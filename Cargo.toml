@@ -3,5 +3,13 @@ name = "gromnie"
 version = "0.1.0"
 edition = "2021"
 
+[lib]
+name = "libgromnie"
+path = "src/lib/main.rs"
+
+[[bin]]
+name = "test"
+path = "src/bin/test.rs"
+
 [dependencies]
 tokio = { version = "1.36.0", features = ["full"] }
