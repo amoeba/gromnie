@@ -1,7 +1,11 @@
 use std::net::UdpSocket;
 
+use libgromnie::test;
+
 #[tokio::main]
 async fn main() -> Result<(),()> {
+    test();
+
     println!("Hello Tokio!");
     let socket: UdpSocket = UdpSocket::bind("0.0.0.0:9000").expect("Failed to bind");
     let _ = socket.connect("play.coldeve.online:9000");
