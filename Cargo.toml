@@ -8,8 +8,8 @@ name = "libgromnie"
 path = "src/lib/lib.rs"
 
 [[bin]]
-name = "test"
-path = "src/bin/test.rs"
+name = "check"
+path = "src/bin/check.rs"
 
 [dependencies]
 tokio = { version = "1.36.0", features = ["full"] }

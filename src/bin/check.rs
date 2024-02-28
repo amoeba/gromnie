@@ -1,10 +1,21 @@
+use std::env;
+
 use libgromnie::uptime_client::UptimeClient;
 
 #[tokio::main]
 async fn main() -> Result<(),()> {
+    let args: Vec<String> = env::args().collect();
+
+    if args.len() != 3 {
+        return Err(())
+    }
+
+    let bind_addr = &args[1];
+    let target_addr = &args[2];
+
     let client = UptimeClient {
-        bind_address: "0.0.0.0:9000".to_owned(),
-        connect_address: "play.coldeve.online:9000".to_owned(),
+        bind_address: bind_addr.to_owned(),
+        connect_address: target_addr.to_owned(),
     };
 
     match client.check() {
