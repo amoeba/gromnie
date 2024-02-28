@@ -1,42 +1,16 @@
-use std::net::UdpSocket;
-
-use libgromnie::test;
+use libgromnie::uptime_client::UptimeClient;
 
 #[tokio::main]
 async fn main() -> Result<(),()> {
-    test();
+    let client = UptimeClient {
+        bind_address: "0.0.0.0:9000".to_owned(),
+        connect_address: "play.coldeve.online:9000".to_owned(),
+    };
 
-    println!("Hello Tokio!");
-    let socket: UdpSocket = UdpSocket::bind("0.0.0.0:9000").expect("Failed to bind");
-    let _ = socket.connect("play.coldeve.online:9000");
-
-    // Send fake login packet
-    // TODO: Figure out how to make this from a proper structure rather than
-    // a raw vec of bytes
-	let data: [u8; 84] = [
-        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x93, 0x00,
-        0xd0, 0x05, 0x00, 0x00, 0x00, 0x00, 0x40, 0x00, 0x00, 0x00,
-        0x04, 0x00, 0x31, 0x38, 0x30, 0x32, 0x00, 0x00, 0x34, 0x00,
-        0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-        0x3e, 0xb8, 0xa8, 0x58, 0x1c, 0x00, 0x61, 0x63, 0x73, 0x65,
-        0x72, 0x76, 0x65, 0x72, 0x74, 0x72, 0x61, 0x63, 0x6b, 0x65,
-        0x72, 0x3a, 0x6a, 0x6a, 0x39, 0x68, 0x32, 0x36, 0x68, 0x63,
-        0x73, 0x67, 0x67, 0x63, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-        0x00, 0x00, 0x00, 0x00
-    ];
-
-    let send_res = socket.send(&data).unwrap();
-    println!("sent {} bytes", send_res);
-
-    let mut recv_buffer = [0u8; 1024];
-
-    println!("about to call recv...");
-
-    match socket.recv(&mut recv_buffer) {
-        Ok(received) => println!("received {received} bytes {:?}", &recv_buffer[..received]),
-        Err(e) => println!("recv function failed: {e:?}"),
+    match client.check() {
+        Ok(received) => println!("Success: Received {} bytes.", received),
+        Err(e) => println!("Failed: recv function failed: {e:?}"),
     }
-    println!("Done!");
 
     Ok(())
 }
