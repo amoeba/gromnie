@@ -1,11 +1,11 @@
 use std::{fmt::Error, net::UdpSocket};
 
-pub struct UptimeClient {
-  pub bind_address: String,
-  pub connect_address: String
+struct UptimeClient {
+  bind_address: String,
+  connect_address: String
 }
 
-impl UptimeClient {
+pub impl UptimeClient {
   pub fn check(&self) -> Result<usize,std::io::Error> {
     println!("Checking {}", self.connect_address);
 
