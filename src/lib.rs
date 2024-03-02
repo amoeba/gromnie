@@ -1,15 +1,18 @@
 use std::{io::{Cursor, Seek, SeekFrom, Write}, time::{SystemTime, UNIX_EPOCH}};
 
 fn on_serialize<W: Write + Seek>(writer: &mut W) {
-  let protocol_version = "1804";
+  let protocol_version = "1802";
 
   writer.write(&(protocol_version.len() as u16).to_le_bytes()).unwrap();
   writer.write(protocol_version.as_bytes()).unwrap();
+
   let padding = 4 - (protocol_version.len() + 2) % 4;
   println!("Padding is {}", padding);
   writer.seek(SeekFrom::Current(padding as i64)).unwrap();
-  let account_name = "test";
-  let password = "testing";
+
+  //
+  let account_name = "acservertracker";
+  let password = "jj9h26hcsggc";
 
   let mut packet_len = 0;
   let mut user_name_pad = (account_name.len() + 2) % 4;
@@ -23,19 +26,20 @@ fn on_serialize<W: Write + Seek>(writer: &mut W) {
   packet_len += account_name.len() + 2 + user_name_pad;
 
 
-  if (password.len() == 0) {
+  if password.len() == 0 {
       login_type = 0x0000001;
   } else {
       login_type = 0x0000002;
       password_pad = (password.len() + 5) % 4;
 
-      if (password_pad > 0) {
+      if password_pad > 0 {
         password_pad = 4 - password_pad
       };
 
       packet_len += password.len() + 5 + password_pad;
   }
 
+  println!("packet_len is {packet_len} but should be 52");
   writer.write(&(packet_len as u8).to_le_bytes()).unwrap();
   writer.write(&(login_type).to_le_bytes()).unwrap();
   writer.write(&(0x0 as u8).to_le_bytes()).unwrap();
@@ -102,5 +106,9 @@ pub fn test() {
   let serialized_data = buffer.into_inner();
 
   println!("len is {}", serialized_data.len());
-  println!("{:?}", serialized_data);
+  print!("[");
+  for i in 0..(serialized_data.len()) {
+      print!("{:#04X}, ", &serialized_data[i]);
+  }
+  print!("]");
 }
