@@ -9,7 +9,7 @@ path = "src/lib.rs"
 
 [[bin]]
 name = "check"
-path = "src/bin/check.rs"
+path = "src/check.rs"
 
 [dependencies]
 deku = "0.16.0"

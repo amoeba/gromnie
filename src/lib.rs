@@ -1,7 +1,33 @@
-use std::{io::{Cursor, Seek, SeekFrom, Write}, time::{SystemTime, UNIX_EPOCH}};
+use std::{io::{Seek, SeekFrom, Write}, time::{SystemTime, UNIX_EPOCH}};
 
-fn on_serialize<W: Write + Seek>(writer: &mut W) {
+// trait Packet {
+//   fn serialize(&self) -> Vec<u8>;
+//   fn common_data() -> Vec<u8> {
+//     vec![0x01, 0x02, 0x03]
+// }
+// }
+
+// struct LoginPacketMessage {
+//   // Define your message fields here
+// }
+
+// impl Packet for LoginPacketMessage {
+//   fn serialize(&self) -> Vec<u8> {
+//       // Implement serialization logic specific to MessageType1
+//       // Add common prefix to the buffer
+//       let mut buffer = Self::common_data();
+//       // buffer.extend(&self.data);
+//       buffer
+//   }
+// }
+
+pub fn on_serialize<W: Write + Seek>(writer: &mut W) {
+  // TODO: We should tolower the account value
+
+  // TODO: Factor these out into a struct
   let protocol_version = "1802";
+  let account_name = "acservertracker";
+  let password = "jj9h26hcsggc";
 
   writer.write(&(protocol_version.len() as u16).to_le_bytes()).unwrap();
   writer.write(protocol_version.as_bytes()).unwrap();
@@ -11,32 +37,38 @@ fn on_serialize<W: Write + Seek>(writer: &mut W) {
   writer.seek(SeekFrom::Current(padding as i64)).unwrap();
 
   //
-  let account_name = "acservertracker";
-  let password = "jj9h26hcsggc";
 
-  let mut packet_len = 0;
-  let mut user_name_pad = (account_name.len() + 2) % 4;
+  let mut user_name_pad = 0;
   let mut password_pad = 0;
+  let mut packet_len: usize = 20;
+  let mut _login_type : u8 = 0;
+
+  user_name_pad = (account_name.len() + 2) % 4;
   let login_type : u8;
 
-  if (user_name_pad > 0){
+  if user_name_pad > 0 {
     user_name_pad = 4 - user_name_pad;
   }
 
   packet_len += account_name.len() + 2 + user_name_pad;
 
+  match Some(password) {
+    Some(value) => {
+      println!("0x02 login type (match case)");
 
-  if password.len() == 0 {
-      login_type = 0x0000001;
-  } else {
       login_type = 0x0000002;
-      password_pad = (password.len() + 5) % 4;
+      password_pad = (value.len() + 5) % 4;
 
       if password_pad > 0 {
         password_pad = 4 - password_pad
       };
 
-      packet_len += password.len() + 5 + password_pad;
+      packet_len += value.len() + 5 + password_pad;
+    }
+    _ => {
+      println!("0x01 login type (else case)");
+      login_type = 0x0000001;
+    }
   }
 
   println!("packet_len is {packet_len} but should be 52");
@@ -99,16 +131,99 @@ fn on_serialize<W: Write + Seek>(writer: &mut W) {
   writer.write(&0x00001A01u32.to_le_bytes()).unwrap();
 }
 
-pub fn test() {
-  let mut buffer = Cursor::new(Vec::new());
+// fn on_serialize_alt<W: Write + Seek>(writer: &mut W) {
+//   let protocol_version = "1802";
+//   let account_name = "acservertracker";
+//   let password = "jj9h26hcsggc";
 
-  on_serialize(&mut buffer);
-  let serialized_data = buffer.into_inner();
+//   let protocol_version_len: i16 = protocol_version.len() as i16;
+//   writer.write(&protocol_version_len.to_le_bytes());
+//   writer.write(&protocol_version.as_bytes());
 
-  println!("len is {}", serialized_data.len());
-  print!("[");
-  for i in 0..(serialized_data.len()) {
-      print!("{:#04X}, ", &serialized_data[i]);
-  }
-  print!("]");
-}
+//   let protocol_version_padding = (4 - (protocol_version.len() + 2) % 4) % 4;
+
+//   let mut user_name_pad = 0;
+//   let mut password_pad = 0;
+//   let mut packet_len = 20;
+//   let mut login_type: u32 = 0;
+
+//   user_name_pad = (account_name.len() + 2) % 4;
+//   if user_name_pad > 0 {
+//       user_name_pad = 4 - user_name_pad;
+//   }
+
+//     packet_len += account_name.len() + 2 + user_name_pad;
+
+//   if password.is_empty() {
+//       login_type = 0x0000001u32;
+//   } else {
+//       login_type = 0x0000002u32;
+//       password_pad = (password.len() + 5) % 4;
+//       if password_pad > 0 {
+//           password_pad = 4 - password_pad;
+//       }
+
+//       packet_len += password.len() + 5 + password_pad;
+//   }
+
+//   println!("packet_len is {packet_len}");
+
+//     writer.write(&packet_len.to_le_bytes());
+
+//     writer.write(&login_type.to_le_bytes());
+
+//     writer.write(&0u32.to_le_bytes());
+
+//     let unix_time = SystemTime::now()
+//     .duration_since(UNIX_EPOCH)
+//     .expect("Time went backwards")
+//     .as_secs() as i32;
+
+//     writer.write(&unix_time.to_le_bytes()).unwrap();
+
+//     writer.write(&account_name.len().to_le_bytes());
+
+//     writer.write(&account_name.as_bytes());
+
+//     if user_name_pad > 0 {
+//         writer.seek(SeekFrom::Current(user_name_pad as i64));
+//     }
+
+//     writer.write(&0u32.to_le_bytes());
+
+//     if !password.is_empty() {
+//         writer.write(&((password.len() + 1) as u32).to_le_bytes());
+//         writer.write(&(password.len() as u8).to_le_bytes());
+//         writer.write(&password.as_bytes());
+//         if password_pad > 0 {
+//             writer.seek(SeekFrom::Current(password_pad as i64));
+//         }
+//     } else {
+//         writer.write(&0u8.to_le_bytes());
+//     }
+
+//     writer.write(&0x0000001Cu8.to_le_bytes());
+
+//     writer.write(&0x00000016u8.to_le_bytes());
+
+//     writer.write(&0x00000000u8.to_le_bytes());
+
+//     writer.write(&0x4C46722F34A7D7D2u64.to_le_bytes());
+
+//     writer.write(&0xFD6F854F51EFB48Au64.to_le_bytes());
+//     writer.write(&0x00001A01u16.to_le_bytes()).unwrap();
+// }
+
+// pub fn test() {
+//   let mut buffer = Cursor::new(Vec::new());
+
+//   on_serialize(&mut buffer);
+//   let serialized_data = buffer.into_inner();
+
+//   println!("len is {}", serialized_data.len());
+//   print!("[");
+//   for i in 0..(serialized_data.len()) {
+//       print!("{:#04X}, ", &serialized_data[i]);
+//   }
+//   print!("]");
+// }
