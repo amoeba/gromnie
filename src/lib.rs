@@ -1,5 +1,7 @@
 use std::{io::{Seek, SeekFrom, Write}, time::{SystemTime, UNIX_EPOCH}};
 
+use byteorder::{LittleEndian, WriteBytesExt};
+
 // trait Packet {
 //   fn serialize(&self) -> Vec<u8>;
 //   fn common_data() -> Vec<u8> {
@@ -72,15 +74,19 @@ pub fn on_serialize<W: Write + Seek>(writer: &mut W) {
   }
 
   println!("packet_len is {packet_len} but should be 52");
-  writer.write(&(packet_len as u8).to_le_bytes()).unwrap();
-  writer.write(&(login_type).to_le_bytes()).unwrap();
-  writer.write(&(0x0 as u8).to_le_bytes()).unwrap();
+  writer.write(&(packet_len as u32).to_le_bytes()).unwrap();
+  // should be 4
+  writer.write(&(login_type as u32).to_le_bytes()).unwrap();
+  // writer.write_u32::<LittleEndian>(login_type.into()).unwrap();
+  // should be 4
+  writer.write(&(0x0 as u32).to_le_bytes()).unwrap();
 
   let unix_time = SystemTime::now()
   .duration_since(UNIX_EPOCH)
   .expect("Time went backwards")
   .as_secs() as i32;
 
+  // TODO: This isn't right
   writer.write(&unix_time.to_le_bytes()).unwrap();
 
   // Account Name
@@ -103,6 +109,7 @@ pub fn on_serialize<W: Write + Seek>(writer: &mut W) {
   match maybe_password {
     Some(password) => {
       let password_len = password.len() + 1;
+      // this is good
       writer.write(&(password_len as u32).to_le_bytes()).unwrap();
       writer.write(&(password.len() as u8).to_le_bytes()).unwrap();
       writer.write(password.as_bytes()).unwrap();

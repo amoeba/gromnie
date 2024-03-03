@@ -40,6 +40,12 @@ impl UptimeClient {
 
     let serialized_data = buffer.into_inner();
 
+    println!("serialized_data: {}", serialized_data.len());
+
+    for i in 0..serialized_data.len() {
+      println!("{}", &serialized_data[i]);
+    }
+
     let _ = socket.send(&serialized_data).unwrap();
     let mut recv_buffer = [0u8; 1024];
 
