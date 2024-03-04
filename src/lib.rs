@@ -152,10 +152,10 @@ pub fn on_serialize_alt<W: Write + Seek>(writer: &mut W) {
   writer.write(&0x0u32.to_le_bytes()).unwrap();
 
   // packetheaderflags
-  writer.write(&0x000100u32.to_le_bytes()).unwrap();
+  writer.write(&0x00010000u32.to_le_bytes()).unwrap();
 
   // checksum
-  writer.write(&0x9300d005u32.to_le_bytes()).unwrap();
+  writer.write(&0x05d00093u32.to_le_bytes()).unwrap();
 
   // recipient
   writer.write(&0x0u16.to_le_bytes()).unwrap();
