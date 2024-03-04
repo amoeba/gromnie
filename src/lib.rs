@@ -1,4 +1,4 @@
-use std::{io::{Seek, SeekFrom, Write}, time::{SystemTime, UNIX_EPOCH}};
+use std::{fmt::write, io::{Seek, SeekFrom, Write}, time::{SystemTime, UNIX_EPOCH}};
 
 use byteorder::{LittleEndian, WriteBytesExt};
 
@@ -30,6 +30,10 @@ pub fn on_serialize<W: Write + Seek>(writer: &mut W) {
   let protocol_version = "1802";
   let account_name = "acservertracker";
   let password = "jj9h26hcsggc";
+
+  // TODO: This bit should come from the parent packet class
+  let preamble = vec![0; 20];
+  writer.write(&preamble).unwrap();
 
   writer.write(&(protocol_version.len() as u16).to_le_bytes()).unwrap();
   writer.write(protocol_version.as_bytes()).unwrap();
@@ -138,99 +142,66 @@ pub fn on_serialize<W: Write + Seek>(writer: &mut W) {
   writer.write(&0x00001A01u32.to_le_bytes()).unwrap();
 }
 
-// fn on_serialize_alt<W: Write + Seek>(writer: &mut W) {
-//   let protocol_version = "1802";
-//   let account_name = "acservertracker";
-//   let password = "jj9h26hcsggc";
+pub fn on_serialize_alt<W: Write + Seek>(writer: &mut W) {
 
-//   let protocol_version_len: i16 = protocol_version.len() as i16;
-//   writer.write(&protocol_version_len.to_le_bytes());
-//   writer.write(&protocol_version.as_bytes());
+  let protocol_version = "1802";
+  let account_name = "acservertracker";
+  let password = "jj9h26hcsggc";
 
-//   let protocol_version_padding = (4 - (protocol_version.len() + 2) % 4) % 4;
+  // sequence
+  writer.write(&0x0u32.to_le_bytes()).unwrap();
 
-//   let mut user_name_pad = 0;
-//   let mut password_pad = 0;
-//   let mut packet_len = 20;
-//   let mut login_type: u32 = 0;
+  // packetheaderflags
+  writer.write(&0x000100u32.to_le_bytes()).unwrap();
 
-//   user_name_pad = (account_name.len() + 2) % 4;
-//   if user_name_pad > 0 {
-//       user_name_pad = 4 - user_name_pad;
-//   }
+  // checksum
+  writer.write(&0x9300d005u32.to_le_bytes()).unwrap();
 
-//     packet_len += account_name.len() + 2 + user_name_pad;
+  // recipient
+  writer.write(&0x0u16.to_le_bytes()).unwrap();
 
-//   if password.is_empty() {
-//       login_type = 0x0000001u32;
-//   } else {
-//       login_type = 0x0000002u32;
-//       password_pad = (password.len() + 5) % 4;
-//       if password_pad > 0 {
-//           password_pad = 4 - password_pad;
-//       }
+  // timesincelastpacket
+  writer.write(&0x0u16.to_le_bytes()).unwrap();
 
-//       packet_len += password.len() + 5 + password_pad;
-//   }
+  // size
+  writer.write(&0x40u16.to_le_bytes()).unwrap();
 
-//   println!("packet_len is {packet_len}");
+  // iteration
+  writer.write(&0x0u16.to_le_bytes()).unwrap();
 
-//     writer.write(&packet_len.to_le_bytes());
+  // ClientVersion = packet.DataReader.ReadString16L();      // should be "1802" for end of retail client
+  writer.write(&0x04u16.to_le_bytes()).unwrap();
+  let client_version : [u8; 6] = [
+    0x31, 0x38, 0x30, 0x32,
+    0x00, 0x00];
+  writer.write(&client_version).unwrap();
 
-//     writer.write(&login_type.to_le_bytes());
+  // uint len = packet.DataReader.ReadUInt32();                     // data length left in packet including ticket
+  writer.write(&0x34u32.to_le_bytes()).unwrap();
 
-//     writer.write(&0u32.to_le_bytes());
+  // NetAuthType = (NetAuthType)packet.DataReader.ReadUInt32();
+  writer.write(&0x01u32.to_le_bytes()).unwrap();
 
-//     let unix_time = SystemTime::now()
-//     .duration_since(UNIX_EPOCH)
-//     .expect("Time went backwards")
-//     .as_secs() as i32;
+  // var authFlags = (AuthFlags)packet.DataReader.ReadUInt32();
+  writer.write(&0x0u32.to_le_bytes()).unwrap();
 
-//     writer.write(&unix_time.to_le_bytes()).unwrap();
+  // Timestamp = packet.DataReader.ReadUInt32();                    // sequence
+  writer.write(&0x58a8b83eu32.to_le_bytes()).unwrap();
 
-//     writer.write(&account_name.len().to_le_bytes());
+  // Account = packet.DataReader.ReadString16L();
+  // string accountToLoginAs = packet.DataReader.ReadString16L();   // special admin only, AuthFlags has 2
 
-//     writer.write(&account_name.as_bytes());
+  // if (NetAuthType == NetAuthType.AccountPassword)
+  //     Password = packet.DataReader.ReadString32L();
+  // else if (NetAuthType == NetAuthType.GlsTicket)
+  //     GlsTicket = packet.DataReader.ReadString32L();
 
-//     if user_name_pad > 0 {
-//         writer.seek(SeekFrom::Current(user_name_pad as i64));
-//     }
+  let account:[u8; 30] = [0x1c, 0x00,
+  0x61, 0x63, 0x73, 0x65, 0x72, 0x76, 0x65, 0x72, 0x74, 0x72, 0x61, 0x63, 0x6b, 0x65, 0x72,
+  0x3a,
+  0x6a, 0x6a, 0x39, 0x68, 0x32, 0x36, 0x68, 0x63, 0x73, 0x67, 0x67, 0x63,
+  ];
+  writer.write(&account).unwrap();
+  writer.write(vec![0, 0, 0, 0, 0, 0, 0, 0, 0, 0, ].as_ref()).unwrap();
 
-//     writer.write(&0u32.to_le_bytes());
-
-//     if !password.is_empty() {
-//         writer.write(&((password.len() + 1) as u32).to_le_bytes());
-//         writer.write(&(password.len() as u8).to_le_bytes());
-//         writer.write(&password.as_bytes());
-//         if password_pad > 0 {
-//             writer.seek(SeekFrom::Current(password_pad as i64));
-//         }
-//     } else {
-//         writer.write(&0u8.to_le_bytes());
-//     }
-
-//     writer.write(&0x0000001Cu8.to_le_bytes());
-
-//     writer.write(&0x00000016u8.to_le_bytes());
-
-//     writer.write(&0x00000000u8.to_le_bytes());
-
-//     writer.write(&0x4C46722F34A7D7D2u64.to_le_bytes());
-
-//     writer.write(&0xFD6F854F51EFB48Au64.to_le_bytes());
-//     writer.write(&0x00001A01u16.to_le_bytes()).unwrap();
-// }
-
-// pub fn test() {
-//   let mut buffer = Cursor::new(Vec::new());
-
-//   on_serialize(&mut buffer);
-//   let serialized_data = buffer.into_inner();
-
-//   println!("len is {}", serialized_data.len());
-//   print!("[");
-//   for i in 0..(serialized_data.len()) {
-//       print!("{:#04X}, ", &serialized_data[i]);
-//   }
-//   print!("]");
-// }
+}
