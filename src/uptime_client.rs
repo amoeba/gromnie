@@ -42,7 +42,7 @@ impl UptimeClient {
     println!("serialized_data len: {}", serialized_data.len());
 
     // compare each item
-    let _ = socket.send(&data).unwrap();
+    let _ = socket.send(&serialized_data).unwrap();
     let mut recv_buffer = [0u8; 1024];
 
     return socket.recv(&mut recv_buffer);
