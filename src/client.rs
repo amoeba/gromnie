@@ -1,7 +1,7 @@
 
-use std::{fmt::Error, fs::File, io::{Cursor, LineWriter, Write}, net::UdpSocket};
+use std::{io::Cursor, net::UdpSocket};
 
-use libgromnie::{on_serialize};
+use libgromnie::on_serialize;
 
 struct Account {
   name: String,

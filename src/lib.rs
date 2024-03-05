@@ -1,6 +1,4 @@
-use std::{fmt::write, io::{Seek, SeekFrom, Write}, time::{SystemTime, UNIX_EPOCH}};
-
-use byteorder::{LittleEndian, WriteBytesExt};
+use std::io::{Seek, Write};
 
 // trait Packet {
 //   fn serialize(&self) -> Vec<u8>;
@@ -23,7 +21,6 @@ use byteorder::{LittleEndian, WriteBytesExt};
 //   }
 // }
 pub fn on_serialize<W: Write + Seek>(writer: &mut W) {
-
   let protocol_version = "1802";
   let account_name = "acservertracker";
   let password = "jj9h26hcsggc";
@@ -83,5 +80,4 @@ pub fn on_serialize<W: Write + Seek>(writer: &mut W) {
   ];
   writer.write(&account).unwrap();
   writer.write(vec![0, 0, 0, 0, 0, 0, 0, 0, 0, 0, ].as_ref()).unwrap();
-
 }
