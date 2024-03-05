@@ -25,14 +25,18 @@ impl Client {
     }
   }
 
-  pub fn connect(&self) -> Result<usize, std::io::Error> {
-    let socket: UdpSocket = UdpSocket::bind(self.bind_address.clone()).expect("Failed to bind");
+  pub fn connect(&mut self) -> Result<usize, std::io::Error> {
+    // TODO: Possibly set this elsewhere
+    self.socket = Some(UdpSocket::bind(self.bind_address.clone()).expect("Failed to bind"));
+
+    let socket = Option::expect(self.socket.as_ref(), "socket not set");
+
     let _ = socket.connect(self.connect_address.clone());
 
     let mut buffer = Cursor::new(Vec::new());
     on_serialize(&mut buffer);
-
     let serialized_data: Vec<u8> = buffer.into_inner();
+
     let _ = socket.send(&serialized_data).unwrap();
 
     let mut recv_buffer = [0u8; 1024];
