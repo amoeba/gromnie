@@ -11,16 +11,16 @@ struct Account {
 // TODO: Don't require both bind_address and connect_address. I had to do this
 // to get things to work but I should be able to listen on any random port so
 // I'm not sure what I'm doing wrong
-pub struct UptimeClient {
+pub struct Client {
   bind_address: String,
   connect_address: String,
   socket: Option<UdpSocket>,
   account: Account,
 }
 
-impl UptimeClient {
-  pub fn create(bind_address: String, connect_address: String, account_name: String, password: String) -> UptimeClient {
-    UptimeClient {
+impl Client {
+  pub fn create(bind_address: String, connect_address: String, account_name: String, password: String) -> Client {
+    Client {
       bind_address, connect_address, account: Account { name: account_name, password: password }, socket: None
     }
   }
