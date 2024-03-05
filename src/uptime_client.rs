@@ -1,10 +1,15 @@
 
-use std::{fs::File, io::{Cursor, LineWriter, Write}, net::UdpSocket};
+use std::{fmt::Error, fs::File, io::{Cursor, LineWriter, Write}, net::UdpSocket};
 
-use libgromnie::{on_serialize, on_serialize_alt};
+use libgromnie::{on_serialize};
+
+// TODO: Don't require both bind_address and connect_address. I had to do this
+// to get things to work but I should be able to listen on any random port so
+// I'm not sure what I'm doing wrong
 pub struct UptimeClient {
   bind_address: String,
-  connect_address: String
+  connect_address: String,
+  socket: Option<UdpSocket>,
 }
 
 impl UptimeClient {
@@ -14,35 +19,16 @@ impl UptimeClient {
     }
   }
 
-  pub fn check(&self) -> Result<usize,std::io::Error> {
-    println!("Checking {}", self.connect_address);
-
+  pub fn connect(&self) -> Result<usize, std::io::Error> {
     let socket: UdpSocket = UdpSocket::bind(self.bind_address.clone()).expect("Failed to bind");
     let _ = socket.connect(self.connect_address.clone());
 
-    // Send fake login packet
-    // TODO: Figure out how to make this from a proper structure rather than
-    // a raw vec of bytes
-    let data: [u8; 84] = [
-          0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x93, 0x00,
-          0xd0, 0x05, 0x00, 0x00, 0x00, 0x00, 0x40, 0x00, 0x00, 0x00,
-          0x04, 0x00, 0x31, 0x38, 0x30, 0x32, 0x00, 0x00, 0x34, 0x00,
-          0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-          0x3e, 0xb8, 0xa8, 0x58, 0x1c, 0x00, 0x61, 0x63, 0x73, 0x65,
-          0x72, 0x76, 0x65, 0x72, 0x74, 0x72, 0x61, 0x63, 0x6b, 0x65,
-          0x72, 0x3a, 0x6a, 0x6a, 0x39, 0x68, 0x32, 0x36, 0x68, 0x63,
-          0x73, 0x67, 0x67, 0x63, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-          0x00, 0x00, 0x00, 0x00
-      ];
     let mut buffer = Cursor::new(Vec::new());
+    on_serialize(&mut buffer);
 
-    on_serialize_alt(&mut buffer);
-
-    let serialized_data = buffer.into_inner();
-    println!("serialized_data len: {}", serialized_data.len());
-
-    // compare each item
+    let serialized_data: Vec<u8> = buffer.into_inner();
     let _ = socket.send(&serialized_data).unwrap();
+
     let mut recv_buffer = [0u8; 1024];
 
     return socket.recv(&mut recv_buffer);
