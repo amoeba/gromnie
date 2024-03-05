@@ -3,6 +3,11 @@ use std::{fmt::Error, fs::File, io::{Cursor, LineWriter, Write}, net::UdpSocket}
 
 use libgromnie::{on_serialize};
 
+struct Account {
+  name: String,
+  password: String
+}
+
 // TODO: Don't require both bind_address and connect_address. I had to do this
 // to get things to work but I should be able to listen on any random port so
 // I'm not sure what I'm doing wrong
@@ -10,12 +15,13 @@ pub struct UptimeClient {
   bind_address: String,
   connect_address: String,
   socket: Option<UdpSocket>,
+  account: Account,
 }
 
 impl UptimeClient {
-  pub fn create(bind_address: String, connect_address: String) -> UptimeClient {
+  pub fn create(bind_address: String, connect_address: String, account_name: String, password: String) -> UptimeClient {
     UptimeClient {
-      bind_address, connect_address
+      bind_address, connect_address, account: Account { name: account_name, password: password }, socket: None
     }
   }
 
