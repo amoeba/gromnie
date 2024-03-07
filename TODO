@@ -1,0 +1,15 @@
+TODO
+
+- [x] Get raw login packet sent and recv a response (52 bytes)
+- [x] Start building out structs+readers for login request/response
+- [x] Refactor to work on tokio.rs and run multiple clients
+- [ ] Refactor packet sending code into something more generic
+- [ ] Get a character list
+- [ ] Log into the game world
+- [ ] Send a command to one or more clients
+
+IDEAS
+
+- Terminal GUI
+- Web GUI
+- See how much of this can run under WASM
