@@ -14,13 +14,14 @@ struct Account {
 // to get things to work but I should be able to listen on any random port so
 // I'm not sure what I'm doing wrong
 pub struct Client {
+    id: u32,
     address: String,
     pub socket: UdpSocket,
     account: Account,
 }
 
 impl Client {
-    pub async fn create(address: String, name: String, password: String) -> Client {
+    pub async fn create(id: u32, address: String, name: String, password: String) -> Client {
         println!("Client::create");
 
         let sok = UdpSocket::bind("0.0.0.0:0").await.unwrap();
@@ -34,6 +35,7 @@ impl Client {
         );
 
         Client {
+            id,
             address,
             account: Account { name, password },
             socket: sok,

@@ -1,10 +1,10 @@
 mod client;
 
 use client::Client;
-use tokio::task;
 
-async fn client_task(address: String, account_name: String, password: String) {
+async fn client_task(id: u32, address: String, account_name: String, password: String) {
     let mut client = Client::create(
+        id.to_owned(),
         address.to_owned(),
         account_name.to_owned(),
         password.to_owned(),
@@ -45,6 +45,7 @@ async fn main() -> Result<(), ()> {
         account_name.push_str(suffix.as_ref());
 
         tasks.push(tokio::spawn(client_task(
+            i.to_owned(),
             address.to_owned(),
             account_name.to_owned(),
             password.to_owned(),
