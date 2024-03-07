@@ -1,10 +1,9 @@
-use std::{
-    io::{Cursor, Seek},
-    net::UdpSocket,
-};
+mod messages;
+
+use std::io::{self, Cursor, Seek};
 
 use deku::prelude::*;
-use libgromnie::on_serialize;
+use tokio::net::UdpSocket;
 
 struct Account {
     name: String,
@@ -16,43 +15,57 @@ struct Account {
 // I'm not sure what I'm doing wrong
 pub struct Client {
     address: String,
-    socket: Option<UdpSocket>,
+    pub socket: UdpSocket,
     account: Account,
 }
 
 impl Client {
-    pub fn create(address: String, name: String, password: String) -> Client {
+    pub async fn create(address: String, name: String, password: String) -> Client {
+        println!("Client::create");
+
+        let sok = UdpSocket::bind("0.0.0.0:0").await;
+
         Client {
             address,
             account: Account { name, password },
-            socket: None,
+            socket: sok.unwrap(),
         }
     }
 
-    pub fn connect(&mut self) -> Result<usize, std::io::Error> {
-        // TODO: Possibly set this elsewhere
-        self.socket = Some(UdpSocket::bind("0.0.0.0:0").expect("Failed to bind"));
+    // TODO: Should return a Result with a success or failure
+    pub async fn connect(&mut self) -> Result<(), std::io::Error> {
+        let local_addr = self.socket.local_addr().unwrap();
+        println!(
+            "client listening on {}:{}",
+            local_addr.ip(),
+            local_addr.port()
+        );
 
-        let socket = Option::expect(self.socket.as_ref(), "socket not set");
+        // TODO: Should handle this with pattern matching
+        self.socket
+            .connect(self.address.clone())
+            .await
+            .expect("connect failed");
 
-        let _ = socket.connect(self.address.clone());
+        println!("client connected");
 
+        Ok(())
+    }
+
+    pub async fn do_login(&mut self) -> Result<(), std::io::Error> {
+        println!("client connecting");
+
+        // TODO: Wrap this up in a nicer way
         let mut buffer = Cursor::new(Vec::new());
-        on_serialize(&mut buffer);
+        messages::login_request(&mut buffer);
         let serialized_data: Vec<u8> = buffer.into_inner();
 
-        let _ = socket.send(&serialized_data).unwrap();
+        println!("client loginrequest sending...");
 
-        let mut recv_buffer = [0u8; 1024];
+        // TODO: Handle here with match
+        self.socket.send(&serialized_data).await;
 
-        let nbytes = socket.recv(&mut recv_buffer);
-
-        // TODO: Temporary code to parse response. Move this elsewhere when it's ready.
-        let mut recv_cursor = Cursor::new(&recv_buffer);
-        // parse_response(&mut recv_cursor);
-        parse_response(&recv_buffer);
-
-        nbytes
+        Ok(())
     }
 
     // Response... which packet is this?
@@ -117,7 +130,7 @@ pub fn parse_response(buffer: &[u8]) {
     println!("{:?}", hdr.1);
 
     // Skip to remainder
-    cursor.seek(std::io::SeekFrom::Start(hdr.1.size as u64));
+    cursor.seek(io::SeekFrom::Start(hdr.1.size as u64));
 
     let data: ((&[u8], usize), ConnectRequestHeader) =
         ConnectRequestHeader::from_bytes((&cursor.get_ref(), 32)).unwrap();

@@ -8,8 +8,8 @@ name = "libgromnie"
 path = "src/lib.rs"
 
 [[bin]]
-name = "check"
-path = "src/check.rs"
+name = "main"
+path = "src/main.rs"
 
 [dependencies]
 byteorder = "1.5.0"
