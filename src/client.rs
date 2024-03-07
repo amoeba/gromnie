@@ -23,23 +23,26 @@ impl Client {
     pub async fn create(address: String, name: String, password: String) -> Client {
         println!("Client::create");
 
-        let sok = UdpSocket::bind("0.0.0.0:0").await;
+        let sok = UdpSocket::bind("0.0.0.0:0").await.unwrap();
 
-        Client {
-            address,
-            account: Account { name, password },
-            socket: sok.unwrap(),
-        }
-    }
-
-    // TODO: Should return a Result with a success or failure
-    pub async fn connect(&mut self) -> Result<(), std::io::Error> {
-        let local_addr = self.socket.local_addr().unwrap();
+        // Debug
+        let local_addr = sok.local_addr().unwrap();
         println!(
             "client listening on {}:{}",
             local_addr.ip(),
             local_addr.port()
         );
+
+        Client {
+            address,
+            account: Account { name, password },
+            socket: sok,
+        }
+    }
+
+    // TODO: Should return a Result with a success or failure
+    pub async fn connect(&mut self) -> Result<(), std::io::Error> {
+        println!("client connecting...");
 
         // TODO: Should handle this with pattern matching
         self.socket
@@ -53,14 +56,12 @@ impl Client {
     }
 
     pub async fn do_login(&mut self) -> Result<(), std::io::Error> {
-        println!("client connecting");
+        println!("client logging in...");
 
         // TODO: Wrap this up in a nicer way
         let mut buffer = Cursor::new(Vec::new());
         messages::login_request(&mut buffer);
         let serialized_data: Vec<u8> = buffer.into_inner();
-
-        println!("client loginrequest sending...");
 
         // TODO: Handle here with match
         self.socket.send(&serialized_data).await;
