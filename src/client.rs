@@ -21,13 +21,10 @@ pub struct Client {
 }
 
 impl Client {
-    pub fn create(address: String, account_name: String, password: String) -> Client {
+    pub fn create(address: String, name: String, password: String) -> Client {
         Client {
             address,
-            account: Account {
-                name: account_name,
-                password: password,
-            },
+            account: Account { name, password },
             socket: None,
         }
     }
