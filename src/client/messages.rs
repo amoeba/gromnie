@@ -60,8 +60,11 @@ pub fn login_request<W: Write + Seek>(writer: &mut W, name: &str, password: &str
     // packetheaderflags
     writer.write(&0x00010000u32.to_le_bytes()).unwrap();
 
-    // checksum
+    // checksum (packet checksum)
     // TODO: Need to make this dynamic so we can use any login
+    // ACE has this code:
+    //  uint fragmentChecksum = Hash32.Calculate(buffer, buffer.Length) + Hash32.Calculate(Data, Data.Length);
+
     writer.write(&0x05d00093u32.to_le_bytes()).unwrap();
 
     // recipient
@@ -71,6 +74,7 @@ pub fn login_request<W: Write + Seek>(writer: &mut W, name: &str, password: &str
     writer.write(&0x0u16.to_le_bytes()).unwrap();
 
     // size
+    // TODO: Don't hardcode
     writer.write(&0x40u16.to_le_bytes()).unwrap();
 
     // iteration
