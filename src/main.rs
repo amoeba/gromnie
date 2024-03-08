@@ -35,7 +35,7 @@ async fn main() -> Result<(), ()> {
     let account_name_prefix = "test";
     let password = "password";
 
-    let n = 2;
+    let n = 1;
     let mut tasks = Vec::with_capacity(2);
 
     for i in 0..n {
