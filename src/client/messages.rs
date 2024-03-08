@@ -73,11 +73,13 @@ pub fn login_request<W: Write + Seek>(writer: &mut W, name: &str, password: &str
     // timesincelastpacket
     writer.write(&0x0u16.to_le_bytes()).unwrap();
 
-    // size
+    // Various ahead of time length calculations
     // TODO: This might be a little weird right now
     let account_len: u16 = (account_name.len() + password.len() + 1) as u16;
     let remaining: u32 = (account_len as u32) + 24; // +24 comes from: u32 + u32 + u32 + u16 + 10
     let packet_len: u16 = 8 + (remaining as u16) + account_len - 24;
+
+    // size
     writer.write(&packet_len.to_le_bytes()).unwrap();
 
     // iteration
