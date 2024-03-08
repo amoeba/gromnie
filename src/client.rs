@@ -5,6 +5,17 @@ use std::io::{self, Cursor, Seek};
 use deku::prelude::*;
 use tokio::net::UdpSocket;
 
+// ClientConnectState
+// TODO: Put this somewhere else
+#[derive(Clone, Debug, PartialEq)]
+pub enum ClientConnectState {
+    Error,
+    Disconnected,
+    Connecting,
+    Connected,
+}
+// End state machine
+
 struct Account {
     name: String,
     password: String,
@@ -18,6 +29,7 @@ pub struct Client {
     address: String,
     pub socket: UdpSocket,
     account: Account,
+    connect_state: ClientConnectState,
 }
 
 impl Client {
@@ -39,6 +51,7 @@ impl Client {
             address,
             account: Account { name, password },
             socket: sok,
+            connect_state: ClientConnectState::Disconnected,
         }
     }
 
