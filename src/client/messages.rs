@@ -74,8 +74,11 @@ pub fn login_request<W: Write + Seek>(writer: &mut W, name: &str, password: &str
     writer.write(&0x0u16.to_le_bytes()).unwrap();
 
     // size
-    // TODO: Don't hardcode
-    writer.write(&0x40u16.to_le_bytes()).unwrap();
+    // TODO: This might be a little weird right now
+    let account_len: u16 = (account_name.len() + password.len() + 1) as u16;
+    let remaining: u32 = (account_len as u32) + 24; // +24 comes from: u32 + u32 + u32 + u16 + 10
+    let packet_len: u16 = 8 + (remaining as u16) + account_len - 24;
+    writer.write(&packet_len.to_le_bytes()).unwrap();
 
     // iteration
     writer.write(&0x0u16.to_le_bytes()).unwrap();
@@ -85,12 +88,7 @@ pub fn login_request<W: Write + Seek>(writer: &mut W, name: &str, password: &str
     let client_version: [u8; 6] = [0x31, 0x38, 0x30, 0x32, 0x00, 0x00];
     writer.write(&client_version).unwrap();
 
-    // Calculate account:password length now because we need it now
-    let account_len: u16 = (account_name.len() + password.len() + 1) as u16;
-
     // Length
-    // +24 comes from: u32 + u32 + u32 + u16 + 10
-    let remaining: u32 = (account_len as u32) + 24;
     writer.write(&remaining.to_le_bytes()).unwrap();
 
     // AuthType
