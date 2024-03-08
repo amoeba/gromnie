@@ -61,6 +61,7 @@ pub fn login_request<W: Write + Seek>(writer: &mut W, name: &str, password: &str
     writer.write(&0x00010000u32.to_le_bytes()).unwrap();
 
     // checksum
+    // TODO: Need to make this dynamic so we can use any login
     writer.write(&0x05d00093u32.to_le_bytes()).unwrap();
 
     // recipient
@@ -75,28 +76,38 @@ pub fn login_request<W: Write + Seek>(writer: &mut W, name: &str, password: &str
     // iteration
     writer.write(&0x0u16.to_le_bytes()).unwrap();
 
-    // ClientVersion = packet.DataReader.ReadString16L();      // should be "1802" for end of retail client
+    // ClientVersion
     writer.write(&0x04u16.to_le_bytes()).unwrap();
     let client_version: [u8; 6] = [0x31, 0x38, 0x30, 0x32, 0x00, 0x00];
     writer.write(&client_version).unwrap();
 
-    // uint len = packet.DataReader.ReadUInt32();                     // data length left in packet including ticket
-    writer.write(&0x34u32.to_le_bytes()).unwrap();
+    // Calculate account:password length now because we need it now
+    let account_len: u16 = (account_name.len() + password.len() + 1) as u16;
 
-    // NetAuthType = (NetAuthType)packet.DataReader.ReadUInt32();
+    // Length
+    // +24 comes from: u32 + u32 + u32 + u16 + 10
+    let remaining: u32 = (account_len as u32) + 24;
+    writer.write(&remaining.to_le_bytes()).unwrap();
+
+    // AuthType
+    // TODO: This is hardcoded as Password and GlsTicket mode isn't supported
     writer.write(&0x01u32.to_le_bytes()).unwrap();
 
-    // var authFlags = (AuthFlags)packet.DataReader.ReadUInt32();
+    // Flags
     writer.write(&0x0u32.to_le_bytes()).unwrap();
 
-    // Timestamp = packet.DataReader.ReadUInt32();                    // sequence
+    // Sequence
     writer.write(&0x58a8b83eu32.to_le_bytes()).unwrap();
 
-    let account: [u8; 30] = [
-        0x1c, 0x00, 0x61, 0x63, 0x73, 0x65, 0x72, 0x76, 0x65, 0x72, 0x74, 0x72, 0x61, 0x63, 0x6b,
-        0x65, 0x72, 0x3a, 0x6a, 0x6a, 0x39, 0x68, 0x32, 0x36, 0x68, 0x63, 0x73, 0x67, 0x67, 0x63,
-    ];
-    writer.write(&account).unwrap();
+    // Account
+    // AccountToLoginAs (admin only)
+    // AuthType.Password | AuthType.GlsTicket
+    writer.write(&account_len.to_le_bytes()).unwrap();
+    writer.write(&account_name.as_bytes()).unwrap();
+    writer.write(&":".as_bytes()).unwrap();
+    writer.write(&password.as_bytes()).unwrap();
+
+    // TODO: Not sure what this extra is yet
     writer
         .write(vec![0, 0, 0, 0, 0, 0, 0, 0, 0, 0].as_ref())
         .unwrap();
