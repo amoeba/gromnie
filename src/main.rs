@@ -1,20 +1,35 @@
-use clap::Parser;
+use std::path::PathBuf;
+
+use clap::{Parser, Subcommand};
 
 mod client;
 
 use crate::client::Client;
 use crate::client::ClientLoginState;
 
-#[derive(Parser, Debug)]
+#[derive(Parser)]
 #[command(version, about, long_about = None)]
-struct Args {
-    /// Name of the person to greet
-    #[arg(short, long)]
-    name: String,
+struct Cli {
+    /// Load runtime configuration from a config file
+    #[arg(short, long, value_name = "FILE")]
+    config: Option<PathBuf>,
 
-    /// Number of times to greet
-    #[arg(short, long, default_value_t = 1)]
-    count: u8,
+    /// Enables debug mode
+    #[arg(short, long, action = clap::ArgAction::Count)]
+    debug: u8,
+
+    #[command(subcommand)]
+    command: Option<Commands>,
+}
+
+#[derive(Subcommand)]
+enum Commands {
+    /// does testing things
+    Connect {
+        /// Address to connect to
+        #[arg(short, long, value_name = "ADDRESS")]
+        address: Option<String>,
+    },
 }
 
 async fn client_task(id: u32, address: String, account_name: String, password: String) {
@@ -53,7 +68,7 @@ async fn client_task(id: u32, address: String, account_name: String, password: S
 
 #[tokio::main]
 async fn main() -> Result<(), ()> {
-    let args = Args::parse();
+    let args = Cli::parse();
 
     // TODO: Wrap this up nicer
     let address = "localhost:9000";
