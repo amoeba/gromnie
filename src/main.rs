@@ -16,7 +16,6 @@ async fn client_task(id: u32, address: String, account_name: String, password: S
 
     let mut buf = [0u8; 1024];
     loop {
-        // TODO: Convert use of io::Socket to tokio::Socket, then await this
         let (size, peer) = client.socket.recv_from(&mut buf).await.unwrap();
 
         let local_addr = client.socket.local_addr().unwrap();
