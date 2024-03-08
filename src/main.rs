@@ -1,8 +1,21 @@
+use clap::Parser;
+
 mod client;
 
-use client::Client;
-
+use crate::client::Client;
 use crate::client::ClientLoginState;
+
+#[derive(Parser, Debug)]
+#[command(version, about, long_about = None)]
+struct Args {
+    /// Name of the person to greet
+    #[arg(short, long)]
+    name: String,
+
+    /// Number of times to greet
+    #[arg(short, long, default_value_t = 1)]
+    count: u8,
+}
 
 async fn client_task(id: u32, address: String, account_name: String, password: String) {
     let mut client = Client::create(
@@ -40,6 +53,8 @@ async fn client_task(id: u32, address: String, account_name: String, password: S
 
 #[tokio::main]
 async fn main() -> Result<(), ()> {
+    let args = Args::parse();
+
     // TODO: Wrap this up nicer
     let address = "localhost:9000";
     let account_name_prefix = "test";
