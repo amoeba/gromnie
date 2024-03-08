@@ -97,6 +97,7 @@ pub fn login_request<W: Write + Seek>(writer: &mut W, name: &str, password: &str
     writer.write(&0x0u32.to_le_bytes()).unwrap();
 
     // Sequence
+    // TODO: I think this is supposed to be a timestamp
     writer.write(&0x58a8b83eu32.to_le_bytes()).unwrap();
 
     // Account
