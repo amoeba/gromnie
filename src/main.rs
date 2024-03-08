@@ -21,10 +21,9 @@ async fn client_task(id: u32, address: String, account_name: String, password: S
         let (size, peer) = client.socket.recv_from(&mut buf).await.unwrap();
 
         // Temporary: Don't check size, check that actual packet data we get
-        if size == 52 {
-            client.login_state = ClientLoginState::LoggedIn;
-        } else {
-            client.login_state = ClientLoginState::Error;
+        match size {
+            52 => client.login_state = ClientLoginState::LoggedIn,
+            _ => client.login_state = ClientLoginState::Error,
         }
 
         let local_addr = client.socket.local_addr().unwrap();
