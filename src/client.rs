@@ -86,7 +86,7 @@ impl Client {
 
         // TODO: Wrap this up in a nicer way
         let mut buffer = Cursor::new(Vec::new());
-        messages::login_request(&mut buffer);
+        messages::login_request(&mut buffer, &self.account.name, &self.account.password);
         let serialized_data: Vec<u8> = buffer.into_inner();
 
         // TODO: Handle here with match

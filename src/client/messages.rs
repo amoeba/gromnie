@@ -49,7 +49,7 @@
 
 use std::io::{Seek, Write};
 
-pub fn login_request<W: Write + Seek>(writer: &mut W) {
+pub fn login_request<W: Write + Seek>(writer: &mut W, name: &str, password: &str) {
     let protocol_version = "1802";
     let account_name = "acservertracker";
     let password = "jj9h26hcsggc";
@@ -91,14 +91,6 @@ pub fn login_request<W: Write + Seek>(writer: &mut W) {
 
     // Timestamp = packet.DataReader.ReadUInt32();                    // sequence
     writer.write(&0x58a8b83eu32.to_le_bytes()).unwrap();
-
-    // Account = packet.DataReader.ReadString16L();
-    // string accountToLoginAs = packet.DataReader.ReadString16L();   // special admin only, AuthFlags has 2
-
-    // if (NetAuthType == NetAuthType.AccountPassword)
-    //     Password = packet.DataReader.ReadString32L();
-    // else if (NetAuthType == NetAuthType.GlsTicket)
-    //     GlsTicket = packet.DataReader.ReadString32L();
 
     let account: [u8; 30] = [
         0x1c, 0x00, 0x61, 0x63, 0x73, 0x65, 0x72, 0x76, 0x65, 0x72, 0x74, 0x72, 0x61, 0x63, 0x6b,
