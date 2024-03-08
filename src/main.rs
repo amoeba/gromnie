@@ -2,6 +2,8 @@ mod client;
 
 use client::Client;
 
+use crate::client::ClientLoginState;
+
 async fn client_task(id: u32, address: String, account_name: String, password: String) {
     let mut client = Client::create(
         id.to_owned(),
@@ -17,6 +19,13 @@ async fn client_task(id: u32, address: String, account_name: String, password: S
     let mut buf = [0u8; 1024];
     loop {
         let (size, peer) = client.socket.recv_from(&mut buf).await.unwrap();
+
+        // Temporary: Don't check size, check that actual packet data we get
+        if size == 52 {
+            client.login_state = ClientLoginState::LoggedIn;
+        } else {
+            client.login_state = ClientLoginState::Error;
+        }
 
         let local_addr = client.socket.local_addr().unwrap();
         println!(

@@ -14,6 +14,14 @@ pub enum ClientConnectState {
     Connecting,
     Connected,
 }
+#[derive(Clone, Debug, PartialEq)]
+pub enum ClientLoginState {
+    Error,
+    NotLoggedIn,
+    LoggingIn,
+    LoggedIn,
+}
+
 // End state machine
 
 struct Account {
@@ -30,6 +38,7 @@ pub struct Client {
     pub socket: UdpSocket,
     account: Account,
     connect_state: ClientConnectState,
+    pub login_state: ClientLoginState,
 }
 
 impl Client {
@@ -52,12 +61,13 @@ impl Client {
             account: Account { name, password },
             socket: sok,
             connect_state: ClientConnectState::Disconnected,
+            login_state: ClientLoginState::NotLoggedIn,
         }
     }
 
     // TODO: Should return a Result with a success or failure
     pub async fn connect(&mut self) -> Result<(), std::io::Error> {
-        println!("client connecting...");
+        self.connect_state = ClientConnectState::Connecting;
 
         // TODO: Should handle this with pattern matching
         self.socket
@@ -65,13 +75,14 @@ impl Client {
             .await
             .expect("connect failed");
 
+        self.connect_state = ClientConnectState::Connected;
         println!("client connected");
 
         Ok(())
     }
 
     pub async fn do_login(&mut self) -> Result<(), std::io::Error> {
-        println!("client logging in...");
+        self.login_state = ClientLoginState::LoggingIn;
 
         // TODO: Wrap this up in a nicer way
         let mut buffer = Cursor::new(Vec::new());
