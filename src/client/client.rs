@@ -173,6 +173,10 @@ pub async fn parse_fragment(buffer: &[u8]) -> Result<Fragment, deku::DekuError> 
                 }
             }
         }
+        crate::messages::packet::PacketHeaderFlags::AckSequence => {
+            println!("ACK!");
+            return Err(DekuError::Unexpected(format!("ACK! This packet isn't handled: {:02x?}", buffer).to_owned()));
+        },
         _ => {
             return Err(DekuError::Unexpected(format!("This packet isn't handled: {:02x?}", buffer).to_owned()));
         }
