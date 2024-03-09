@@ -67,17 +67,21 @@ async fn client_task(id: u32, address: String, account_name: String, password: S
             peer
         );
         println!("           {:02X?}", &buf[..size]);
+
         // Temporary code
         // TODO: Try to pull packet data out of this
         let result = parse_fragment(&buf[..size]).await;
 
         match result {
             Ok(fragment) => {
-                println!("[FRAGMENT]  {:?}", fragment);
+                println!("[OK FRAGMENT]  {:?}", fragment);
 
+                // TODO: Once this is right, it needs to get pushed into a
+                // separate async context
                 match fragment.header.flags {
                     gromnie::messages::packet::PacketHeaderFlags::ConnectRequest => {
-                        "GOT CONNECT REQUEST";
+                        println!("GOT CONNECT REQUEST, sending response...");
+                        let _ = client.do_connect_response().await;
                     }
                     _ => {
                         println!("OTHER");
