@@ -48,7 +48,6 @@ async fn client_task(id: u32, address: String, account_name: String, password: S
 
     };
 
-
     match client.do_login().await {
         Ok(_) => {},
         Err(_) => panic!(),
