@@ -64,11 +64,20 @@ async fn client_task(id: u32, address: String, account_name: String, password: S
         let result = parse_fragment(&buf[..size]).await;
 
         match result {
-            Ok(packet) => {
-                println!("PACKET {:?}", packet);
+            Ok(fragment) => {
+                println!("[FRAGMENT]  {:?}", fragment);
+
+                match fragment.header.flags {
+                    gromnie::messages::packet::PacketHeaderFlags::ConnectRequest => {
+                        "GOT CONNECT REQUEST";
+                    }
+                    _ => {
+                        println!("OTHER");
+                    }
+                }
             },
             Err(error) => {
-                println!("ERROR {:?}", error);
+                println!("[FRAGMENT: ERROR] {:?}", error);
             }
         }
         // Temporary: Don't check size, check that actual packet data we get
