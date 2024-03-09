@@ -1,8 +1,5 @@
 use clap::{Parser, Subcommand};
-
-use crate::client::parse_response;
-use crate::client::Client;
-use crate::client::ClientLoginState;
+use gromnie::client::client::{parse_response, Client, ClientLoginState};
 
 #[derive(Parser)]
 #[command(version, about, long_about = None)]

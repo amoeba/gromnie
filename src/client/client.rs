@@ -1,5 +1,3 @@
-mod messages;
-
 use std::io::{self, Cursor, Seek};
 
 use deku::prelude::*;
@@ -7,9 +5,7 @@ use std::string::ToString;
 use strum_macros::Display;
 use tokio::net::UdpSocket;
 
-use crate::client::messages::{ConnectRequestHeader, S2CPacket};
-
-use self::messages::PacketHeaderFlags;
+use crate::messages::{login_request::login_request, packet::{ConnectRequestHeader, S2CPacket}};
 
 // ClientConnectState
 // TODO: Put this somewhere else
@@ -89,8 +85,8 @@ impl Client {
         self.login_state = ClientLoginState::LoggingIn;
 
         // TODO: Wrap this up in a nicer way
-        let mut buffer = Cursor::new(Vec::new());
-        messages::login_request(&mut buffer, &self.account.name, &self.account.password);
+        let mut buffer: Cursor<Vec<u8>> = Cursor::new(Vec::new());
+        login_request(&mut buffer, &self.account.name, &self.account.password);
         let serialized_data: Vec<u8> = buffer.into_inner();
 
         // TODO: Handle here with match
