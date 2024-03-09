@@ -72,9 +72,6 @@ async fn client_task(id: u32, address: String, account_name: String, password: S
             "[STATE/Client] Client login state is now {:?}",
             client.login_state
         );
-
-        // temporary
-        buf.fill(0);
     }
 }
 
