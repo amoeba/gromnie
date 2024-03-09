@@ -1,3 +1,4 @@
+use core::fmt;
 use std::io::{self, Cursor, Seek};
 
 use deku::prelude::*;
@@ -155,7 +156,6 @@ pub async fn parse_fragment(buffer: &[u8]) -> Result<Fragment, deku::DekuError> 
             return Err(e);
         }
     };
-    println!("[parse_response/header] {:?}", hdr.1);
 
     // Skip to remainder
     cursor.seek(io::SeekFrom::Start(hdr.1.size as u64)).unwrap();
@@ -174,11 +174,9 @@ pub async fn parse_fragment(buffer: &[u8]) -> Result<Fragment, deku::DekuError> 
             }
         }
         _ => {
-            return Err(DekuError::Unexpected("This packet isn't handled".to_owned()));
+            return Err(DekuError::Unexpected(format!("This packet isn't handled: {:02x?}", buffer).to_owned()));
         }
     };
-
-    println!("[parse_response/data] {:?}", rest);
 
     // TODO: Not quite right yet, needs to return whole fragment
     let fragment = Fragment {

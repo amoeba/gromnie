@@ -61,7 +61,7 @@ async fn client_task(id: u32, address: String, account_name: String, password: S
         println!("           {:02X?}", &buf[..size]);
         // Temporary code
         // TODO: Try to pull packet data out of this
-        let result = parse_fragment(&buf).await;
+        let result = parse_fragment(&buf[..size]).await;
 
         match result {
             Ok(packet) => {
