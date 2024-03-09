@@ -81,7 +81,7 @@ async fn client_task(id: u32, address: String, account_name: String, password: S
                 match fragment.header.flags {
                     gromnie::messages::packet::PacketHeaderFlags::ConnectRequest => {
                         println!("GOT CONNECT REQUEST, sending response...");
-                        let _ = client.do_connect_response().await;
+                        let _ = client.do_connect_response(fragment.body.cookie;).await;
                     }
                     _ => {
                         println!("OTHER");

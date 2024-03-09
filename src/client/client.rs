@@ -97,12 +97,12 @@ impl Client {
     }
 
 
-    pub async fn do_connect_response(&mut self) -> Result<(), std::io::Error> {
+    pub async fn do_connect_response(&mut self, cookie: u8) -> Result<(), std::io::Error> {
         println!("sending do_connect_response");
 
         // TODO: Wrap this up in a nicer way
         let mut buffer: Cursor<Vec<u8>> = Cursor::new(Vec::new());
-        connect_response(&mut buffer);
+        connect_response(&mut buffer, cookie);
         let serialized_data: Vec<u8> = buffer.into_inner();
 
         // TODO: Handle here with match

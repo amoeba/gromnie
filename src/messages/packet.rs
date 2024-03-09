@@ -25,7 +25,7 @@ pub struct S2CPacket {
 #[deku(endian = "little")]
 pub struct ConnectRequestHeader {
     server_time: f64,
-    cookie: u8,
+    pub cookie: u8,
     net_id: i32,
     outgoing_seed: u32,
     unknown: u32,
