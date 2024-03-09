@@ -134,7 +134,16 @@ impl Client {
 pub fn parse_response(buffer: &[u8]) {
     let mut cursor = Cursor::new(&buffer);
 
-    let hdr = S2CPacket::from_bytes((&cursor.get_ref(), 0)).unwrap();
+    // Temporarily: Handle this tolerantly as we figure out the protocol
+    let result = S2CPacket::from_bytes((&cursor.get_ref(), 0));
+
+    let hdr = match result {
+        Ok(val) => val,
+        Err(e) => {
+            println!("[WARN] {}", e);
+            return;
+        }
+    };
     println!("[parse_response/header] {:?}", hdr.1);
 
     // Skip to remainder
