@@ -3,6 +3,29 @@ use deku::prelude::*;
 use std::string::ToString;
 use strum_macros::Display;
 
+// 20 bytes?
+#[derive(Debug, PartialEq, DekuRead, DekuWrite)]
+#[deku(endian = "little")]
+pub struct S2CPacket {
+    sequence: u32,
+    pub flags: PacketHeaderFlags,
+    checksum: u32,
+    recipient_id: u16,
+    time_since_last_packet: u16,
+    pub size: u16,
+    iteration: u16,
+}
+
+#[derive(Debug, PartialEq, DekuRead, DekuWrite)]
+#[deku(endian = "little")]
+pub struct ConnectRequestHeader {
+    server_time: f64,
+    cookie: u8,
+    net_id: i32,
+    outgoing_seed: u32,
+    unknown: u32,
+}
+
 #[derive(Debug, PartialEq, DekuRead, DekuWrite, Display)]
 #[deku(type = "u32", endian = "endian", ctx = "endian: deku::ctx::Endian")]
 pub enum PacketHeaderFlags {

@@ -7,6 +7,8 @@ use std::string::ToString;
 use strum_macros::Display;
 use tokio::net::UdpSocket;
 
+use crate::client::messages::{ConnectRequestHeader, S2CPacket};
+
 use self::messages::PacketHeaderFlags;
 
 // ClientConnectState
@@ -129,29 +131,6 @@ impl Client {
     // <field name="IncomingSeed" type="uint" />
     // <field name="Unknown" type="DWORD" />
     // </type>
-}
-
-// 20 bytes?
-#[derive(Debug, PartialEq, DekuRead, DekuWrite)]
-#[deku(endian = "little")]
-pub struct S2CPacket {
-    sequence: u32,
-    flags: PacketHeaderFlags,
-    checksum: u32,
-    recipient_id: u16,
-    time_since_last_packet: u16,
-    size: u16,
-    iteration: u16,
-}
-
-#[derive(Debug, PartialEq, DekuRead, DekuWrite)]
-#[deku(endian = "little")]
-pub struct ConnectRequestHeader {
-    server_time: f64,
-    cookie: u8,
-    net_id: i32,
-    outgoing_seed: u32,
-    unknown: u32,
 }
 
 // TODO: this is a total hack but it looks like it works. Can we wrap this up
