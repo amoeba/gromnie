@@ -39,7 +39,7 @@ struct Account {
 // to get things to work but I should be able to listen on any random port so
 // I'm not sure what I'm doing wrong
 pub struct Client {
-    id: u32,
+    pub id: u32,
     address: String,
     pub socket: UdpSocket,
     account: Account,
