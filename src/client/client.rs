@@ -1,9 +1,6 @@
-use core::fmt;
 use std::io::{self, Cursor, Seek};
 
 use deku::prelude::*;
-use std::string::ToString;
-use strum_macros::Display;
 use tokio::net::UdpSocket;
 
 use crate::messages::{connect_response::connect_response, login_request::login_request, packet::{ConnectRequestHeader, Fragment, S2CPacket}};
@@ -91,7 +88,10 @@ impl Client {
         let serialized_data: Vec<u8> = buffer.into_inner();
 
         // TODO: Handle here with match
-        self.socket.send(&serialized_data).await;
+        match self.socket.send(&serialized_data).await {
+            Ok(_) => {},
+            Err(_) => panic!(),
+        }
 
         Ok(())
     }
@@ -106,7 +106,7 @@ impl Client {
         let serialized_data: Vec<u8> = buffer.into_inner();
 
         // TODO: Handle here with match
-        self.socket.send(&serialized_data).await;
+        let _ = self.socket.send(&serialized_data).await;
 
         Ok(())
     }

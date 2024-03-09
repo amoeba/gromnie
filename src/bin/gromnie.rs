@@ -1,5 +1,5 @@
 use clap::{Parser, Subcommand};
-use gromnie::{client::client::{parse_fragment, Client, ClientLoginState}, messages::packet::S2CPacket};
+use gromnie::client::client::{parse_fragment, Client, ClientLoginState};
 
 #[derive(Parser)]
 #[command(version, about, long_about = None)]
@@ -42,8 +42,17 @@ async fn client_task(id: u32, address: String, account_name: String, password: S
     )
     .await;
 
-    client.connect().await;
-    client.do_login().await;
+    match client.connect().await {
+        Ok(_) => {},
+        Err(_) => panic!(),
+
+    };
+
+
+    match client.do_login().await {
+        Ok(_) => {},
+        Err(_) => panic!(),
+    }
 
     let local_addr = client.socket.local_addr().unwrap();
 
