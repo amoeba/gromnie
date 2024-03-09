@@ -1,4 +1,58 @@
 // use deku::prelude::*;
+use deku::prelude::*;
+use std::string::ToString;
+use strum_macros::Display;
+
+#[derive(Debug, PartialEq, DekuRead, DekuWrite, Display)]
+#[deku(type = "u32", endian = "endian", ctx = "endian: deku::ctx::Endian")]
+pub enum PacketHeaderFlags {
+    #[deku(id = "0x00000000")]
+    None,
+    #[deku(id = "0x00000001")]
+    Retransmission,
+    #[deku(id = "0x00000002")]
+    EncryptedChecksum,
+    #[deku(id = "0x00000004")]
+    BlobFragments,
+    #[deku(id = "0x00000100")]
+    ServerSwitch,
+    #[deku(id = "0x00000200")]
+    LogonServerAddr,
+    #[deku(id = "0x00000400")]
+    EmptyHeader1,
+    #[deku(id = "0x00000800")]
+    Referral,
+    #[deku(id = "0x00001000")]
+    RequestRetransmit,
+    #[deku(id = "0x00002000")]
+    RejectRetransmit,
+    #[deku(id = "0x00004000")]
+    AckSequence,
+    #[deku(id = "0x00008000")]
+    Disconnect,
+    #[deku(id = "0x00010000")]
+    LoginRequest,
+    #[deku(id = "0x00020000")]
+    WorldLoginRequest,
+    #[deku(id = "0x00040000")]
+    ConnectRequest,
+    #[deku(id = "0x00080000")]
+    ConnectResponse,
+    #[deku(id = "0x00100000")]
+    NetError,
+    #[deku(id = "0x00200000")]
+    NetErrorDisconnect,
+    #[deku(id = "0x00400000")]
+    CICMDCommand,
+    #[deku(id = "0x01000000")]
+    TimeSync,
+    #[deku(id = "0x02000000")]
+    EchoRequest,
+    #[deku(id = "0x04000000")]
+    EchoResponse,
+    #[deku(id = "0x08000000")]
+    Flow,
+}
 
 // #[derive(Debug, PartialEq, DekuRead, DekuWrite)]
 // pub struct StringWithLength {

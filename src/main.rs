@@ -1,19 +1,14 @@
-use std::path::PathBuf;
-
 use clap::{Parser, Subcommand};
 
 mod client;
 
+use crate::client::parse_response;
 use crate::client::Client;
 use crate::client::ClientLoginState;
 
 #[derive(Parser)]
 #[command(version, about, long_about = None)]
-struct Cli {
-    /// Load runtime configuration from a config file
-    #[arg(short, long, value_name = "FILE")]
-    config: Option<PathBuf>,
-
+pub struct Cli {
     /// Enables debug mode
     #[arg(short, long, action = clap::ArgAction::Count)]
     debug: u8,
@@ -21,14 +16,25 @@ struct Cli {
     #[command(subcommand)]
     command: Option<Commands>,
 }
-
 #[derive(Subcommand)]
 enum Commands {
-    /// does testing things
+    /// connect
+    ///
+    /// Connect to a server.
+    ///
+    /// Usage: gromnie connect -a localhost:9000 -u admin -p password
     Connect {
-        /// Address to connect to
+        /// Address to connect to in host:port syntax
         #[arg(short, long, value_name = "ADDRESS")]
         address: Option<String>,
+
+        /// Account name
+        #[arg(short, long, value_name = "USERNME")]
+        username: Option<String>,
+
+        /// Password
+        #[arg(short, long, value_name = "PASSWORD")]
+        password: Option<String>,
     },
 }
 
@@ -48,6 +54,9 @@ async fn client_task(id: u32, address: String, account_name: String, password: S
     loop {
         let (size, peer) = client.socket.recv_from(&mut buf).await.unwrap();
 
+        // Temporary code
+        // TODO: Try to pull packet data out of this
+        parse_response(&buf);
         // Temporary: Don't check size, check that actual packet data we get
         match size {
             52 => client.login_state = ClientLoginState::LoggedIn,
@@ -68,7 +77,8 @@ async fn client_task(id: u32, address: String, account_name: String, password: S
 
 #[tokio::main]
 async fn main() -> Result<(), ()> {
-    let args = Cli::parse();
+    // TODO: Finish CLI
+    let _ = Cli::parse();
 
     // TODO: Wrap this up nicer
     let address = "localhost:9000";

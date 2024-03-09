@@ -3,7 +3,11 @@ mod messages;
 use std::io::{self, Cursor, Seek};
 
 use deku::prelude::*;
+use std::string::ToString;
+use strum_macros::Display;
 use tokio::net::UdpSocket;
+
+use self::messages::PacketHeaderFlags;
 
 // ClientConnectState
 // TODO: Put this somewhere else
@@ -89,6 +93,8 @@ impl Client {
         messages::login_request(&mut buffer, &self.account.name, &self.account.password);
         let serialized_data: Vec<u8> = buffer.into_inner();
 
+        println!("{:?}", serialized_data);
+
         // TODO: Handle here with match
         self.socket.send(&serialized_data).await;
 
@@ -130,7 +136,7 @@ impl Client {
 #[deku(endian = "little")]
 pub struct S2CPacket {
     sequence: u32,
-    flags: u32,
+    flags: PacketHeaderFlags,
     checksum: u32,
     recipient_id: u16,
     time_since_last_packet: u16,
@@ -155,11 +161,13 @@ pub fn parse_response(buffer: &[u8]) {
 
     let hdr = S2CPacket::from_bytes((&cursor.get_ref(), 0)).unwrap();
     println!("{:?}", hdr.1);
+    println!("Flags are: {}", hdr.1.flags);
 
     // Skip to remainder
     cursor.seek(io::SeekFrom::Start(hdr.1.size as u64));
 
     let data: ((&[u8], usize), ConnectRequestHeader) =
         ConnectRequestHeader::from_bytes((&cursor.get_ref(), 32)).unwrap();
+
     println!("{:?}", data.1);
 }
