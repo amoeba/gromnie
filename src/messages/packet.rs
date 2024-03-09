@@ -2,6 +2,14 @@ use deku::prelude::*;
 use std::string::ToString;
 use strum_macros::Display;
 
+
+#[derive(Debug, PartialEq)]
+pub struct Fragment {
+    pub header: S2CPacket,
+    // TODO: WRong type here but for now it works
+    pub body : ConnectRequestHeader,
+}
+
 // 20 bytes?
 #[derive(Debug, PartialEq, DekuRead, DekuWrite)]
 #[deku(endian = "little")]

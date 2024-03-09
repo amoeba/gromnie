@@ -5,7 +5,7 @@ use std::string::ToString;
 use strum_macros::Display;
 use tokio::net::UdpSocket;
 
-use crate::messages::{connect_response::connect_response, login_request::login_request, packet::{ConnectRequestHeader, S2CPacket}};
+use crate::messages::{connect_response::connect_response, login_request::login_request, packet::{ConnectRequestHeader, Fragment, S2CPacket}};
 
 // ClientConnectState
 // TODO: Put this somewhere else
@@ -142,7 +142,7 @@ impl Client {
 
 // TODO: this is a total hack but it looks like it works. Can we wrap this up
 // better?
-pub async fn parse_fragment(buffer: &[u8]) -> Result<S2CPacket, deku::DekuError> {
+pub async fn parse_fragment(buffer: &[u8]) -> Result<Fragment, deku::DekuError> {
     let mut cursor = Cursor::new(&buffer);
 
     // Temporarily: Handle this tolerantly as we figure out the protocol
@@ -181,5 +181,10 @@ pub async fn parse_fragment(buffer: &[u8]) -> Result<S2CPacket, deku::DekuError>
     println!("[parse_response/data] {:?}", rest);
 
     // TODO: Not quite right yet, needs to return whole fragment
-    Ok(hdr.1)
+    let fragment = Fragment {
+        header: hdr.1,
+        body: rest.1
+    };
+
+    Ok(fragment)
 }
