@@ -142,7 +142,7 @@ impl Client {
 
 // TODO: this is a total hack but it looks like it works. Can we wrap this up
 // better?
-pub fn parse_fragment(buffer: &[u8]) -> Result<S2CPacket, deku::DekuError> {
+pub async fn parse_fragment(buffer: &[u8]) -> Result<S2CPacket, deku::DekuError> {
     let mut cursor = Cursor::new(&buffer);
 
     // Temporarily: Handle this tolerantly as we figure out the protocol
