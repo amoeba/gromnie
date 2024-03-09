@@ -49,14 +49,12 @@ pub struct Client {
 
 impl Client {
     pub async fn create(id: u32, address: String, name: String, password: String) -> Client {
-        println!("Client::create");
-
         let sok = UdpSocket::bind("0.0.0.0:0").await.unwrap();
 
         // Debug
         let local_addr = sok.local_addr().unwrap();
         println!(
-            "client listening on {}:{}",
+            "[Client::create] client listening on {}:{}",
             local_addr.ip(),
             local_addr.port()
         );
@@ -82,7 +80,7 @@ impl Client {
             .expect("connect failed");
 
         self.connect_state = ClientConnectState::Connected;
-        println!("client connected");
+        println!("[Client::connect] Client connected!");
 
         Ok(())
     }
@@ -94,8 +92,6 @@ impl Client {
         let mut buffer = Cursor::new(Vec::new());
         messages::login_request(&mut buffer, &self.account.name, &self.account.password);
         let serialized_data: Vec<u8> = buffer.into_inner();
-
-        println!("{:?}", serialized_data);
 
         // TODO: Handle here with match
         self.socket.send(&serialized_data).await;
@@ -139,8 +135,7 @@ pub fn parse_response(buffer: &[u8]) {
     let mut cursor = Cursor::new(&buffer);
 
     let hdr = S2CPacket::from_bytes((&cursor.get_ref(), 0)).unwrap();
-    println!("{:?}", hdr.1);
-    println!("Flags are: {}", hdr.1.flags);
+    println!("[parse_response/header] {:?}", hdr.1);
 
     // Skip to remainder
     cursor.seek(io::SeekFrom::Start(hdr.1.size as u64));
@@ -148,5 +143,5 @@ pub fn parse_response(buffer: &[u8]) {
     let data: ((&[u8], usize), ConnectRequestHeader) =
         ConnectRequestHeader::from_bytes((&cursor.get_ref(), 32)).unwrap();
 
-    println!("{:?}", data.1);
+    println!("[parse_response/data] {:?}", data.1);
 }

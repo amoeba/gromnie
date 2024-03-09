@@ -63,14 +63,17 @@ async fn client_task(id: u32, address: String, account_name: String, password: S
             _ => client.login_state = ClientLoginState::Error,
         }
 
-        println!("client login state is {:?}", client.login_state);
+        println!(
+            "[STATE/Client] Client login state is now {:?}",
+            client.login_state
+        );
 
         let local_addr = client.socket.local_addr().unwrap();
         println!(
-            "Client on port {} received data from {}: {:?}",
+            "[DEBUG/Client] Client on port {} received {} bytes of data from {}",
             local_addr.port(),
+            size,
             peer,
-            &buf[..size]
         );
     }
 }
@@ -102,7 +105,6 @@ async fn main() -> Result<(), ()> {
     }
 
     for task in tasks {
-        println!("about to await a task...");
         task.await.unwrap();
     }
 
