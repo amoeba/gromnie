@@ -1,5 +1,5 @@
 use clap::{Parser, Subcommand};
-use gromnie::client::client::{parse_fragment, Client, ClientLoginState};
+use gromnie::{client::client::{parse_fragment, Client, ClientLoginState}, messages::packet::S2CPacket};
 
 #[derive(Parser)]
 #[command(version, about, long_about = None)]
@@ -63,6 +63,14 @@ async fn client_task(id: u32, address: String, account_name: String, password: S
         // TODO: Try to pull packet data out of this
         let result = parse_fragment(&buf).await;
 
+        match result {
+            Ok(packet) => {
+                println!("PACKET {:?}", packet);
+            },
+            Err(error) => {
+                println!("ERROR {:?}", error);
+            }
+        }
         // Temporary: Don't check size, check that actual packet data we get
         match size {
             52 => client.login_state = ClientLoginState::LoggedIn,
