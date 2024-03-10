@@ -8,7 +8,7 @@ pub fn get_magic_number(data: &Vec<u8>, size: u32, include_size: bool) -> u32 {
   // i is used in both for loops
   let mut i : u32 = 0;
 
-  for _ in 0..(size/4) {
+  for _ in 0..(size / 4) {
     magic += data[i as usize] as u32;
     i += 1;
   }
