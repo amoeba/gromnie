@@ -1,6 +1,62 @@
 use deku::prelude::*;
 use strum_macros::Display;
 
+use crate::checksum::get_magic_number;
+
+#[derive(Debug, PartialEq)]
+pub struct TransitHeader {
+
+}
+
+#[derive(Debug, PartialEq)]
+pub struct Packet {
+    pub header: TransitHeader,
+    pub fragment: Fragment,
+    // TODO: Document each of these
+    option_size: i32,
+    sequence_ack: u32,
+    connect_token: i64,
+    timestamp: i64,
+}
+
+impl Packet {
+    pub fn set_ack(&mut self, sequence: u32) {
+        self.sequence_ack = sequence;
+        self.option_size += 4;
+        // TODO: Update flags
+        // Header.Flags |= PacketFlags.AckSequence;
+    }
+
+    pub fn set_token(&mut self, token: i64, world: Option<bool>)
+    {
+        self.connect_token = token;
+        self.option_size += 8;
+        // TODO: Update flags
+        // Header.Flags |= world ? PacketFlags.LoginWorld : PacketFlags.ConnectResponse;
+    }
+
+    pub fn set_timestamp(&mut self, timestamp: i64)
+    {
+        self.timestamp = timestamp;
+        self.option_size += 8;
+        // TODO: Update flags
+        // Header.Flags |= PacketFlags.TimeSync;
+    }
+
+    fn hash(&mut self, seed : u32, data : Vec<u8>) -> u32{
+        let orig = 0; // should be header.Checksum, whatever that is
+        let mut result = 0;
+
+        if self.option_size > 0 {
+            result += get_magic_number(&data[..(self.option_size as usize)], OptionSize, true)
+        }
+
+        result
+  }
+
+
+}
+
 #[derive(Debug, PartialEq)]
 pub struct Fragment {
     pub header: S2CPacket,
