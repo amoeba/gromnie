@@ -47,10 +47,8 @@ use std::io::{Seek, Write};
 //   // Minor: u8,
 // }
 
-pub fn login_request<W: Write + Seek>(writer: &mut W, _name: &str, _password: &str) {
+pub fn login_request<W: Write + Seek>(writer: &mut W, account_name: &str, password: &str) {
     let _protocol_version = "1802";
-    let account_name = "acservertracker";
-    let password = "jj9h26hcsggc";
 
     // sequence
     writer.write(&0x0u32.to_le_bytes()).unwrap();

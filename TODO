@@ -22,3 +22,8 @@ What is hashed?
   ACE has code that makes it look like it hashes both the header and the body
 What algorithm is used to hash?
 Does the server set the seed for the hash?
+
+Some packets are more complicated and use some RNG?
+
+> parad0x: "the isaac rng uses that, and each packet gets a new value from the
+gen to use as part of the checksum well, each flagged packet"

@@ -1,6 +1,15 @@
 use std::io::Cursor;
 
 use gromnie::messages::login_request::login_request;
+use gromnie::checksum::get_magic_number;
+
+#[test]
+fn test_checksum() {
+  let input = vec![1, 2, 3, 4];
+  let magic = get_magic_number(&input, 0, true);
+
+  assert_eq!(0, magic);
+}
 
 
 #[test]
