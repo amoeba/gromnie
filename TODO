@@ -27,3 +27,5 @@ Some packets are more complicated and use some RNG?
 
 > parad0x: "the isaac rng uses that, and each packet gets a new value from the
 gen to use as part of the checksum well, each flagged packet"
+
+Apparently <https://en.wikipedia.org/wiki/ISAAC_(cipher)> is used.
