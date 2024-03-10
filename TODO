@@ -3,6 +3,7 @@ TODO
 - [x] Get raw login packet sent and recv a response (52 bytes)
 - [x] Start building out structs+readers for login request/response
 - [x] Refactor to work on tokio.rs and run multiple clients
+- [ ] Figure out hashing
 - [ ] Refactor packet sending code into something more generic
 - [ ] Get a character list
 - [ ] Log into the game world
@@ -13,3 +14,11 @@ IDEAS
 - Terminal GUI
 - Web GUI
 - See how much of this can run under WASM
+
+HASHING
+
+What is hashed?
+  I think just the TransitHeader (packet header) buffer?
+  ACE has code that makes it look like it hashes both the header and the body
+What algorithm is used to hash?
+Does the server set the seed for the hash?
