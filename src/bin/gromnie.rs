@@ -1,5 +1,5 @@
 use clap::{Parser, Subcommand};
-use gromnie::client::client::{parse_fragment, Client, ClientLoginState};
+use gromnie::{client::client::{parse_fragment, Client, ClientLoginState}, messages::packet::PacketHeaderFlags};
 
 #[derive(Parser)]
 #[command(version, about, long_about = None)]
@@ -78,8 +78,10 @@ async fn client_task(id: u32, address: String, account_name: String, password: S
 
                 // TODO: Once this is right, it needs to get pushed into a
                 // separate async context
-                match fragment.header.flags {
-                    gromnie::messages::packet::PacketHeaderFlags::ConnectRequest => {
+                let flags = PacketHeaderFlags::from_bits(fragment.header.flags).unwrap();
+
+                match flags {
+                    PacketHeaderFlags::ConnectRequest => {
                         println!("GOT CONNECT REQUEST, sending response...");
                         let _ = client.do_connect_response(fragment.body.cookie).await;
                     }

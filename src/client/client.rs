@@ -3,8 +3,6 @@ use std::io::{self, Cursor, Seek};
 use deku::prelude::*;
 use tokio::net::UdpSocket;
 
-use crate::messages::{connect_response::connect_response, login_request::login_request, packet::{ConnectRequestHeader, Fragment, TransitHeader}};
-
 // ClientConnectState
 // TODO: Put this somewhere else
 #[derive(Clone, Debug, PartialEq)]
@@ -77,6 +75,10 @@ impl Client {
         println!("[Client::connect] Client connected!");
 
         Ok(())
+    }
+
+    pub async fn send(&mut self, Packet: Packet) {
+
     }
 
     pub async fn do_login(&mut self) -> Result<(), std::io::Error> {
@@ -163,9 +165,12 @@ pub async fn parse_fragment(buffer: &[u8]) -> Result<Fragment, deku::DekuError> 
     // TODO: This value only works for one packet, what does it need to be?
     let temp_read_len = 32;
 
+    // We need to convert from a u32 to a PacketHeaderFlags
+    let flag = PacketHeaderFlags::from_bits(hdr.1.flags).unwrap();
+
     // TODO: Should/could be a template to save code
-    let rest: ((&[u8], usize), ConnectRequestHeader) = match hdr.1.flags {
-        crate::messages::packet::PacketHeaderFlags::ConnectRequest => {
+    let rest: ((&[u8], usize), ConnectRequestHeader) = match flag {
+        PacketHeaderFlags::ConnectRequest => {
             match ConnectRequestHeader::from_bytes((&cursor.get_ref(), temp_read_len)) {
                 Ok(header) => header,
                 Err(error) => {
@@ -173,7 +178,7 @@ pub async fn parse_fragment(buffer: &[u8]) -> Result<Fragment, deku::DekuError> 
                 }
             }
         }
-        crate::messages::packet::PacketHeaderFlags::AckSequence => {
+        PacketHeaderFlags::AckSequence => {
             println!("ACK!");
             return Err(DekuError::Unexpected(format!("ACK! This packet isn't handled: {:02x?}", buffer).to_owned()));
         },

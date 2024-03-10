@@ -1,0 +1,13 @@
+actestclient docs
+
+How/what does NetworkManager.Send actually do?
+- It gets passed in a subclass of Packet, like LoginRequestPacket
+- Calls the superclass (Packet) .Serialize method
+  - Which serializes the entire packet to a buffer, in two phases
+    - First it serializes the fragment data
+    - Then it jumps back and serializes the header
+    ? Why?
+  - and records a length
+  ! the serialized buffer is a TransitHeader
+- Updates the TransitHeader with connection state (i.e., sequence)
+- Hashes the header buffer and sets it

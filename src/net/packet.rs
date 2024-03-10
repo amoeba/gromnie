@@ -1,26 +1,21 @@
+use std::io::{Seek, Write};
+
 use deku::prelude::*;
-use strum_macros::Display;
 use bitflags::bitflags;
 
-use crate::checksum::get_magic_number;
+use super::transit_header::TransitHeader;
 
-#[derive(Debug, PartialEq, DekuRead, DekuWrite)]
-#[deku(endian = "little")]
-pub struct TransitHeader {
-    sequence: u32,
-    pub flags: u32, // Weakly typed here because deku and bitflags don't work
-                    // togetherr
-    checksum: u32,
-    recipient_id: u16,
-    time_since_last_packet: u16,
-    pub size: u16,
-    table: u16,
+// WIP, not sure about this yet.
+pub trait Serializable {
+    fn serialize<W: Write + Seek>(&mut self, &mut writer: W) {
+        todo!();
+    }
 }
 
 #[derive(Debug, PartialEq)]
-pub struct Packet {
+pub struct Packet<T: Serializable> {
     pub header: TransitHeader,
-    pub fragment: Fragment,
+    pub payload: T, // TODO: Not sure when I will need this
     // TODO: Document each of these
     option_size: i32,
     sequence_ack: u32,
@@ -29,6 +24,17 @@ pub struct Packet {
 }
 
 impl Packet {
+    pub fn create<T: Serializable>(payload: T) -> Packet<T> {
+        Packet {
+            header: TransitHeader::create(),
+            option_size: 0,
+            sequence_ack: 0,
+            connect_token: 0,
+            timestamp: 0,
+            payload: payload,
+        }
+    }
+
     pub fn set_ack(&mut self, sequence: u32) {
         self.sequence_ack = sequence;
         self.option_size += 4;
@@ -66,12 +72,13 @@ impl Packet {
         self.header.flags |= PacketHeaderFlags::TimeSync.as_u32();
     }
 
-    fn hash(&mut self, seed : u32, data : Vec<u8>) -> u32{
+    // This hashes a buffer containing [transitheader, packet data]
+    pub fn compute_hash(&mut self, seed : u32, data : Vec<u8>) -> u32{
         let orig = 0; // should be header.Checksum, whatever that is
         let mut result = 0;
 
         if self.option_size > 0 {
-            result += get_magic_number(&data[..(self.option_size as usize)], self.option_size, true)
+            // result += get_magic_number(&data[..(self.option_size as usize)], self.option_size, true)
         }
 
         result
@@ -156,8 +163,13 @@ pub struct ConnectRequestHeader {
 
 // TODO: I'm not sure if there's a way to use Deku with the bitflags crate
 // so I duplicated the flags. Use this one just for bitwise operations.
+// TODO: This might be it, see below...
+#[derive(Debug, PartialEq, Eq, DekuRead, DekuWrite)]
+#[deku(endian = "endian", ctx = "endian: deku::ctx::Endian")]
+pub struct PacketHeaderFlags(u32);
+
 bitflags! {
-    pub struct PacketHeaderFlags: u32 {
+    impl PacketHeaderFlags: u32 {
         const None = 0x00000000;
         const Retransmission = 0x00000001;
         const EncryptedChecksum = 0x00000002;
