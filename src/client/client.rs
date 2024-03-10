@@ -3,7 +3,7 @@ use std::io::{self, Cursor, Seek};
 use deku::prelude::*;
 use tokio::net::UdpSocket;
 
-use crate::messages::{connect_response::connect_response, login_request::login_request, packet::{ConnectRequestHeader, Fragment, S2CPacket}};
+use crate::messages::{connect_response::connect_response, login_request::login_request, packet::{ConnectRequestHeader, Fragment, TransitHeader}};
 
 // ClientConnectState
 // TODO: Put this somewhere else
@@ -119,7 +119,7 @@ impl Client {
     // 0040   82 d4 43 a8 00 00 00 00 75 05 81 e9 55 88 43 18
     // 0050   00 00 00 00
 
-    // ame="S2CPacket" text="Server to Client AC packet.">
+    // ame="TransitHeader" text="Server to Client AC packet.">
     // 		<field type="uint" name="Sequence" text="Packet Sequence / Order" />
     // 		<field type="PacketHeaderFlags" name="Flags" text="Flags that dictate the content / purpose of this packet" />
     // 		<field type="uint" name="Checksum" text="Packet Checksum" />
@@ -147,7 +147,7 @@ pub async fn parse_fragment(buffer: &[u8]) -> Result<Fragment, deku::DekuError> 
     let mut cursor = Cursor::new(&buffer);
 
     // Temporarily: Handle this tolerantly as we figure out the protocol
-    let packet = S2CPacket::from_bytes((&cursor.get_ref(), 0));
+    let packet = TransitHeader::from_bytes((&cursor.get_ref(), 0));
 
     let hdr = match packet {
         Ok(val) => val,
