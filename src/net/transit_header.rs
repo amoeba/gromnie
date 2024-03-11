@@ -14,7 +14,7 @@ pub struct TransitHeader {
 }
 
 impl TransitHeader {
-    pub fn create() -> TransitHeader {
+    pub fn new() -> TransitHeader {
         TransitHeader {
             sequence: 0,
             flags: 0,

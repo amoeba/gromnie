@@ -1,5 +1,7 @@
+use std::io::Cursor;
+
 use clap::{Parser, Subcommand};
-use gromnie::{client::client::{parse_fragment, Client, ClientLoginState}, messages::packet::PacketHeaderFlags};
+use gromnie::{client::client::Client, net::packets::login_request::LoginRequestPacket};
 
 #[derive(Parser)]
 #[command(version, about, long_about = None)]
@@ -34,13 +36,19 @@ enum Commands {
 }
 
 async fn client_task(id: u32, address: String, account_name: String, password: String) {
-    let mut client = Client::create(
+    let mut client = Client::new(
         id.to_owned(),
         address.to_owned(),
         account_name.to_owned(),
         password.to_owned(),
     )
     .await;
+
+    // testikng
+    let packet = LoginRequestPacket::create("my", "password");
+    let buffer = Cursor::new(Vec::new());
+    packet.serialize(&buffer);
+    println!("{:?}", buffer);
 
     match client.connect().await {
         Ok(_) => {},
@@ -70,35 +78,35 @@ async fn client_task(id: u32, address: String, account_name: String, password: S
 
         // Temporary code
         // TODO: Try to pull packet data out of this
-        let result = parse_fragment(&buf[..size]).await;
+        // let result = parse_fragment(&buf[..size]).await;
 
-        match result {
-            Ok(fragment) => {
-                println!("[OK FRAGMENT]  {:?}", fragment);
+        // match result {
+        //     Ok(fragment) => {
+        //         println!("[OK FRAGMENT]  {:?}", fragment);
 
-                // TODO: Once this is right, it needs to get pushed into a
-                // separate async context
-                let flags = PacketHeaderFlags::from_bits(fragment.header.flags).unwrap();
+        //         // TODO: Once this is right, it needs to get pushed into a
+        //         // separate async context
+        //         let flags = PacketHeaderFlags::from_bits(fragment.header.flags).unwrap();
 
-                match flags {
-                    PacketHeaderFlags::ConnectRequest => {
-                        println!("GOT CONNECT REQUEST, sending response...");
-                        let _ = client.do_connect_response(fragment.body.cookie).await;
-                    }
-                    _ => {
-                        println!("OTHER");
-                    }
-                }
-            },
-            Err(error) => {
-                println!("[FRAGMENT: ERROR] {:?}", error);
-            }
-        }
-        // Temporary: Don't check size, check that actual packet data we get
-        match size {
-            52 => client.login_state = ClientLoginState::LoggedIn,
-            _ => client.login_state = ClientLoginState::Error,
-        }
+        //         match flags {
+        //             PacketHeaderFlags::ConnectRequest => {
+        //                 println!("GOT CONNECT REQUEST, sending response...");
+        //                 let _ = client.do_connect_response(fragment.body.cookie).await;
+        //             }
+        //             _ => {
+        //                 println!("OTHER");
+        //             }
+        //         }
+        //     },
+        //     Err(error) => {
+        //         println!("[FRAGMENT: ERROR] {:?}", error);
+        //     }
+        // }
+        // // Temporary: Don't check size, check that actual packet data we get
+        // match size {
+        //     52 => client.login_state = ClientLoginState::LoggedIn,
+        //     _ => client.login_state = ClientLoginState::Error,
+        // }
 
         println!(
             "[STATE/Client] Client login state is now {:?}",

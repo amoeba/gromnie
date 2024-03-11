@@ -3,6 +3,8 @@ use std::io::{self, Cursor, Seek};
 use deku::prelude::*;
 use tokio::net::UdpSocket;
 
+use crate::net::packet::Packet;
+
 // ClientConnectState
 // TODO: Put this somewhere else
 #[derive(Clone, Debug, PartialEq)]
@@ -40,7 +42,7 @@ pub struct Client {
 }
 
 impl Client {
-    pub async fn create(id: u32, address: String, name: String, password: String) -> Client {
+    pub async fn new(id: u32, address: String, name: String, password: String) -> Client {
         let sok = UdpSocket::bind("0.0.0.0:0").await.unwrap();
 
         // Debug
@@ -78,6 +80,7 @@ impl Client {
     }
 
     pub async fn send(&mut self, Packet: Packet) {
+        println!("send Packet");
 
     }
 
@@ -86,7 +89,7 @@ impl Client {
 
         // TODO: Wrap this up in a nicer way
         let mut buffer: Cursor<Vec<u8>> = Cursor::new(Vec::new());
-        login_request(&mut buffer, &self.account.name, &self.account.password);
+        // login_request(&mut buffer, &self.account.name, &self.account.password);
         let serialized_data: Vec<u8> = buffer.into_inner();
 
         // TODO: Handle here with match
@@ -104,7 +107,7 @@ impl Client {
 
         // TODO: Wrap this up in a nicer way
         let mut buffer: Cursor<Vec<u8>> = Cursor::new(Vec::new());
-        connect_response(&mut buffer, cookie);
+        // connect_response(&mut buffer, cookie);
         let serialized_data: Vec<u8> = buffer.into_inner();
 
         // TODO: Handle here with match
@@ -145,53 +148,53 @@ impl Client {
 
 // TODO: this is a total hack but it looks like it works. Can we wrap this up
 // better?
-pub async fn parse_fragment(buffer: &[u8]) -> Result<Fragment, deku::DekuError> {
-    let mut cursor = Cursor::new(&buffer);
+// pub async fn parse_fragment(buffer: &[u8]) -> Result<Fragment, deku::DekuError> {
+//     let mut cursor = Cursor::new(&buffer);
 
-    // Temporarily: Handle this tolerantly as we figure out the protocol
-    let packet = TransitHeader::from_bytes((&cursor.get_ref(), 0));
+//     // Temporarily: Handle this tolerantly as we figure out the protocol
+//     let packet = TransitHeader::from_bytes((&cursor.get_ref(), 0));
 
-    let hdr = match packet {
-        Ok(val) => val,
-        Err(e) => {
-            println!("[WARN] {}", e);
-            return Err(e);
-        }
-    };
+//     let hdr = match packet {
+//         Ok(val) => val,
+//         Err(e) => {
+//             println!("[WARN] {}", e);
+//             return Err(e);
+//         }
+//     };
 
-    // Skip to remainder
-    cursor.seek(io::SeekFrom::Start(hdr.1.size as u64)).unwrap();
+//     // Skip to remainder
+//     cursor.seek(io::SeekFrom::Start(hdr.1.size as u64)).unwrap();
 
-    // TODO: This value only works for one packet, what does it need to be?
-    let temp_read_len = 32;
+//     // TODO: This value only works for one packet, what does it need to be?
+//     let temp_read_len = 32;
 
-    // We need to convert from a u32 to a PacketHeaderFlags
-    let flag = PacketHeaderFlags::from_bits(hdr.1.flags).unwrap();
+//     // We need to convert from a u32 to a PacketHeaderFlags
+//     let flag = PacketHeaderFlags::from_bits(hdr.1.flags).unwrap();
 
-    // TODO: Should/could be a template to save code
-    let rest: ((&[u8], usize), ConnectRequestHeader) = match flag {
-        PacketHeaderFlags::ConnectRequest => {
-            match ConnectRequestHeader::from_bytes((&cursor.get_ref(), temp_read_len)) {
-                Ok(header) => header,
-                Err(error) => {
-                    return Err(error);
-                }
-            }
-        }
-        PacketHeaderFlags::AckSequence => {
-            println!("ACK!");
-            return Err(DekuError::Unexpected(format!("ACK! This packet isn't handled: {:02x?}", buffer).to_owned()));
-        },
-        _ => {
-            return Err(DekuError::Unexpected(format!("This packet isn't handled: {:02x?}", buffer).to_owned()));
-        }
-    };
+//     // TODO: Should/could be a template to save code
+//     let rest: ((&[u8], usize), ConnectRequestHeader) = match flag {
+//         PacketHeaderFlags::ConnectRequest => {
+//             match ConnectRequestHeader::from_bytes((&cursor.get_ref(), temp_read_len)) {
+//                 Ok(header) => header,
+//                 Err(error) => {
+//                     return Err(error);
+//                 }
+//             }
+//         }
+//         PacketHeaderFlags::AckSequence => {
+//             println!("ACK!");
+//             return Err(DekuError::Unexpected(format!("ACK! This packet isn't handled: {:02x?}", buffer).to_owned()));
+//         },
+//         _ => {
+//             return Err(DekuError::Unexpected(format!("This packet isn't handled: {:02x?}", buffer).to_owned()));
+//         }
+//     };
 
-    // TODO: Not quite right yet, needs to return whole fragment
-    let fragment = Fragment {
-        header: hdr.1,
-        body: rest.1
-    };
+//     // TODO: Not quite right yet, needs to return whole fragment
+//     let fragment = Fragment {
+//         header: hdr.1,
+//         body: rest.1
+//     };
 
-    Ok(fragment)
-}
+//     Ok(fragment)
+// }

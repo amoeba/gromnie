@@ -3,35 +3,36 @@ use std::io::{Seek, Write};
 use deku::prelude::*;
 use bitflags::bitflags;
 
-use super::transit_header::TransitHeader;
+use super::{packets::login_request::LoginRequestPacket, transit_header::TransitHeader};
 
-// WIP, not sure about this yet.
-pub trait Serializable {
-    fn serialize<W: Write + Seek>(&mut self, &mut writer: W) {
-        todo!();
-    }
+pub trait Serialize {
+    fn on_serialize<W: Write + Seek>(&mut self, writer: &mut W);
+
 }
 
 #[derive(Debug, PartialEq)]
-pub struct Packet<T: Serializable> {
+pub struct Packet {
     pub header: TransitHeader,
-    pub payload: T, // TODO: Not sure when I will need this
-    // TODO: Document each of these
     option_size: i32,
     sequence_ack: u32,
     connect_token: i64,
     timestamp: i64,
 }
 
+impl Serialize for Packet {
+    fn on_serialize<W: Write + Seek>(&mut self, writer: &mut W) {
+        println!("Calling serialize method on Packet");
+    }
+}
+
 impl Packet {
-    pub fn create<T: Serializable>(payload: T) -> Packet<T> {
+    pub fn new() -> Packet {
         Packet {
-            header: TransitHeader::create(),
+            header: TransitHeader::new(),
             option_size: 0,
             sequence_ack: 0,
             connect_token: 0,
             timestamp: 0,
-            payload: payload,
         }
     }
 
@@ -82,16 +83,16 @@ impl Packet {
         }
 
         result
-  }
+    }
 
+    pub fn serialize<W: Write + Seek>(&mut self, writer: &mut W) {
+        self.on_serialize(writer);
+        self.serialize(writer);
+    }
 
-}
-
-#[derive(Debug, PartialEq)]
-pub struct Fragment {
-    pub header: TransitHeader,
-    // TODO: WRong type here but for now it works
-    pub body : ConnectRequestHeader,
+    fn on_serialize(&self) {
+        // Default implementation
+    }
 }
 
 #[derive(Debug, PartialEq, DekuRead, DekuWrite)]
