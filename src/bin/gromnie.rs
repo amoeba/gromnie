@@ -1,7 +1,7 @@
 use std::io::Cursor;
 
 use clap::{Parser, Subcommand};
-use gromnie::{client::client::Client, net::packets::login_request::LoginRequestPacket};
+use gromnie::{client::client::Client, net::{packet::Serialize, packets::login_request::LoginRequestPacket}};
 
 #[derive(Parser)]
 #[command(version, about, long_about = None)]
@@ -45,10 +45,12 @@ async fn client_task(id: u32, address: String, account_name: String, password: S
     .await;
 
     // testikng
-    let packet = LoginRequestPacket::create("my", "password");
-    let buffer = Cursor::new(Vec::new());
-    packet.serialize(&buffer);
-    println!("{:?}", buffer);
+    let mut packet = LoginRequestPacket::create("my", "password");
+    let mut buf = Cursor::new(Vec::new());
+    packet.on_serialize(&mut buf);
+    println!("{:?}", buf);
+
+    return;
 
     match client.connect().await {
         Ok(_) => {},
