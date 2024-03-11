@@ -3,12 +3,7 @@ use std::io::{Seek, Write};
 use deku::prelude::*;
 use bitflags::bitflags;
 
-use super::{packets::login_request::LoginRequestPacket, transit_header::TransitHeader};
-
-pub trait Serialize {
-    fn on_serialize<W: Write + Seek>(&mut self, writer: &mut W);
-
-}
+use super::transit_header::TransitHeader;
 
 #[derive(Debug, PartialEq)]
 pub struct Packet {
@@ -19,11 +14,6 @@ pub struct Packet {
     timestamp: i64,
 }
 
-impl Serialize for Packet {
-    fn on_serialize<W: Write + Seek>(&mut self, writer: &mut W) {
-        println!("Calling serialize method on Packet");
-    }
-}
 
 impl Packet {
     pub fn new() -> Packet {
@@ -86,12 +76,7 @@ impl Packet {
     }
 
     pub fn serialize<W: Write + Seek>(&mut self, writer: &mut W) {
-        self.on_serialize(writer);
-        self.serialize(writer);
-    }
-
-    fn on_serialize(&self) {
-        // Default implementation
+        println!("Packet.serialize");
     }
 }
 

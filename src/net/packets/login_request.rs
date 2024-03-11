@@ -1,9 +1,10 @@
 use std::io::{Write, Seek};
 
-use crate::net::packet::Serialize;
+use crate::net::packet::{Packet};
 
 #[derive(Debug, PartialEq)]
 pub struct LoginRequestPacket {
+  pub packet: Packet,
   pub protocol_version: String,
   pub account_name: String,
   pub password: String,
@@ -12,6 +13,7 @@ pub struct LoginRequestPacket {
 impl LoginRequestPacket {
   pub fn create(account_name: &str, password: &str) -> LoginRequestPacket {
     LoginRequestPacket {
+      packet: Packet::new(),
       protocol_version: "1802".to_owned(),
       account_name: account_name.to_lowercase().to_owned(),
       password: password.to_owned()
@@ -19,9 +21,11 @@ impl LoginRequestPacket {
   }
 }
 
-impl Serialize for LoginRequestPacket {
-  fn on_serialize<W: Write + Seek>(&mut self, mut writer: &mut W) {
-    println!("LoginRequestPacket.on_serialize");
+impl LoginRequestPacket {
+  pub fn serialize<W: Write + Seek>(&mut self, writer: &mut W) {
+    println!("LoginRequestPacket.serialize");
+    self.packet.serialize(writer);
+
     // sequence
     writer.write(&0x0u32.to_le_bytes()).unwrap();
 
