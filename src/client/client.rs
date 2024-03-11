@@ -3,7 +3,7 @@ use std::io::{self, Cursor, Seek};
 use deku::prelude::*;
 use tokio::net::UdpSocket;
 
-use crate::net::packet::Packet;
+use crate::net::{packet::Packet, packets::login_request::LoginRequestPacket};
 
 // ClientConnectState
 // TODO: Put this somewhere else
@@ -89,10 +89,14 @@ impl Client {
 
         // TODO: Wrap this up in a nicer way
         let mut buffer: Cursor<Vec<u8>> = Cursor::new(Vec::new());
-        // login_request(&mut buffer, &self.account.name, &self.account.password);
+        let mut packet = LoginRequestPacket::new(&self.account.name, &self.account.password);
+        packet.serialize(&mut buffer);
         let serialized_data: Vec<u8> = buffer.into_inner();
 
         // TODO: Handle here with match
+        println!("Sending LoginRequest data");
+        println!("{:02X?}", serialized_data);
+
         match self.socket.send(&serialized_data).await {
             Ok(_) => {},
             Err(_) => panic!(),

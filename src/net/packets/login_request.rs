@@ -11,7 +11,7 @@ pub struct LoginRequestPacket {
 }
 
 impl LoginRequestPacket {
-  pub fn create(account_name: &str, password: &str) -> LoginRequestPacket {
+  pub fn new(account_name: &str, password: &str) -> LoginRequestPacket {
     LoginRequestPacket {
       packet: Packet::new(),
       protocol_version: "1802".to_owned(),
