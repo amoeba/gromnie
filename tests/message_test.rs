@@ -1,14 +1,12 @@
 use std::io::Cursor;
 
-use gromnie::messages::login_request::login_request;
+use gromnie::net::packets::login_request::LoginRequestPacket;
 
 #[test]
 fn test_message_login_request() {
-    let account_name = "mudlurk";
-    let password = "mosswart";
-
-    let mut buffer: Cursor<Vec<u8>> = Cursor::new(Vec::new());
-    login_request(&mut buffer, &account_name, password);
+    let mut buffer = Cursor::new(Vec::new());
+    let mut packet = LoginRequestPacket::new("mudlurk", "mosswart");
+    packet.serialize(&mut buffer);
 
     let expected = vec![
         0, 0, 0, 0, 0, 0, 1, 0, 147, 0, 208, 5, 0, 0, 0, 0, 64, 0, 0, 0, 4, 0,

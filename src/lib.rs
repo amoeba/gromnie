@@ -21,3 +21,4 @@
 pub mod client;
 pub mod checksum;
 pub mod net;
+pub mod crypto;
