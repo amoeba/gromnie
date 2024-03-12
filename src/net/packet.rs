@@ -75,8 +75,22 @@ impl Packet {
         result
     }
 
-    pub fn serialize<W: Write + Seek>(&mut self, writer: &mut W) {
-        println!("Packet.serialize");
+    pub fn serialize<W: Write + Seek>(&mut self, writer: &mut W, size: u64) {
+        println!("Packet.serialize, size is {} bytes", size);
+        writer.seek(std::io::SeekFrom::Start(0)).unwrap();
+
+        // FIXME: Don't hardcode
+        let transit_header = TransitHeader {
+            sequence: 0x0u32, // FIXME: Don't harddcode
+            flags: PacketHeaderFlags::LoginRequest.as_u32(), // FIXME: Don't hardcode
+            checksum: 0x05d00093u32, // FIXME: Don't hardcode
+            recipient_id: 0x0u16, // FIXME: Don't hardcode
+            time_since_last_packet: 0x0u16, // FIXME: Don't hardcode
+            size: size as u16,
+            iteration: 0x0u16, // FIXME: Don't hardcode
+        };
+
+        writer.write(&transit_header.to_bytes().unwrap()).unwrap();
     }
 }
 

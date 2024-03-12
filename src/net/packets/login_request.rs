@@ -1,6 +1,8 @@
-use std::io::{Write, Seek};
+use std::{io::{Seek, Write}, mem};
 
-use crate::net::packet::{Packet};
+use deku::DekuContainerWrite;
+
+use crate::net::{packet::{Packet, PacketHeaderFlags}, transit_header::TransitHeader};
 
 #[derive(Debug, PartialEq)]
 pub struct LoginRequestPacket {
@@ -23,31 +25,39 @@ impl LoginRequestPacket {
 
 impl LoginRequestPacket {
   pub fn serialize<W: Write + Seek>(&mut self, writer: &mut W) {
+    println!("LoginRequestPacket: serialize");
     // Calculate lengths ahead of time
     let account_len: u16 = (self.account_name.len() + self.password.len() + 1) as u16;
     let remaining: u32 = (account_len as u32) + 24; // +24 comes from: u32 + u32 + u32 + u16 + 10
     let packet_len: u16 = 8 + (remaining as u16) + account_len - 24;
 
+    println!("Seeking to beyond TransitHeader...");
+    let offset = mem::size_of::<TransitHeader>() as u64;
+    writer.seek(std::io::SeekFrom::Start(offset)).unwrap();
+    println!("Seeked to {}", writer.stream_position().unwrap());
+
     // Sequence
-    writer.write(&0x0u32.to_le_bytes()).unwrap();
+    // writer.write(&0x0u32.to_le_bytes()).unwrap();
 
     // Flags
-    writer.write(&0x00010000u32.to_le_bytes()).unwrap();
+    // writer.write(&0x00010000u32.to_le_bytes()).unwrap();
 
     // Checksum
-    writer.write(&0x05d00093u32.to_le_bytes()).unwrap();
+    // writer.write(&0x05d00093u32.to_le_bytes()).unwrap();
 
     // RecipientId
-    writer.write(&0x0u16.to_le_bytes()).unwrap();
+    // writer.write(&0x0u16.to_le_bytes()).unwrap();
 
     // TimeSinceLastPacket
-    writer.write(&0x0u16.to_le_bytes()).unwrap();
+    // writer.write(&0x0u16.to_le_bytes()).unwrap();
 
     // Size
-    writer.write(&packet_len.to_le_bytes()).unwrap();
+    // writer.write(&packet_len.to_le_bytes()).unwrap();
 
     // Iteration
-    writer.write(&0x0u16.to_le_bytes()).unwrap();
+    // writer.write(&0x0u16.to_le_bytes()).unwrap();
+
+    // end transit header
 
     // Begin LoginRequest
     // ClientVersion
@@ -79,5 +89,11 @@ impl LoginRequestPacket {
     writer
         .write(vec![0, 0, 0, 0, 0, 0, 0, 0, 0, 0].as_ref())
         .unwrap();
+
+    let bytes_written = writer.stream_position().unwrap() - offset;
+    println!("Wrote {} bytes of packet data", bytes_written);
+
+    self.packet.serialize(writer, bytes_written);
+
   }
 }

@@ -79,7 +79,7 @@ impl Client {
         Ok(())
     }
 
-    pub async fn send(&mut self, Packet: Packet) {
+    pub async fn send(&mut self, packet: Packet) {
         println!("send Packet");
 
     }

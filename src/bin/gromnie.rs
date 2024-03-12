@@ -1,7 +1,5 @@
-use std::io::Cursor;
-
 use clap::{Parser, Subcommand};
-use gromnie::{client::client::Client, net::{packets::login_request::LoginRequestPacket}};
+use gromnie::client::client::Client;
 
 #[derive(Parser)]
 #[command(version, about, long_about = None)]
@@ -117,7 +115,7 @@ async fn main() -> Result<(), ()> {
     // TODO: Wrap this up nicer
     let address = "localhost:9000";
     let account_name_prefix = "test";
-    let password = "password";
+    let _password = "password";
 
     let n = 1;
     let mut tasks = Vec::with_capacity(2);
