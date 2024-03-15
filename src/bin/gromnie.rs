@@ -134,8 +134,10 @@ async fn main() -> Result<(), ()> {
         tasks.push(tokio::spawn(client_task(
             i.to_owned(),
             address.to_owned(),
-            "acservertracker".to_owned(),
-            "jj9h26hcsggc".to_owned(),
+            // "acservertracker".to_owned(),
+            // "jj9h26hcsggc".to_owned(),
+            "test".to_owned(),
+            "test".to_owned(),
         )));
     }
 

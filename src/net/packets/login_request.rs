@@ -33,10 +33,23 @@ impl LoginRequestPacket {
     writer.seek(std::io::SeekFrom::Start(offset)).unwrap();
     println!("Seeked to {}", writer.stream_position().unwrap());
 
-    // Calculate lengths ahead of time
-    let account_len: u16 = (self.account_name.len() + self.password.len() + 1) as u16;
-    let remaining: u32 = (account_len as u32) + 24; // +24 comes from: u32 + u32 + u32 + u16 + 10
-    let packet_len: u16 = 8 + (remaining as u16) + account_len - 24;
+    // Calculate lengths and paddings ahead of time
+    let mut packet_len = 20;
+
+    let mut username_pad = (self.account_name.len() + 2) % 4;
+
+    if username_pad > 0 {
+      username_pad = 4 - username_pad;
+    }
+
+    let mut password_pad = (self.password.len() + 5) % 4;
+
+    if password_pad > 0 {
+      password_pad = 4 - password_pad;
+    }
+
+    packet_len += self.account_name.len() + 2 + username_pad;
+    packet_len += self.password.len() + 5 + password_pad;
 
     // Begin LoginRequest
 
@@ -45,14 +58,15 @@ impl LoginRequestPacket {
     let client_version: [u8; 4] = [0x31, 0x38, 0x30, 0x32];
     writer.write(&client_version).unwrap();
 
-    // Align to byte boundary, in this case this doesn't change
+    // Align to byte boundary, in this case this doesn't change so write two
+    // bytes (6 % 4 = 2)
     writer.write(&0x0u16.to_le_bytes()).unwrap();
 
     // Length
-    writer.write(&remaining.to_le_bytes()).unwrap();
+    writer.write(&(packet_len as u32).to_le_bytes()).unwrap();
 
     // AuthType
-    writer.write(&0x01u32.to_le_bytes()).unwrap();
+    writer.write(&0x00000002u32.to_le_bytes()).unwrap();
 
     // Flags
     writer.write(&0x0u32.to_le_bytes()).unwrap();
@@ -61,28 +75,26 @@ impl LoginRequestPacket {
     writer.write(&0x58a8b83eu32.to_le_bytes()).unwrap();
 
     // Account
-    let mut token: String = self.account_name.to_owned();
-    token.push_str(":");
-    token.push_str(&self.password.to_owned());
+    writer.write(&(self.account_name.len() as u16).to_le_bytes()).unwrap();
+    writer.write(&self.account_name.as_bytes()).unwrap();
+    writer.seek(std::io::SeekFrom::Current(username_pad as i64)).unwrap();
 
-    writer.write(&(token.len() as u16).to_le_bytes()).unwrap();
-    writer.write(&token.as_bytes()).unwrap();
+    // AccountToLoginAs (admin only)
+    writer.write(&0x0u32.to_le_bytes()).unwrap();
 
-    // Align to byte boundary since we just wrote a string
-    let pos = writer.stream_position().unwrap() as i64;
-    writer.seek(std::io::SeekFrom::Current(pos % 4)).unwrap();
+    // Password
+    let password_length = self.password.len() as u32;
+    writer.write(&(password_length + 1).to_le_bytes()).unwrap();
+    writer.write(&(password_length as u8).to_le_bytes()).unwrap();
+    writer.write(&self.password.as_bytes()).unwrap();
+    writer.seek(std::io::SeekFrom::Current(password_pad as i64)).unwrap();
 
-    // TODO: Not sure about the remainder but this works for now
-    writer
-        .write(vec![0, 0, 0, 0, 0, 0, 0, 0].as_ref())
-        .unwrap();
-
+    // Debug
     let bytes_written = writer.stream_position().unwrap() - offset;
     println!("Wrote {} bytes of packet data", bytes_written);
-
-    // WIP: Set size now, but see how actestclient does it
     println!("stream position is {}", writer.stream_position().unwrap());
     println!("size of transit header is {}", mem::size_of::<TransitHeader>());
+    // End Debug
 
     // WIP: Set header size as a side-effect
     self.packet.header.size = (writer.stream_position().unwrap() - mem::size_of::<TransitHeader>() as u64) as u16;
