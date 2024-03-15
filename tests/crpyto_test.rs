@@ -1,5 +1,3 @@
-use std::io::Cursor;
-
 use gromnie::crypto::magic_number::get_magic_number;
 
 #[test]
