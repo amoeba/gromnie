@@ -1,7 +1,9 @@
-use std::io::{Seek, Write};
+use std::{io::{Seek, Write}, mem};
 
 use deku::prelude::*;
 use bitflags::bitflags;
+
+use crate::crypto::magic_number::get_magic_number;
 
 use super::transit_header::TransitHeader;
 
@@ -64,19 +66,23 @@ impl Packet {
     }
 
     // This hashes a buffer containing [transitheader, packet data]
-    pub fn compute_hash(&mut self, seed : u32, data : Vec<u8>) -> u32{
+    pub fn compute_hash(&mut self, seed : u32, buffer : Vec<u8>) -> i32{
         let orig = 0; // should be header.Checksum, whatever that is
         let mut result = 0;
 
-        if self.option_size > 0 {
-            // result += get_magic_number(&data[..(self.option_size as usize)], self.option_size, true)
-        }
+        // Hash the body first, then the header
+        result += get_magic_number(&buffer[(mem::size_of::<TransitHeader>())..(buffer.len())], 0, true);
+        result += get_magic_number(&buffer[0..(mem::size_of::<TransitHeader>())], 2, true);
+
+        // TODO: Add logic for when flags is Checksum to hash with seed
 
         result
     }
 
     pub fn serialize<W: Write + Seek>(&mut self, writer: &mut W, size: u64) {
         println!("Packet.serialize, size is {} bytes", size);
+
+        println!("Jumping to start of stream");
         writer.seek(std::io::SeekFrom::Start(0)).unwrap();
 
         // FIXME: Don't hardcode
@@ -90,6 +96,7 @@ impl Packet {
             iteration: 0x0u16, // FIXME: Don't hardcode
         };
 
+        println!("Writing TransitHeader");
         writer.write(&transit_header.to_bytes().unwrap()).unwrap();
     }
 }

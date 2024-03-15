@@ -1,4 +1,4 @@
-pub fn get_magic_number(buffer: &Vec<u8>, size: usize, include_size: bool) -> i32{
+pub fn get_magic_number(buffer: &[u8], size: usize, include_size: bool) -> i32{
   let mut magic : i32 = 0;
 
   if include_size {
