@@ -114,7 +114,7 @@ async fn main() -> Result<(), ()> {
 
     // TODO: Wrap this up nicer
     let address = "localhost:9000";
-    let account_name_prefix = "test";
+    let account_name_prefix = "user";
     let _password = "password";
 
     let n = 1;
@@ -136,8 +136,8 @@ async fn main() -> Result<(), ()> {
             address.to_owned(),
             // "acservertracker".to_owned(),
             // "jj9h26hcsggc".to_owned(),
-            "test".to_owned(),
-            "test".to_owned(),
+            "testing".to_owned(),
+            "testing".to_owned(),
         )));
     }
 

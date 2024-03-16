@@ -94,7 +94,7 @@ impl Client {
         let serialized_data: Vec<u8> = buffer.into_inner();
 
         // TODO: Handle here with match
-        println!("Sending LoginRequest data");
+        println!("Sending LoginRequest data for account {}:{}", self.account.name, self.account.password);
         println!("{:02X?}", serialized_data);
 
         match self.socket.send(&serialized_data).await {

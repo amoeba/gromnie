@@ -88,8 +88,8 @@ async fn main() -> Result<(), ()> {
 
     // TODO: Wrap this up nicer
     let address = "localhost:9000";
-    let account_name_prefix = "test";
-    let password = "password";
+    let account_name_prefix = "root";
+    let password = "root";
 
     let n = 1;
     let mut tasks = Vec::with_capacity(2);
