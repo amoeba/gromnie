@@ -34,24 +34,20 @@ impl LoginRequestPacket {
     println!("Seeked to {}", writer.stream_position().unwrap());
 
     // Calculate lengths and paddings ahead of time
-    let mut packet_len = 20;
-
     let mut username_pad = (self.account_name.len() + 2) % 4;
 
     if username_pad > 0 {
       username_pad = 4 - username_pad;
     }
 
-    let mut password_pad = (self.password.len() + 5) % 4;
+    let packet_len = 20 +
+      self.account_name.len() +
+      2 + // len (short)
+      username_pad +
+      self.password.len() +
+      1; // len (byte)
 
-    if password_pad > 0 {
-      password_pad = 4 - password_pad;
-    }
-
-    packet_len += self.account_name.len() + 2 + username_pad;
-    packet_len += self.password.len() + 5 + password_pad;
-
-    // Begin LoginRequest
+    // Begin LoginRequest fields
 
     // ClientVersion
     writer.write(&0x04u16.to_le_bytes()).unwrap();
@@ -80,6 +76,7 @@ impl LoginRequestPacket {
     writer.seek(std::io::SeekFrom::Current(username_pad as i64)).unwrap();
 
     // AccountToLoginAs (admin only)
+    // This seems to always be zeroes
     writer.write(&0x0u32.to_le_bytes()).unwrap();
 
     // Password
@@ -87,7 +84,9 @@ impl LoginRequestPacket {
     writer.write(&(password_length + 1).to_le_bytes()).unwrap();
     writer.write(&(password_length as u8).to_le_bytes()).unwrap();
     writer.write(&self.password.as_bytes()).unwrap();
-    writer.seek(std::io::SeekFrom::Current(password_pad as i64)).unwrap();
+    // WIP: Skipping adding a pad here because you don't see the retail client
+    // do it
+    // writer.seek(std::io::SeekFrom::Current(password_pad as i64)).unwrap();
 
     // Debug
     let bytes_written = writer.stream_position().unwrap() - offset;
