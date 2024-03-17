@@ -1,4 +1,4 @@
-use std::{io::{Seek, Write}, mem};
+use std::{io::{Cursor, Read, Seek, Write}, mem};
 
 use deku::prelude::*;
 use bitflags::bitflags;
@@ -65,39 +65,48 @@ impl Packet {
         self.header.flags |= PacketHeaderFlags::TimeSync.as_u32();
     }
 
-    // This hashes a buffer containing [transitheader, packet data]
-    pub fn compute_hash(&mut self, seed : u32, buffer : Vec<u8>) -> i32{
-        let orig = 0; // should be header.Checksum, whatever that is
-        let mut result = 0;
-
-        // Hash the body first, then the header
-        result += get_magic_number(&buffer[(mem::size_of::<TransitHeader>())..(buffer.len())], 0, true);
-        result += get_magic_number(&buffer[0..(mem::size_of::<TransitHeader>())], 2, true);
-
-        // TODO: Add logic for when flags is Checksum to hash with seed
-
-        result
+    // This hashes a buffer containing [empty transitheader, packet data]
+    pub fn compute_checksum(&mut self, buffer: &[u8]) -> u32{
+        // TODO: Pass in include_size or determine whether to set it
+        return get_magic_number(buffer, buffer.len(), true);
     }
 
-    pub fn serialize<W: Write + Seek>(&mut self, writer: &mut W, size: u64) {
-        println!("Packet.serialize, size is {} bytes", size);
+    // VERY WIP
+    // TODO: Can I avoid passing a mut Write+Seek?
+    pub fn set_checksum(&mut self, writer: &Cursor<Vec<u8>>) {
+        // Create a copy of the buffer
+        // TODO: Not sure if I want clone here
+        let buffer_copy = writer.clone().into_inner();
+        let body = &buffer_copy[(mem::size_of::<TransitHeader>())..buffer_copy.len()];
+
+        let header_checksum = self.header.compute_checksum();
+        let body_checksum = self.compute_checksum(body);
+
+        println!("header_checksum is 0x{:02x?}", header_checksum);
+        println!("body_checksum is 0x{:02x?}", body_checksum);
+        println!("combined checksum is 0x{:02x?}", header_checksum + body_checksum);
+
+        // TODO: Eventually needs to include the ISAAC XOR
+        //self.checksum = header_checksum + (body_checksum ^ issac_xor);
+        self.header.checksum = header_checksum + body_checksum;
+    }
+
+    pub fn serialize(&mut self, writer: &mut Cursor<Vec<u8>>, size: u64) {
+        // Once we're called, we have a writer that has the packet data in it
+        // with no header information (yet)
+        println!("Packet.serialize(), size is {} bytes", size);
+
+        // Set size
+        self.header.size = size as u16;
+
+        // We can set the checksum now
+        self.set_checksum(writer);
 
         println!("Jumping to start of stream");
         writer.seek(std::io::SeekFrom::Start(0)).unwrap();
 
-        // FIXME: Don't hardcode
-        let transit_header = TransitHeader {
-            sequence: 0x0u32, // FIXME: Don't harddcode
-            flags: PacketHeaderFlags::LoginRequest.as_u32(), // FIXME: Don't hardcode
-            checksum: 0x05d00093u32, // FIXME: Don't hardcode
-            recipient_id: 0x0u16, // FIXME: Don't hardcode
-            time_since_last_packet: 0x0u16, // FIXME: Don't hardcode
-            size: size as u16,
-            iteration: 0x0u16, // FIXME: Don't hardcode
-        };
-
         println!("Writing TransitHeader");
-        writer.write(&transit_header.to_bytes().unwrap()).unwrap();
+        writer.write(&self.header.to_bytes().unwrap()).unwrap();
     }
 }
 

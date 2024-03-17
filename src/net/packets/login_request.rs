@@ -1,8 +1,8 @@
-use std::{io::{Seek, Write}, mem};
+use std::{io::{Cursor, Seek, Write}, mem};
 
 use deku::DekuContainerWrite;
 
-use crate::net::{packet::{Packet, PacketHeaderFlags}, transit_header::TransitHeader};
+use crate::net::{packet::Packet, transit_header::TransitHeader};
 
 #[derive(Debug, PartialEq)]
 pub struct LoginRequestPacket {
@@ -24,7 +24,7 @@ impl LoginRequestPacket {
 }
 
 impl LoginRequestPacket {
-  pub fn serialize<W: Write + Seek>(&mut self, writer: &mut W) {
+  pub fn serialize(&mut self, writer: &mut Cursor<Vec<u8>>) {
     println!("LoginRequestPacket: serialize");
 
     // Seek to just after TransitHeader
@@ -94,9 +94,6 @@ impl LoginRequestPacket {
     println!("stream position is {}", writer.stream_position().unwrap());
     println!("size of transit header is {}", mem::size_of::<TransitHeader>());
     // End Debug
-
-    // WIP: Set header size as a side-effect
-    self.packet.header.size = (writer.stream_position().unwrap() - mem::size_of::<TransitHeader>() as u64) as u16;
 
     self.packet.serialize(writer, bytes_written);
 

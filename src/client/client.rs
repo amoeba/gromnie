@@ -1,4 +1,4 @@
-use std::io::{self, Cursor, Seek};
+use std::io::Cursor;
 
 use deku::prelude::*;
 use tokio::net::UdpSocket;
@@ -77,11 +77,6 @@ impl Client {
         println!("[Client::connect] Client connected!");
 
         Ok(())
-    }
-
-    pub async fn send(&mut self, packet: Packet) {
-        println!("send Packet");
-
     }
 
     pub async fn do_login(&mut self) -> Result<(), std::io::Error> {

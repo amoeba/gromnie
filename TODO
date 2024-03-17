@@ -25,6 +25,16 @@ What is hashed?
 What algorithm is used to hash?
 Does the server set the seed for the hash?
 
+- It looks like hashing follows these steps:
+  - Set the Checksum field on the packet header to 0xBADD70DD;
+  - Serialize the packet into a buffer
+  - Hash the buffer
+  - Set the checksum back to its original value
+  - Return the hash
+
+- Final checksum is
+  - Header.Checksum = headerChecksum + (payloadChecksum ^ issacXor);
+
 Some packets are more complicated and use some RNG?
 
 > parad0x: "the isaac rng uses that, and each packet gets a new value from the
