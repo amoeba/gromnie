@@ -33,7 +33,7 @@ impl TransitHeader {
 
         self.checksum = 0xBADD70DD;
 
-        let buf = TransitHeader::to_bytes(self).unwrap();
+        let buf = self.to_bytes().unwrap();
         let result = get_magic_number(&buf, buf.len(), true);
 
         self.checksum = orig;
