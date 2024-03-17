@@ -16,10 +16,10 @@ pub struct TransitHeader {
 }
 
 impl TransitHeader {
-    pub fn new() -> TransitHeader {
+    pub fn new(flags : u32) -> TransitHeader {
         TransitHeader {
             sequence: 0,
-            flags: 0,
+            flags: flags,
             checksum: 0,
             recipient_id: 0,
             time_since_last_packet: 0,

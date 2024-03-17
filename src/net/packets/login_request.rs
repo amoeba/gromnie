@@ -2,7 +2,7 @@ use std::{io::{Cursor, Seek, Write}, mem};
 
 use deku::DekuContainerWrite;
 
-use crate::net::{packet::Packet, transit_header::TransitHeader};
+use crate::net::{packet::{Packet, PacketHeaderFlags}, transit_header::TransitHeader};
 
 #[derive(Debug, PartialEq)]
 pub struct LoginRequestPacket {
@@ -15,7 +15,7 @@ pub struct LoginRequestPacket {
 impl LoginRequestPacket {
   pub fn new(account_name: &str, password: &str) -> LoginRequestPacket {
     LoginRequestPacket {
-      packet: Packet::new(),
+      packet: Packet::new(PacketHeaderFlags::LoginRequest.as_u32()),
       protocol_version: "1802".to_owned(),
       account_name: account_name.to_lowercase().to_owned(),
       password: password.to_owned()

@@ -18,9 +18,9 @@ pub struct Packet {
 
 
 impl Packet {
-    pub fn new() -> Packet {
+    pub fn new(flags: u32) -> Packet {
         Packet {
-            header: TransitHeader::new(),
+            header: TransitHeader::new(flags),
             option_size: 0,
             sequence_ack: 0,
             connect_token: 0,
