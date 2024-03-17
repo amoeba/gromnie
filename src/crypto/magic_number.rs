@@ -1,3 +1,5 @@
+use byteorder::{ByteOrder, LittleEndian};
+
 pub fn get_magic_number(buffer: &[u8], size: usize, include_size: bool) -> u32{
   let mut magic : u32 = 0;
 
@@ -9,7 +11,10 @@ pub fn get_magic_number(buffer: &[u8], size: usize, include_size: bool) -> u32{
   let mut i : u32 = 0;
 
   for _ in 0..(size / 4) {
-    magic += buffer[i as usize] as u32;
+    let start = i as usize;
+    let num = LittleEndian::read_u32(&buffer[start..(start+4)]);
+    magic += num;
+
     i += 1;
   }
 
