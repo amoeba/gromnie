@@ -1,4 +1,4 @@
-use std::{io::{Cursor, Seek, Write}, mem};
+use std::{io::{Cursor, Seek, Write}, mem, time::SystemTime};
 
 use deku::DekuContainerWrite;
 
@@ -68,7 +68,7 @@ impl LoginRequestPacket {
     writer.write(&0x0u32.to_le_bytes()).unwrap();
 
     // Sequence
-    writer.write(&0x58a8b83eu32.to_le_bytes()).unwrap();
+    writer.write(&0x0u32.to_le_bytes()).unwrap();
 
     // Account
     writer.write(&(self.account_name.len() as u16).to_le_bytes()).unwrap();
