@@ -1,5 +1,6 @@
 use std::io::Cursor;
 
+use byteorder::{ByteOrder, LittleEndian};
 use gromnie::{crypto::magic_number::get_magic_number, net::packets::login_request::LoginRequestPacket};
 
 #[test]
@@ -54,4 +55,15 @@ fn test_hash_wip() {
   let expected = 841045810;
 
   assert_eq!(expected, 2);
+}
+
+#[test]
+fn test_casting_as_u32() {
+  assert_eq!(0, LittleEndian::read_u32(&vec![0, 0, 0, 0][0..4]));
+  assert_eq!(1, LittleEndian::read_u32(&vec![1, 0, 0, 0][0..4]));
+  assert_eq!(255, LittleEndian::read_u32(&vec![255, 0, 0, 0][0..4]));
+  assert_eq!(65280, LittleEndian::read_u32(&vec![0, 255, 0, 0][0..4]));
+  assert_eq!(16711680, LittleEndian::read_u32(&vec![0, 0, 255, 0][0..4]));
+  assert_eq!(4278190080, LittleEndian::read_u32(&vec![0, 0, 0, 255][0..4]));
+  assert_eq!(4294967295, LittleEndian::read_u32(&vec![255, 255, 255, 255][0..4]));
 }
