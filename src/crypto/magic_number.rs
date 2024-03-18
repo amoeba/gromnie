@@ -8,12 +8,11 @@ pub fn get_magic_number(buffer: &[u8], size: usize, include_size: bool) -> u32{
   }
 
   // i is used in both for loops
-  let mut i : u32 = 0;
+  let mut i : i32 = 0;
 
   for _ in 0..(size / 4) {
     let start = i as usize;
-    let num = LittleEndian::read_u32(&buffer[start..(start+4)]);
-    magic += num;
+    magic += LittleEndian::read_u32(&buffer[start..(start+4)]);
 
     i += 1;
   }
@@ -22,7 +21,7 @@ pub fn get_magic_number(buffer: &[u8], size: usize, include_size: bool) -> u32{
 
   i = i * 4;
 
-  for _ in i..(size as u32) {
+  for _ in i..(size as i32) {
     magic += (buffer[i as usize] as u32) << (shift * 8);
     shift -= 1;
     i += 1;
