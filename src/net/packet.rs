@@ -84,11 +84,11 @@ impl Packet {
 
         println!("header_checksum is 0x{:02x?}", header_checksum);
         println!("body_checksum is 0x{:02x?}", body_checksum);
-        println!("combined checksum is 0x{:02x?}", header_checksum + body_checksum);
+        println!("combined checksum is 0x{:02x?}", header_checksum.wrapping_add(body_checksum));
 
         // TODO: Eventually needs to include the ISAAC XOR
         //self.checksum = header_checksum + (body_checksum ^ issac_xor);
-        self.header.checksum = header_checksum + body_checksum;
+        self.header.checksum = header_checksum.wrapping_add(body_checksum);
     }
 
     pub fn serialize(&mut self, writer: &mut Cursor<Vec<u8>>, size: u64) {
