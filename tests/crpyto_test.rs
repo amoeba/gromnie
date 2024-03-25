@@ -54,7 +54,7 @@ fn test_hash_wip() {
   let input = vec![0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,48,0,0,0,4,0,49,56,48,50,0,0,40,0,0,0,2,0,0,0,0,0,0,0,211,202,243,101,4,0,116,101,115,116,0,0,0,0,0,0,5,0,0,0,4,116,101,115,116,0,0,0];
   let expected = 841045810;
 
-  assert_eq!(expected, 2);
+  assert_eq!(expected, get_magic_number(&input, input.len(), true));
 }
 
 #[test]
