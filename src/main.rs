@@ -61,20 +61,6 @@ async fn client_task(id: u32, address: String, account_name: String, password: S
             size,
             peer
         );
-        println!("           {:02X?}", &buf[..size]);
-        // Temporary code
-        // TODO: Try to pull packet data out of this
-        parse_response(&buf);
-        // Temporary: Don't check size, check that actual packet data we get
-        match size {
-            52 => client.login_state = ClientLoginState::LoggedIn,
-            _ => client.login_state = ClientLoginState::Error,
-        }
-
-        println!(
-            "[STATE/Client] Client login state is now {:?}",
-            client.login_state
-        );
 
         // temporary
         buf.fill(0);
@@ -110,17 +96,6 @@ async fn main() -> Result<(), ()> {
     for task in tasks {
         task.await.unwrap();
     }
-
-    // Receive code
-    // // //
-    // let mut recv_buffer = [0u8; 1024];
-
-    // let nbytes = socket.recv(&mut recv_buffer);
-
-    // // TODO: Temporary code to parse response. Move this elsewhere when it's ready.
-    // let mut recv_cursor = Cursor::new(&recv_buffer);
-    // // parse_response(&mut recv_cursor);
-    // parse_response(&recv_buffer);
 
     // nbytes
     Ok(())

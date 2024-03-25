@@ -4,10 +4,10 @@ use deku::prelude::*;
 use bitflags::bitflags;
 
 use crate::crypto::magic_number::get_magic_number;
-
 use super::transit_header::TransitHeader;
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, DekuRead, DekuWrite)]
+#[deku(endian = "little")]
 pub struct Packet {
     pub header: TransitHeader,
     option_size: i32,
@@ -15,7 +15,6 @@ pub struct Packet {
     connect_token: i64,
     timestamp: i64,
 }
-
 
 impl Packet {
     pub fn new(flags: u32) -> Packet {

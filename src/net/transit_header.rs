@@ -1,9 +1,10 @@
 use deku::prelude::*;
+use deku::ctx::Endian;
 
 use crate::crypto::magic_number::get_magic_number;
 
 #[derive(Debug, PartialEq, DekuRead, DekuWrite)]
-#[deku(endian = "little")]
+#[deku(endian = "endian", ctx = "endian: Endian")]
 pub struct TransitHeader {
     pub sequence: u32,
     pub flags: u32, // Weakly typed here because deku and bitflags don't work

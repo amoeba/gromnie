@@ -1,5 +1,6 @@
 use clap::{Parser, Subcommand};
-use gromnie::client::client::Client;
+use deku::DekuContainerRead;
+use gromnie::{client::client::Client, net::packet::{Packet, PacketHeaderFlags}};
 
 #[derive(Parser)]
 #[command(version, about, long_about = None)]
@@ -59,6 +60,9 @@ async fn client_task(id: u32, address: String, account_name: String, password: S
     loop {
         let (size, peer) = client.socket.recv_from(&mut buf).await.unwrap();
 
+        // Try to parse into a Packet (basically, TransitHeader)
+        let (_rest, packet) = Packet::from_bytes((&buf, size)).unwrap();
+
         println!(
             "[NET/RECV] [client: {} on port: {} recv'd {} bytes from {}]",
             client.id,
@@ -67,43 +71,12 @@ async fn client_task(id: u32, address: String, account_name: String, password: S
             peer
         );
         println!("           {:02X?}", &buf[..size]);
+        println!("           {:?}", packet);
 
-        // Temporary code
-        // TODO: Try to pull packet data out of this
-        // let result = parse_fragment(&buf[..size]).await;
-
-        // match result {
-        //     Ok(fragment) => {
-        //         println!("[OK FRAGMENT]  {:?}", fragment);
-
-        //         // TODO: Once this is right, it needs to get pushed into a
-        //         // separate async context
-        //         let flags = PacketHeaderFlags::from_bits(fragment.header.flags).unwrap();
-
-        //         match flags {
-        //             PacketHeaderFlags::ConnectRequest => {
-        //                 println!("GOT CONNECT REQUEST, sending response...");
-        //                 let _ = client.do_connect_response(fragment.body.cookie).await;
-        //             }
-        //             _ => {
-        //                 println!("OTHER");
-        //             }
-        //         }
-        //     },
-        //     Err(error) => {
-        //         println!("[FRAGMENT: ERROR] {:?}", error);
-        //     }
-        // }
-        // // Temporary: Don't check size, check that actual packet data we get
-        // match size {
-        //     52 => client.login_state = ClientLoginState::LoggedIn,
-        //     _ => client.login_state = ClientLoginState::Error,
-        // }
-
-        println!(
-            "[STATE/Client] Client login state is now {:?}",
-            client.login_state
-        );
+        match PacketHeaderFlags::from_bits(packet.header.flags) {
+            Some(v) => println!("{:?}", v),
+            None => println!("Failed to parse flags."),
+        }
     }
 }
 
@@ -159,3 +132,19 @@ async fn main() -> Result<(), ()> {
     // nbytes
     Ok(())
 }
+
+use deku::prelude::*;
+
+#[derive(Debug, PartialEq, DekuRead, DekuWrite)]
+struct DekuTest {
+    header: DekuHeader,
+    data: DekuData,
+}
+
+#[derive(Debug, PartialEq, DekuRead, DekuWrite)]
+#[deku(endian = "little")]
+struct DekuHeader(u8);
+
+#[derive(Debug, PartialEq, DekuRead, DekuWrite)]
+#[deku(endian = "little")]
+struct DekuData(u16);
