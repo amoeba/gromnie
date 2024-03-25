@@ -61,9 +61,6 @@ async fn client_task(id: u32, address: String, account_name: String, password: S
             size,
             peer
         );
-
-        // temporary
-        buf.fill(0);
     }
 }
 
