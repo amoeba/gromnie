@@ -1,4 +1,4 @@
-use std::{io::{Cursor, Read, Seek, Write}, mem};
+use std::{io::{Cursor, Seek, Write}, mem};
 
 use deku::prelude::*;
 use bitflags::bitflags;
@@ -45,7 +45,7 @@ impl Packet {
         // TODO: Update flags
         // Header.Flags |= world ? PacketFlags.LoginWorld : PacketFlags.ConnectResponse;
         match world {
-            Some(world) => {
+            Some(_world) => {
                 self.header.flags |= PacketHeaderFlags::WorldLoginRequest.as_u32();
             }
             None => {

@@ -1,6 +1,4 @@
-use std::{io::{Cursor, Seek, Write}, mem, time::SystemTime};
-
-use deku::DekuContainerWrite;
+use std::{io::{Cursor, Seek, Write}, mem};
 
 use crate::net::{packet::{Packet, PacketHeaderFlags}, transit_header::TransitHeader};
 
