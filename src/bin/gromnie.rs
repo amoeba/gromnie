@@ -78,6 +78,14 @@ async fn client_task(id: u32, address: String, account_name: String, password: S
         match PacketHeaderFlags::from_bits(packet.flags) {
             Some(v) => {
                 println!("PacketHeaderFlags: {}", v.to_string());
+
+                if v == PacketHeaderFlags::ConnectRequest {
+                    println!("TODO: Send ConnectResponse")
+                }
+
+                if v == PacketHeaderFlags::AckSequence {
+                    println!("TODO: Send AckResponse")
+                }
             },
             None => panic!("Failed to parse PacketHeaderFlags."),
         }
