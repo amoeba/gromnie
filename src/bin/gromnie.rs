@@ -79,7 +79,7 @@ async fn client_task(id: u32, address: String, account_name: String, password: S
             Some(v) => {
                 println!("PacketHeaderFlags: {}", v.to_string());
             },
-            None => println!("Failed to parse PacketHeaderFlags."),
+            None => panic!("Failed to parse PacketHeaderFlags."),
         }
     }
 }
