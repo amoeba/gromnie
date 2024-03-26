@@ -215,4 +215,8 @@ impl PacketHeaderFlags {
     pub fn as_u32(&self) -> u32 {
         self.bits() as u32
     }
+
+    pub fn to_string(&self) -> String {
+        self.iter_names().map(|x| x.0.to_string()).collect::<Vec<String>>().join(" | ")
+    }
 }

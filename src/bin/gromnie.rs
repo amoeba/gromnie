@@ -76,7 +76,9 @@ async fn client_task(id: u32, address: String, account_name: String, password: S
         println!("           {:?}", packet);
 
         match PacketHeaderFlags::from_bits(packet.flags) {
-            Some(v) => println!("{:?}", v),
+            Some(v) => {
+                println!("PacketHeaderFlags: {}", v.to_string());
+            },
             None => println!("Failed to parse PacketHeaderFlags."),
         }
     }
