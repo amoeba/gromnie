@@ -1,6 +1,6 @@
 use clap::{Parser, Subcommand};
 use deku::DekuContainerRead;
-use gromnie::{client::client::Client, net::packet::{Packet, PacketHeaderFlags}};
+use gromnie::{client::client::Client, net::{packet::PacketHeaderFlags, transit_header::TransitHeader}};
 
 #[derive(Parser)]
 #[command(version, about, long_about = None)]
@@ -61,7 +61,7 @@ async fn client_task(id: u32, address: String, account_name: String, password: S
         let (size, peer) = client.socket.recv_from(&mut buf).await.unwrap();
 
         // Try to parse into a Packet (basically, TransitHeader)
-        let (_rest, packet) = Packet::from_bytes((&buf, size)).unwrap();
+        let (_rest, packet) = TransitHeader::from_bytes((buf.as_ref(), 0)).unwrap();
 
         println!(
             "[NET/RECV] [client: {} on port: {} recv'd {} bytes from {}]",
@@ -73,12 +73,13 @@ async fn client_task(id: u32, address: String, account_name: String, password: S
         println!("           {:02X?}", &buf[..size]);
         println!("           {:?}", packet);
 
-        match PacketHeaderFlags::from_bits(packet.header.flags) {
+        match PacketHeaderFlags::from_bits(packet.flags) {
             Some(v) => println!("{:?}", v),
-            None => println!("Failed to parse flags."),
+            None => println!("Failed to parse PacketHeaderFlags."),
         }
     }
 }
+
 
 #[tokio::main]
 async fn main() -> Result<(), ()> {
