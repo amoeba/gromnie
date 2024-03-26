@@ -105,7 +105,6 @@ impl Client {
 
         // TODO: Wrap this up in a nicer way
         let buffer: Cursor<Vec<u8>> = Cursor::new(Vec::new());
-        // connect_response(&mut buffer, cookie);
         let serialized_data: Vec<u8> = buffer.into_inner();
 
         // TODO: Handle here with match
@@ -113,86 +112,4 @@ impl Client {
 
         Ok(())
     }
-
-    // Response... which packet is this?
-    // 0000   02 00 00 00 45 00 00 50 cc c2 00 00 40 11 00 00
-    // 0010   7f 00 00 01 7f 00 00 01 23 28 c9 10 00 3c fe 4f
-    // 0020   00 00 00 00 00 00 04 00 0a b9 8c 2c 0b 00 4a 88
-    // 0030   20 00 01 00 ad aa f2 94 10 a7 aa 41 f9 93 86 68
-    // 0040   82 d4 43 a8 00 00 00 00 75 05 81 e9 55 88 43 18
-    // 0050   00 00 00 00
-
-    // ame="TransitHeader" text="Server to Client AC packet.">
-    // 		<field type="uint" name="Sequence" text="Packet Sequence / Order" />
-    // 		<field type="PacketHeaderFlags" name="Flags" text="Flags that dictate the content / purpose of this packet" />
-    // 		<field type="uint" name="Checksum" text="Packet Checksum" />
-    // 		<field type="ushort" name="RecipientId" />
-    // 		<field type="ushort" name="TimeSinceLastPacket" />
-    // 		<field type="ushort" name="Size" text="Packet length, excluding this header" />
-    // 		<field type="ushort" name="Iteration" />
-
-    // PacketHeaderFlags
-    // <value value="0x00080000" name="ConnectResponse" />
-
-    // <type name="ConnectRequestHeader" proto="true" text="Optional header data when PacketHeaderFlags includes ConnectRequest">
-    // <field name="ServerTime" type="double" />
-    // <field name="Cookie" type="ulong" />
-    // <field name="NetID" type="int" />
-    // <field name="OutgoingSeed" type="uint" />
-    // <field name="IncomingSeed" type="uint" />
-    // <field name="Unknown" type="DWORD" />
-    // </type>
 }
-
-// TODO: this is a total hack but it looks like it works. Can we wrap this up
-// better?
-// pub async fn parse_fragment(buffer: &[u8]) -> Result<Fragment, deku::DekuError> {
-//     let mut cursor = Cursor::new(&buffer);
-
-//     // Temporarily: Handle this tolerantly as we figure out the protocol
-//     let packet = TransitHeader::from_bytes((&cursor.get_ref(), 0));
-
-//     let hdr = match packet {
-//         Ok(val) => val,
-//         Err(e) => {
-//             println!("[WARN] {}", e);
-//             return Err(e);
-//         }
-//     };
-
-//     // Skip to remainder
-//     cursor.seek(io::SeekFrom::Start(hdr.1.size as u64)).unwrap();
-
-//     // TODO: This value only works for one packet, what does it need to be?
-//     let temp_read_len = 32;
-
-//     // We need to convert from a u32 to a PacketHeaderFlags
-//     let flag = PacketHeaderFlags::from_bits(hdr.1.flags).unwrap();
-
-//     // TODO: Should/could be a template to save code
-//     let rest: ((&[u8], usize), ConnectRequestHeader) = match flag {
-//         PacketHeaderFlags::ConnectRequest => {
-//             match ConnectRequestHeader::from_bytes((&cursor.get_ref(), temp_read_len)) {
-//                 Ok(header) => header,
-//                 Err(error) => {
-//                     return Err(error);
-//                 }
-//             }
-//         }
-//         PacketHeaderFlags::AckSequence => {
-//             println!("ACK!");
-//             return Err(DekuError::Unexpected(format!("ACK! This packet isn't handled: {:02x?}", buffer).to_owned()));
-//         },
-//         _ => {
-//             return Err(DekuError::Unexpected(format!("This packet isn't handled: {:02x?}", buffer).to_owned()));
-//         }
-//     };
-
-//     // TODO: Not quite right yet, needs to return whole fragment
-//     let fragment = Fragment {
-//         header: hdr.1,
-//         body: rest.1
-//     };
-
-//     Ok(fragment)
-// }

@@ -54,13 +54,15 @@ async fn client_task(id: u32, address: String, account_name: String, password: S
         Err(_) => panic!(),
     }
 
+    // Grab this for logging later on
     let local_addr = client.socket.local_addr().unwrap();
 
     let mut buf = [0u8; 1024];
+
     loop {
         let (size, peer) = client.socket.recv_from(&mut buf).await.unwrap();
 
-        // Try to parse into a Packet (basically, TransitHeader)
+        // Pull out TransitHeader first and inspect
         let (_rest, packet) = TransitHeader::from_bytes((buf.as_ref(), 0)).unwrap();
 
         println!(
@@ -108,8 +110,6 @@ async fn main() -> Result<(), ()> {
         tasks.push(tokio::spawn(client_task(
             i.to_owned(),
             address.to_owned(),
-            // "acservertracker".to_owned(),
-            // "jj9h26hcsggc".to_owned(),
             "testing".to_owned(),
             "testing".to_owned(),
         )));
@@ -119,33 +119,5 @@ async fn main() -> Result<(), ()> {
         task.await.unwrap();
     }
 
-    // Receive code
-    // // //
-    // let mut recv_buffer = [0u8; 1024];
-
-    // let nbytes = socket.recv(&mut recv_buffer);
-
-    // // TODO: Temporary code to parse response. Move this elsewhere when it's ready.
-    // let mut recv_cursor = Cursor::new(&recv_buffer);
-    // // parse_response(&mut recv_cursor);
-    // parse_response(&recv_buffer);
-
-    // nbytes
     Ok(())
 }
-
-use deku::prelude::*;
-
-#[derive(Debug, PartialEq, DekuRead, DekuWrite)]
-struct DekuTest {
-    header: DekuHeader,
-    data: DekuData,
-}
-
-#[derive(Debug, PartialEq, DekuRead, DekuWrite)]
-#[deku(endian = "little")]
-struct DekuHeader(u8);
-
-#[derive(Debug, PartialEq, DekuRead, DekuWrite)]
-#[deku(endian = "little")]
-struct DekuData(u16);
