@@ -3,6 +3,7 @@ use std::io::Cursor;
 use tokio::net::UdpSocket;
 
 use crate::net::packets::login_request::LoginRequestPacket;
+use crate::net::packets::connect_response::ConnectResponsePacket;
 
 // ClientConnectState
 // TODO: Put this somewhere else
@@ -104,12 +105,16 @@ impl Client {
         println!("sending do_connect_response");
 
         // TODO: Wrap this up in a nicer way
-        let buffer: Cursor<Vec<u8>> = Cursor::new(Vec::new());
+        let mut buffer: Cursor<Vec<u8>> = Cursor::new(Vec::new());
+        let mut packet = ConnectResponsePacket::new();
+        packet.serialize(&mut buffer);
         let serialized_data: Vec<u8> = buffer.into_inner();
 
         // TODO: Handle here with match
-        let _ = self.socket.send(&serialized_data).await;
-
+        match self.socket.send(&serialized_data).await {
+            Ok(_) => {},
+            Err(_) => panic!(),
+        }
         Ok(())
     }
 }
