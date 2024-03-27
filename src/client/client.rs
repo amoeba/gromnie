@@ -100,7 +100,6 @@ impl Client {
         Ok(())
     }
 
-
     pub async fn do_connect_response(&mut self, cookie: u64) -> Result<(), std::io::Error> {
         // TODO: Wrap this up in a nicer way
         let mut buffer: Cursor<Vec<u8>> = Cursor::new(Vec::new());
