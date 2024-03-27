@@ -2,6 +2,7 @@ use std::io::Cursor;
 
 use tokio::net::UdpSocket;
 
+use crate::net::packets::ack_response::AckResponsePacket;
 use crate::net::packets::login_request::LoginRequestPacket;
 use crate::net::packets::connect_response::ConnectResponsePacket;
 
@@ -108,6 +109,24 @@ impl Client {
         let serialized_data: Vec<u8> = buffer.into_inner();
 
         println!("[NET/SEND] Sending ConnectResponse with data: {:2X?}", serialized_data);
+        println!("           -> raw: {:02X?}", serialized_data);
+        println!("           -> packet: {:?}", packet);
+        // TODO: Handle here with match
+        match self.socket.send(&serialized_data).await {
+            Ok(_) => {},
+            Err(_) => panic!(),
+        }
+        Ok(())
+    }
+
+    pub async fn do_ack_response(&mut self, value: u32) -> Result<(), std::io::Error> {
+        // TODO: Wrap this up in a nicer way
+        let mut buffer: Cursor<Vec<u8>> = Cursor::new(Vec::new());
+        let mut packet = AckResponsePacket::new(value);
+        packet.serialize(&mut buffer);
+        let serialized_data: Vec<u8> = buffer.into_inner();
+
+        println!("[NET/SEND] Sending AckResponse with data: {:2X?}", serialized_data);
         println!("           -> raw: {:02X?}", serialized_data);
         println!("           -> packet: {:?}", packet);
         // TODO: Handle here with match

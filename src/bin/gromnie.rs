@@ -88,7 +88,9 @@ async fn client_task(id: u32, address: String, account_name: String, password: S
                 }
 
                 if v == PacketHeaderFlags::AckSequence {
-                    println!("TODO: Send AckResponse")
+                    println!("TODO: Send AckResponse");
+                    let _ = client.do_ack_response(0x02).await;
+
                 }
             },
             None => panic!("Failed to parse PacketHeaderFlags."),
