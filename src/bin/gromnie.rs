@@ -115,12 +115,6 @@ async fn main() -> Result<(), ()> {
         let suffix = i.to_string();
         account_name.push_str(suffix.as_ref());
 
-        // tasks.push(tokio::spawn(client_task(
-        //     i.to_owned(),
-        //     address.to_owned(),
-        //     account_name.to_owned(),
-        //     password.to_owned(),
-        // )));
         tasks.push(tokio::spawn(client_task(
             i.to_owned(),
             address.to_owned(),
