@@ -26,18 +26,12 @@ impl ConnectResponsePacket {
 
 impl ConnectResponsePacket {
   pub fn serialize(&mut self, writer: &mut Cursor<Vec<u8>>) {
-    println!("TODO: ConnectResponsePacket: serialize");
-
-    println!("Seeking to beyond TransitHeader...");
     let offset = mem::size_of::<TransitHeader>() as u64;
     writer.seek(std::io::SeekFrom::Start(offset)).unwrap();
-    println!("Seeked to {}", writer.stream_position().unwrap());
 
-    // TODO
     writer.write(&self.body.cookie.to_le_bytes()).unwrap();
 
     let bytes_written = writer.stream_position().unwrap() - offset;
-
     self.packet.serialize(writer, bytes_written);
   }
 }

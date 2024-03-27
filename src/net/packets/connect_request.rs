@@ -10,17 +10,3 @@ pub struct ConnectRequestHeader {
     incoming_seed: u32,
     unknown: u32,
 }
-
-// TODO: actestclient defines this as the following, and doesn't match the
-// protocol docs
-//
-// #[derive(Debug, PartialEq, DekuRead, DekuWrite)]
-// #[deku(endian = "little")]
-// pub struct ConnectRequestHeader {
-//   server_time: u8,
-//   cookie: u8,
-//   client_id: u32,
-//   seed_s2c: u32,
-//   seed_c2s: u32,
-//   unknown: u32
-// }
