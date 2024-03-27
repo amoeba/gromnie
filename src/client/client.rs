@@ -1,10 +1,15 @@
 use std::io::Cursor;
+use std::net::SocketAddr;
 
 use tokio::net::UdpSocket;
+use deku::prelude::*;
 
+use crate::net::packet::PacketHeaderFlags;
 use crate::net::packets::ack_response::AckResponsePacket;
+use crate::net::packets::connect_request::ConnectRequestHeader;
 use crate::net::packets::login_request::LoginRequestPacket;
 use crate::net::packets::connect_response::ConnectResponsePacket;
+use crate::net::transit_header::TransitHeader;
 
 // ClientConnectState
 // TODO: Put this somewhere else
@@ -68,6 +73,40 @@ impl Client {
         }
     }
 
+    pub async fn process_packet(&mut self, buffer: &[u8], size: usize, peer: &SocketAddr) {
+        // Pull out TransitHeader first and inspect
+        let (_rest, packet) = TransitHeader::from_bytes((buffer.as_ref(), 0)).unwrap();
+
+        println!(
+            "[NET/RECV] [client: {} on port: {} recv'd {} bytes from {:?}]",
+            self.id,
+            self.socket.local_addr().unwrap().port(),
+            size,
+            peer
+        );
+        println!("           -> raw: {:02X?}", &buffer[..size]);
+        println!("           -> packet: {:?}", packet);
+
+        match PacketHeaderFlags::from_bits(packet.flags) {
+            Some(v) => {
+                println!("[RECVLOOP] Processing packet with PacketHeaderFlags: {}", v.to_string());
+
+                if v == PacketHeaderFlags::ConnectRequest {
+                    let packet = ConnectRequestHeader::from_bytes((&buffer[..size], size)).unwrap();
+                    println!("        -> packet: {:?}", packet.1);
+
+                    let _ = self.do_connect_response(packet.1.cookie).await;
+                }
+
+                if v == PacketHeaderFlags::AckSequence {
+                    println!("TODO: Send AckResponse");
+                    let _ = self.do_ack_response(0x02).await;
+
+                }
+            },
+            None => panic!("Failed to parse PacketHeaderFlags."),
+        }
+    }
     // TODO: Should return a Result with a success or failure
     pub async fn connect(&mut self) -> Result<(), std::io::Error> {
         self.connect_state = ClientConnectState::Connecting;

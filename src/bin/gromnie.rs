@@ -1,7 +1,6 @@
-use deku::prelude::*;
 use clap::{Parser, Subcommand};
 
-use gromnie::{client::client::Client, net::{packet::PacketHeaderFlags, packets::connect_request::ConnectRequestHeader, transit_header::TransitHeader}};
+use gromnie::client::client::Client;
 
 #[derive(Parser)]
 #[command(version, about, long_about = None)]
@@ -44,60 +43,26 @@ async fn client_task(id: u32, address: String, account_name: String, password: S
     )
     .await;
 
+    // TODO: Handle propertly
     match client.connect().await {
         Ok(_) => {},
         Err(_) => panic!(),
 
     };
 
+    // TODO: Handle properly
     match client.do_login().await {
         Ok(_) => {},
         Err(_) => panic!(),
     }
 
-    // Grab this for logging later on
-    let local_addr = client.socket.local_addr().unwrap();
-
     let mut buf = [0u8; 1024];
 
     loop {
         let (size, peer) = client.socket.recv_from(&mut buf).await.unwrap();
-
-        // Pull out TransitHeader first and inspect
-        let (_rest, packet) = TransitHeader::from_bytes((buf.as_ref(), 0)).unwrap();
-
-        println!(
-            "[NET/RECV] [client: {} on port: {} recv'd {} bytes from {}]",
-            client.id,
-            local_addr.port(),
-            size,
-            peer
-        );
-        println!("           -> raw: {:02X?}", &buf[..size]);
-        println!("           -> packet: {:?}", packet);
-
-        match PacketHeaderFlags::from_bits(packet.flags) {
-            Some(v) => {
-                println!("[RECVLOOP] Processing packet with PacketHeaderFlags: {}", v.to_string());
-
-                if v == PacketHeaderFlags::ConnectRequest {
-                    let packet = ConnectRequestHeader::from_bytes((&buf[..size], size)).unwrap();
-                    println!("        -> packet: {:?}", packet.1);
-
-                    let _ = client.do_connect_response(packet.1.cookie).await;
-                }
-
-                if v == PacketHeaderFlags::AckSequence {
-                    println!("TODO: Send AckResponse");
-                    let _ = client.do_ack_response(0x02).await;
-
-                }
-            },
-            None => panic!("Failed to parse PacketHeaderFlags."),
-        }
+        client.process_packet(&buf[..size], size, &peer).await
     }
 }
-
 
 #[tokio::main]
 async fn main() -> Result<(), ()> {
