@@ -40,6 +40,8 @@ pub struct Client {
     account: Account,
     connect_state: ClientConnectState,
     pub login_state: ClientLoginState,
+    pub send_count: u32,
+    pub recv_count: u32
 }
 
 impl Client {
@@ -61,6 +63,8 @@ impl Client {
             socket: sok,
             connect_state: ClientConnectState::Disconnected,
             login_state: ClientLoginState::NotLoggedIn,
+            send_count: 0,
+            recv_count: 0
         }
     }
 
