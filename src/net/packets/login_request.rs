@@ -23,13 +23,9 @@ impl LoginRequestPacket {
 
 impl LoginRequestPacket {
   pub fn serialize(&mut self, writer: &mut Cursor<Vec<u8>>) {
-    println!("LoginRequestPacket: serialize");
-
     // Seek to just after TransitHeader
-    println!("Seeking to beyond TransitHeader...");
     let offset = mem::size_of::<TransitHeader>() as u64;
     writer.seek(std::io::SeekFrom::Start(offset)).unwrap();
-    println!("Seeked to {}", writer.stream_position().unwrap());
 
     // Calculate lengths and paddings ahead of time
     let mut username_pad = (self.account_name.len() + 2) % 4;
@@ -86,12 +82,7 @@ impl LoginRequestPacket {
     // do it
     // writer.seek(std::io::SeekFrom::Current(password_pad as i64)).unwrap();
 
-    // Debug
     let bytes_written = writer.stream_position().unwrap() - offset;
-    println!("Wrote {} bytes of packet data", bytes_written);
-    println!("stream position is {}", writer.stream_position().unwrap());
-    println!("size of transit header is {}", mem::size_of::<TransitHeader>());
-    // End Debug
 
     self.packet.serialize(writer, bytes_written);
 

@@ -81,30 +81,20 @@ impl Packet {
         let header_checksum = self.header.compute_checksum();
         let body_checksum = self.compute_checksum(body);
 
-        println!("header_checksum is 0x{:02x?}", header_checksum);
-        println!("body_checksum is 0x{:02x?}", body_checksum);
-        println!("combined checksum is 0x{:02x?}", header_checksum.wrapping_add(body_checksum));
-
         // TODO: Eventually needs to include the ISAAC XOR
         //self.checksum = header_checksum + (body_checksum ^ issac_xor);
         self.header.checksum = header_checksum.wrapping_add(body_checksum);
     }
 
     pub fn serialize(&mut self, writer: &mut Cursor<Vec<u8>>, size: u64) {
-        // Once we're called, we have a writer that has the packet data in it
-        // with no header information (yet)
-        println!("Packet.serialize(), size is {} bytes", size);
-
         // Set size
         self.header.size = size as u16;
 
         // We can set the checksum now
         self.set_checksum(writer);
 
-        println!("Jumping to start of stream");
         writer.seek(std::io::SeekFrom::Start(0)).unwrap();
 
-        println!("Writing TransitHeader");
         writer.write(&self.header.to_bytes().unwrap()).unwrap();
     }
 }

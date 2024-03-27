@@ -73,15 +73,14 @@ async fn client_task(id: u32, address: String, account_name: String, password: S
             size,
             peer
         );
-        println!("           {:02X?}", &buf[..size]);
-        println!("           {:?}", packet);
+        println!("           -> raw: {:02X?}", &buf[..size]);
+        println!("           -> packet: {:?}", packet);
 
         match PacketHeaderFlags::from_bits(packet.flags) {
             Some(v) => {
-                println!("PacketHeaderFlags: {}", v.to_string());
+                println!("[RECVLOOP] Processing packet with PacketHeaderFlags: {}", v.to_string());
 
                 if v == PacketHeaderFlags::ConnectRequest {
-                    println!("TODO: Send ConnectResponse");
                     let packet = ConnectRequestHeader::from_bytes((&buf[..size], size)).unwrap();
                     println!("{:?}", packet.1);
 
