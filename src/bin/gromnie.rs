@@ -82,7 +82,7 @@ async fn client_task(id: u32, address: String, account_name: String, password: S
 
                 if v == PacketHeaderFlags::ConnectRequest {
                     let packet = ConnectRequestHeader::from_bytes((&buf[..size], size)).unwrap();
-                    println!("{:?}", packet.1);
+                    println!("        -> packet: {:?}", packet.1);
 
                     let _ = client.do_connect_response(packet.1.cookie).await;
                 }

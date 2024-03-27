@@ -90,7 +90,7 @@ impl Client {
 
         // TODO: Handle here with match
         println!("Sending LoginRequest data for account {}:{}", self.account.name, self.account.password);
-        println!("{:02X?}", serialized_data);
+        println!("          -> raw: {:02X?}", serialized_data);
 
         match self.socket.send(&serialized_data).await {
             Ok(_) => {},
