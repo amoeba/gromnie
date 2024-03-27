@@ -1,6 +1,7 @@
+use deku::prelude::*;
 use clap::{Parser, Subcommand};
-use deku::DekuContainerRead;
-use gromnie::{client::client::Client, net::{packet::PacketHeaderFlags, packets::connect_response::ConnectResponsePacket, transit_header::TransitHeader}};
+
+use gromnie::{client::client::Client, net::{packet::PacketHeaderFlags, packets::connect_request::ConnectRequestHeader, transit_header::TransitHeader}};
 
 #[derive(Parser)]
 #[command(version, about, long_about = None)]
@@ -81,7 +82,10 @@ async fn client_task(id: u32, address: String, account_name: String, password: S
 
                 if v == PacketHeaderFlags::ConnectRequest {
                     println!("TODO: Send ConnectResponse");
-                    let _ = client.do_connect_response(0).await;
+                    let packet = ConnectRequestHeader::from_bytes((&buf[..size], size)).unwrap();
+                    println!("{:?}", packet.1);
+
+                    let _ = client.do_connect_response(packet.1.cookie).await;
                 }
 
                 if v == PacketHeaderFlags::AckSequence {

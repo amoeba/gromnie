@@ -109,16 +109,6 @@ impl Packet {
     }
 }
 
-#[derive(Debug, PartialEq, DekuRead, DekuWrite)]
-#[deku(endian = "little")]
-pub struct ConnectRequestHeader {
-    server_time: f64,
-    pub cookie: u8,
-    net_id: i32,
-    outgoing_seed: u32,
-    unknown: u32,
-}
-
 // TODO: Probably remove this. We need to use these values as bitflags but
 // Rust enums can't be used that way. The recommended way to do bitflags in Rust
 // is to use the bitflags crate. Unfortunately, I couldn't figure out how to
