@@ -26,6 +26,7 @@ impl ConnectResponsePacket {
 
 impl ConnectResponsePacket {
   pub fn serialize(&mut self, writer: &mut Cursor<Vec<u8>>) {
+    // Seek to just after TransitHeader
     let offset = mem::size_of::<TransitHeader>() as u64;
     writer.seek(std::io::SeekFrom::Start(offset)).unwrap();
 
