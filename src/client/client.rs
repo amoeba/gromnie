@@ -75,7 +75,8 @@ impl Client {
 
     pub async fn process_packet(&mut self, buffer: &[u8], size: usize, peer: &SocketAddr) {
         // Pull out TransitHeader first and inspect
-        let (_rest, packet) = TransitHeader::from_bytes((buffer.as_ref(), 0)).unwrap();
+        let mut cursor = std::io::Cursor::new(buffer);
+        let packet = TransitHeader::parse(&mut cursor).unwrap();
 
         println!(
             "[NET/RECV] [client: {} on port: {} recv'd {} bytes from {:?}]",
@@ -87,24 +88,19 @@ impl Client {
         println!("           -> raw: {:02X?}", &buffer[..size]);
         println!("           -> packet: {:?}", packet);
 
-        match PacketHeaderFlags::from_bits(packet.flags) {
-            Some(v) => {
-                println!("[RECVLOOP] Processing packet with PacketHeaderFlags: {}", v.to_string());
+        let flags = packet.flags;
+        println!("[RECVLOOP] Processing packet with PacketHeaderFlags: {:?}", flags);
 
-                if v == PacketHeaderFlags::ConnectRequest {
-                    let packet = ConnectRequestHeader::from_bytes((&buffer[..size], size)).unwrap();
-                    println!("        -> packet: {:?}", packet.1);
+        if flags.contains(PacketHeaderFlags::CONNECT_REQUEST) {
+            let packet = ConnectRequestHeader::from_bytes((&buffer[..size], size)).unwrap();
+            println!("        -> packet: {:?}", packet.1);
 
-                    let _ = self.do_connect_response(packet.1.cookie).await;
-                }
+            let _ = self.do_connect_response(packet.1.cookie).await;
+        }
 
-                if v == PacketHeaderFlags::AckSequence {
-                    println!("TODO: Send AckResponse");
-                    let _ = self.do_ack_response(0x02).await;
-
-                }
-            },
-            None => panic!("Failed to parse PacketHeaderFlags."),
+        if flags.contains(PacketHeaderFlags::ACK_SEQUENCE) {
+            println!("TODO: Send AckResponse");
+            let _ = self.do_ack_response(0x02).await;
         }
     }
     // TODO: Should return a Result with a success or failure

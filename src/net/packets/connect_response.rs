@@ -9,7 +9,7 @@ pub struct ConnectResponseBody {
 }
 
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug)]
 pub struct ConnectResponsePacket {
   pub packet: Packet,
   body: ConnectResponseBody,
@@ -18,7 +18,7 @@ pub struct ConnectResponsePacket {
 impl ConnectResponsePacket {
   pub fn new(cookie: u64) -> ConnectResponsePacket {
     ConnectResponsePacket {
-      packet: Packet::new(PacketHeaderFlags::ConnectResponse.as_u32()),
+      packet: Packet::new(PacketHeaderFlags::CONNECT_RESPONSE.bits()),
       body: ConnectResponseBody {cookie: cookie}
     }
   }

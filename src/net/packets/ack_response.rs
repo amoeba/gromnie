@@ -8,7 +8,7 @@ pub struct AckResponseBody {
   value: u32
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug)]
 pub struct AckResponsePacket {
   pub packet: Packet,
   body: AckResponseBody,
@@ -17,7 +17,7 @@ pub struct AckResponsePacket {
 impl AckResponsePacket {
   pub fn new(value: u32) -> AckResponsePacket {
     AckResponsePacket {
-      packet: Packet::new(PacketHeaderFlags::ConnectResponse.as_u32()),
+      packet: Packet::new(PacketHeaderFlags::CONNECT_RESPONSE.bits()),
       body: AckResponseBody {value: value}
     }
   }

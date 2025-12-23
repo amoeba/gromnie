@@ -2,7 +2,7 @@ use std::{io::{Cursor, Seek, Write}, mem};
 
 use crate::net::{packet::{Packet, PacketHeaderFlags}, transit_header::TransitHeader};
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug)]
 pub struct LoginRequestPacket {
   pub packet: Packet,
   pub protocol_version: String,
@@ -13,7 +13,7 @@ pub struct LoginRequestPacket {
 impl LoginRequestPacket {
   pub fn new(account_name: &str, password: &str) -> LoginRequestPacket {
     LoginRequestPacket {
-      packet: Packet::new(PacketHeaderFlags::LoginRequest.as_u32()),
+      packet: Packet::new(PacketHeaderFlags::LOGIN_REQUEST.bits()),
       protocol_version: "1802".to_owned(),
       account_name: account_name.to_lowercase().to_owned(),
       password: password.to_owned()
