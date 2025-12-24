@@ -17,8 +17,8 @@ impl PacketHeaderExt for TransitHeader {
             sequence: 0,
             flags: PacketHeaderFlags::from_bits_truncate(flags),
             checksum: 0,
-            id: 0,  // formerly recipient_id
-            time: 0,  // formerly time_since_last_packet
+            id: 0,   // formerly recipient_id
+            time: 0, // formerly time_since_last_packet
             size: 0,
             iteration: 0,
         }
@@ -29,7 +29,7 @@ impl PacketHeaderExt for TransitHeader {
         let temp = TransitHeader {
             sequence: self.sequence,
             flags: self.flags,
-            checksum: 0xBADD70DD,  // Magic constant
+            checksum: 0xBADD70DD, // Magic constant
             id: self.id,
             time: self.time,
             size: self.size,

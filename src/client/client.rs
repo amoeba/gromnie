@@ -1,14 +1,14 @@
 use std::io::Cursor;
 use std::net::SocketAddr;
 
-use tokio::net::UdpSocket;
 use deku::prelude::*;
+use tokio::net::UdpSocket;
 
 use crate::net::packet::PacketHeaderFlags;
 use crate::net::packets::ack_response::AckResponsePacket;
 use crate::net::packets::connect_request::ConnectRequestHeader;
-use crate::net::packets::login_request::LoginRequestPacket;
 use crate::net::packets::connect_response::ConnectResponsePacket;
+use crate::net::packets::login_request::LoginRequestPacket;
 use crate::net::transit_header::TransitHeader;
 
 // ClientConnectState
@@ -46,7 +46,7 @@ pub struct Client {
     connect_state: ClientConnectState,
     pub login_state: ClientLoginState,
     pub send_count: u32,
-    pub recv_count: u32
+    pub recv_count: u32,
 }
 
 impl Client {
@@ -69,7 +69,7 @@ impl Client {
             connect_state: ClientConnectState::Disconnected,
             login_state: ClientLoginState::NotLoggedIn,
             send_count: 0,
-            recv_count: 0
+            recv_count: 0,
         }
     }
 
@@ -89,7 +89,10 @@ impl Client {
         println!("           -> packet: {:?}", packet);
 
         let flags = packet.flags;
-        println!("[RECVLOOP] Processing packet with PacketHeaderFlags: {:?}", flags);
+        println!(
+            "[RECVLOOP] Processing packet with PacketHeaderFlags: {:?}",
+            flags
+        );
 
         if flags.contains(PacketHeaderFlags::CONNECT_REQUEST) {
             let packet = ConnectRequestHeader::from_bytes((&buffer[..size], size)).unwrap();
@@ -129,11 +132,14 @@ impl Client {
         let serialized_data: Vec<u8> = buffer.into_inner();
 
         // TODO: Handle here with match
-        println!("Sending LoginRequest data for account {}:{}", self.account.name, self.account.password);
+        println!(
+            "Sending LoginRequest data for account {}:{}",
+            self.account.name, self.account.password
+        );
         println!("          -> raw: {:02X?}", serialized_data);
 
         match self.socket.send(&serialized_data).await {
-            Ok(_) => {},
+            Ok(_) => {}
             Err(_) => panic!(),
         }
 
@@ -147,12 +153,15 @@ impl Client {
         packet.serialize(&mut buffer);
         let serialized_data: Vec<u8> = buffer.into_inner();
 
-        println!("[NET/SEND] Sending ConnectResponse with data: {:2X?}", serialized_data);
+        println!(
+            "[NET/SEND] Sending ConnectResponse with data: {:2X?}",
+            serialized_data
+        );
         println!("           -> raw: {:02X?}", serialized_data);
         println!("           -> packet: {:?}", packet);
         // TODO: Handle here with match
         match self.socket.send(&serialized_data).await {
-            Ok(_) => {},
+            Ok(_) => {}
             Err(_) => panic!(),
         }
         Ok(())
@@ -165,12 +174,15 @@ impl Client {
         packet.serialize(&mut buffer);
         let serialized_data: Vec<u8> = buffer.into_inner();
 
-        println!("[NET/SEND] Sending AckResponse with data: {:2X?}", serialized_data);
+        println!(
+            "[NET/SEND] Sending AckResponse with data: {:2X?}",
+            serialized_data
+        );
         println!("           -> raw: {:02X?}", serialized_data);
         println!("           -> packet: {:?}", packet);
         // TODO: Handle here with match
         match self.socket.send(&serialized_data).await {
-            Ok(_) => {},
+            Ok(_) => {}
             Err(_) => panic!(),
         }
         Ok(())

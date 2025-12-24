@@ -45,14 +45,13 @@ async fn client_task(id: u32, address: String, account_name: String, password: S
 
     // TODO: Handle propertly
     match client.connect().await {
-        Ok(_) => {},
+        Ok(_) => {}
         Err(_) => panic!(),
-
     };
 
     // TODO: Handle properly
     match client.do_login().await {
-        Ok(_) => {},
+        Ok(_) => {}
         Err(_) => panic!(),
     }
 

@@ -1,7 +1,10 @@
-use std::{io::{Cursor, Seek, Write}, mem};
+use std::{
+    io::{Cursor, Seek, Write},
+    mem,
+};
 
+use super::transit_header::{PacketHeaderExt, TransitHeader};
 use crate::crypto::magic_number::get_magic_number;
-use super::transit_header::{TransitHeader, PacketHeaderExt};
 pub use acprotocol::network::packet::PacketHeaderFlags;
 
 #[derive(Debug)]
@@ -33,8 +36,7 @@ impl Packet {
         self.header.flags |= PacketHeaderFlags::ACK_SEQUENCE;
     }
 
-    pub fn set_token(&mut self, token: i64, world: Option<bool>)
-    {
+    pub fn set_token(&mut self, token: i64, world: Option<bool>) {
         self.connect_token = token;
         self.option_size += 8;
 
@@ -46,13 +48,11 @@ impl Packet {
             }
             None => {
                 self.header.flags |= PacketHeaderFlags::CONNECT_RESPONSE;
-
             }
         }
     }
 
-    pub fn set_timestamp(&mut self, timestamp: i64)
-    {
+    pub fn set_timestamp(&mut self, timestamp: i64) {
         self.timestamp = timestamp;
         self.option_size += 8;
 
@@ -62,9 +62,9 @@ impl Packet {
     }
 
     // This hashes a buffer containing [empty transitheader, packet data]
-    pub fn compute_checksum(&mut self, buffer: &[u8]) -> u32{
+    pub fn compute_checksum(&mut self, buffer: &[u8]) -> u32 {
         // TODO: Pass in include_size or determine whether to set it
-        return get_magic_number(buffer, buffer.len(), true);
+        get_magic_number(buffer, buffer.len(), true)
     }
 
     // VERY WIP
@@ -92,7 +92,9 @@ impl Packet {
 
         writer.seek(std::io::SeekFrom::Start(0)).unwrap();
 
-        writer.write(&self.header.to_bytes().unwrap()).unwrap();
+        writer
+            .write_all(&self.header.to_bytes().unwrap())
+            .unwrap();
     }
 }
 
