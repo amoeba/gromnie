@@ -1,7 +1,6 @@
 use std::io::Cursor;
 use std::net::SocketAddr;
 
-use deku::prelude::*;
 use tokio::net::UdpSocket;
 
 use crate::net::packet::PacketHeaderFlags;

@@ -26,7 +26,6 @@ acprotocol = { git = "https://github.com/amoeba/asheron-rs", package = "acprotoc
 bitflags = "2.6"
 byteorder = "1.5.0"
 clap = { version = "4.5.2", features = ["derive"] }
-deku = "0.16.0"
 strum_macros = "0.26.1"
 tokio = { version = "1.36.0", features = ["full"] }
 
