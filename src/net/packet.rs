@@ -92,9 +92,7 @@ impl Packet {
 
         writer.seek(std::io::SeekFrom::Start(0)).unwrap();
 
-        writer
-            .write_all(&self.header.to_bytes().unwrap())
-            .unwrap();
+        writer.write_all(&self.header.to_bytes().unwrap()).unwrap();
     }
 }
 
