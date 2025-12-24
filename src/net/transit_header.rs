@@ -1,44 +1,59 @@
-use deku::prelude::*;
+// Re-export PacketHeader from acprotocol as TransitHeader for compatibility
+pub use acprotocol::network::packet::PacketHeader as TransitHeader;
+pub use acprotocol::network::packet::PacketHeaderFlags;
 
 use crate::crypto::magic_number::get_magic_number;
 
-#[derive(Debug, PartialEq, DekuRead, DekuWrite)]
-#[deku(endian = "endian", ctx = "endian: deku::ctx::Endian", ctx_default = "deku::ctx::Endian::Little")]
-pub struct TransitHeader {
-    pub sequence: u32,
-    pub flags: u32, // Weakly typed here because deku and bitflags don't work
-                    // together. Or do they? TODO
-    pub checksum: u32,
-    pub recipient_id: u16,
-    pub time_since_last_packet: u16,
-    pub size: u16,
-    pub iteration: u16,
+// Extension trait to add checksum computation to PacketHeader
+pub trait PacketHeaderExt {
+    fn new(flags: u32) -> Self;
+    fn compute_checksum(&self) -> u32;
+    fn to_bytes(&self) -> Result<Vec<u8>, std::io::Error>;
 }
 
-impl TransitHeader {
-    pub fn new(flags : u32) -> TransitHeader {
+impl PacketHeaderExt for TransitHeader {
+    fn new(flags: u32) -> Self {
         TransitHeader {
             sequence: 0,
-            flags: flags,
+            flags: PacketHeaderFlags::from_bits_truncate(flags),
             checksum: 0,
-            recipient_id: 0,
-            time_since_last_packet: 0,
+            id: 0,   // formerly recipient_id
+            time: 0, // formerly time_since_last_packet
             size: 0,
             iteration: 0,
         }
     }
 
-    pub fn compute_checksum(&mut self) -> u32 {
-        let orig = self.checksum; // should be header.Checksum, whatever that is
+    fn compute_checksum(&self) -> u32 {
+        // Create a copy for checksum computation
+        let temp = TransitHeader {
+            sequence: self.sequence,
+            flags: self.flags,
+            checksum: 0xBADD70DD, // Magic constant
+            id: self.id,
+            time: self.time,
+            size: self.size,
+            iteration: self.iteration,
+        };
 
-        self.checksum = 0xBADD70DD;
+        let buf = temp.to_bytes().unwrap();
+        get_magic_number(&buf, buf.len(), true)
+    }
 
-        let buf = self.to_bytes().unwrap();
-        let result = get_magic_number(&buf, buf.len(), true);
+    fn to_bytes(&self) -> Result<Vec<u8>, std::io::Error> {
+        use std::io::Write;
 
-        self.checksum = orig;
+        let mut buf = Vec::with_capacity(20);
 
-        // TODO: See if I can avoid the cast here
-        result as u32
+        // Write fields in little-endian order (20 bytes total)
+        buf.write_all(&self.sequence.to_le_bytes())?;
+        buf.write_all(&self.flags.bits().to_le_bytes())?;
+        buf.write_all(&self.checksum.to_le_bytes())?;
+        buf.write_all(&self.id.to_le_bytes())?;
+        buf.write_all(&self.time.to_le_bytes())?;
+        buf.write_all(&self.size.to_le_bytes())?;
+        buf.write_all(&self.iteration.to_le_bytes())?;
+
+        Ok(buf)
     }
 }

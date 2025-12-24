@@ -19,5 +19,5 @@
 //   }
 
 pub mod client;
-pub mod net;
 pub mod crypto;
+pub mod net;
