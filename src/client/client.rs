@@ -166,9 +166,9 @@ impl Client {
         // Write packet to buffer
         let mut buffer = Vec::new();
         let mut cursor = Cursor::new(&mut buffer);
-        packet.write(&mut cursor).map_err(|e| {
-            std::io::Error::other(format!("Write error: {}", e))
-        })?;
+        packet
+            .write(&mut cursor)
+            .map_err(|e| std::io::Error::other(format!("Write error: {}", e)))?;
 
         println!(
             "Sending LoginRequest data for account {}:{}",
@@ -215,9 +215,9 @@ impl Client {
         // Write packet to buffer
         let mut buffer = Vec::new();
         let mut cursor = Cursor::new(&mut buffer);
-        packet.write(&mut cursor).map_err(|e| {
-            std::io::Error::other(format!("Write error: {}", e))
-        })?;
+        packet
+            .write(&mut cursor)
+            .map_err(|e| std::io::Error::other(format!("Write error: {}", e)))?;
 
         println!(
             "[NET/SEND] Sending ConnectResponse with data: {:2X?}",
@@ -264,14 +264,11 @@ impl Client {
         // Write packet to buffer
         let mut buffer = Vec::new();
         let mut cursor = Cursor::new(&mut buffer);
-        packet.write(&mut cursor).map_err(|e| {
-            std::io::Error::other(format!("Write error: {}", e))
-        })?;
+        packet
+            .write(&mut cursor)
+            .map_err(|e| std::io::Error::other(format!("Write error: {}", e)))?;
 
-        println!(
-            "[NET/SEND] Sending AckResponse with data: {:2X?}",
-            buffer
-        );
+        println!("[NET/SEND] Sending AckResponse with data: {:2X?}", buffer);
         println!("           -> raw: {:02X?}", buffer);
         println!("           -> packet: {:?}", packet);
         // TODO: Handle here with match
