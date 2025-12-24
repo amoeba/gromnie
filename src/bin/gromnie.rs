@@ -1,6 +1,6 @@
 use clap::{Parser, Subcommand};
 
-use gromnie::client::client::Client;
+use gromnie::client::Client;
 
 #[derive(Parser)]
 #[command(version, about, long_about = None)]

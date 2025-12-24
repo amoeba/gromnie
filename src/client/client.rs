@@ -1,6 +1,7 @@
 use std::io::Cursor;
 use std::net::SocketAddr;
 
+use acprotocol::readers::ACDataType;
 use tokio::net::UdpSocket;
 
 use crate::net::packet::PacketHeaderFlags;
@@ -11,6 +12,7 @@ use crate::net::transit_header::TransitHeader;
 // TODO: Put this somewhere else
 #[derive(Clone, Debug, PartialEq)]
 pub enum ClientConnectState {
+    #[allow(dead_code)]
     Error,
     Disconnected,
     Connecting,
@@ -91,10 +93,11 @@ impl Client {
         );
 
         if flags.contains(PacketHeaderFlags::CONNECT_REQUEST) {
-            let packet = ConnectRequestHeader::from_bytes((&buffer[..size], size)).unwrap();
-            println!("        -> packet: {:?}", packet.1);
+            let mut cursor = Cursor::new(&buffer[..size]);
+            let packet = ConnectRequestHeader::read(&mut cursor).unwrap();
+            println!("        -> packet: {:?}", packet);
 
-            let _ = self.do_connect_response(packet.1.cookie).await;
+            let _ = self.do_connect_response(packet.cookie).await;
         }
 
         if flags.contains(PacketHeaderFlags::ACK_SEQUENCE) {
@@ -164,7 +167,7 @@ impl Client {
         let mut buffer = Vec::new();
         let mut cursor = Cursor::new(&mut buffer);
         packet.write(&mut cursor).map_err(|e| {
-            std::io::Error::new(std::io::ErrorKind::Other, format!("Write error: {}", e))
+            std::io::Error::other(format!("Write error: {}", e))
         })?;
 
         println!(
@@ -213,7 +216,7 @@ impl Client {
         let mut buffer = Vec::new();
         let mut cursor = Cursor::new(&mut buffer);
         packet.write(&mut cursor).map_err(|e| {
-            std::io::Error::new(std::io::ErrorKind::Other, format!("Write error: {}", e))
+            std::io::Error::other(format!("Write error: {}", e))
         })?;
 
         println!(
@@ -262,7 +265,7 @@ impl Client {
         let mut buffer = Vec::new();
         let mut cursor = Cursor::new(&mut buffer);
         packet.write(&mut cursor).map_err(|e| {
-            std::io::Error::new(std::io::ErrorKind::Other, format!("Write error: {}", e))
+            std::io::Error::other(format!("Write error: {}", e))
         })?;
 
         println!(
