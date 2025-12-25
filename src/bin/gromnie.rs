@@ -46,13 +46,19 @@ async fn client_task(id: u32, address: String, account_name: String, password: S
     // TODO: Handle propertly
     match client.connect().await {
         Ok(_) => {}
-        Err(_) => panic!(),
+        Err(e) => {
+            eprintln!("[ERROR] Connect failed: {}", e);
+            panic!("Connect failed");
+        }
     };
 
     // TODO: Handle properly
     match client.do_login().await {
         Ok(_) => {}
-        Err(_) => panic!(),
+        Err(e) => {
+            eprintln!("[ERROR] Login failed: {}", e);
+            panic!("Login failed");
+        }
     }
 
     let mut buf = [0u8; 1024];
