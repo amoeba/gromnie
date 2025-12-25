@@ -5,7 +5,9 @@ use acprotocol::enums::{AuthFlags, PacketHeaderFlags};
 use acprotocol::network::packet::PacketHeader;
 use acprotocol::packets::c2s_packet::C2SPacket;
 use acprotocol::readers::ACDataType;
-use acprotocol::types::{ConnectRequestHeader, LoginRequestHeader, LoginRequestHeaderType2, WString};
+use acprotocol::types::{
+    ConnectRequestHeader, LoginRequestHeader, LoginRequestHeaderType2, WString,
+};
 use acprotocol::writers::ACWritable;
 use tokio::net::UdpSocket;
 
