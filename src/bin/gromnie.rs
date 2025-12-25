@@ -67,7 +67,12 @@ async fn client_task(id: u32, address: String, account_name: String, password: S
         match client.socket.recv_from(&mut buf).await {
             Ok((size, peer)) => {
                 println!("[RECV_LOOP] Received {} bytes from {}", size, peer);
-                client.process_packet(&buf[..size], size, &peer).await
+                client.process_packet(&buf[..size], size, &peer).await;
+
+                // Check for and process any messages that were parsed from fragments
+                if client.has_messages() {
+                    client.process_messages();
+                }
             }
             Err(e) => {
                 eprintln!("[RECV_LOOP] Error: {}", e);
