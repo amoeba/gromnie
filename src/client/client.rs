@@ -1,12 +1,15 @@
 use std::io::Cursor;
 use std::net::SocketAddr;
 
+use acprotocol::enums::{AuthFlags, PacketHeaderFlags};
+use acprotocol::network::packet::PacketHeader;
+use acprotocol::packets::c2s_packet::C2SPacket;
 use acprotocol::readers::ACDataType;
+use acprotocol::types::{ConnectRequestHeader, LoginRequestHeader, LoginRequestHeaderType2, WString};
+use acprotocol::writers::ACWritable;
 use tokio::net::UdpSocket;
 
-use crate::net::packet::PacketHeaderFlags;
-use crate::net::packets::connect_request::ConnectRequestHeader;
-use crate::net::transit_header::TransitHeader;
+use crate::crypto::magic_number::get_magic_number;
 
 // ClientConnectState
 // TODO: Put this somewhere else
@@ -31,6 +34,28 @@ pub enum ClientLoginState {
 struct Account {
     name: String,
     password: String,
+}
+
+/// Helper function to serialize a C2SPacket and compute its checksum
+fn serialize_c2s_packet(packet: &C2SPacket) -> Result<Vec<u8>, std::io::Error> {
+    // Write packet to buffer with checksum=0
+    let mut buffer = Vec::new();
+    {
+        let mut cursor = Cursor::new(&mut buffer);
+        packet
+            .write(&mut cursor)
+            .map_err(|e| std::io::Error::other(format!("Write error: {}", e)))?;
+    }
+
+    // Compute checksum on the entire serialized packet
+    let checksum = get_magic_number(&buffer, buffer.len(), true);
+
+    // Write checksum back into buffer (checksum is at offset 8-11)
+    if buffer.len() >= 12 {
+        buffer[8..12].copy_from_slice(&checksum.to_le_bytes());
+    }
+
+    Ok(buffer)
 }
 
 // TODO: Don't require both bind_address and connect_address. I had to do this
@@ -74,7 +99,7 @@ impl Client {
     pub async fn process_packet(&mut self, buffer: &[u8], size: usize, peer: &SocketAddr) {
         // Pull out TransitHeader first and inspect
         let mut cursor = std::io::Cursor::new(buffer);
-        let packet = TransitHeader::parse(&mut cursor).unwrap();
+        let packet = PacketHeader::read(&mut cursor).unwrap();
 
         println!(
             "[NET/RECV] [client: {} on port: {} recv'd {} bytes from {:?}]",
@@ -123,13 +148,6 @@ impl Client {
     }
 
     pub async fn do_login(&mut self) -> Result<(), std::io::Error> {
-        use acprotocol::enums::{AuthFlags, PacketHeaderFlags};
-        use acprotocol::packets::c2s_packet::C2SPacket;
-        use acprotocol::types::{LoginRequestHeader, LoginRequestHeaderType2, WString};
-        use acprotocol::writers::ACWritable;
-        use crate::net::transit_header::PacketHeaderExt;
-        use crate::crypto::magic_number::get_magic_number;
-
         self.login_state = ClientLoginState::LoggingIn;
 
         // Compute the length field for LoginRequestHeaderType2
@@ -208,56 +226,32 @@ impl Client {
             fragments: None,
         };
 
-        println!("DEBUG: packet flags = {:?} (bits: 0x{:x})", packet.flags, packet.flags.bits());
-        println!("DEBUG: computed size = {} (payload only), computed length = {}", login_payload_size, computed_length);
+        println!(
+            "DEBUG: packet flags = {:?} (bits: 0x{:x})",
+            packet.flags,
+            packet.flags.bits()
+        );
+        println!(
+            "DEBUG: computed size = {} (payload only), computed length = {}",
+            login_payload_size, computed_length
+        );
 
-        // Write packet to buffer
-        let mut buffer = Vec::new();
-        {
-            let mut cursor = Cursor::new(&mut buffer);
-            packet
-                .write(&mut cursor)
-                .map_err(|e| std::io::Error::other(format!("Write error: {}", e)))?;
-        }
-
-        // Compute checksum: hash the entire buffer
-        let body_checksum = get_magic_number(&buffer, buffer.len(), true);
-
-        // Create header for checksum computation
-        let header = TransitHeader::new(PacketHeaderFlags::LOGIN_REQUEST.bits());
-        let header_checksum = header.compute_checksum();
-
-        // Combined checksum
-        let final_checksum = header_checksum.wrapping_add(body_checksum);
-
-        // Write checksum back into buffer (checksum is at offset 8, 4 bytes)
-        if buffer.len() >= 12 {
-            buffer[8..12].copy_from_slice(&final_checksum.to_le_bytes());
-        }
+        // Serialize packet with checksum
+        let buffer = serialize_c2s_packet(&packet)?;
 
         println!(
             "Sending LoginRequest data for account {}:{}",
             self.account.name, self.account.password
         );
         println!("          -> raw: {:02X?}", buffer);
-        println!(
-            "          -> size field at offset 16-17: {:02X?} (expected: {:04X})",
-            &buffer[16..18],
-            login_payload_size
-        );
-        println!(
-            "          -> length field at offset 28-31: {:02X?} (expected: {:08X})",
-            &buffer[28..32],
-            computed_length
-        );
-        println!(
-            "          -> checksum at offset 8-11: {:02X?}",
-            &buffer[8..12]
-        );
 
         match self.socket.send(&buffer).await {
             Ok(n) => {
-                println!("[NET/SEND] Sent {} bytes to {:?}", n, self.socket.peer_addr()?);
+                println!(
+                    "[NET/SEND] Sent {} bytes to {:?}",
+                    n,
+                    self.socket.peer_addr()?
+                );
             }
             Err(e) => {
                 eprintln!("[NET/SEND] ERROR: {}", e);
@@ -269,18 +263,17 @@ impl Client {
     }
 
     pub async fn do_connect_response(&mut self, cookie: u64) -> Result<(), std::io::Error> {
-        use acprotocol::enums::PacketHeaderFlags;
-        use acprotocol::packets::c2s_packet::C2SPacket;
-        use acprotocol::writers::ACWritable;
+        // ConnectResponse payload: just a u64 cookie (8 bytes)
+        let payload_size = 8;
 
         // Create C2SPacket with ConnectResponse
         let packet = C2SPacket {
             sequence: 0,
             flags: PacketHeaderFlags::CONNECT_RESPONSE,
-            checksum: 0, // Will need to compute this
+            checksum: 0,
             recipient_id: 0,
             time_since_last_packet: 0,
-            size: 0, // Will be set after writing
+            size: payload_size,
             iteration: 0,
             server_switch: None,
             retransmit_sequences: None,
@@ -296,12 +289,8 @@ impl Client {
             fragments: None,
         };
 
-        // Write packet to buffer
-        let mut buffer = Vec::new();
-        let mut cursor = Cursor::new(&mut buffer);
-        packet
-            .write(&mut cursor)
-            .map_err(|e| std::io::Error::other(format!("Write error: {}", e)))?;
+        // Serialize packet with checksum
+        let buffer = serialize_c2s_packet(&packet)?;
 
         println!(
             "[NET/SEND] Sending ConnectResponse with data: {:2X?}",
@@ -309,7 +298,7 @@ impl Client {
         );
         println!("           -> raw: {:02X?}", buffer);
         println!("           -> packet: {:?}", packet);
-        // TODO: Handle here with match
+
         match self.socket.send(&buffer).await {
             Ok(_) => {}
             Err(_) => panic!(),
@@ -318,18 +307,17 @@ impl Client {
     }
 
     pub async fn do_ack_response(&mut self, value: u32) -> Result<(), std::io::Error> {
-        use acprotocol::enums::PacketHeaderFlags;
-        use acprotocol::packets::c2s_packet::C2SPacket;
-        use acprotocol::writers::ACWritable;
+        // AckSequence payload: just a u32 value (4 bytes)
+        let payload_size = 4;
 
         // Create C2SPacket with AckSequence
         let packet = C2SPacket {
             sequence: 0,
             flags: PacketHeaderFlags::ACK_SEQUENCE,
-            checksum: 0, // Will need to compute this
+            checksum: 0,
             recipient_id: 0,
             time_since_last_packet: 0,
-            size: 0, // Will be set after writing
+            size: payload_size,
             iteration: 0,
             server_switch: None,
             retransmit_sequences: None,
@@ -345,17 +333,13 @@ impl Client {
             fragments: None,
         };
 
-        // Write packet to buffer
-        let mut buffer = Vec::new();
-        let mut cursor = Cursor::new(&mut buffer);
-        packet
-            .write(&mut cursor)
-            .map_err(|e| std::io::Error::other(format!("Write error: {}", e)))?;
+        // Serialize packet with checksum
+        let buffer = serialize_c2s_packet(&packet)?;
 
         println!("[NET/SEND] Sending AckResponse with data: {:2X?}", buffer);
         println!("           -> raw: {:02X?}", buffer);
         println!("           -> packet: {:?}", packet);
-        // TODO: Handle here with match
+
         match self.socket.send(&buffer).await {
             Ok(_) => {}
             Err(_) => panic!(),
