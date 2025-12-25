@@ -116,7 +116,8 @@ impl Client {
             .expect("connect failed");
 
         self.connect_state = ClientConnectState::Connected;
-        println!("[Client::connect] Client connected!");
+        let peer = self.socket.peer_addr().unwrap();
+        println!("[Client::connect] Client connected to {:?}!", peer);
 
         Ok(())
     }
@@ -126,28 +127,72 @@ impl Client {
         use acprotocol::packets::c2s_packet::C2SPacket;
         use acprotocol::types::{LoginRequestHeader, LoginRequestHeaderType2, WString};
         use acprotocol::writers::ACWritable;
+        use crate::net::transit_header::PacketHeaderExt;
+        use crate::crypto::magic_number::get_magic_number;
 
         self.login_state = ClientLoginState::LoggingIn;
+
+        // Compute the length field for LoginRequestHeaderType2
+        // The length field contains the size of all data after client_version and length itself
+        let account = self.account.name.to_lowercase();
+        let account_to_login_as = String::new();
+        let password = self.account.password.clone();
+
+        // Calculate sizes with proper AC protocol string encoding
+        // For regular strings: 2 (i16 length) + string_len + padding to 4-byte alignment
+        let account_size = {
+            let str_len = account.len();
+            let bytes_written = 2 + str_len;
+            let padding = (4 - (bytes_written % 4)) % 4;
+            bytes_written + padding
+        };
+
+        let account_to_login_as_size = {
+            let str_len = account_to_login_as.len();
+            let bytes_written = 2 + str_len;
+            let padding = (4 - (bytes_written % 4)) % 4;
+            bytes_written + padding
+        };
+
+        // For string32l: 4 (u32 length) + 1 (packed word if len <= 255) + string_len
+        let password_size = {
+            let str_len = password.len();
+            let packed_word_size = if str_len > 255 { 2 } else { 1 };
+            4 + packed_word_size + str_len
+        };
+
+        // Total length = auth_type (4) + flags (4) + sequence (4) + account + account_to_login_as + password
+        let computed_length = 4 + 4 + 4 + account_size + account_to_login_as_size + password_size;
 
         // Create LoginRequestHeaderType2 for password authentication
         let login_header = LoginRequestHeaderType2 {
             client_version: "1802".to_string(),
-            length: 0, // Will be computed during serialization
+            length: computed_length as u32,
             flags: AuthFlags::None,
             sequence: 0,
-            account: self.account.name.to_lowercase(),
-            account_to_login_as: String::new(),
-            password: WString(self.account.password.clone()),
+            account,
+            account_to_login_as,
+            password: WString(password),
         };
+
+        // Pre-compute the payload size (excluding the 20-byte C2SPacket header)
+        // LoginRequest payload: client_version string + length field + computed_length
+        let client_version_size = {
+            let str_len = "1802".len();
+            let bytes_written = 2 + str_len;
+            let padding = (4 - (bytes_written % 4)) % 4;
+            bytes_written + padding
+        };
+        let login_payload_size = client_version_size + 4 + computed_length; // client_version + length field (u32) + rest
 
         // Create C2SPacket with LoginRequest
         let packet = C2SPacket {
             sequence: 0,
             flags: PacketHeaderFlags::LOGIN_REQUEST,
-            checksum: 0, // Will need to compute this
+            checksum: 0, // Will compute this below
             recipient_id: 0,
             time_since_last_packet: 0,
-            size: 0, // Will be set after writing
+            size: login_payload_size as u16, // Size field = payload size only (not including header)
             iteration: 0,
             server_switch: None,
             retransmit_sequences: None,
@@ -163,22 +208,61 @@ impl Client {
             fragments: None,
         };
 
+        println!("DEBUG: packet flags = {:?} (bits: 0x{:x})", packet.flags, packet.flags.bits());
+        println!("DEBUG: computed size = {} (payload only), computed length = {}", login_payload_size, computed_length);
+
         // Write packet to buffer
         let mut buffer = Vec::new();
-        let mut cursor = Cursor::new(&mut buffer);
-        packet
-            .write(&mut cursor)
-            .map_err(|e| std::io::Error::other(format!("Write error: {}", e)))?;
+        {
+            let mut cursor = Cursor::new(&mut buffer);
+            packet
+                .write(&mut cursor)
+                .map_err(|e| std::io::Error::other(format!("Write error: {}", e)))?;
+        }
+
+        // Compute checksum: hash the entire buffer
+        let body_checksum = get_magic_number(&buffer, buffer.len(), true);
+
+        // Create header for checksum computation
+        let header = TransitHeader::new(PacketHeaderFlags::LOGIN_REQUEST.bits());
+        let header_checksum = header.compute_checksum();
+
+        // Combined checksum
+        let final_checksum = header_checksum.wrapping_add(body_checksum);
+
+        // Write checksum back into buffer (checksum is at offset 8, 4 bytes)
+        if buffer.len() >= 12 {
+            buffer[8..12].copy_from_slice(&final_checksum.to_le_bytes());
+        }
 
         println!(
             "Sending LoginRequest data for account {}:{}",
             self.account.name, self.account.password
         );
         println!("          -> raw: {:02X?}", buffer);
+        println!(
+            "          -> size field at offset 16-17: {:02X?} (expected: {:04X})",
+            &buffer[16..18],
+            login_payload_size
+        );
+        println!(
+            "          -> length field at offset 28-31: {:02X?} (expected: {:08X})",
+            &buffer[28..32],
+            computed_length
+        );
+        println!(
+            "          -> checksum at offset 8-11: {:02X?}",
+            &buffer[8..12]
+        );
 
         match self.socket.send(&buffer).await {
-            Ok(_) => {}
-            Err(_) => panic!(),
+            Ok(n) => {
+                println!("[NET/SEND] Sent {} bytes to {:?}", n, self.socket.peer_addr()?);
+            }
+            Err(e) => {
+                eprintln!("[NET/SEND] ERROR: {}", e);
+                return Err(e);
+            }
         }
 
         Ok(())
