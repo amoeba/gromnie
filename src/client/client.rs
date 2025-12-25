@@ -1,9 +1,9 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, VecDeque};
 use std::io::Cursor;
 use std::net::SocketAddr;
 
-use acprotocol::enums::{AuthFlags, PacketHeaderFlags};
-use acprotocol::network::Fragment;
+use acprotocol::enums::{AuthFlags, PacketHeaderFlags, S2CMessage};
+use acprotocol::network::{Fragment, RawMessage};
 use acprotocol::network::packet::PacketHeader;
 use acprotocol::packets::c2s_packet::C2SPacket;
 use acprotocol::packets::s2c_packet::S2CPacket;
@@ -176,6 +176,7 @@ pub struct Client {
     pub recv_count: u32,
     session: Option<SessionState>,
     pending_fragments: HashMap<u32, Fragment>,  // Track incomplete fragment sequences
+    message_queue: VecDeque<RawMessage>,        // Queue of parsed messages to process
 }
 
 impl Client {
@@ -210,6 +211,7 @@ impl Client {
             recv_count: 0,
             session: None,
             pending_fragments: HashMap::new(),
+            message_queue: VecDeque::new(),
         }
     }
 
@@ -218,6 +220,46 @@ impl Client {
         let seq = self.send_count;
         self.send_count += 1;
         seq
+    }
+
+    /// Check if there are messages waiting to be processed
+    pub fn has_messages(&self) -> bool {
+        !self.message_queue.is_empty()
+    }
+
+    /// Process all queued messages
+    pub fn process_messages(&mut self) {
+        while let Some(message) = self.message_queue.pop_front() {
+            self.handle_message(message);
+        }
+    }
+
+    /// Handle a single parsed message
+    fn handle_message(&mut self, message: RawMessage) {
+        println!(
+            "[HANDLE_MESSAGE] Processing {} message: {} (0x{:04X})",
+            message.direction, message.message_type, message.opcode
+        );
+
+        // Log queue information if present
+        if let Some(queue) = message.queue {
+            println!("                 Queue: {:?}", queue);
+        }
+
+        // Handle message based on S2C message type
+        // Panic on unhandled messages so we know what needs to be implemented
+        match S2CMessage::try_from(message.opcode) {
+            Ok(msg_type) => {
+                println!("                 ✓ S2CMessage: {:?}", msg_type);
+                // Panic to force us to implement the handler
+                panic!("Unhandled S2CMessage: {:?} (0x{:04X})\nImplement handler for this message type!",
+                       msg_type, message.opcode);
+            }
+            Err(_) => {
+                panic!("Unknown message opcode: 0x{:04X}\nThis message type is not in the S2CMessage enum!",
+                       message.opcode);
+            }
+        }
     }
 
     /// Handle a fragment received from the server
@@ -268,9 +310,27 @@ impl Client {
             let preview_len = data.len().min(100);
             println!("[FRAGMENT] Data preview: {:02X?}", &data[..preview_len]);
 
-            // TODO: Parse the reassembled data as AC protocol messages
-            // This would involve reading the fragment type (first 4 bytes)
-            // and then parsing based on the message type
+            // Parse the reassembled data as an AC protocol message
+            println!("[MESSAGE] Attempting to parse fragment data (first 4 bytes: {:02X?})", &data[..4.min(data.len())]);
+            match RawMessage::from_fragment(data.to_vec(), sequence, blob_fragment.id) {
+                Ok(message) => {
+                    println!(
+                        "[MESSAGE] ✓ Parsed message: Type={} (0x{:04X}), Direction={}, Queue={:?}",
+                        message.message_type,
+                        message.opcode,
+                        message.direction,
+                        message.queue
+                    );
+
+                    // Add to message queue for processing
+                    self.message_queue.push_back(message);
+                    println!("[MESSAGE] Queued message for processing (queue size: {})", self.message_queue.len());
+                }
+                Err(e) => {
+                    println!("[MESSAGE] ✗ Error parsing message from fragment {}: {}", sequence, e);
+                    println!("[MESSAGE]    Data length: {} bytes", data.len());
+                }
+            }
 
             // Clean up metadata and remove from pending
             fragment.cleanup();
