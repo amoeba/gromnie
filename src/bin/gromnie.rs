@@ -64,9 +64,8 @@ async fn client_task(id: u32, address: String, account_name: String, password: S
     let mut buf = [0u8; 1024];
 
     loop {
-        match client.socket.recv(&mut buf).await {
-            Ok(size) => {
-                let peer = client.socket.peer_addr().unwrap();
+        match client.socket.recv_from(&mut buf).await {
+            Ok((size, peer)) => {
                 println!("[RECV_LOOP] Received {} bytes from {}", size, peer);
                 client.process_packet(&buf[..size], size, &peer).await
             }
