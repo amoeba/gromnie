@@ -235,7 +235,7 @@ impl Client {
         };
 
         // Serialize packet with checksum
-        let buffer = serialize_c2s_packet(&packet)?;
+        let buffer = packet.serialize_with_checksum()?;
 
         println!(
             "Sending LoginRequest data for account {}:{}",
@@ -288,7 +288,7 @@ impl Client {
         };
 
         // Serialize packet with checksum
-        let buffer = serialize_c2s_packet(&packet)?;
+        let buffer = packet.serialize_with_checksum()?;
 
         println!(
             "[NET/SEND] Sending ConnectResponse with data: {:2X?}",
@@ -332,7 +332,7 @@ impl Client {
         };
 
         // Serialize packet with checksum
-        let buffer = serialize_c2s_packet(&packet)?;
+        let buffer = packet.serialize_with_checksum()?;
 
         println!("[NET/SEND] Sending AckResponse with data: {:2X?}", buffer);
         println!("           -> raw: {:02X?}", buffer);
