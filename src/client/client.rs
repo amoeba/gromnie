@@ -13,6 +13,7 @@ use acprotocol::writers::{
     write_i32, write_string, write_u32, ACWritable, ACWriter,
 };
 use tokio::net::UdpSocket;
+use tracing::{debug, error, warn};
 
 use crate::crypto::magic_number::get_magic_number;
 
@@ -183,14 +184,6 @@ impl Client {
     pub async fn new(id: u32, address: String, name: String, password: String) -> Client {
         let sok = UdpSocket::bind("0.0.0.0:0").await.unwrap();
 
-        // Debug
-        let local_addr = sok.local_addr().unwrap();
-        println!(
-            "[Client::create] client listening on {}:{}",
-            local_addr.ip(),
-            local_addr.port()
-        );
-
         // Parse address to extract host and port
         let parts: Vec<&str> = address.split(':').collect();
         let host = parts[0].to_string();
@@ -236,21 +229,12 @@ impl Client {
 
     /// Handle a single parsed message
     fn handle_message(&mut self, message: RawMessage) {
-        println!(
-            "[HANDLE_MESSAGE] Processing {} message: {} (0x{:04X})",
-            message.direction, message.message_type, message.opcode
-        );
-
-        // Log queue information if present
-        if let Some(queue) = message.queue {
-            println!("                 Queue: {:?}", queue);
-        }
+        debug!(target: "net", "Received message: {} (0x{:04X})", message.message_type, message.opcode);
 
         // Handle message based on S2C message type
         // Panic on unhandled messages so we know what needs to be implemented
         match S2CMessage::try_from(message.opcode) {
             Ok(msg_type) => {
-                println!("                 ✓ S2CMessage: {:?}", msg_type);
                 // Panic to force us to implement the handler
                 panic!("Unhandled S2CMessage: {:?} (0x{:04X})\nImplement handler for this message type!",
                        msg_type, message.opcode);
@@ -277,7 +261,6 @@ impl Client {
         let fragment = self.pending_fragments
             .entry(sequence)
             .or_insert_with(|| {
-                println!("[FRAGMENT] Creating new fragment assembly for sequence {}, expecting {} chunks", sequence, count);
                 Fragment::new(sequence, count)
             });
 
@@ -287,82 +270,41 @@ impl Client {
         // Add this chunk to the fragment
         fragment.add_chunk(&blob_fragment.data, index, chunk_size);
 
-        println!(
-            "[FRAGMENT] Added chunk {}/{} (size={} bytes) to sequence {}",
-            index + 1,
-            count,
-            chunk_size,
-            sequence
-        );
-
         // Check if fragment is complete
         if fragment.is_complete() {
-            println!(
-                "[FRAGMENT] ✓ Fragment sequence {} is COMPLETE! Processing...",
-                sequence
-            );
-
             // Get the reassembled data
             let data = fragment.get_data();
-            println!("[FRAGMENT] Reassembled {} bytes of data", data.len());
-
-            // For now, just log the first 100 bytes
-            let preview_len = data.len().min(100);
-            println!("[FRAGMENT] Data preview: {:02X?}", &data[..preview_len]);
 
             // Parse the reassembled data as an AC protocol message
-            println!("[MESSAGE] Attempting to parse fragment data (first 4 bytes: {:02X?})", &data[..4.min(data.len())]);
             match RawMessage::from_fragment(data.to_vec(), sequence, blob_fragment.id) {
                 Ok(message) => {
-                    println!(
-                        "[MESSAGE] ✓ Parsed message: Type={} (0x{:04X}), Direction={}, Queue={:?}",
-                        message.message_type,
-                        message.opcode,
-                        message.direction,
-                        message.queue
-                    );
-
                     // Add to message queue for processing
                     self.message_queue.push_back(message);
-                    println!("[MESSAGE] Queued message for processing (queue size: {})", self.message_queue.len());
                 }
                 Err(e) => {
-                    println!("[MESSAGE] ✗ Error parsing message from fragment {}: {}", sequence, e);
-                    println!("[MESSAGE]    Data length: {} bytes", data.len());
+                    error!(target: "net", "Error parsing message from fragment {}: {}", sequence, e);
                 }
             }
 
             // Clean up metadata and remove from pending
             fragment.cleanup();
             self.pending_fragments.remove(&sequence);
-
-            println!("[FRAGMENT] Cleaned up sequence {}", sequence);
         }
     }
 
     pub async fn process_packet(&mut self, buffer: &[u8], size: usize, peer: &SocketAddr) {
+
         // Pull out TransitHeader first and inspect
         let mut cursor = std::io::Cursor::new(buffer);
         let packet = PacketHeader::read(&mut cursor).unwrap();
 
-        println!(
-            "[NET/RECV] [client: {} on port: {} recv'd {} bytes from {:?}]",
-            self.id,
-            self.socket.local_addr().unwrap().port(),
-            size,
-            peer
-        );
+        debug!(target: "net", "Received {} bytes from {}", size, peer);
 
         let flags = packet.flags;
-        println!(
-            "[RECVLOOP] Processing packet with PacketHeaderFlags: {:?}",
-            flags
-        );
 
         if flags.contains(PacketHeaderFlags::CONNECT_REQUEST) {
             let mut cursor = Cursor::new(&buffer[..size]);
             let connect_req_packet = ConnectRequestHeader::read(&mut cursor).unwrap();
-            println!("        -> packet: {:?}", connect_req_packet);
 
             // Store session data from ConnectRequest
             // Note: table/iteration comes from the packet header, not the ConnectRequest payload
@@ -374,12 +316,6 @@ impl Client {
                 incoming_seed: connect_req_packet.incoming_seed,
             });
 
-            println!(
-                "[SESSION] Stored: Cookie={:016X}, ClientId={:04X}, Table={}, OutgoingSeed={:08X}, IncomingSeed={:08X}",
-                connect_req_packet.cookie, connect_req_packet.net_id, packet.iteration,
-                connect_req_packet.outgoing_seed, connect_req_packet.incoming_seed
-            );
-
             let _ = self.do_connect_response().await;
         }
 
@@ -390,10 +326,6 @@ impl Client {
             cursor.set_position(PACKET_HEADER_SIZE as u64);
             let acked_seq = u32::read(&mut cursor).unwrap();
 
-            println!(
-                "[ACK_SEQUENCE] Server acknowledged our sequence: {}",
-                acked_seq
-            );
             // Store the last acked sequence - we don't send a response to this
             self.recv_count = acked_seq;
         }
@@ -402,7 +334,7 @@ impl Client {
             // Read the server time (8-byte double)
             let mut cursor = Cursor::new(&buffer[..size]);
             cursor.set_position(PACKET_HEADER_SIZE as u64);
-            let server_time = f64::from_le_bytes([
+            let _server_time = f64::from_le_bytes([
                 buffer[PACKET_HEADER_SIZE],
                 buffer[PACKET_HEADER_SIZE + 1],
                 buffer[PACKET_HEADER_SIZE + 2],
@@ -413,35 +345,22 @@ impl Client {
                 buffer[PACKET_HEADER_SIZE + 7],
             ]);
 
-            println!("[TIME_SYNC] Server time: {}", server_time);
             // TODO: Store server time if needed for future use
         }
 
         if flags.contains(PacketHeaderFlags::BLOB_FRAGMENTS) {
-            println!("[BLOB_FRAGMENTS] Received fragmented packet");
-
             // Parse the full S2CPacket to get fragment data
             let mut cursor = Cursor::new(&buffer[..size]);
             match S2CPacket::read(&mut cursor) {
                 Ok(s2c_packet) => {
                     if let Some(blob_fragments) = s2c_packet.fragments {
-                        println!(
-                            "[BLOB_FRAGMENTS] Seq={}, Id={}, Index={}/{}, Size={}, Group={:?}",
-                            blob_fragments.sequence,
-                            blob_fragments.id,
-                            blob_fragments.index,
-                            blob_fragments.count,
-                            blob_fragments.size,
-                            blob_fragments.group
-                        );
-
                         self.handle_fragment(blob_fragments);
                     } else {
-                        println!("[BLOB_FRAGMENTS] Warning: BLOB_FRAGMENTS flag set but no fragments in packet");
+                        warn!(target: "net", "BLOB_FRAGMENTS flag set but no fragments in packet");
                     }
                 }
                 Err(e) => {
-                    eprintln!("[BLOB_FRAGMENTS] Error parsing S2CPacket: {}", e);
+                    error!(target: "net", "Error parsing S2CPacket: {}", e);
                 }
             }
         }
@@ -454,10 +373,6 @@ impl Client {
         // ports (9000 for login, 9001 for world). Instead, we use send_to() with explicit addresses.
 
         self.connect_state = ClientConnectState::Connected;
-        println!(
-            "[Client::connect] Client ready to communicate with {}:{}/{}",
-            self.server.host, self.server.login_port, self.server.world_port
-        );
 
         Ok(())
     }
@@ -544,11 +459,7 @@ impl Client {
         // 3. Write final checksum back
         buffer[CHECKSUM_OFFSET..CHECKSUM_OFFSET + 4].copy_from_slice(&checksum.to_le_bytes());
 
-        println!(
-            "Sending LoginRequest data for account {}:{}",
-            self.account.name, self.account.password
-        );
-        println!("          -> raw: {:02X?}", buffer);
+        debug!(target: "net", "Sending LoginRequest with data: {:2X?}", buffer);
 
         // Send to login server port (9000)
         let login_addr = format!("{}:{}", self.server.host, self.server.login_port);
@@ -556,17 +467,10 @@ impl Client {
             .await?
             .find(|addr| addr.is_ipv4())
             .ok_or_else(|| std::io::Error::new(std::io::ErrorKind::NotFound, "Could not resolve IPv4 address"))?;
-        println!("          -> resolved to: {}", login_sockaddr);
         match self.socket.send_to(&buffer, login_sockaddr).await {
-            Ok(n) => {
-                println!(
-                    "[NET/SEND] Sent {} bytes to {}",
-                    n,
-                    login_addr
-                );
-            }
+            Ok(_) => {}
             Err(e) => {
-                eprintln!("[NET/SEND] ERROR: {}", e);
+                error!(target: "net", "Send error: {}", e);
                 return Err(e);
             }
         }
@@ -615,29 +519,20 @@ impl Client {
         // Serialize packet with checksum
         let buffer = packet.serialize()?;
 
-        println!(
-            "[NET/SEND] Sending ConnectResponse with data: {:2X?}",
-            buffer
-        );
-        println!("           -> raw: {:02X?}", buffer);
-        println!("           -> packet: {:?}", packet);
+        debug!(target: "net", "Sending ConnectResponse with data: {:2X?}", buffer);
 
         // CRITICAL: ConnectResponse must be sent to world server port (9001), not login port (9000)
         // This matches the C# client behavior where ConnectResponse uses "ReadAddress"
         let world_addr = format!("{}:{}", self.server.host, self.server.world_port);
-        println!("           -> sending to world server at {}", world_addr);
 
         let world_sockaddr = tokio::net::lookup_host(&world_addr)
             .await?
             .find(|addr| addr.is_ipv4())
             .ok_or_else(|| std::io::Error::new(std::io::ErrorKind::NotFound, "Could not resolve IPv4 address"))?;
-        println!("           -> resolved to: {}", world_sockaddr);
         match self.socket.send_to(&buffer, world_sockaddr).await {
-            Ok(n) => {
-                println!("[NET/SEND] Sent {} bytes to {}", n, world_addr);
-            }
+            Ok(_) => {}
             Err(e) => {
-                eprintln!("[NET/SEND] ERROR: {}", e);
+                error!(target: "net", "Send error: {}", e);
                 return Err(e);
             }
         }
@@ -674,7 +569,7 @@ impl Client {
         // Serialize packet with checksum
         let buffer = packet.serialize()?;
 
-        println!("[NET/SEND] Sending AckResponse with data: {:2X?}", buffer);
+        debug!(target: "net", "Sending AckResponse with data: {:2X?}", buffer);
 
         // Send ACK to login server port (9000)
         let login_addr = format!("{}:{}", self.server.host, self.server.login_port);
@@ -683,11 +578,9 @@ impl Client {
             .find(|addr| addr.is_ipv4())
             .ok_or_else(|| std::io::Error::new(std::io::ErrorKind::NotFound, "Could not resolve IPv4 address"))?;
         match self.socket.send_to(&buffer, login_sockaddr).await {
-            Ok(n) => {
-                println!("[NET/SEND] Sent {} bytes to {}", n, login_addr);
-            }
+            Ok(_) => {}
             Err(e) => {
-                eprintln!("[NET/SEND] ERROR: {}", e);
+                error!(target: "net", "Send error: {}", e);
                 return Err(e);
             }
         }

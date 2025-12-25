@@ -1,4 +1,6 @@
 use clap::{Parser, Subcommand};
+use tracing::error;
+use tracing_subscriber::EnvFilter;
 
 use gromnie::client::Client;
 
@@ -47,7 +49,7 @@ async fn client_task(id: u32, address: String, account_name: String, password: S
     match client.connect().await {
         Ok(_) => {}
         Err(e) => {
-            eprintln!("[ERROR] Connect failed: {}", e);
+            error!("Connect failed: {}", e);
             panic!("Connect failed");
         }
     };
@@ -56,7 +58,7 @@ async fn client_task(id: u32, address: String, account_name: String, password: S
     match client.do_login().await {
         Ok(_) => {}
         Err(e) => {
-            eprintln!("[ERROR] Login failed: {}", e);
+            error!("Login failed: {}", e);
             panic!("Login failed");
         }
     }
@@ -66,7 +68,6 @@ async fn client_task(id: u32, address: String, account_name: String, password: S
     loop {
         match client.socket.recv_from(&mut buf).await {
             Ok((size, peer)) => {
-                println!("[RECV_LOOP] Received {} bytes from {}", size, peer);
                 client.process_packet(&buf[..size], size, &peer).await;
 
                 // Check for and process any messages that were parsed from fragments
@@ -75,7 +76,7 @@ async fn client_task(id: u32, address: String, account_name: String, password: S
                 }
             }
             Err(e) => {
-                eprintln!("[RECV_LOOP] Error: {}", e);
+                error!("Error in receive loop: {}", e);
                 break;
             }
         }
@@ -84,6 +85,14 @@ async fn client_task(id: u32, address: String, account_name: String, password: S
 
 #[tokio::main]
 async fn main() -> Result<(), ()> {
+    // Initialize tracing subscriber with env filter
+    tracing_subscriber::fmt()
+        .with_env_filter(
+            EnvFilter::try_from_default_env()
+                .unwrap_or_else(|_| EnvFilter::new("debug"))
+        )
+        .init();
+
     // TODO: Finish CLI
     let _ = Cli::parse();
 
