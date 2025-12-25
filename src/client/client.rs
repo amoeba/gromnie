@@ -1,9 +1,12 @@
+use std::collections::HashMap;
 use std::io::Cursor;
 use std::net::SocketAddr;
 
 use acprotocol::enums::{AuthFlags, PacketHeaderFlags};
+use acprotocol::network::Fragment;
 use acprotocol::network::packet::PacketHeader;
 use acprotocol::packets::c2s_packet::C2SPacket;
+use acprotocol::packets::s2c_packet::S2CPacket;
 use acprotocol::readers::ACDataType;
 use acprotocol::types::ConnectRequestHeader;
 use acprotocol::writers::{
@@ -23,6 +26,7 @@ const CHECKSUM_OFFSET: usize = 8;
 struct SessionState {
     cookie: u64,
     client_id: u16,
+    table: u16,         // Table/iteration value from packet header
     outgoing_seed: u32, // Server->Client checksum seed
     incoming_seed: u32, // Client->Server checksum seed
 }
@@ -150,12 +154,20 @@ struct Account {
     password: String,
 }
 
+/// Server connection information tracking both login and world server ports
+#[derive(Clone, Debug)]
+struct ServerInfo {
+    login_port: u16,  // Port 9000 - for LoginRequest and most traffic
+    world_port: u16,  // Port 9001 - for ConnectResponse and game data
+    host: String,
+}
+
 // TODO: Don't require both bind_address and connect_address. I had to do this
 // to get things to work but I should be able to listen on any random port so
 // I'm not sure what I'm doing wrong
 pub struct Client {
     pub id: u32,
-    address: String,
+    server: ServerInfo,
     pub socket: UdpSocket,
     account: Account,
     connect_state: ClientConnectState,
@@ -163,6 +175,7 @@ pub struct Client {
     pub send_count: u32,
     pub recv_count: u32,
     session: Option<SessionState>,
+    pending_fragments: HashMap<u32, Fragment>,  // Track incomplete fragment sequences
 }
 
 impl Client {
@@ -177,9 +190,18 @@ impl Client {
             local_addr.port()
         );
 
+        // Parse address to extract host and port
+        let parts: Vec<&str> = address.split(':').collect();
+        let host = parts[0].to_string();
+        let login_port = parts.get(1).and_then(|p| p.parse().ok()).unwrap_or(9000);
+
         Client {
             id,
-            address,
+            server: ServerInfo {
+                login_port,
+                world_port: login_port + 1,  // Typically 9001
+                host,
+            },
             account: Account { name, password },
             socket: sok,
             connect_state: ClientConnectState::Disconnected,
@@ -187,6 +209,7 @@ impl Client {
             send_count: 0,
             recv_count: 0,
             session: None,
+            pending_fragments: HashMap::new(),
         }
     }
 
@@ -195,6 +218,66 @@ impl Client {
         let seq = self.send_count;
         self.send_count += 1;
         seq
+    }
+
+    /// Handle a fragment received from the server
+    fn handle_fragment(&mut self, blob_fragment: acprotocol::types::BlobFragments) {
+        let sequence = blob_fragment.sequence;
+        let index = blob_fragment.index as usize;
+        let count = blob_fragment.count;
+
+        // Calculate the actual fragment data size (size includes the fragment header overhead)
+        // In C#: fragLength = fragHeader.Size - FragmentHeader.SizeOf
+        // FragmentHeader.SizeOf = 16 bytes (sequence:4 + id:4 + count:2 + size:2 + index:2 + group:2)
+        let chunk_size = blob_fragment.data.len();
+
+        // Get or create Fragment for this sequence
+        let fragment = self.pending_fragments
+            .entry(sequence)
+            .or_insert_with(|| {
+                println!("[FRAGMENT] Creating new fragment assembly for sequence {}, expecting {} chunks", sequence, count);
+                Fragment::new(sequence, count)
+            });
+
+        // Set size and group metadata
+        fragment.set_fragment_info(blob_fragment.size, blob_fragment.group as u16);
+
+        // Add this chunk to the fragment
+        fragment.add_chunk(&blob_fragment.data, index, chunk_size);
+
+        println!(
+            "[FRAGMENT] Added chunk {}/{} (size={} bytes) to sequence {}",
+            index + 1,
+            count,
+            chunk_size,
+            sequence
+        );
+
+        // Check if fragment is complete
+        if fragment.is_complete() {
+            println!(
+                "[FRAGMENT] ✓ Fragment sequence {} is COMPLETE! Processing...",
+                sequence
+            );
+
+            // Get the reassembled data
+            let data = fragment.get_data();
+            println!("[FRAGMENT] Reassembled {} bytes of data", data.len());
+
+            // For now, just log the first 100 bytes
+            let preview_len = data.len().min(100);
+            println!("[FRAGMENT] Data preview: {:02X?}", &data[..preview_len]);
+
+            // TODO: Parse the reassembled data as AC protocol messages
+            // This would involve reading the fragment type (first 4 bytes)
+            // and then parsing based on the message type
+
+            // Clean up metadata and remove from pending
+            fragment.cleanup();
+            self.pending_fragments.remove(&sequence);
+
+            println!("[FRAGMENT] Cleaned up sequence {}", sequence);
+        }
     }
 
     pub async fn process_packet(&mut self, buffer: &[u8], size: usize, peer: &SocketAddr) {
@@ -218,20 +301,23 @@ impl Client {
 
         if flags.contains(PacketHeaderFlags::CONNECT_REQUEST) {
             let mut cursor = Cursor::new(&buffer[..size]);
-            let packet = ConnectRequestHeader::read(&mut cursor).unwrap();
-            println!("        -> packet: {:?}", packet);
+            let connect_req_packet = ConnectRequestHeader::read(&mut cursor).unwrap();
+            println!("        -> packet: {:?}", connect_req_packet);
 
             // Store session data from ConnectRequest
+            // Note: table/iteration comes from the packet header, not the ConnectRequest payload
             self.session = Some(SessionState {
-                cookie: packet.cookie,
-                client_id: packet.net_id as u16,
-                outgoing_seed: packet.outgoing_seed,
-                incoming_seed: packet.incoming_seed,
+                cookie: connect_req_packet.cookie,
+                client_id: connect_req_packet.net_id as u16,
+                table: packet.iteration,  // Use iteration from packet header as table value
+                outgoing_seed: connect_req_packet.outgoing_seed,
+                incoming_seed: connect_req_packet.incoming_seed,
             });
 
             println!(
-                "[SESSION] Stored: Cookie={:016X}, ClientId={:04X}, OutgoingSeed={:08X}, IncomingSeed={:08X}",
-                packet.cookie, packet.net_id, packet.outgoing_seed, packet.incoming_seed
+                "[SESSION] Stored: Cookie={:016X}, ClientId={:04X}, Table={}, OutgoingSeed={:08X}, IncomingSeed={:08X}",
+                connect_req_packet.cookie, connect_req_packet.net_id, packet.iteration,
+                connect_req_packet.outgoing_seed, connect_req_packet.incoming_seed
             );
 
             let _ = self.do_connect_response().await;
@@ -251,20 +337,67 @@ impl Client {
             // Store the last acked sequence - we don't send a response to this
             self.recv_count = acked_seq;
         }
+
+        if flags.contains(PacketHeaderFlags::TIME_SYNC) {
+            // Read the server time (8-byte double)
+            let mut cursor = Cursor::new(&buffer[..size]);
+            cursor.set_position(PACKET_HEADER_SIZE as u64);
+            let server_time = f64::from_le_bytes([
+                buffer[PACKET_HEADER_SIZE],
+                buffer[PACKET_HEADER_SIZE + 1],
+                buffer[PACKET_HEADER_SIZE + 2],
+                buffer[PACKET_HEADER_SIZE + 3],
+                buffer[PACKET_HEADER_SIZE + 4],
+                buffer[PACKET_HEADER_SIZE + 5],
+                buffer[PACKET_HEADER_SIZE + 6],
+                buffer[PACKET_HEADER_SIZE + 7],
+            ]);
+
+            println!("[TIME_SYNC] Server time: {}", server_time);
+            // TODO: Store server time if needed for future use
+        }
+
+        if flags.contains(PacketHeaderFlags::BLOB_FRAGMENTS) {
+            println!("[BLOB_FRAGMENTS] Received fragmented packet");
+
+            // Parse the full S2CPacket to get fragment data
+            let mut cursor = Cursor::new(&buffer[..size]);
+            match S2CPacket::read(&mut cursor) {
+                Ok(s2c_packet) => {
+                    if let Some(blob_fragments) = s2c_packet.fragments {
+                        println!(
+                            "[BLOB_FRAGMENTS] Seq={}, Id={}, Index={}/{}, Size={}, Group={:?}",
+                            blob_fragments.sequence,
+                            blob_fragments.id,
+                            blob_fragments.index,
+                            blob_fragments.count,
+                            blob_fragments.size,
+                            blob_fragments.group
+                        );
+
+                        self.handle_fragment(blob_fragments);
+                    } else {
+                        println!("[BLOB_FRAGMENTS] Warning: BLOB_FRAGMENTS flag set but no fragments in packet");
+                    }
+                }
+                Err(e) => {
+                    eprintln!("[BLOB_FRAGMENTS] Error parsing S2CPacket: {}", e);
+                }
+            }
+        }
     }
     // TODO: Should return a Result with a success or failure
     pub async fn connect(&mut self) -> Result<(), std::io::Error> {
         self.connect_state = ClientConnectState::Connecting;
 
-        // TODO: Should handle this with pattern matching
-        self.socket
-            .connect(self.address.clone())
-            .await
-            .expect("connect failed");
+        // Note: We don't use socket.connect() here because we need to send to different
+        // ports (9000 for login, 9001 for world). Instead, we use send_to() with explicit addresses.
 
         self.connect_state = ClientConnectState::Connected;
-        let peer = self.socket.peer_addr().unwrap();
-        println!("[Client::connect] Client connected to {:?}!", peer);
+        println!(
+            "[Client::connect] Client ready to communicate with {}:{}/{}",
+            self.server.host, self.server.login_port, self.server.world_port
+        );
 
         Ok(())
     }
@@ -357,12 +490,19 @@ impl Client {
         );
         println!("          -> raw: {:02X?}", buffer);
 
-        match self.socket.send(&buffer).await {
+        // Send to login server port (9000)
+        let login_addr = format!("{}:{}", self.server.host, self.server.login_port);
+        let login_sockaddr = tokio::net::lookup_host(&login_addr)
+            .await?
+            .find(|addr| addr.is_ipv4())
+            .ok_or_else(|| std::io::Error::new(std::io::ErrorKind::NotFound, "Could not resolve IPv4 address"))?;
+        println!("          -> resolved to: {}", login_sockaddr);
+        match self.socket.send_to(&buffer, login_sockaddr).await {
             Ok(n) => {
                 println!(
-                    "[NET/SEND] Sent {} bytes to {:?}",
+                    "[NET/SEND] Sent {} bytes to {}",
                     n,
-                    self.socket.peer_addr()?
+                    login_addr
                 );
             }
             Err(e) => {
@@ -375,25 +515,29 @@ impl Client {
     }
 
     pub async fn do_connect_response(&mut self) -> Result<(), std::io::Error> {
-        // Get the cookie from session state
-        let cookie = self
+        // Get session data
+        let session = self
             .session
             .as_ref()
-            .expect("Session not established - ConnectRequest not received yet")
-            .cookie;
+            .expect("Session not established - ConnectRequest not received yet");
+
+        let cookie = session.cookie;
+        let client_id = session.client_id;
+        let table = session.table;
 
         // ConnectResponse payload: just a u64 cookie (8 bytes)
         let payload_size = 8;
 
         // Create C2SPacket with ConnectResponse
+        // NOTE: We use sequence 0 and increment manually per C# code (includeSequence=false, incrementSequence=false)
         let packet = C2SPacket {
-            sequence: self.next_sequence(),
+            sequence: 0,  // ConnectResponse doesn't use sequence numbers
             flags: PacketHeaderFlags::CONNECT_RESPONSE,
             checksum: 0,
-            recipient_id: 0,
+            recipient_id: client_id,  // Must match the ClientId from ConnectRequest
             time_since_last_packet: 0,
             size: payload_size,
-            iteration: 0,
+            iteration: table,  // Must match the Table value from ConnectRequest header
             server_switch: None,
             retransmit_sequences: None,
             reject_sequences: None,
@@ -418,9 +562,24 @@ impl Client {
         println!("           -> raw: {:02X?}", buffer);
         println!("           -> packet: {:?}", packet);
 
-        match self.socket.send(&buffer).await {
-            Ok(_) => {}
-            Err(_) => panic!(),
+        // CRITICAL: ConnectResponse must be sent to world server port (9001), not login port (9000)
+        // This matches the C# client behavior where ConnectResponse uses "ReadAddress"
+        let world_addr = format!("{}:{}", self.server.host, self.server.world_port);
+        println!("           -> sending to world server at {}", world_addr);
+
+        let world_sockaddr = tokio::net::lookup_host(&world_addr)
+            .await?
+            .find(|addr| addr.is_ipv4())
+            .ok_or_else(|| std::io::Error::new(std::io::ErrorKind::NotFound, "Could not resolve IPv4 address"))?;
+        println!("           -> resolved to: {}", world_sockaddr);
+        match self.socket.send_to(&buffer, world_sockaddr).await {
+            Ok(n) => {
+                println!("[NET/SEND] Sent {} bytes to {}", n, world_addr);
+            }
+            Err(e) => {
+                eprintln!("[NET/SEND] ERROR: {}", e);
+                return Err(e);
+            }
         }
         Ok(())
     }
@@ -457,9 +616,20 @@ impl Client {
 
         println!("[NET/SEND] Sending AckResponse with data: {:2X?}", buffer);
 
-        match self.socket.send(&buffer).await {
-            Ok(_) => {}
-            Err(_) => panic!(),
+        // Send ACK to login server port (9000)
+        let login_addr = format!("{}:{}", self.server.host, self.server.login_port);
+        let login_sockaddr = tokio::net::lookup_host(&login_addr)
+            .await?
+            .find(|addr| addr.is_ipv4())
+            .ok_or_else(|| std::io::Error::new(std::io::ErrorKind::NotFound, "Could not resolve IPv4 address"))?;
+        match self.socket.send_to(&buffer, login_sockaddr).await {
+            Ok(n) => {
+                println!("[NET/SEND] Sent {} bytes to {}", n, login_addr);
+            }
+            Err(e) => {
+                eprintln!("[NET/SEND] ERROR: {}", e);
+                return Err(e);
+            }
         }
         Ok(())
     }
