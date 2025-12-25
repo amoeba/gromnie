@@ -1,7 +1,7 @@
 use std::io::Cursor;
 use std::net::SocketAddr;
 
-use acprotocol::enums::PacketHeaderFlags;
+use acprotocol::enums::{AuthFlags, PacketHeaderFlags};
 use acprotocol::network::packet::PacketHeader;
 use acprotocol::packets::c2s_packet::C2SPacket;
 use acprotocol::readers::ACDataType;
@@ -12,6 +12,11 @@ use acprotocol::writers::{
 use tokio::net::UdpSocket;
 
 use crate::crypto::magic_number::get_magic_number;
+
+// Protocol constants
+const CHECKSUM_PLACEHOLDER: u32 = 0xbadd70dd;
+const PACKET_HEADER_SIZE: usize = 20;
+const CHECKSUM_OFFSET: usize = 8;
 
 /// Session state received from the server's ConnectRequest packet
 #[derive(Clone, Debug)]
@@ -28,12 +33,11 @@ struct SessionState {
 struct CustomLoginRequest {
     client_version: String,
     length: u32,
-    login_type: u32,       // 0x00000002 for password authentication
-    unknown: u32,          // Always 0
-    timestamp: i32,        // Unix timestamp
+    login_type: u32, // Password authentication type
+    unknown: u32,    // Always 0
+    timestamp: i32,  // Unix timestamp
     account: String,
-    account_to_login_as: String,
-    password: String,      // Raw password string (not WString)
+    password: String, // Raw password string (not WString)
 }
 
 impl ACWritable for CustomLoginRequest {
@@ -56,7 +60,7 @@ impl ACWritable for CustomLoginRequest {
         // Write account name
         write_string(writer, &self.account)?;
 
-        // Write account_to_login_as (empty string = 4 zero bytes for u32)
+        // Write account_to_login_as (always empty = 4 zero bytes for u32)
         write_u32(writer, 0)?;
 
         // Write password in C# format (NOT WString):
@@ -110,9 +114,9 @@ impl C2SPacketExt for C2SPacket {
         // Compute checksum on the entire serialized packet
         let checksum = get_magic_number(&buffer, buffer.len(), true);
 
-        // Write checksum back into buffer (checksum is at offset 8-11)
-        if buffer.len() >= 12 {
-            buffer[8..12].copy_from_slice(&checksum.to_le_bytes());
+        // Write checksum back into buffer
+        if buffer.len() >= CHECKSUM_OFFSET + 4 {
+            buffer[CHECKSUM_OFFSET..CHECKSUM_OFFSET + 4].copy_from_slice(&checksum.to_le_bytes());
         } else {
             panic!("At the time of writing the packet checksum, buffer was too small to be valid.");
         }
@@ -236,8 +240,8 @@ impl Client {
         if flags.contains(PacketHeaderFlags::ACK_SEQUENCE) {
             // Read the sequence number that the server is acknowledging
             let mut cursor = Cursor::new(&buffer[..size]);
-            // Skip past the packet header (20 bytes) to read the payload
-            cursor.set_position(20);
+            // Skip past the packet header to read the payload
+            cursor.set_position(PACKET_HEADER_SIZE as u64);
             let acked_seq = u32::read(&mut cursor).unwrap();
 
             println!(
@@ -269,7 +273,6 @@ impl Client {
         self.login_state = ClientLoginState::LoggingIn;
 
         let account = self.account.name.to_lowercase();
-        let account_to_login_as = String::new();
         let password = self.account.password.clone();
 
         // Calculate sizes with proper AC protocol string encoding
@@ -300,14 +303,13 @@ impl Client {
         let login_request = CustomLoginRequest {
             client_version: "1802".to_string(),
             length: computed_length as u32,
-            login_type: 0x00000002, // Password authentication
+            login_type: AuthFlags::AdminAccountOverride as u32,
             unknown: 0,
             timestamp: std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
                 .unwrap()
                 .as_secs() as i32,
             account,
-            account_to_login_as,
             password,
         };
 
@@ -321,10 +323,10 @@ impl Client {
 
         let payload_size = payload_buffer.len();
 
-        // Build packet manually: header (20 bytes) + payload
-        let mut buffer = Vec::with_capacity(20 + payload_size);
+        // Build packet manually: header + payload
+        let mut buffer = Vec::with_capacity(PACKET_HEADER_SIZE + payload_size);
 
-        // Write packet header (20 bytes)
+        // Write packet header
         let sequence = self.next_sequence();
         buffer.extend_from_slice(&sequence.to_le_bytes());                      // sequence (4)
         buffer.extend_from_slice(&0x00010000u32.to_le_bytes());                 // flags: LOGIN_REQUEST (4)
@@ -338,16 +340,16 @@ impl Client {
         buffer.extend_from_slice(&payload_buffer);
 
         // Compute checksum like C# does:
-        // 1. Set checksum field to 0xbadd70dd
-        buffer[8..12].copy_from_slice(&0xbadd70ddu32.to_le_bytes());
+        // 1. Set checksum field to placeholder
+        buffer[CHECKSUM_OFFSET..CHECKSUM_OFFSET + 4].copy_from_slice(&CHECKSUM_PLACEHOLDER.to_le_bytes());
 
-        // 2. Checksum header (20 bytes) + payload
-        let checksum1 = get_magic_number(&buffer[0..20], 20, true);
+        // 2. Checksum header + payload
+        let checksum1 = get_magic_number(&buffer[0..PACKET_HEADER_SIZE], PACKET_HEADER_SIZE, true);
         let checksum2 = get_magic_number(&payload_buffer, payload_size, true);
         let checksum = checksum1.wrapping_add(checksum2);
 
         // 3. Write final checksum back
-        buffer[8..12].copy_from_slice(&checksum.to_le_bytes());
+        buffer[CHECKSUM_OFFSET..CHECKSUM_OFFSET + 4].copy_from_slice(&checksum.to_le_bytes());
 
         println!(
             "Sending LoginRequest data for account {}:{}",
