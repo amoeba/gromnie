@@ -228,16 +228,6 @@ impl Client {
             fragments: None,
         };
 
-        println!(
-            "DEBUG: packet flags = {:?} (bits: 0x{:x})",
-            packet.flags,
-            packet.flags.bits()
-        );
-        println!(
-            "DEBUG: computed size = {} (payload only), computed length = {}",
-            login_payload_size, computed_length
-        );
-
         // Serialize packet with checksum
         let buffer = serialize_c2s_packet(&packet)?;
 
