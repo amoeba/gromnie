@@ -13,6 +13,15 @@ use tokio::net::UdpSocket;
 
 use crate::crypto::magic_number::get_magic_number;
 
+/// Session state received from the server's ConnectRequest packet
+#[derive(Clone, Debug)]
+struct SessionState {
+    cookie: u64,
+    client_id: u16,
+    outgoing_seed: u32, // Server->Client checksum seed
+    incoming_seed: u32, // Client->Server checksum seed
+}
+
 /// Custom LoginRequest structure that matches the actual C# client implementation.
 /// This is needed because acprotocol's LoginRequestHeaderType2 is missing the timestamp field.
 #[derive(Clone, Debug)]
@@ -149,11 +158,7 @@ pub struct Client {
     pub login_state: ClientLoginState,
     pub send_count: u32,
     pub recv_count: u32,
-    // Session state from ConnectRequest
-    cookie: Option<u64>,
-    client_id: Option<u16>,
-    outgoing_seed: Option<u32>, // Server->Client checksum seed
-    incoming_seed: Option<u32>, // Client->Server checksum seed
+    session: Option<SessionState>,
 }
 
 impl Client {
@@ -177,10 +182,7 @@ impl Client {
             login_state: ClientLoginState::NotLoggedIn,
             send_count: 0,
             recv_count: 0,
-            cookie: None,
-            client_id: None,
-            outgoing_seed: None,
-            incoming_seed: None,
+            session: None,
         }
     }
 
@@ -216,10 +218,12 @@ impl Client {
             println!("        -> packet: {:?}", packet);
 
             // Store session data from ConnectRequest
-            self.cookie = Some(packet.cookie);
-            self.client_id = Some(packet.net_id as u16);
-            self.outgoing_seed = Some(packet.outgoing_seed);
-            self.incoming_seed = Some(packet.incoming_seed);
+            self.session = Some(SessionState {
+                cookie: packet.cookie,
+                client_id: packet.net_id as u16,
+                outgoing_seed: packet.outgoing_seed,
+                incoming_seed: packet.incoming_seed,
+            });
 
             println!(
                 "[SESSION] Stored: Cookie={:016X}, ClientId={:04X}, OutgoingSeed={:08X}, IncomingSeed={:08X}",
@@ -371,8 +375,10 @@ impl Client {
     pub async fn do_connect_response(&mut self) -> Result<(), std::io::Error> {
         // Get the cookie from session state
         let cookie = self
-            .cookie
-            .expect("Cookie not set - ConnectRequest not received yet");
+            .session
+            .as_ref()
+            .expect("Session not established - ConnectRequest not received yet")
+            .cookie;
 
         // ConnectResponse payload: just a u64 cookie (8 bytes)
         let payload_size = 8;
