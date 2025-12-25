@@ -84,7 +84,7 @@ impl ACWritable for CustomLoginRequest {
 }
 
 /// Extension trait for C2SPacket to add serialization with checksum
-/// TODO: Concisder putting this in acprotocol
+/// TODO: Consider putting this in acprotocol
 trait C2SPacketExt {
     fn serialize(&self) -> Result<Vec<u8>, std::io::Error>;
 }
