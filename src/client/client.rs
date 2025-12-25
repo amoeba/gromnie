@@ -13,6 +13,34 @@ use tokio::net::UdpSocket;
 
 use crate::crypto::magic_number::get_magic_number;
 
+/// Extension trait for C2SPacket to add serialization with checksum
+/// TODO: Concisder putting this in acprotocol
+trait C2SPacketExt {
+    fn serialize_with_checksum(&self) -> Result<Vec<u8>, std::io::Error>;
+}
+
+impl C2SPacketExt for C2SPacket {
+    fn serialize_with_checksum(&self) -> Result<Vec<u8>, std::io::Error> {
+        // Write packet to buffer with checksum=0
+        let mut buffer = Vec::new();
+        {
+            let mut cursor = Cursor::new(&mut buffer);
+            self.write(&mut cursor)
+                .map_err(|e| std::io::Error::other(format!("Write error: {}", e)))?;
+        }
+
+        // Compute checksum on the entire serialized packet
+        let checksum = get_magic_number(&buffer, buffer.len(), true);
+
+        // Write checksum back into buffer (checksum is at offset 8-11)
+        if buffer.len() >= 12 {
+            buffer[8..12].copy_from_slice(&checksum.to_le_bytes());
+        }
+
+        Ok(buffer)
+    }
+}
+
 // ClientConnectState
 // TODO: Put this somewhere else
 #[derive(Clone, Debug, PartialEq)]
@@ -36,28 +64,6 @@ pub enum ClientLoginState {
 struct Account {
     name: String,
     password: String,
-}
-
-/// Helper function to serialize a C2SPacket and compute its checksum
-fn serialize_c2s_packet(packet: &C2SPacket) -> Result<Vec<u8>, std::io::Error> {
-    // Write packet to buffer with checksum=0
-    let mut buffer = Vec::new();
-    {
-        let mut cursor = Cursor::new(&mut buffer);
-        packet
-            .write(&mut cursor)
-            .map_err(|e| std::io::Error::other(format!("Write error: {}", e)))?;
-    }
-
-    // Compute checksum on the entire serialized packet
-    let checksum = get_magic_number(&buffer, buffer.len(), true);
-
-    // Write checksum back into buffer (checksum is at offset 8-11)
-    if buffer.len() >= 12 {
-        buffer[8..12].copy_from_slice(&checksum.to_le_bytes());
-    }
-
-    Ok(buffer)
 }
 
 // TODO: Don't require both bind_address and connect_address. I had to do this
