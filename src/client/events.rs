@@ -12,6 +12,15 @@ pub enum GameEvent {
         language: u32,
         region: u32,
     },
+    /// Character login succeeded - received LoginComplete notification
+    LoginSucceeded {
+        character_id: u32,
+        character_name: String,
+    },
+    /// Character login failed
+    LoginFailed {
+        reason: String,
+    },
 }
 
 #[derive(Debug, Clone)]
@@ -26,4 +35,6 @@ pub struct CharacterInfo {
 pub enum ClientAction {
     SendMessage(PendingOutgoingMessage),
     Disconnect,
+    /// Log in as a specific character
+    LoginCharacter { character_id: u32, character_name: String, account: String },
 }
