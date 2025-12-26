@@ -5,10 +5,9 @@ use tracing::{error, info};
 use tracing_subscriber::EnvFilter;
 
 use acprotocol::enums::{Gender, HeritageGroup};
-use acprotocol::messages::c2s::CharacterSendCharGenResult;
-use acprotocol::types::{CharGenResult, PackableList};
+use acprotocol::types::PackableList;
 use gromnie::client::events::{ClientAction, GameEvent};
-use gromnie::client::{Client, PendingOutgoingMessage};
+use gromnie::client::{Client, PendingOutgoingMessage, ace_protocol::{AceCharGenResult, RawSkillAdvancementClass}};
 
 #[derive(Parser)]
 #[command(version, about, long_about = None)]
@@ -91,59 +90,63 @@ async fn client_task(id: u32, address: String, account_name: String, password: S
                         let char_name =
                             format!("TestChar{}", chrono::Utc::now().timestamp() % 10000);
 
-                        let char_gen_result = CharGenResult {
-                            account: account.clone(),
-                            one: 1,
-                            heritage_group: HeritageGroup::Aluvian,
-                            gender: Gender::Male,
-                            eyes_strip: 0,
-                            nose_strip: 0,
-                            mouth_strip: 0,
-                            hair_color: 0,
-                            eye_color: 0,
-                            hair_style: 0,
-                            headgear_style: 0,
-                            headgear_color: 0,
-                            shirt_style: 0,
-                            shirt_color: 0,
-                            trousers_style: 0,
-                            trousers_color: 0,
-                            footwear_style: 0,
-                            footwear_color: 0,
-                            skin_shade: 0,
-                            hair_shade: 0,
-                            headgear_shade: 0,
-                            shirt_shade: 0,
-                            trousers_shade: 0,
-                            tootwear_shade: 0,
-                            template_num: 0,
-                            strength: 10,
-                            endurance: 10,
-                            coordination: 10,
-                            quickness: 10,
-                            focus: 10,
-                            self_: 10,
-                            slot: 0,
-                            class_id: 0,
-                            skills: PackableList {
-                                count: 0,
-                                list: vec![],
+                        // Use ACE-compatible character generation format
+                        // ACE expects Heritage and Gender as u32 (not u8), and no redundant account field
+                        let char_gen_result = AceCharGenResult::from_generic(
+                            HeritageGroup::Aluvian,
+                            Gender::Male,
+                            0,  // eyes_strip
+                            0,  // nose_strip
+                            0,  // mouth_strip
+                            0,  // hair_color
+                            0,  // eye_color
+                            0,  // hair_style
+                            0,  // headgear_style
+                            0,  // headgear_color
+                            0,  // shirt_style
+                            0,  // shirt_color
+                            0,  // trousers_style
+                            0,  // trousers_color
+                            0,  // footwear_style
+                            0,  // footwear_color
+                            0,  // skin_shade
+                            0,  // hair_shade
+                            0,  // headgear_shade
+                            0,  // shirt_shade
+                            0,  // trousers_shade
+                            0,  // tootwear_shade
+                            0,  // template_num
+                            10, // strength
+                            10, // endurance
+                            10, // coordination
+                            10, // quickness
+                            10, // focus
+                            10, // self_
+                            0,  // slot
+                            0,  // class_id
+                            {
+                                // Create a list of 55 skill entries, all set to Inactive (0)
+                                // The server expects exactly 55 skills in SkillAdvancementClass format
+                                // ACE defines Inactive = 0, but acprotocol doesn't have it, so we use RawSkillAdvancementClass
+                                let mut skills = vec![];
+                                for _ in 0..55 {
+                                    skills.push(RawSkillAdvancementClass(0));
+                                }
+                                PackableList {
+                                    count: 55,
+                                    list: skills,
+                                }
                             },
-                            name: char_name.clone(),
-                            start_area: 0, // Default starting area
-                            is_admin: 0,
-                            is_envoy: 0,
-                            validation: 0,
-                        };
-
-                        let char_gen_msg = CharacterSendCharGenResult {
-                            account: account.clone(),
-                            result: char_gen_result,
-                        };
+                            char_name.clone(),
+                            0,  // start_area
+                            0,  // is_admin
+                            0,  // is_envoy
+                            0,  // validation
+                        );
 
                         info!(target: "events", "Creating character: {}", char_name);
 
-                        let msg = PendingOutgoingMessage::CharacterCreation(char_gen_msg);
+                        let msg = PendingOutgoingMessage::CharacterCreationAce(account.clone(), char_gen_result);
                         if let Err(e) = action_tx.send(ClientAction::SendMessage(msg)) {
                             error!(target: "events", "Failed to send character creation action: {}", e);
                         } else {

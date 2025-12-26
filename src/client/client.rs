@@ -13,6 +13,8 @@ use tokio::sync::{broadcast, mpsc};
 pub enum PendingOutgoingMessage {
     DDDInterrogationResponse(DDDInterrogationResponseMessage),
     CharacterCreation(CharacterSendCharGenResult),
+    // ACE-compatible character creation (uses custom serialization format)
+    CharacterCreationAce(String, crate::client::ace_protocol::AceCharGenResult),
 }
 
 use acprotocol::network::packet::PacketHeader;
@@ -532,6 +534,9 @@ impl Client {
             PendingOutgoingMessage::CharacterCreation(char_gen) => {
                 self.send_character_creation_internal(char_gen).await
             }
+            PendingOutgoingMessage::CharacterCreationAce(account, char_gen) => {
+                self.send_character_creation_ace_internal(account, char_gen).await
+            }
         }
     }
 
@@ -686,6 +691,34 @@ impl Client {
         self.send_fragmented_message(message_data, FragmentGroup::Object).await
     }
 
+    /// Send character creation request with ACE-compatible serialization
+    async fn send_character_creation_ace_internal(
+        &mut self,
+        account: String,
+        char_gen: crate::client::ace_protocol::AceCharGenResult,
+    ) -> Result<(), std::io::Error> {
+        info!(target: "net", "Sending Character Creation (ACE format) - Name: {}", char_gen.name);
+
+        // Serialize the character creation message with opcode prefix
+        let mut message_data = Vec::new();
+        {
+            let mut cursor = Cursor::new(&mut message_data);
+            // Write opcode first (0xF656 = Character_SendCharGenResult)
+            write_u32(&mut cursor, 0xF656)
+                .map_err(|e| std::io::Error::other(format!("Write error: {}", e)))?;
+            // Write account string (outer wrapper field)
+            write_string(&mut cursor, &account)
+                .map_err(|e| std::io::Error::other(format!("Write error: {}", e)))?;
+            // Write the ACE-formatted CharGenResult
+            char_gen
+                .write(&mut cursor)
+                .map_err(|e| std::io::Error::other(format!("Write error: {}", e)))?;
+        }
+
+        // Send as a proper fragmented packet
+        self.send_fragmented_message(message_data, FragmentGroup::Object).await
+    }
+
     /// Handle a single parsed message
     fn handle_message(&mut self, message: RawMessage) {
         debug!(target: "net", "Received message: {} (0x{:08X})", message.message_type, message.opcode);
@@ -695,6 +728,7 @@ impl Client {
                 match msg_type {
                     S2CMessage::LoginLoginCharacterSet => self.handle_character_list(message),
                     S2CMessage::DDDInterrogationMessage => self.handle_ddd_interrogation(message),
+                    S2CMessage::CharacterCharGenVerificationResponse => self.handle_character_gen_response(message),
                     // Add more handlers as needed
                     _ => {
                         warn!(target: "net", "Unhandled S2CMessage: {:?} (0x{:04X})", msg_type, message.opcode);
@@ -765,6 +799,30 @@ impl Client {
     }
 
     /// Handle DDD Interrogation message from the server
+    fn handle_character_gen_response(&mut self, message: RawMessage) {
+        debug!(target: "net", "Processing character generation response");
+
+        // Parse the incoming message
+        // Note: message.data includes the opcode as the first 4 bytes, skip it
+        let mut cursor = Cursor::new(&message.data[4..]);
+        use acprotocol::messages::s2c::CharacterCharGenVerificationResponse;
+        match CharacterCharGenVerificationResponse::read(&mut cursor) {
+            Ok(response) => {
+                match response {
+                    CharacterCharGenVerificationResponse::Type1(char_info) => {
+                        info!(target: "net", "Character creation successful!");
+                        info!(target: "net", "  - Character: {}", char_info.name);
+                        info!(target: "net", "  - ID: {}", char_info.character_id.0);
+                        info!(target: "net", "  - Seconds until deletion: {}", char_info.seconds_until_deletion);
+                    }
+                }
+            }
+            Err(e) => {
+                error!(target: "net", "Failed to parse character gen response: {}", e);
+            }
+        }
+    }
+
     fn handle_ddd_interrogation(&mut self, message: RawMessage) {
         debug!(target: "net", "Processing DDD interrogation message");
 
