@@ -3,17 +3,25 @@ use std::io::Cursor;
 use std::net::SocketAddr;
 
 use acprotocol::enums::{AuthFlags, PacketHeaderFlags, S2CMessage};
+use acprotocol::messages::s2c::{LoginLoginCharacterSet, DDDInterrogationMessage};
+use acprotocol::messages::c2s::DDDInterrogationResponseMessage;
+
+/// Enum for outgoing messages to be sent in the network loop
+pub enum PendingOutgoingMessage {
+    DDDInterrogationResponse(DDDInterrogationResponseMessage),
+}
+
 use acprotocol::network::{Fragment, RawMessage};
 use acprotocol::network::packet::PacketHeader;
 use acprotocol::packets::c2s_packet::C2SPacket;
 use acprotocol::packets::s2c_packet::S2CPacket;
 use acprotocol::readers::ACDataType;
-use acprotocol::types::ConnectRequestHeader;
+use acprotocol::types::{ConnectRequestHeader, PackableList};
 use acprotocol::writers::{
     write_i32, write_string, write_u32, ACWritable, ACWriter,
 };
 use tokio::net::UdpSocket;
-use tracing::{debug, error, warn};
+use tracing::{debug, error, info, warn};
 
 use crate::crypto::magic_number::get_magic_number;
 
@@ -21,6 +29,48 @@ use crate::crypto::magic_number::get_magic_number;
 const CHECKSUM_PLACEHOLDER: u32 = 0xbadd70dd;
 const PACKET_HEADER_SIZE: usize = 20;
 const CHECKSUM_OFFSET: usize = 8;
+
+/// Server information tracking both login and world ports
+#[derive(Clone, Debug)]
+pub struct ServerInfo {
+    pub host: String,
+    pub login_port: u16,  // Port 9000 - for LoginRequest and most traffic
+    pub world_port: u16,  // Port 9001 - for ConnectResponse and game data
+}
+
+impl ServerInfo {
+    pub fn new(host: String, login_port: u16) -> Self {
+        ServerInfo {
+            host,
+            login_port,
+            world_port: login_port + 1,
+        }
+    }
+
+    /// Check if the given peer address matches this server (either port)
+    pub fn is_from(&self, peer: &SocketAddr) -> bool {
+        let peer_ip = peer.ip().to_string();
+        peer_ip == self.host || peer_ip == "127.0.0.1" || peer_ip == "::1"
+    }
+
+    /// Get the login server address for sending standard messages
+    pub async fn login_addr(&self) -> Result<SocketAddr, std::io::Error> {
+        let addr = format!("{}:{}", self.host, self.login_port);
+        tokio::net::lookup_host(addr)
+            .await?
+            .find(|a| a.is_ipv4())
+            .ok_or_else(|| std::io::Error::new(std::io::ErrorKind::NotFound, "Could not resolve IPv4 address"))
+    }
+
+    /// Get the world server address for sending ConnectResponse
+    pub async fn world_addr(&self) -> Result<SocketAddr, std::io::Error> {
+        let addr = format!("{}:{}", self.host, self.world_port);
+        tokio::net::lookup_host(addr)
+            .await?
+            .find(|a| a.is_ipv4())
+            .ok_or_else(|| std::io::Error::new(std::io::ErrorKind::NotFound, "Could not resolve IPv4 address"))
+    }
+}
 
 /// Session state received from the server's ConnectRequest packet
 #[derive(Clone, Debug)]
@@ -155,20 +205,14 @@ struct Account {
     password: String,
 }
 
-/// Server connection information tracking both login and world server ports
-#[derive(Clone, Debug)]
-struct ServerInfo {
-    login_port: u16,  // Port 9000 - for LoginRequest and most traffic
-    world_port: u16,  // Port 9001 - for ConnectResponse and game data
-    host: String,
-}
+
 
 // TODO: Don't require both bind_address and connect_address. I had to do this
 // to get things to work but I should be able to listen on any random port so
 // I'm not sure what I'm doing wrong
 pub struct Client {
     pub id: u32,
-    server: ServerInfo,
+    pub server: ServerInfo,
     pub socket: UdpSocket,
     account: Account,
     connect_state: ClientConnectState,
@@ -178,6 +222,7 @@ pub struct Client {
     session: Option<SessionState>,
     pending_fragments: HashMap<u32, Fragment>,  // Track incomplete fragment sequences
     message_queue: VecDeque<RawMessage>,        // Queue of parsed messages to process
+    outgoing_message_queue: VecDeque<PendingOutgoingMessage>,  // Queue of messages to send
 }
 
 impl Client {
@@ -191,11 +236,7 @@ impl Client {
 
         Client {
             id,
-            server: ServerInfo {
-                login_port,
-                world_port: login_port + 1,  // Typically 9001
-                host,
-            },
+            server: ServerInfo::new(host, login_port),
             account: Account { name, password },
             socket: sok,
             connect_state: ClientConnectState::Disconnected,
@@ -205,6 +246,7 @@ impl Client {
             session: None,
             pending_fragments: HashMap::new(),
             message_queue: VecDeque::new(),
+            outgoing_message_queue: VecDeque::new(),
         }
     }
 
@@ -227,21 +269,158 @@ impl Client {
         }
     }
 
+    /// Check if there are pending outgoing messages to send
+    pub fn has_pending_outgoing_messages(&self) -> bool {
+        !self.outgoing_message_queue.is_empty()
+    }
+
+    /// Send all pending outgoing messages
+    pub async fn send_pending_messages(&mut self) -> Result<(), std::io::Error> {
+        while let Some(message) = self.outgoing_message_queue.pop_front() {
+            self.send_outgoing_message(message).await?;
+        }
+        Ok(())
+    }
+
+    /// Send a single outgoing message
+    async fn send_outgoing_message(&mut self, message: PendingOutgoingMessage) -> Result<(), std::io::Error> {
+        match message {
+            PendingOutgoingMessage::DDDInterrogationResponse(response) => {
+                self.send_ddd_response_internal(response).await
+            }
+        }
+    }
+
+    /// Send a DDD interrogation response to the login server
+    async fn send_ddd_response_internal(&mut self, response: DDDInterrogationResponseMessage) -> Result<(), std::io::Error> {
+        info!(target: "net", "Sending DDD Interrogation Response - Language: {}, Files: {:?}",
+            response.language, response.files.list);
+
+        // Serialize the response message
+        let mut payload_buffer = Vec::new();
+        {
+            let mut payload_cursor = Cursor::new(&mut payload_buffer);
+            response.write(&mut payload_cursor)
+                .map_err(|e| std::io::Error::other(format!("Write error: {}", e)))?;
+        }
+
+        // For now, send as a simple packet with the DDD response
+        // TODO: Properly implement as fragments if needed
+        let payload_size = payload_buffer.len();
+
+        let mut buffer = Vec::with_capacity(PACKET_HEADER_SIZE + payload_size);
+
+        // Write packet header
+        // Extract session values first to avoid borrow issues
+        let (client_id, table) = {
+            let session = self.session.as_ref().expect("Session not established");
+            (session.client_id, session.table)
+        };
+        let sequence = self.next_sequence();
+        buffer.extend_from_slice(&sequence.to_le_bytes());
+        buffer.extend_from_slice(&0u32.to_le_bytes());  // flags
+        buffer.extend_from_slice(&0u32.to_le_bytes());  // checksum placeholder
+        buffer.extend_from_slice(&client_id.to_le_bytes());  // recipient_id
+        buffer.extend_from_slice(&0u16.to_le_bytes());  // time_since_last_packet
+        buffer.extend_from_slice(&(payload_size as u16).to_le_bytes());  // size
+        buffer.extend_from_slice(&table.to_le_bytes());  // iteration
+
+        // Append payload
+        buffer.extend_from_slice(&payload_buffer);
+
+        // Compute checksum
+        buffer[CHECKSUM_OFFSET..CHECKSUM_OFFSET + 4].copy_from_slice(&CHECKSUM_PLACEHOLDER.to_le_bytes());
+        let checksum1 = get_magic_number(&buffer[0..PACKET_HEADER_SIZE], PACKET_HEADER_SIZE, true);
+        let checksum2 = get_magic_number(&payload_buffer, payload_size, true);
+        let checksum = checksum1.wrapping_add(checksum2);
+        buffer[CHECKSUM_OFFSET..CHECKSUM_OFFSET + 4].copy_from_slice(&checksum.to_le_bytes());
+
+        // Send to login server (port 9000) - DDD interrogation is not a ConnectResponse
+        let login_addr = self.server.login_addr().await?;
+        self.socket.send_to(&buffer, login_addr).await?;
+        info!(target: "net", "DDD response sent successfully");
+        Ok(())
+    }
+
     /// Handle a single parsed message
     fn handle_message(&mut self, message: RawMessage) {
         debug!(target: "net", "Received message: {} (0x{:04X})", message.message_type, message.opcode);
 
-        // Handle message based on S2C message type
-        // Panic on unhandled messages so we know what needs to be implemented
         match S2CMessage::try_from(message.opcode) {
             Ok(msg_type) => {
-                // Panic to force us to implement the handler
-                panic!("Unhandled S2CMessage: {:?} (0x{:04X})\nImplement handler for this message type!",
-                       msg_type, message.opcode);
+                match msg_type {
+                    S2CMessage::LoginLoginCharacterSet => self.handle_character_list(message),
+                    S2CMessage::DDDInterrogationMessage => self.handle_ddd_interrogation(message),
+                    // Add more handlers as needed
+                    _ => {
+                        warn!(target: "net", "Unhandled S2CMessage: {:?} (0x{:04X})", msg_type, message.opcode);
+                    }
+                }
             }
             Err(_) => {
-                panic!("Unknown message opcode: 0x{:04X}\nThis message type is not in the S2CMessage enum!",
-                       message.opcode);
+                warn!(target: "net", "Unknown message opcode: 0x{:04X}", message.opcode);
+            }
+        }
+    }
+
+    /// Handle the character list message from the server
+    fn handle_character_list(&mut self, message: RawMessage) {
+        debug!(target: "net", "Processing character list message");
+
+        // Parse using acprotocol's generated parser
+        let mut cursor = Cursor::new(&message.data);
+        match LoginLoginCharacterSet::read(&mut cursor) {
+            Ok(char_list) => {
+                info!(target: "net", "=== Character List for Account: {} ===", char_list.account);
+                info!(target: "net", "Available character slots: {}", char_list.num_allowed_characters);
+                info!(target: "net", "Characters on account: {}", char_list.characters.list.len());
+
+                for character in &char_list.characters.list {
+                    if character.seconds_greyed_out > 0 {
+                        info!(target: "net", "  - {} (ID: {:?}) [PENDING DELETION in {} seconds]",
+                            character.name, character.character_id, character.seconds_greyed_out);
+                    } else {
+                        info!(target: "net", "  - {} (ID: {:?})", character.name, character.character_id);
+                    }
+                }
+
+                if !char_list.deleted_characters.list.is_empty() {
+                    info!(target: "net", "Characters pending deletion: {}", char_list.deleted_characters.list.len());
+                }
+            }
+            Err(e) => {
+                error!(target: "net", "Failed to parse character list: {}", e);
+            }
+        }
+    }
+
+    /// Handle DDD Interrogation message from the server
+    fn handle_ddd_interrogation(&mut self, message: RawMessage) {
+        debug!(target: "net", "Processing DDD interrogation message");
+
+        // Parse the incoming message
+        let mut cursor = Cursor::new(&message.data);
+        match DDDInterrogationMessage::read(&mut cursor) {
+            Ok(ddd_msg) => {
+                info!(target: "net", "Received DDD Interrogation - Language: {}, Region: {}, Product: {}",
+                    ddd_msg.name_rule_language, ddd_msg.servers_region, ddd_msg.product_id);
+
+                // Prepare response with language 1 and the file list from the pcap
+                let files = vec![4294967296, -8899172235240, 4294967297];
+                let response = DDDInterrogationResponseMessage {
+                    language: 1,
+                    files: PackableList {
+                        count: files.len() as u32,
+                        list: files,
+                    },
+                };
+
+                // Queue the response to be sent in the next send cycle
+                self.outgoing_message_queue.push_back(PendingOutgoingMessage::DDDInterrogationResponse(response));
+                info!(target: "net", "DDD response queued for sending");
+            }
+            Err(e) => {
+                error!(target: "net", "Failed to parse DDD interrogation message: {}", e);
             }
         }
     }
@@ -303,10 +482,15 @@ impl Client {
         let flags = packet.flags;
 
         if flags.contains(PacketHeaderFlags::CONNECT_REQUEST) {
+            debug!(target: "net", "Raw ConnectRequest bytes: {:02X?}", &buffer[..size]);
             let mut cursor = Cursor::new(&buffer[..size]);
+            // Skip past the packet header (20 bytes) to read the ConnectRequest payload
+            cursor.set_position(PACKET_HEADER_SIZE as u64);
             let connect_req_packet = ConnectRequestHeader::read(&mut cursor).unwrap();
 
             debug!(target: "net", "Received ConnectRequest from server");
+            debug!(target: "net", "  Cookie: 0x{:016X}", connect_req_packet.cookie);
+            debug!(target: "net", "  Client ID: {}", connect_req_packet.net_id);
 
             // Store session data from ConnectRequest
             // Note: table/iteration comes from the packet header, not the ConnectRequest payload
@@ -317,6 +501,11 @@ impl Client {
                 outgoing_seed: connect_req_packet.outgoing_seed,
                 incoming_seed: connect_req_packet.incoming_seed,
             });
+
+            // Small delay to avoid race condition with server's async authentication
+            // The server validates the password asynchronously, so we need to wait
+            // for it to transition to AuthConnectResponse state before sending ConnectResponse
+            tokio::time::sleep(tokio::time::Duration::from_millis(200)).await;
 
             let _ = self.do_connect_response().await;
         }
@@ -523,6 +712,7 @@ impl Client {
         let buffer = packet.serialize()?;
 
         debug!(target: "net", "Sending ConnectResponse to complete handshake");
+        debug!(target: "net", "  Cookie: 0x{:016X}", cookie);
         debug!(target: "net", "ConnectResponse data: {:2X?}", buffer);
 
         // CRITICAL: ConnectResponse must be sent to world server port (9001), not login port (9000)
