@@ -191,6 +191,14 @@ async fn client_task(id: u32, address: String, account_name: String, password: S
                     debug!(target: "events", "Name: {}", object_name);
                     debug!(target: "events", "ID: 0x{:08X}", object_id);
                 }
+                GameEvent::ChatMessageReceived { message, message_type } => {
+                    info!(target: "events", "=== CHAT MESSAGE ===");
+                    info!(target: "events", "Type: {}", message_type);
+                    info!(target: "events", "Message: {}", message);
+                }
+                GameEvent::NetworkMessage { direction, message_type } => {
+                    debug!(target: "events", "Network message: {:?} - {}", direction, message_type);
+                }
             }
         }
 

@@ -106,6 +106,24 @@ fn render_character_select_scene(frame: &mut Frame, area: Rect, app: &App) {
 
 /// Scene 3: Game World - shows created objects in the game world
 fn render_game_world_scene(frame: &mut Frame, area: Rect, app: &App, state: &GameWorldState, created_objects: &[(u32, String)]) {
+    // Create layout: objects panel (left) | chat window (right)
+    let chunks = Layout::default()
+        .direction(Direction::Horizontal)
+        .constraints([
+            Constraint::Percentage(50),
+            Constraint::Percentage(50),
+        ])
+        .split(area);
+
+    // Render objects panel on the left
+    render_objects_panel(frame, chunks[0], app, state, created_objects);
+
+    // Render chat window on the right
+    render_chat_panel(frame, chunks[1], app);
+}
+
+/// Render the objects panel showing game world objects
+fn render_objects_panel(frame: &mut Frame, area: Rect, app: &App, state: &GameWorldState, created_objects: &[(u32, String)]) {
     let mut lines = vec![];
 
     // Add character info
@@ -189,6 +207,73 @@ fn render_game_world_scene(frame: &mut Frame, area: Rect, app: &App, state: &Gam
         .style(Style::default().fg(Color::White));
 
     frame.render_widget(paragraph, area);
+}
+
+/// Render the chat panel showing chat messages and input
+fn render_chat_panel(frame: &mut Frame, area: Rect, app: &App) {
+    // Split into chat messages area and chat input area
+    let chunks = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([
+            Constraint::Min(0),
+            Constraint::Length(3),
+        ])
+        .split(area);
+
+    // Render chat messages
+    let mut lines = vec![];
+    if app.chat_messages.is_empty() {
+        lines.push(Line::from(Span::styled(
+            "No messages yet. Press 'c' to start chatting.",
+            Style::default().fg(Color::Gray).italic(),
+        )));
+    } else {
+        // Show most recent messages (up to height of area)
+        let max_messages = (chunks[0].height as usize).saturating_sub(2); // Account for borders
+        for message in app.chat_messages.iter().rev().take(max_messages).rev() {
+            // Color based on message type
+            let color = match message.message_type {
+                0x00 => Color::White,       // Broadcast
+                0x03 => Color::Cyan,        // Tell (incoming)
+                0x04 => Color::Green,       // OutgoingTell
+                0x05 => Color::Yellow,      // System
+                0x06 => Color::Red,         // Combat
+                0x07 => Color::Magenta,     // Magic
+                _ => Color::White,
+            };
+
+            lines.push(Line::from(Span::styled(
+                message.text.clone(),
+                Style::default().fg(color),
+            )));
+        }
+    }
+
+    let chat_messages_widget = Paragraph::new(lines)
+        .block(Block::default().title("Chat").borders(Borders::ALL))
+        .style(Style::default().fg(Color::White))
+        .wrap(ratatui::widgets::Wrap { trim: true });
+
+    frame.render_widget(chat_messages_widget, chunks[0]);
+
+    // Render chat input
+    let input_title = if app.chat_input_focused {
+        "Chat Input (ESC to cancel, Enter to send)"
+    } else {
+        "Chat Input (press 'c' to focus)"
+    };
+
+    let input_style = if app.chat_input_focused {
+        Style::default().fg(Color::Yellow)
+    } else {
+        Style::default().fg(Color::Gray)
+    };
+
+    let chat_input_widget = Paragraph::new(app.chat_input.as_str())
+        .block(Block::default().title(input_title).borders(Borders::ALL).border_style(input_style))
+        .style(input_style);
+
+    frame.render_widget(chat_input_widget, chunks[1]);
 }
 
 #[allow(dead_code)]
