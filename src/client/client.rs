@@ -168,9 +168,39 @@ impl ACWritable for CustomLoginRequest {
 /// TODO: Consider putting this in acprotocol
 trait C2SPacketExt {
     fn serialize(&self) -> Result<Vec<u8>, std::io::Error>;
+    fn calculate_option_size(&self) -> usize;
 }
 
 impl C2SPacketExt for C2SPacket {
+    /// Calculate the size of optional headers based on which fields are present
+    fn calculate_option_size(&self) -> usize {
+        let mut option_size = 0usize;
+
+        // Order matches actestclient's Serialize() method (Packet.cs lines 126-176)
+        if self.ack_sequence.is_some() {
+            option_size += 4; // u32
+        }
+        if self.world_login_request.is_some() {
+            option_size += 8; // u64
+        }
+        if self.connect_response.is_some() {
+            option_size += 8; // u64
+        }
+        // Note: LoginRequest is handled in C2SPacket.write(), so it contributes to size
+        // but is not part of optional headers in the same way
+        if self.time.is_some() {
+            option_size += 8; // u64
+        }
+        if self.echo_time.is_some() {
+            option_size += 4; // f32
+        }
+        if self.flow.is_some() {
+            option_size += 6; // u32 + u16
+        }
+
+        option_size
+    }
+
     fn serialize(&self) -> Result<Vec<u8>, std::io::Error> {
         let mut buffer = Vec::new();
         {
@@ -179,15 +209,52 @@ impl C2SPacketExt for C2SPacket {
                 .map_err(|e| std::io::Error::other(format!("Write error: {}", e)))?;
         }
 
-        // Compute checksum on the entire serialized packet
-        let checksum = get_magic_number(&buffer, buffer.len(), true);
+        // Calculate option size before we modify the buffer
+        let option_size = self.calculate_option_size();
 
-        // Write checksum back into buffer
-        if buffer.len() >= CHECKSUM_OFFSET + 4 {
-            buffer[CHECKSUM_OFFSET..CHECKSUM_OFFSET + 4].copy_from_slice(&checksum.to_le_bytes());
-        } else {
-            panic!("At the time of writing the packet checksum, buffer was too small to be valid.");
+        // Get the size field from the header (bytes 16-17)
+        // This is the total size of payload + optional headers
+        let header_size = u16::from_le_bytes([buffer[16], buffer[17]]) as usize;
+        let mut checksum_result = 0u32;
+
+        if header_size > 0 {
+            // Step 1: Checksum optional headers if present
+            if option_size > 0 && option_size <= header_size {
+                let option_checksum = get_magic_number(
+                    &buffer[PACKET_HEADER_SIZE..PACKET_HEADER_SIZE + option_size],
+                    option_size,
+                    true,
+                );
+                checksum_result = checksum_result.wrapping_add(option_checksum);
+            }
+
+            // Step 2: Checksum remaining payload (fragments or message data)
+            let remaining = header_size - option_size;
+            if remaining > 0 {
+                let payload_start = PACKET_HEADER_SIZE + option_size;
+                let payload_checksum = get_magic_number(
+                    &buffer[payload_start..payload_start + remaining],
+                    remaining,
+                    true,
+                );
+                checksum_result = checksum_result.wrapping_add(payload_checksum);
+            }
+
+            // Step 3: XOR with seed if Checksum flag is set
+            // (Not needed for TimeSync - only for encrypted packets)
+            // This would be added here when we implement packet encryption
         }
+
+        // Step 4: Set header checksum to placeholder (0xbadd70dd)
+        buffer[CHECKSUM_OFFSET..CHECKSUM_OFFSET + 4]
+            .copy_from_slice(&CHECKSUM_PLACEHOLDER.to_le_bytes());
+
+        // Step 5: Checksum the entire packet header (with placeholder in checksum field)
+        let header_checksum = get_magic_number(&buffer[0..PACKET_HEADER_SIZE], PACKET_HEADER_SIZE, true);
+        checksum_result = checksum_result.wrapping_add(header_checksum);
+
+        // Step 6: Write final checksum back to the packet
+        buffer[CHECKSUM_OFFSET..CHECKSUM_OFFSET + 4].copy_from_slice(&checksum_result.to_le_bytes());
 
         Ok(buffer)
     }
@@ -287,11 +354,47 @@ impl Client {
         (client, event_rx, action_tx)
     }
 
-    /// Get the next sequence number for outgoing packets and increment the counter
-    fn next_sequence(&mut self) -> u32 {
-        let seq = self.send_count;
-        self.send_count += 1;
-        seq
+    /// Centralized packet sending with sequence management
+    /// Matches actestclient's Send() method logic:
+    /// - incrementSequence: increment send_count BEFORE using it
+    /// - includeSequence: use send_count in packet header, otherwise use 0
+    /// - Id/Table are only set if ClientId > 0 (actestclient line 292-297)
+    async fn send_packet(
+        &mut self,
+        mut packet: C2SPacket,
+        include_sequence: bool,
+        increment_sequence: bool,
+    ) -> Result<(), std::io::Error> {
+        // Increment sequence FIRST if requested (matches actestclient behavior)
+        if increment_sequence {
+            self.send_count += 1;
+        }
+
+        // Set sequence based on include_sequence flag
+        packet.sequence = if include_sequence { self.send_count } else { 0 };
+
+        // CRITICAL: Only set recipient_id and iteration if ClientId > 0
+        // (matches actestclient NetworkManager.Send lines 292-297)
+        // When ClientId is 0, these should remain at their default values from packet construction
+        // This affects checksum calculation!
+
+        // Serialize with checksum
+        let buffer = packet.serialize()?;
+
+        // Determine destination address
+        let dest_addr = if packet.flags.contains(PacketHeaderFlags::CONNECT_RESPONSE) {
+            // ConnectResponse goes to world port (9001)
+            self.server.world_addr().await?
+        } else {
+            // Everything else goes to login port (9000)
+            self.server.login_addr().await?
+        };
+
+        debug!(target: "net", "Sending packet: seq={}, id={}, flags={:?}, dest={}",
+            packet.sequence, packet.recipient_id, packet.flags, dest_addr);
+
+        self.socket.send_to(&buffer, dest_addr).await?;
+        Ok(())
     }
 
     /// Check if there are messages waiting to be processed
@@ -319,65 +422,19 @@ impl Client {
         Ok(())
     }
 
-    /// Send keep-alive packet (ACK or TimeSync) to maintain connection
+    /// Send keep-alive packet (TimeSync) to maintain connection
+    /// Note: ACKs should be piggybacked on outgoing packets, not sent standalone
     pub async fn send_keepalive(&mut self) -> Result<(), std::io::Error> {
-        // If we have received new sequences from server that we haven't ACKed, send ACK
-        if self.recv_count > self.last_acked_to_server && self.session.is_some() {
-            debug!(target: "net", "Sending ACK for sequence {}", self.recv_count);
-            self.send_ack(self.recv_count).await?;
-            self.last_acked_to_server = self.recv_count;
-        }
-        // Otherwise, send TimeSync to keep connection alive
-        else if self.session.is_some() {
+        if self.session.is_some() {
             debug!(target: "net", "Sending TimeSync keep-alive");
             self.send_timesync().await?;
         }
         Ok(())
     }
 
-    /// Send an ACK packet to acknowledge received server sequences
-    async fn send_ack(&mut self, ack_sequence: u32) -> Result<(), std::io::Error> {
-        let (client_id, table) = {
-            let session = self.session.as_ref().ok_or_else(|| {
-                std::io::Error::other("Session not established")
-            })?;
-            (session.client_id, session.table)
-        };
-
-        debug!(target: "net", "Creating ACK packet: client_id={}, table={}, ack_seq={}", client_id, table, ack_sequence);
-
-        // ACK packets don't increment send_count
-        let packet = C2SPacket {
-            sequence: self.send_count, // Use current send_count without incrementing
-            flags: PacketHeaderFlags::ACK_SEQUENCE,
-            checksum: 0,
-            recipient_id: client_id,
-            time_since_last_packet: 0,
-            size: 4, // ACK payload is just the u32 ack_sequence
-            iteration: table,
-            server_switch: None,
-            retransmit_sequences: None,
-            reject_sequences: None,
-            ack_sequence: Some(ack_sequence),
-            login_request: None,
-            world_login_request: None,
-            connect_response: None,
-            cicmd_command: None,
-            time: None,
-            echo_time: None,
-            flow: None,
-            fragments: None,
-        };
-
-        let buffer = packet.serialize()?;
-        // After connection, all packets with Id > 0 go to the login server port (9000), not world port
-        let login_addr = self.server.login_addr().await?;
-        debug!(target: "net", "Sending ACK to login server at {}", login_addr);
-        self.socket.send_to(&buffer, login_addr).await?;
-        Ok(())
-    }
 
     /// Send a TimeSync packet to keep connection alive
+    /// Uses includeSequence=false, incrementSequence=false (sequence will be 0)
     async fn send_timesync(&mut self) -> Result<(), std::io::Error> {
         let (client_id, table) = {
             let session = self.session.as_ref().ok_or_else(|| {
@@ -392,15 +449,22 @@ impl Client {
             .unwrap()
             .as_secs();
 
-        // TimeSync packets don't increment send_count
+        // CRITICAL: Only set recipient_id and iteration if client_id > 0 (matches actestclient line 292-297)
+        // When client_id is 0, these should be 0 (default values)
+        let (recipient_id, iteration) = if client_id > 0 {
+            (client_id, table)
+        } else {
+            (0, 0)
+        };
+
         let packet = C2SPacket {
-            sequence: self.send_count, // Use current send_count without incrementing
+            sequence: 0, // Will be set by send_packet
             flags: PacketHeaderFlags::TIME_SYNC,
             checksum: 0,
-            recipient_id: client_id,
+            recipient_id,
             time_since_last_packet: 0,
             size: 8, // TimeSync payload is a u64
-            iteration: table,
+            iteration,
             server_switch: None,
             retransmit_sequences: None,
             reject_sequences: None,
@@ -415,12 +479,8 @@ impl Client {
             fragments: None,
         };
 
-        let buffer = packet.serialize()?;
-        // After connection, all packets with Id > 0 go to the login server port (9000), not world port
-        let login_addr = self.server.login_addr().await?;
-        debug!(target: "net", "Sending TimeSync to login server at {}", login_addr);
-        self.socket.send_to(&buffer, login_addr).await?;
-        Ok(())
+        // TimeSync: includeSequence=false, incrementSequence=false (like actestclient line 678)
+        self.send_packet(packet, false, false).await
     }
 
     /// Get a new subscriber to client events
@@ -931,9 +991,8 @@ impl Client {
         // Build packet manually: header + payload
         let mut buffer = Vec::with_capacity(PACKET_HEADER_SIZE + payload_size);
 
-        // Write packet header
-        let sequence = self.next_sequence();
-        buffer.extend_from_slice(&sequence.to_le_bytes()); // sequence (4)
+        // Write packet header (sequence will be overwritten by send_packet, but we need placeholder)
+        buffer.extend_from_slice(&0u32.to_le_bytes()); // sequence (4) - will be set by send_packet
         buffer.extend_from_slice(&0x00010000u32.to_le_bytes()); // flags: LOGIN_REQUEST (4)
         buffer.extend_from_slice(&0u32.to_le_bytes()); // checksum placeholder (4)
         buffer.extend_from_slice(&0u16.to_le_bytes()); // recipient_id (2)
@@ -958,26 +1017,17 @@ impl Client {
         buffer[CHECKSUM_OFFSET..CHECKSUM_OFFSET + 4].copy_from_slice(&checksum.to_le_bytes());
 
         debug!(target: "net", "Sending LoginRequest for account: {}", self.account.name);
-        debug!(target: "net", "LoginRequest data: {:2X?}", buffer);
+
+        // LoginRequest: includeSequence=false, incrementSequence=true (like actestclient line 164)
+        // Sequence in header is 0, but send_count gets incremented
+        // NOTE: We're building this packet manually, so we need to send it directly and manage sequence manually
+
+        // Increment send_count for LoginRequest (matches actestclient)
+        self.send_count += 1;
 
         // Send to login server port (9000)
-        let login_addr = format!("{}:{}", self.server.host, self.server.login_port);
-        let login_sockaddr = tokio::net::lookup_host(&login_addr)
-            .await?
-            .find(|addr| addr.is_ipv4())
-            .ok_or_else(|| {
-                std::io::Error::new(
-                    std::io::ErrorKind::NotFound,
-                    "Could not resolve IPv4 address",
-                )
-            })?;
-        match self.socket.send_to(&buffer, login_sockaddr).await {
-            Ok(_) => {}
-            Err(e) => {
-                error!(target: "net", "Send error: {}", e);
-                return Err(e);
-            }
-        }
+        let login_addr = self.server.login_addr().await?;
+        self.socket.send_to(&buffer, login_addr).await?;
 
         Ok(())
     }
@@ -997,9 +1047,8 @@ impl Client {
         let payload_size = 8;
 
         // Create C2SPacket with ConnectResponse
-        // NOTE: We use sequence 0 and increment manually per C# code (includeSequence=false, incrementSequence=false)
         let packet = C2SPacket {
-            sequence: 0, // ConnectResponse doesn't use sequence numbers
+            sequence: 0, // Will be set by send_packet
             flags: PacketHeaderFlags::CONNECT_RESPONSE,
             checksum: 0,
             recipient_id: client_id, // Must match the ClientId from ConnectRequest
@@ -1020,86 +1069,10 @@ impl Client {
             fragments: None,
         };
 
-        // Serialize packet with checksum
-        let buffer = packet.serialize()?;
-
         debug!(target: "net", "Sending ConnectResponse to complete handshake");
         debug!(target: "net", "  Cookie: 0x{:016X}", cookie);
-        debug!(target: "net", "ConnectResponse data: {:2X?}", buffer);
 
-        // CRITICAL: ConnectResponse must be sent to world server port (9001), not login port (9000)
-        // This matches the C# client behavior where ConnectResponse uses "ReadAddress"
-        let world_addr = format!("{}:{}", self.server.host, self.server.world_port);
-
-        let world_sockaddr = tokio::net::lookup_host(&world_addr)
-            .await?
-            .find(|addr| addr.is_ipv4())
-            .ok_or_else(|| {
-                std::io::Error::new(
-                    std::io::ErrorKind::NotFound,
-                    "Could not resolve IPv4 address",
-                )
-            })?;
-        match self.socket.send_to(&buffer, world_sockaddr).await {
-            Ok(_) => {}
-            Err(e) => {
-                error!(target: "net", "Send error: {}", e);
-                return Err(e);
-            }
-        }
-        Ok(())
-    }
-
-    pub async fn do_ack_response(&mut self, value: u32) -> Result<(), std::io::Error> {
-        // AckSequence payload: just a u32 value (4 bytes)
-        let payload_size = 4;
-
-        // Create C2SPacket with AckSequence
-        let packet = C2SPacket {
-            sequence: self.next_sequence(),
-            flags: PacketHeaderFlags::ACK_SEQUENCE,
-            checksum: 0,
-            recipient_id: 0,
-            time_since_last_packet: 0,
-            size: payload_size,
-            iteration: 0,
-            server_switch: None,
-            retransmit_sequences: None,
-            reject_sequences: None,
-            ack_sequence: Some(value),
-            login_request: None,
-            world_login_request: None,
-            connect_response: None,
-            cicmd_command: None,
-            time: None,
-            echo_time: None,
-            flow: None,
-            fragments: None,
-        };
-
-        // Serialize packet with checksum
-        let buffer = packet.serialize()?;
-
-        debug!(target: "net", "Sending AckResponse with data: {:2X?}", buffer);
-
-        // Send ACK to login server port (9000)
-        let login_addr = format!("{}:{}", self.server.host, self.server.login_port);
-        let login_sockaddr = tokio::net::lookup_host(&login_addr)
-            .await?
-            .find(|addr| addr.is_ipv4())
-            .ok_or_else(|| {
-                std::io::Error::new(
-                    std::io::ErrorKind::NotFound,
-                    "Could not resolve IPv4 address",
-                )
-            })?;
-        match self.socket.send_to(&buffer, login_sockaddr).await {
-            Ok(_) => {}
-            Err(e) => {
-                error!(target: "net", "Send error: {}", e);
-                return Err(e);
-            }
-        }
-        Ok(())
+        // ConnectResponse: includeSequence=false, incrementSequence=false (like actestclient line 558)
+        self.send_packet(packet, false, false).await
     }
 }
