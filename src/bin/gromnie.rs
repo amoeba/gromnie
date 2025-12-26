@@ -187,30 +187,44 @@ async fn client_task(id: u32, address: String, account_name: String, password: S
     }
 
     let mut buf = [0u8; 1024];
+    let mut last_keepalive = tokio::time::Instant::now();
+    let keepalive_interval = tokio::time::Duration::from_secs(10); // Send keep-alive every 10 seconds
 
     loop {
-        match client.socket.recv_from(&mut buf).await {
-            Ok((size, peer)) => {
-                client.process_packet(&buf[..size], size, &peer).await;
+        // Use tokio::select! to either receive a packet or timeout for keep-alive
+        tokio::select! {
+            recv_result = client.socket.recv_from(&mut buf) => {
+                match recv_result {
+                    Ok((size, peer)) => {
+                        client.process_packet(&buf[..size], size, &peer).await;
 
-                // Check for and process any messages that were parsed from fragments
-                if client.has_messages() {
-                    client.process_messages();
-                }
+                        // Check for and process any messages that were parsed from fragments
+                        if client.has_messages() {
+                            client.process_messages();
+                        }
 
-                // Process actions from event handlers
-                client.process_actions();
+                        // Process actions from event handlers
+                        client.process_actions();
 
-                // Check for and send any pending outgoing messages
-                if client.has_pending_outgoing_messages() {
-                    if let Err(e) = client.send_pending_messages().await {
-                        error!("Failed to send pending messages: {}", e);
+                        // Check for and send any pending outgoing messages
+                        if client.has_pending_outgoing_messages() {
+                            if let Err(e) = client.send_pending_messages().await {
+                                error!("Failed to send pending messages: {}", e);
+                            }
+                        }
+                    }
+                    Err(e) => {
+                        error!("Error in receive loop: {}", e);
+                        break;
                     }
                 }
             }
-            Err(e) => {
-                error!("Error in receive loop: {}", e);
-                break;
+            _ = tokio::time::sleep_until(last_keepalive + keepalive_interval) => {
+                // Time to send keep-alive
+                if let Err(e) = client.send_keepalive().await {
+                    error!("Failed to send keep-alive: {}", e);
+                }
+                last_keepalive = tokio::time::Instant::now();
             }
         }
     }
