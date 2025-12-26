@@ -1,3 +1,4 @@
+use std::cell::RefCell;
 use std::collections::{HashMap, VecDeque};
 use std::io::Cursor;
 use std::net::SocketAddr;
@@ -25,6 +26,7 @@ use tokio::net::UdpSocket;
 use tracing::{debug, error, info, warn};
 
 use crate::client::events::{ClientAction, GameEvent};
+use crate::crypto::crypto_system::CryptoSystem;
 use crate::crypto::magic_number::get_magic_number;
 
 // Protocol constants
@@ -90,9 +92,9 @@ impl ServerInfo {
 struct SessionState {
     cookie: u64,
     client_id: u16,
-    table: u16,         // Table/iteration value from packet header
-    outgoing_seed: u32, // Server->Client checksum seed
-    incoming_seed: u32, // Client->Server checksum seed
+    table: u16,                                    // Table/iteration value from packet header
+    send_generator: RefCell<CryptoSystem>,        // Client->Server checksum encryption (initialized from seed_c2s)
+    recv_generator: RefCell<CryptoSystem>,        // Server->Client checksum encryption (initialized from seed_s2c)
 }
 
 /// Custom LoginRequest structure that matches the actual C# client implementation.
@@ -167,7 +169,7 @@ impl ACWritable for CustomLoginRequest {
 /// Extension trait for C2SPacket to add serialization with checksum
 /// TODO: Consider putting this in acprotocol
 trait C2SPacketExt {
-    fn serialize(&self) -> Result<Vec<u8>, std::io::Error>;
+    fn serialize(&self, session: Option<&SessionState>) -> Result<Vec<u8>, std::io::Error>;
     fn calculate_option_size(&self) -> usize;
 }
 
@@ -201,12 +203,20 @@ impl C2SPacketExt for C2SPacket {
         option_size
     }
 
-    fn serialize(&self) -> Result<Vec<u8>, std::io::Error> {
+    fn serialize(&self, session: Option<&SessionState>) -> Result<Vec<u8>, std::io::Error> {
         let mut buffer = Vec::new();
         {
             let mut cursor = Cursor::new(&mut buffer);
             self.write(&mut cursor)
                 .map_err(|e| std::io::Error::other(format!("Write error: {}", e)))?;
+        }
+
+        // If this is a fragmented packet with session established, set ENCRYPTED_CHECKSUM flag
+        if self.flags.contains(PacketHeaderFlags::BLOB_FRAGMENTS) && session.is_some() {
+            // Set the ENCRYPTED_CHECKSUM flag (0x2) in the flags field (bytes 4-7)
+            let mut flags = u32::from_le_bytes([buffer[4], buffer[5], buffer[6], buffer[7]]);
+            flags |= 0x2; // ENCRYPTED_CHECKSUM flag
+            buffer[4..8].copy_from_slice(&flags.to_le_bytes());
         }
 
         // Calculate option size before we modify the buffer
@@ -240,9 +250,14 @@ impl C2SPacketExt for C2SPacket {
                 checksum_result = checksum_result.wrapping_add(payload_checksum);
             }
 
-            // Step 3: XOR with seed if Checksum flag is set
-            // (Not needed for TimeSync - only for encrypted packets)
-            // This would be added here when we implement packet encryption
+            // Step 3: XOR with seed if this is a fragmented packet with session established
+            // Fragmented packets use encrypted checksums (ENCRYPTED_CHECKSUM flag 0x2)
+            if self.flags.contains(PacketHeaderFlags::BLOB_FRAGMENTS) {
+                if let Some(sess) = session {
+                    let encryption_key = sess.send_generator.borrow_mut().get_send_key();
+                    checksum_result ^= encryption_key;
+                }
+            }
         }
 
         // Step 4: Set header checksum to placeholder (0xbadd70dd)
@@ -378,8 +393,8 @@ impl Client {
         // When ClientId is 0, these should remain at their default values from packet construction
         // This affects checksum calculation!
 
-        // Serialize with checksum
-        let buffer = packet.serialize()?;
+        // Serialize with checksum (pass session for encryption key if fragmented)
+        let buffer = packet.serialize(self.session.as_ref())?;
 
         // Determine destination address
         let dest_addr = if packet.flags.contains(PacketHeaderFlags::CONNECT_RESPONSE) {
@@ -862,8 +877,8 @@ impl Client {
                 cookie: connect_req_packet.cookie,
                 client_id: connect_req_packet.net_id as u16, // Use net_id from payload - this is our session index!
                 table: packet.iteration, // Use iteration from packet header as table value
-                outgoing_seed: connect_req_packet.outgoing_seed,
-                incoming_seed: connect_req_packet.incoming_seed,
+                send_generator: RefCell::new(CryptoSystem::new(connect_req_packet.incoming_seed)), // Client->Server seed
+                recv_generator: RefCell::new(CryptoSystem::new(connect_req_packet.outgoing_seed)), // Server->Client seed
             });
 
             // Small delay to avoid race condition with server's async authentication
