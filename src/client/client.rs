@@ -230,6 +230,7 @@ pub struct Client {
     pub login_state: ClientLoginState,
     pub send_count: u32,
     pub recv_count: u32,
+    last_acked_to_server: u32, // Last sequence we ACKed to the server
     fragment_sequence: u32, // Counter for outgoing fragment sequences
     session: Option<SessionState>,
     pending_fragments: HashMap<u32, Fragment>, // Track incomplete fragment sequences
@@ -273,6 +274,7 @@ impl Client {
             login_state: ClientLoginState::NotLoggedIn,
             send_count: 0,
             recv_count: 0,
+            last_acked_to_server: 0,
             fragment_sequence: 1, // Start at 1 as per actestclient
             session: None,
             pending_fragments: HashMap::new(),
@@ -314,6 +316,110 @@ impl Client {
         while let Some(message) = self.outgoing_message_queue.pop_front() {
             self.send_outgoing_message(message).await?;
         }
+        Ok(())
+    }
+
+    /// Send keep-alive packet (ACK or TimeSync) to maintain connection
+    pub async fn send_keepalive(&mut self) -> Result<(), std::io::Error> {
+        // If we have received new sequences from server that we haven't ACKed, send ACK
+        if self.recv_count > self.last_acked_to_server && self.session.is_some() {
+            debug!(target: "net", "Sending ACK for sequence {}", self.recv_count);
+            self.send_ack(self.recv_count).await?;
+            self.last_acked_to_server = self.recv_count;
+        }
+        // Otherwise, send TimeSync to keep connection alive
+        else if self.session.is_some() {
+            debug!(target: "net", "Sending TimeSync keep-alive");
+            self.send_timesync().await?;
+        }
+        Ok(())
+    }
+
+    /// Send an ACK packet to acknowledge received server sequences
+    async fn send_ack(&mut self, ack_sequence: u32) -> Result<(), std::io::Error> {
+        let (client_id, table) = {
+            let session = self.session.as_ref().ok_or_else(|| {
+                std::io::Error::other("Session not established")
+            })?;
+            (session.client_id, session.table)
+        };
+
+        debug!(target: "net", "Creating ACK packet: client_id={}, table={}, ack_seq={}", client_id, table, ack_sequence);
+
+        // ACK packets don't increment send_count
+        let packet = C2SPacket {
+            sequence: self.send_count, // Use current send_count without incrementing
+            flags: PacketHeaderFlags::ACK_SEQUENCE,
+            checksum: 0,
+            recipient_id: client_id,
+            time_since_last_packet: 0,
+            size: 4, // ACK payload is just the u32 ack_sequence
+            iteration: table,
+            server_switch: None,
+            retransmit_sequences: None,
+            reject_sequences: None,
+            ack_sequence: Some(ack_sequence),
+            login_request: None,
+            world_login_request: None,
+            connect_response: None,
+            cicmd_command: None,
+            time: None,
+            echo_time: None,
+            flow: None,
+            fragments: None,
+        };
+
+        let buffer = packet.serialize()?;
+        // After connection, all packets with Id > 0 go to the login server port (9000), not world port
+        let login_addr = self.server.login_addr().await?;
+        debug!(target: "net", "Sending ACK to login server at {}", login_addr);
+        self.socket.send_to(&buffer, login_addr).await?;
+        Ok(())
+    }
+
+    /// Send a TimeSync packet to keep connection alive
+    async fn send_timesync(&mut self) -> Result<(), std::io::Error> {
+        let (client_id, table) = {
+            let session = self.session.as_ref().ok_or_else(|| {
+                std::io::Error::other("Session not established")
+            })?;
+            (session.client_id, session.table)
+        };
+
+        // Get current time as Unix timestamp (seconds since epoch)
+        let current_time = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_secs();
+
+        // TimeSync packets don't increment send_count
+        let packet = C2SPacket {
+            sequence: self.send_count, // Use current send_count without incrementing
+            flags: PacketHeaderFlags::TIME_SYNC,
+            checksum: 0,
+            recipient_id: client_id,
+            time_since_last_packet: 0,
+            size: 8, // TimeSync payload is a u64
+            iteration: table,
+            server_switch: None,
+            retransmit_sequences: None,
+            reject_sequences: None,
+            ack_sequence: None,
+            login_request: None,
+            world_login_request: None,
+            connect_response: None,
+            cicmd_command: None,
+            time: Some(current_time),
+            echo_time: None,
+            flow: None,
+            fragments: None,
+        };
+
+        let buffer = packet.serialize()?;
+        // After connection, all packets with Id > 0 go to the login server port (9000), not world port
+        let login_addr = self.server.login_addr().await?;
+        debug!(target: "net", "Sending TimeSync to login server at {}", login_addr);
+        self.socket.send_to(&buffer, login_addr).await?;
         Ok(())
     }
 
@@ -453,8 +559,9 @@ impl Client {
         debug!(target: "net", "Sending fragmented message: seq={}, frag_seq={}, size={}, checksum=0x{:08X}",
             packet_sequence, frag_sequence, buffer.len(), total_checksum);
 
-        // Send to login server (port 9000)
+        // After connection, all packets with Id > 0 go to the login server port (9000)
         let login_addr = self.server.login_addr().await?;
+        debug!(target: "net", "Sending fragmented message to login server at {}", login_addr);
         self.socket.send_to(&buffer, login_addr).await?;
         Ok(())
     }
@@ -667,6 +774,12 @@ impl Client {
 
         debug!(target: "net", "Received {} bytes from {}", size, peer);
 
+        // Track server's packet sequence (for ACKing back to server)
+        // Only update if this is a sequenced packet (sequence > 0) and it's newer than what we've seen
+        if packet.sequence > 0 && packet.sequence > self.recv_count {
+            self.recv_count = packet.sequence;
+        }
+
         let flags = packet.flags;
 
         if flags.contains(PacketHeaderFlags::CONNECT_REQUEST) {
@@ -678,13 +791,16 @@ impl Client {
 
             debug!(target: "net", "Received ConnectRequest from server");
             debug!(target: "net", "  Cookie: 0x{:016X}", connect_req_packet.cookie);
-            debug!(target: "net", "  Client ID: {}", connect_req_packet.net_id);
+            debug!(target: "net", "  Server ID from header: {}", packet.id);
+            debug!(target: "net", "  Client ID (our session index) from payload: {}", connect_req_packet.net_id);
 
             // Store session data from ConnectRequest
-            // Note: table/iteration comes from the packet header, not the ConnectRequest payload
+            // IMPORTANT: Use net_id from payload (our ClientId/session index), NOT packet.id (ServerId)!
+            // The server uses packet.Header.Id for the SERVER's ID, not ours
+            // Our session index is in the payload's net_id field
             self.session = Some(SessionState {
                 cookie: connect_req_packet.cookie,
-                client_id: connect_req_packet.net_id as u16,
+                client_id: connect_req_packet.net_id as u16, // Use net_id from payload - this is our session index!
                 table: packet.iteration, // Use iteration from packet header as table value
                 outgoing_seed: connect_req_packet.outgoing_seed,
                 incoming_seed: connect_req_packet.incoming_seed,
@@ -703,10 +819,11 @@ impl Client {
             let mut cursor = Cursor::new(&buffer[..size]);
             // Skip past the packet header to read the payload
             cursor.set_position(PACKET_HEADER_SIZE as u64);
-            let acked_seq = u32::read(&mut cursor).unwrap();
+            let _acked_seq = u32::read(&mut cursor).unwrap();
 
-            // Store the last acked sequence - we don't send a response to this
-            self.recv_count = acked_seq;
+            // Server is acknowledging our packets - we could track this to resend unacked packets
+            // For now, we just note that we received the ACK
+            // TODO: Track last_acked_by_server for retransmission logic
         }
 
         if flags.contains(PacketHeaderFlags::TIME_SYNC) {
