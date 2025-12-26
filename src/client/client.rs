@@ -17,6 +17,8 @@ pub enum PendingOutgoingMessage {
     CharacterCreationAce(String, crate::client::ace_protocol::AceCharGenResult),
     // Character login - sent when selecting a character to enter the game world
     EnterWorld(acprotocol::messages::c2s::LoginSendEnterWorld),
+    // GameAction message (raw bytes including opcode)
+    GameAction(Vec<u8>),
 }
 
 use acprotocol::network::packet::PacketHeader;
@@ -503,6 +505,26 @@ impl Client {
         Ok(())
     }
 
+    /// Send LoginComplete notification to server after receiving initial world state
+    fn send_login_complete_notification(&mut self) {
+        info!(target: "net", "Sending LoginComplete notification to server");
+
+        // Build the GameAction message (0x00A1 = Character_LoginCompleteNotification)
+        let mut message_data = Vec::new();
+        message_data.extend_from_slice(&0x00A1u32.to_le_bytes()); // GameAction opcode
+
+        // Queue for sending
+        self.outgoing_message_queue.push_back(PendingOutgoingMessage::GameAction(message_data));
+
+        // Emit LoginSucceeded event to update UI
+        let event = GameEvent::LoginSucceeded {
+            character_id: 0, // TODO: track current character ID
+            character_name: "".to_string(), // TODO: track current character name
+        };
+        let _ = self.event_tx.send(event);
+
+        info!(target: "net", "LoginComplete notification queued and event emitted");
+    }
 
     /// Send a TimeSync packet to keep connection alive
     /// Uses includeSequence=false, incrementSequence=false (sequence will be 0)
@@ -578,6 +600,10 @@ impl Client {
                         error!(target: "events", "Failed to attempt character login: {}", e);
                     }
                 }
+                ClientAction::SendLoginComplete => {
+                    debug!(target: "events", "Action: Sending LoginComplete notification to server");
+                    self.send_login_complete_notification();
+                }
             }
         }
     }
@@ -599,6 +625,9 @@ impl Client {
             }
             PendingOutgoingMessage::EnterWorld(enter_world) => {
                 self.send_enter_world_internal(enter_world).await
+            }
+            PendingOutgoingMessage::GameAction(message_data) => {
+                self.send_fragmented_message(message_data, FragmentGroup::Object).await
             }
         }
     }
@@ -825,6 +854,7 @@ impl Client {
                     S2CMessage::LoginLoginCharacterSet => self.handle_character_list(message),
                     S2CMessage::DDDInterrogationMessage => self.handle_ddd_interrogation(message),
                     S2CMessage::CharacterCharGenVerificationResponse => self.handle_character_gen_response(message),
+                    S2CMessage::ItemCreateObject => self.handle_create_object(message),
                     // Add more handlers as needed
                     _ => {
                         debug!(target: "net", "Unhandled S2CMessage: {:?} (0x{:04X})", msg_type, message.opcode);
@@ -981,6 +1011,36 @@ impl Client {
             }
             Err(e) => {
                 error!(target: "net", "Failed to parse DDD interrogation message: {}", e);
+            }
+        }
+    }
+
+    /// Handle CreateObject message from the server
+    fn handle_create_object(&mut self, message: RawMessage) {
+        debug!(target: "net", "Processing create object message");
+
+        // Parse the incoming message
+        // Note: message.data includes the opcode as the first 4 bytes, skip it
+        let mut cursor = Cursor::new(&message.data[4..]);
+        use acprotocol::messages::s2c::ItemCreateObject;
+        match ItemCreateObject::read(&mut cursor) {
+            Ok(create_obj) => {
+                let object_id = create_obj.object_id.0;
+                // Get object name from weenie description
+                let object_name = create_obj.weenie_description.name.clone();
+
+                info!(target: "net", "Object created in world: {} (ID: 0x{:08X})", object_name, object_id);
+
+                let event = GameEvent::CreateObject {
+                    object_id,
+                    object_name,
+                };
+
+                // Send on channel (ignore error if no subscribers)
+                let _ = self.event_tx.send(event);
+            }
+            Err(e) => {
+                error!(target: "net", "Failed to parse create object message: {}", e);
             }
         }
     }

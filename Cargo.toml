@@ -12,6 +12,7 @@ keywords = []
 categories = []
 
 license = "Apache-2.0"
+default-run = "gromnie"
 
 [lib]
 name = "gromnie"
@@ -19,6 +20,10 @@ path = "src/lib.rs"
 
 [[bin]]
 name = "gromnie"
+path = "src/bin/gromnie-tui.rs"
+
+[[bin]]
+name = "gromnie-cli"
 path = "src/bin/gromnie.rs"
 
 [dependencies]
@@ -33,5 +38,8 @@ strum_macros = "0.26.1"
 tokio = { version = "1.36.0", features = ["full"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+ratatui = { version = "0.28", features = ["serde"] }
+crossterm = "0.28"
+serde = { version = "1.0", features = ["derive"] }
 
 [dev-dependencies]
