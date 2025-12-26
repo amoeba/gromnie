@@ -1,14 +1,14 @@
 use clap::{Parser, Subcommand};
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
 use tracing::{error, info};
 use tracing_subscriber::EnvFilter;
-use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, Ordering};
 
-use gromnie::client::{Client, PendingOutgoingMessage};
-use gromnie::client::events::{GameEvent, ClientAction};
+use acprotocol::enums::{Gender, HeritageGroup};
 use acprotocol::messages::c2s::CharacterSendCharGenResult;
 use acprotocol::types::{CharGenResult, PackableList};
-use acprotocol::enums::{HeritageGroup, Gender};
+use gromnie::client::events::{ClientAction, GameEvent};
+use gromnie::client::{Client, PendingOutgoingMessage};
 
 #[derive(Parser)]
 #[command(version, about, long_about = None)]
@@ -61,7 +61,11 @@ async fn client_task(id: u32, address: String, account_name: String, password: S
 
         while let Ok(event) = event_rx.recv().await {
             match event {
-                GameEvent::CharacterListReceived { account, characters, num_slots } => {
+                GameEvent::CharacterListReceived {
+                    account,
+                    characters,
+                    num_slots,
+                } => {
                     info!(target: "events", "=== Character List Event ===");
                     info!(target: "events", "Account: {}", account);
                     info!(target: "events", "Slots: {}", num_slots);
@@ -84,7 +88,8 @@ async fn client_task(id: u32, address: String, account_name: String, password: S
                         character_created_clone.store(true, Ordering::SeqCst);
 
                         // Create a simple character with default values
-                        let char_name = format!("TestChar{}", chrono::Utc::now().timestamp() % 10000);
+                        let char_name =
+                            format!("TestChar{}", chrono::Utc::now().timestamp() % 10000);
 
                         let char_gen_result = CharGenResult {
                             account: account.clone(),
@@ -125,7 +130,7 @@ async fn client_task(id: u32, address: String, account_name: String, password: S
                                 list: vec![],
                             },
                             name: char_name.clone(),
-                            start_area: 0,  // Default starting area
+                            start_area: 0, // Default starting area
                             is_admin: 0,
                             is_envoy: 0,
                             validation: 0,
@@ -216,8 +221,7 @@ async fn main() -> Result<(), ()> {
     // Initialize tracing subscriber with env filter
     tracing_subscriber::fmt()
         .with_env_filter(
-            EnvFilter::try_from_default_env()
-                .unwrap_or_else(|_| EnvFilter::new("debug"))
+            EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("debug")),
         )
         .init();
 
