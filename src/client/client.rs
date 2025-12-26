@@ -306,6 +306,8 @@ impl Client {
             let mut cursor = Cursor::new(&buffer[..size]);
             let connect_req_packet = ConnectRequestHeader::read(&mut cursor).unwrap();
 
+            debug!(target: "net", "Received ConnectRequest from server");
+
             // Store session data from ConnectRequest
             // Note: table/iteration comes from the packet header, not the ConnectRequest payload
             self.session = Some(SessionState {
@@ -459,7 +461,8 @@ impl Client {
         // 3. Write final checksum back
         buffer[CHECKSUM_OFFSET..CHECKSUM_OFFSET + 4].copy_from_slice(&checksum.to_le_bytes());
 
-        debug!(target: "net", "Sending LoginRequest with data: {:2X?}", buffer);
+        debug!(target: "net", "Sending LoginRequest for account: {}", self.account.name);
+        debug!(target: "net", "LoginRequest data: {:2X?}", buffer);
 
         // Send to login server port (9000)
         let login_addr = format!("{}:{}", self.server.host, self.server.login_port);
@@ -519,7 +522,8 @@ impl Client {
         // Serialize packet with checksum
         let buffer = packet.serialize()?;
 
-        debug!(target: "net", "Sending ConnectResponse with data: {:2X?}", buffer);
+        debug!(target: "net", "Sending ConnectResponse to complete handshake");
+        debug!(target: "net", "ConnectResponse data: {:2X?}", buffer);
 
         // CRITICAL: ConnectResponse must be sent to world server port (9001), not login port (9000)
         // This matches the C# client behavior where ConnectResponse uses "ReadAddress"
