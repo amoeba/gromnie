@@ -344,7 +344,7 @@ impl Client {
 
     /// Handle a single parsed message
     fn handle_message(&mut self, message: RawMessage) {
-        debug!(target: "net", "Received message: {} (0x{:04X})", message.message_type, message.opcode);
+        debug!(target: "net", "Received message: {} (0x{:08X})", message.message_type, message.opcode);
 
         match S2CMessage::try_from(message.opcode) {
             Ok(msg_type) => {
@@ -368,7 +368,9 @@ impl Client {
         debug!(target: "net", "Processing character list message");
 
         // Parse using acprotocol's generated parser
-        let mut cursor = Cursor::new(&message.data);
+        // Note: message.data includes the opcode as the first 4 bytes, skip it
+        let payload = &message.data[4..];
+        let mut cursor = Cursor::new(payload);
         match LoginLoginCharacterSet::read(&mut cursor) {
             Ok(char_list) => {
                 info!(target: "net", "=== Character List for Account: {} ===", char_list.account);
@@ -399,7 +401,8 @@ impl Client {
         debug!(target: "net", "Processing DDD interrogation message");
 
         // Parse the incoming message
-        let mut cursor = Cursor::new(&message.data);
+        // Note: message.data includes the opcode as the first 4 bytes, skip it
+        let mut cursor = Cursor::new(&message.data[4..]);
         match DDDInterrogationMessage::read(&mut cursor) {
             Ok(ddd_msg) => {
                 info!(target: "net", "Received DDD Interrogation - Language: {}, Region: {}, Product: {}",
