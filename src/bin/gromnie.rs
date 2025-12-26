@@ -74,6 +74,13 @@ async fn client_task(id: u32, address: String, account_name: String, password: S
                 if client.has_messages() {
                     client.process_messages();
                 }
+
+                // Check for and send any pending outgoing messages
+                if client.has_pending_outgoing_messages() {
+                    if let Err(e) = client.send_pending_messages().await {
+                        error!("Failed to send pending messages: {}", e);
+                    }
+                }
             }
             Err(e) => {
                 error!("Error in receive loop: {}", e);
