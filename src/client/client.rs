@@ -3,8 +3,8 @@ use std::io::Cursor;
 use std::net::SocketAddr;
 
 use acprotocol::enums::{AuthFlags, PacketHeaderFlags, S2CMessage};
-use acprotocol::messages::s2c::{LoginLoginCharacterSet, DDDInterrogationMessage};
-use acprotocol::messages::c2s::{DDDInterrogationResponseMessage, CharacterSendCharGenResult};
+use acprotocol::messages::c2s::{CharacterSendCharGenResult, DDDInterrogationResponseMessage};
+use acprotocol::messages::s2c::{DDDInterrogationMessage, LoginLoginCharacterSet};
 use tokio::sync::{broadcast, mpsc};
 
 /// Enum for outgoing messages to be sent in the network loop
@@ -14,19 +14,17 @@ pub enum PendingOutgoingMessage {
     CharacterCreation(CharacterSendCharGenResult),
 }
 
-use acprotocol::network::{Fragment, RawMessage};
 use acprotocol::network::packet::PacketHeader;
+use acprotocol::network::{Fragment, RawMessage};
 use acprotocol::packets::c2s_packet::C2SPacket;
 use acprotocol::packets::s2c_packet::S2CPacket;
 use acprotocol::readers::ACDataType;
 use acprotocol::types::{ConnectRequestHeader, PackableList};
-use acprotocol::writers::{
-    write_i32, write_string, write_u32, ACWritable, ACWriter,
-};
+use acprotocol::writers::{write_i32, write_string, write_u32, ACWritable, ACWriter};
 use tokio::net::UdpSocket;
 use tracing::{debug, error, info, warn};
 
-use crate::client::events::{GameEvent, ClientAction};
+use crate::client::events::{ClientAction, GameEvent};
 use crate::crypto::magic_number::get_magic_number;
 
 // Protocol constants
@@ -38,8 +36,8 @@ const CHECKSUM_OFFSET: usize = 8;
 #[derive(Clone, Debug)]
 pub struct ServerInfo {
     pub host: String,
-    pub login_port: u16,  // Port 9000 - for LoginRequest and most traffic
-    pub world_port: u16,  // Port 9001 - for ConnectResponse and game data
+    pub login_port: u16, // Port 9000 - for LoginRequest and most traffic
+    pub world_port: u16, // Port 9001 - for ConnectResponse and game data
 }
 
 impl ServerInfo {
@@ -63,7 +61,12 @@ impl ServerInfo {
         tokio::net::lookup_host(addr)
             .await?
             .find(|a| a.is_ipv4())
-            .ok_or_else(|| std::io::Error::new(std::io::ErrorKind::NotFound, "Could not resolve IPv4 address"))
+            .ok_or_else(|| {
+                std::io::Error::new(
+                    std::io::ErrorKind::NotFound,
+                    "Could not resolve IPv4 address",
+                )
+            })
     }
 
     /// Get the world server address for sending ConnectResponse
@@ -72,7 +75,12 @@ impl ServerInfo {
         tokio::net::lookup_host(addr)
             .await?
             .find(|a| a.is_ipv4())
-            .ok_or_else(|| std::io::Error::new(std::io::ErrorKind::NotFound, "Could not resolve IPv4 address"))
+            .ok_or_else(|| {
+                std::io::Error::new(
+                    std::io::ErrorKind::NotFound,
+                    "Could not resolve IPv4 address",
+                )
+            })
     }
 }
 
@@ -209,8 +217,6 @@ struct Account {
     password: String,
 }
 
-
-
 // TODO: Don't require both bind_address and connect_address. I had to do this
 // to get things to work but I should be able to listen on any random port so
 // I'm not sure what I'm doing wrong
@@ -224,15 +230,24 @@ pub struct Client {
     pub send_count: u32,
     pub recv_count: u32,
     session: Option<SessionState>,
-    pending_fragments: HashMap<u32, Fragment>,  // Track incomplete fragment sequences
-    message_queue: VecDeque<RawMessage>,        // Queue of parsed messages to process
-    outgoing_message_queue: VecDeque<PendingOutgoingMessage>,  // Queue of messages to send
-    event_tx: broadcast::Sender<GameEvent>,     // Broadcast events to handlers
-    action_rx: mpsc::UnboundedReceiver<ClientAction>,  // Receive actions from handlers
+    pending_fragments: HashMap<u32, Fragment>, // Track incomplete fragment sequences
+    message_queue: VecDeque<RawMessage>,       // Queue of parsed messages to process
+    outgoing_message_queue: VecDeque<PendingOutgoingMessage>, // Queue of messages to send
+    event_tx: broadcast::Sender<GameEvent>,    // Broadcast events to handlers
+    action_rx: mpsc::UnboundedReceiver<ClientAction>, // Receive actions from handlers
 }
 
 impl Client {
-    pub async fn new(id: u32, address: String, name: String, password: String) -> (Client, broadcast::Receiver<GameEvent>, mpsc::UnboundedSender<ClientAction>) {
+    pub async fn new(
+        id: u32,
+        address: String,
+        name: String,
+        password: String,
+    ) -> (
+        Client,
+        broadcast::Receiver<GameEvent>,
+        mpsc::UnboundedSender<ClientAction>,
+    ) {
         let sok = UdpSocket::bind("0.0.0.0:0").await.unwrap();
 
         // Parse address to extract host and port
@@ -322,7 +337,10 @@ impl Client {
     }
 
     /// Send a single outgoing message
-    async fn send_outgoing_message(&mut self, message: PendingOutgoingMessage) -> Result<(), std::io::Error> {
+    async fn send_outgoing_message(
+        &mut self,
+        message: PendingOutgoingMessage,
+    ) -> Result<(), std::io::Error> {
         match message {
             PendingOutgoingMessage::DDDInterrogationResponse(response) => {
                 self.send_ddd_response_internal(response).await
@@ -334,7 +352,10 @@ impl Client {
     }
 
     /// Send a DDD interrogation response to the login server
-    async fn send_ddd_response_internal(&mut self, response: DDDInterrogationResponseMessage) -> Result<(), std::io::Error> {
+    async fn send_ddd_response_internal(
+        &mut self,
+        response: DDDInterrogationResponseMessage,
+    ) -> Result<(), std::io::Error> {
         info!(target: "net", "Sending DDD Interrogation Response - Language: {}, Files: {:?}",
             response.language, response.files.list);
 
@@ -342,7 +363,8 @@ impl Client {
         let mut payload_buffer = Vec::new();
         {
             let mut payload_cursor = Cursor::new(&mut payload_buffer);
-            response.write(&mut payload_cursor)
+            response
+                .write(&mut payload_cursor)
                 .map_err(|e| std::io::Error::other(format!("Write error: {}", e)))?;
         }
 
@@ -360,18 +382,19 @@ impl Client {
         };
         let sequence = self.next_sequence();
         buffer.extend_from_slice(&sequence.to_le_bytes());
-        buffer.extend_from_slice(&0u32.to_le_bytes());  // flags
-        buffer.extend_from_slice(&0u32.to_le_bytes());  // checksum placeholder
-        buffer.extend_from_slice(&client_id.to_le_bytes());  // recipient_id
-        buffer.extend_from_slice(&0u16.to_le_bytes());  // time_since_last_packet
-        buffer.extend_from_slice(&(payload_size as u16).to_le_bytes());  // size
-        buffer.extend_from_slice(&table.to_le_bytes());  // iteration
+        buffer.extend_from_slice(&0u32.to_le_bytes()); // flags
+        buffer.extend_from_slice(&0u32.to_le_bytes()); // checksum placeholder
+        buffer.extend_from_slice(&client_id.to_le_bytes()); // recipient_id
+        buffer.extend_from_slice(&0u16.to_le_bytes()); // time_since_last_packet
+        buffer.extend_from_slice(&(payload_size as u16).to_le_bytes()); // size
+        buffer.extend_from_slice(&table.to_le_bytes()); // iteration
 
         // Append payload
         buffer.extend_from_slice(&payload_buffer);
 
         // Compute checksum
-        buffer[CHECKSUM_OFFSET..CHECKSUM_OFFSET + 4].copy_from_slice(&CHECKSUM_PLACEHOLDER.to_le_bytes());
+        buffer[CHECKSUM_OFFSET..CHECKSUM_OFFSET + 4]
+            .copy_from_slice(&CHECKSUM_PLACEHOLDER.to_le_bytes());
         let checksum1 = get_magic_number(&buffer[0..PACKET_HEADER_SIZE], PACKET_HEADER_SIZE, true);
         let checksum2 = get_magic_number(&payload_buffer, payload_size, true);
         let checksum = checksum1.wrapping_add(checksum2);
@@ -385,7 +408,10 @@ impl Client {
     }
 
     /// Send character creation request to the login server
-    async fn send_character_creation_internal(&mut self, char_gen: CharacterSendCharGenResult) -> Result<(), std::io::Error> {
+    async fn send_character_creation_internal(
+        &mut self,
+        char_gen: CharacterSendCharGenResult,
+    ) -> Result<(), std::io::Error> {
         info!(target: "net", "Sending Character Creation - Name: {}", char_gen.result.name);
 
         // Serialize the character creation message with opcode prefix
@@ -396,7 +422,8 @@ impl Client {
             write_u32(&mut payload_cursor, 0xF656)
                 .map_err(|e| std::io::Error::other(format!("Write error: {}", e)))?;
             // Then write the message payload
-            char_gen.write(&mut payload_cursor)
+            char_gen
+                .write(&mut payload_cursor)
                 .map_err(|e| std::io::Error::other(format!("Write error: {}", e)))?;
         }
 
@@ -410,18 +437,19 @@ impl Client {
         };
         let sequence = self.next_sequence();
         buffer.extend_from_slice(&sequence.to_le_bytes());
-        buffer.extend_from_slice(&0u32.to_le_bytes());  // flags
-        buffer.extend_from_slice(&0u32.to_le_bytes());  // checksum placeholder
-        buffer.extend_from_slice(&client_id.to_le_bytes());  // recipient_id
-        buffer.extend_from_slice(&0u16.to_le_bytes());  // time_since_last_packet
-        buffer.extend_from_slice(&(payload_size as u16).to_le_bytes());  // size
-        buffer.extend_from_slice(&table.to_le_bytes());  // iteration
+        buffer.extend_from_slice(&0u32.to_le_bytes()); // flags
+        buffer.extend_from_slice(&0u32.to_le_bytes()); // checksum placeholder
+        buffer.extend_from_slice(&client_id.to_le_bytes()); // recipient_id
+        buffer.extend_from_slice(&0u16.to_le_bytes()); // time_since_last_packet
+        buffer.extend_from_slice(&(payload_size as u16).to_le_bytes()); // size
+        buffer.extend_from_slice(&table.to_le_bytes()); // iteration
 
         // Append payload
         buffer.extend_from_slice(&payload_buffer);
 
         // Compute checksum
-        buffer[CHECKSUM_OFFSET..CHECKSUM_OFFSET + 4].copy_from_slice(&CHECKSUM_PLACEHOLDER.to_le_bytes());
+        buffer[CHECKSUM_OFFSET..CHECKSUM_OFFSET + 4]
+            .copy_from_slice(&CHECKSUM_PLACEHOLDER.to_le_bytes());
         let checksum1 = get_magic_number(&buffer[0..PACKET_HEADER_SIZE], PACKET_HEADER_SIZE, true);
         let checksum2 = get_magic_number(&payload_buffer, payload_size, true);
         let checksum = checksum1.wrapping_add(checksum2);
@@ -484,13 +512,18 @@ impl Client {
 
                 // Emit event to broadcast channel
                 use crate::client::events::CharacterInfo;
-                let characters = char_list.characters.list.iter().map(|c| {
-                    CharacterInfo {
-                        name: c.name.clone(),
-                        id: c.character_id.0,  // Extract u32 from ObjectId wrapper
-                        delete_pending: c.seconds_greyed_out > 0,
-                    }
-                }).collect();
+                let characters = char_list
+                    .characters
+                    .list
+                    .iter()
+                    .map(|c| {
+                        CharacterInfo {
+                            name: c.name.clone(),
+                            id: c.character_id.0, // Extract u32 from ObjectId wrapper
+                            delete_pending: c.seconds_greyed_out > 0,
+                        }
+                    })
+                    .collect();
 
                 let event = GameEvent::CharacterListReceived {
                     account: char_list.account.clone(),
@@ -530,7 +563,8 @@ impl Client {
                 };
 
                 // Queue the response to be sent in the next send cycle
-                self.outgoing_message_queue.push_back(PendingOutgoingMessage::DDDInterrogationResponse(response));
+                self.outgoing_message_queue
+                    .push_back(PendingOutgoingMessage::DDDInterrogationResponse(response));
                 info!(target: "net", "DDD response queued for sending");
             }
             Err(e) => {
@@ -551,11 +585,10 @@ impl Client {
         let chunk_size = blob_fragment.data.len();
 
         // Get or create Fragment for this sequence
-        let fragment = self.pending_fragments
+        let fragment = self
+            .pending_fragments
             .entry(sequence)
-            .or_insert_with(|| {
-                Fragment::new(sequence, count)
-            });
+            .or_insert_with(|| Fragment::new(sequence, count));
 
         // Set size and group metadata
         fragment.set_fragment_info(blob_fragment.size, blob_fragment.group as u16);
@@ -586,7 +619,6 @@ impl Client {
     }
 
     pub async fn process_packet(&mut self, buffer: &[u8], size: usize, peer: &SocketAddr) {
-
         // Pull out TransitHeader first and inspect
         let mut cursor = std::io::Cursor::new(buffer);
         let packet = PacketHeader::read(&mut cursor).unwrap();
@@ -611,7 +643,7 @@ impl Client {
             self.session = Some(SessionState {
                 cookie: connect_req_packet.cookie,
                 client_id: connect_req_packet.net_id as u16,
-                table: packet.iteration,  // Use iteration from packet header as table value
+                table: packet.iteration, // Use iteration from packet header as table value
                 outgoing_seed: connect_req_packet.outgoing_seed,
                 incoming_seed: connect_req_packet.incoming_seed,
             });
@@ -730,7 +762,8 @@ impl Client {
         let mut payload_buffer = Vec::new();
         {
             let mut payload_cursor = Cursor::new(&mut payload_buffer);
-            login_request.write(&mut payload_cursor)
+            login_request
+                .write(&mut payload_cursor)
                 .map_err(|e| std::io::Error::other(format!("Write error: {}", e)))?;
         }
 
@@ -741,20 +774,21 @@ impl Client {
 
         // Write packet header
         let sequence = self.next_sequence();
-        buffer.extend_from_slice(&sequence.to_le_bytes());                      // sequence (4)
-        buffer.extend_from_slice(&0x00010000u32.to_le_bytes());                 // flags: LOGIN_REQUEST (4)
-        buffer.extend_from_slice(&0u32.to_le_bytes());                          // checksum placeholder (4)
-        buffer.extend_from_slice(&0u16.to_le_bytes());                          // recipient_id (2)
-        buffer.extend_from_slice(&0u16.to_le_bytes());                          // time_since_last_packet (2)
-        buffer.extend_from_slice(&(payload_size as u16).to_le_bytes());         // size (2)
-        buffer.extend_from_slice(&0u16.to_le_bytes());                          // iteration (2)
+        buffer.extend_from_slice(&sequence.to_le_bytes()); // sequence (4)
+        buffer.extend_from_slice(&0x00010000u32.to_le_bytes()); // flags: LOGIN_REQUEST (4)
+        buffer.extend_from_slice(&0u32.to_le_bytes()); // checksum placeholder (4)
+        buffer.extend_from_slice(&0u16.to_le_bytes()); // recipient_id (2)
+        buffer.extend_from_slice(&0u16.to_le_bytes()); // time_since_last_packet (2)
+        buffer.extend_from_slice(&(payload_size as u16).to_le_bytes()); // size (2)
+        buffer.extend_from_slice(&0u16.to_le_bytes()); // iteration (2)
 
         // Append payload
         buffer.extend_from_slice(&payload_buffer);
 
         // Compute checksum like C# does:
         // 1. Set checksum field to placeholder
-        buffer[CHECKSUM_OFFSET..CHECKSUM_OFFSET + 4].copy_from_slice(&CHECKSUM_PLACEHOLDER.to_le_bytes());
+        buffer[CHECKSUM_OFFSET..CHECKSUM_OFFSET + 4]
+            .copy_from_slice(&CHECKSUM_PLACEHOLDER.to_le_bytes());
 
         // 2. Checksum header + payload
         let checksum1 = get_magic_number(&buffer[0..PACKET_HEADER_SIZE], PACKET_HEADER_SIZE, true);
@@ -772,7 +806,12 @@ impl Client {
         let login_sockaddr = tokio::net::lookup_host(&login_addr)
             .await?
             .find(|addr| addr.is_ipv4())
-            .ok_or_else(|| std::io::Error::new(std::io::ErrorKind::NotFound, "Could not resolve IPv4 address"))?;
+            .ok_or_else(|| {
+                std::io::Error::new(
+                    std::io::ErrorKind::NotFound,
+                    "Could not resolve IPv4 address",
+                )
+            })?;
         match self.socket.send_to(&buffer, login_sockaddr).await {
             Ok(_) => {}
             Err(e) => {
@@ -801,13 +840,13 @@ impl Client {
         // Create C2SPacket with ConnectResponse
         // NOTE: We use sequence 0 and increment manually per C# code (includeSequence=false, incrementSequence=false)
         let packet = C2SPacket {
-            sequence: 0,  // ConnectResponse doesn't use sequence numbers
+            sequence: 0, // ConnectResponse doesn't use sequence numbers
             flags: PacketHeaderFlags::CONNECT_RESPONSE,
             checksum: 0,
-            recipient_id: client_id,  // Must match the ClientId from ConnectRequest
+            recipient_id: client_id, // Must match the ClientId from ConnectRequest
             time_since_last_packet: 0,
             size: payload_size,
-            iteration: table,  // Must match the Table value from ConnectRequest header
+            iteration: table, // Must match the Table value from ConnectRequest header
             server_switch: None,
             retransmit_sequences: None,
             reject_sequences: None,
@@ -836,7 +875,12 @@ impl Client {
         let world_sockaddr = tokio::net::lookup_host(&world_addr)
             .await?
             .find(|addr| addr.is_ipv4())
-            .ok_or_else(|| std::io::Error::new(std::io::ErrorKind::NotFound, "Could not resolve IPv4 address"))?;
+            .ok_or_else(|| {
+                std::io::Error::new(
+                    std::io::ErrorKind::NotFound,
+                    "Could not resolve IPv4 address",
+                )
+            })?;
         match self.socket.send_to(&buffer, world_sockaddr).await {
             Ok(_) => {}
             Err(e) => {
@@ -884,7 +928,12 @@ impl Client {
         let login_sockaddr = tokio::net::lookup_host(&login_addr)
             .await?
             .find(|addr| addr.is_ipv4())
-            .ok_or_else(|| std::io::Error::new(std::io::ErrorKind::NotFound, "Could not resolve IPv4 address"))?;
+            .ok_or_else(|| {
+                std::io::Error::new(
+                    std::io::ErrorKind::NotFound,
+                    "Could not resolve IPv4 address",
+                )
+            })?;
         match self.socket.send_to(&buffer, login_sockaddr).await {
             Ok(_) => {}
             Err(e) => {
