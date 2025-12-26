@@ -4,11 +4,14 @@ use std::net::SocketAddr;
 
 use acprotocol::enums::{AuthFlags, PacketHeaderFlags, S2CMessage};
 use acprotocol::messages::s2c::{LoginLoginCharacterSet, DDDInterrogationMessage};
-use acprotocol::messages::c2s::DDDInterrogationResponseMessage;
+use acprotocol::messages::c2s::{DDDInterrogationResponseMessage, CharacterSendCharGenResult};
+use tokio::sync::{broadcast, mpsc};
 
 /// Enum for outgoing messages to be sent in the network loop
+#[derive(Debug)]
 pub enum PendingOutgoingMessage {
     DDDInterrogationResponse(DDDInterrogationResponseMessage),
+    CharacterCreation(CharacterSendCharGenResult),
 }
 
 use acprotocol::network::{Fragment, RawMessage};
@@ -23,6 +26,7 @@ use acprotocol::writers::{
 use tokio::net::UdpSocket;
 use tracing::{debug, error, info, warn};
 
+use crate::client::events::{GameEvent, ClientAction};
 use crate::crypto::magic_number::get_magic_number;
 
 // Protocol constants
@@ -223,10 +227,12 @@ pub struct Client {
     pending_fragments: HashMap<u32, Fragment>,  // Track incomplete fragment sequences
     message_queue: VecDeque<RawMessage>,        // Queue of parsed messages to process
     outgoing_message_queue: VecDeque<PendingOutgoingMessage>,  // Queue of messages to send
+    event_tx: broadcast::Sender<GameEvent>,     // Broadcast events to handlers
+    action_rx: mpsc::UnboundedReceiver<ClientAction>,  // Receive actions from handlers
 }
 
 impl Client {
-    pub async fn new(id: u32, address: String, name: String, password: String) -> Client {
+    pub async fn new(id: u32, address: String, name: String, password: String) -> (Client, broadcast::Receiver<GameEvent>, mpsc::UnboundedSender<ClientAction>) {
         let sok = UdpSocket::bind("0.0.0.0:0").await.unwrap();
 
         // Parse address to extract host and port
@@ -234,7 +240,14 @@ impl Client {
         let host = parts[0].to_string();
         let login_port = parts.get(1).and_then(|p| p.parse().ok()).unwrap_or(9000);
 
-        Client {
+        // Create channels for event system
+        // Event channel: Client broadcasts events to handlers
+        let (event_tx, event_rx) = broadcast::channel(100);
+
+        // Action channel: Handlers send actions back to client
+        let (action_tx, action_rx) = mpsc::unbounded_channel();
+
+        let client = Client {
             id,
             server: ServerInfo::new(host, login_port),
             account: Account { name, password },
@@ -247,7 +260,11 @@ impl Client {
             pending_fragments: HashMap::new(),
             message_queue: VecDeque::new(),
             outgoing_message_queue: VecDeque::new(),
-        }
+            event_tx,
+            action_rx,
+        };
+
+        (client, event_rx, action_tx)
     }
 
     /// Get the next sequence number for outgoing packets and increment the counter
@@ -282,11 +299,36 @@ impl Client {
         Ok(())
     }
 
+    /// Get a new subscriber to client events
+    pub fn subscribe_events(&self) -> broadcast::Receiver<GameEvent> {
+        self.event_tx.subscribe()
+    }
+
+    /// Process actions sent from event handlers
+    pub fn process_actions(&mut self) {
+        // Process all pending actions without blocking
+        while let Ok(action) = self.action_rx.try_recv() {
+            match action {
+                ClientAction::SendMessage(msg) => {
+                    debug!(target: "events", "Action: Enqueueing message from event handler");
+                    self.outgoing_message_queue.push_back(msg);
+                }
+                ClientAction::Disconnect => {
+                    info!(target: "events", "Action: Disconnecting");
+                    self.connect_state = ClientConnectState::Disconnected;
+                }
+            }
+        }
+    }
+
     /// Send a single outgoing message
     async fn send_outgoing_message(&mut self, message: PendingOutgoingMessage) -> Result<(), std::io::Error> {
         match message {
             PendingOutgoingMessage::DDDInterrogationResponse(response) => {
                 self.send_ddd_response_internal(response).await
+            }
+            PendingOutgoingMessage::CharacterCreation(char_gen) => {
+                self.send_character_creation_internal(char_gen).await
             }
         }
     }
@@ -342,6 +384,56 @@ impl Client {
         Ok(())
     }
 
+    /// Send character creation request to the login server
+    async fn send_character_creation_internal(&mut self, char_gen: CharacterSendCharGenResult) -> Result<(), std::io::Error> {
+        info!(target: "net", "Sending Character Creation - Name: {}", char_gen.result.name);
+
+        // Serialize the character creation message with opcode prefix
+        let mut payload_buffer = Vec::new();
+        {
+            let mut payload_cursor = Cursor::new(&mut payload_buffer);
+            // Write opcode first (0xF656 = Character_SendCharGenResult)
+            write_u32(&mut payload_cursor, 0xF656)
+                .map_err(|e| std::io::Error::other(format!("Write error: {}", e)))?;
+            // Then write the message payload
+            char_gen.write(&mut payload_cursor)
+                .map_err(|e| std::io::Error::other(format!("Write error: {}", e)))?;
+        }
+
+        let payload_size = payload_buffer.len();
+        let mut buffer = Vec::with_capacity(PACKET_HEADER_SIZE + payload_size);
+
+        // Write packet header
+        let (client_id, table) = {
+            let session = self.session.as_ref().expect("Session not established");
+            (session.client_id, session.table)
+        };
+        let sequence = self.next_sequence();
+        buffer.extend_from_slice(&sequence.to_le_bytes());
+        buffer.extend_from_slice(&0u32.to_le_bytes());  // flags
+        buffer.extend_from_slice(&0u32.to_le_bytes());  // checksum placeholder
+        buffer.extend_from_slice(&client_id.to_le_bytes());  // recipient_id
+        buffer.extend_from_slice(&0u16.to_le_bytes());  // time_since_last_packet
+        buffer.extend_from_slice(&(payload_size as u16).to_le_bytes());  // size
+        buffer.extend_from_slice(&table.to_le_bytes());  // iteration
+
+        // Append payload
+        buffer.extend_from_slice(&payload_buffer);
+
+        // Compute checksum
+        buffer[CHECKSUM_OFFSET..CHECKSUM_OFFSET + 4].copy_from_slice(&CHECKSUM_PLACEHOLDER.to_le_bytes());
+        let checksum1 = get_magic_number(&buffer[0..PACKET_HEADER_SIZE], PACKET_HEADER_SIZE, true);
+        let checksum2 = get_magic_number(&payload_buffer, payload_size, true);
+        let checksum = checksum1.wrapping_add(checksum2);
+        buffer[CHECKSUM_OFFSET..CHECKSUM_OFFSET + 4].copy_from_slice(&checksum.to_le_bytes());
+
+        // Send to login server (port 9000)
+        let login_addr = self.server.login_addr().await?;
+        self.socket.send_to(&buffer, login_addr).await?;
+        info!(target: "net", "Character creation request sent successfully");
+        Ok(())
+    }
+
     /// Handle a single parsed message
     fn handle_message(&mut self, message: RawMessage) {
         debug!(target: "net", "Received message: {} (0x{:08X})", message.message_type, message.opcode);
@@ -389,6 +481,25 @@ impl Client {
                 if !char_list.deleted_characters.list.is_empty() {
                     info!(target: "net", "Characters pending deletion: {}", char_list.deleted_characters.list.len());
                 }
+
+                // Emit event to broadcast channel
+                use crate::client::events::CharacterInfo;
+                let characters = char_list.characters.list.iter().map(|c| {
+                    CharacterInfo {
+                        name: c.name.clone(),
+                        id: c.character_id.0,  // Extract u32 from ObjectId wrapper
+                        delete_pending: c.seconds_greyed_out > 0,
+                    }
+                }).collect();
+
+                let event = GameEvent::CharacterListReceived {
+                    account: char_list.account.clone(),
+                    characters,
+                    num_slots: char_list.num_allowed_characters,
+                };
+
+                // Send on channel (ignore error if no subscribers)
+                let _ = self.event_tx.send(event);
             }
             Err(e) => {
                 error!(target: "net", "Failed to parse character list: {}", e);
