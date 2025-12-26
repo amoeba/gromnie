@@ -70,6 +70,14 @@ pub enum NetworkMessage {
     },
 }
 
+/// A chat message to display in the chat window
+#[derive(Debug, Clone)]
+pub struct ChatMessage {
+    pub text: String,
+    pub message_type: u32,
+    pub timestamp: chrono::DateTime<chrono::Utc>,
+}
+
 pub struct App {
     pub should_quit: bool,
     pub current_view: AppView,
@@ -81,6 +89,13 @@ pub struct App {
     pub action_tx: Option<mpsc::UnboundedSender<ClientAction>>,
     /// Currently selected character index in the character list
     pub selected_character_index: usize,
+    /// Chat messages received from the server
+    pub chat_messages: VecDeque<ChatMessage>,
+    pub max_chat_messages: usize,
+    /// Current chat input text being typed by the user
+    pub chat_input: String,
+    /// Whether the chat input is focused (user is typing)
+    pub chat_input_focused: bool,
 }
 
 impl App {
@@ -97,6 +112,10 @@ impl App {
             event_rx: None,
             action_tx: None,
             selected_character_index: 0,
+            chat_messages: VecDeque::new(),
+            max_chat_messages: 100,
+            chat_input: String::new(),
+            chat_input_focused: false,
         }
     }
 
@@ -259,6 +278,47 @@ impl App {
                     timestamp: chrono::Utc::now(),
                 });
             }
+            GameEvent::ChatMessageReceived { message, message_type } => {
+                // Add chat message to the list
+                self.add_chat_message(ChatMessage {
+                    text: message.clone(),
+                    message_type,
+                    timestamp: chrono::Utc::now(),
+                });
+
+                self.add_network_message(NetworkMessage::Received {
+                    opcode: "0xF7E0".to_string(),
+                    description: format!("Chat (type {}): {}", message_type, message),
+                    timestamp: chrono::Utc::now(),
+                });
+            }
+            GameEvent::NetworkMessage { direction, message_type } => {
+                // Add all network messages to the debug view
+                use crate::client::events::MessageDirection;
+                match direction {
+                    MessageDirection::Received => {
+                        self.add_network_message(NetworkMessage::Received {
+                            opcode: "".to_string(),
+                            description: message_type,
+                            timestamp: chrono::Utc::now(),
+                        });
+                    }
+                    MessageDirection::Sent => {
+                        self.add_network_message(NetworkMessage::Sent {
+                            opcode: "".to_string(),
+                            description: message_type,
+                            timestamp: chrono::Utc::now(),
+                        });
+                    }
+                }
+            }
+        }
+    }
+
+    pub fn add_chat_message(&mut self, message: ChatMessage) {
+        self.chat_messages.push_back(message);
+        if self.chat_messages.len() > self.max_chat_messages {
+            self.chat_messages.pop_front();
         }
     }
 }

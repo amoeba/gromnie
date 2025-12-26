@@ -526,6 +526,33 @@ impl Client {
         info!(target: "net", "LoginComplete notification queued and event emitted");
     }
 
+    /// Send a chat message to the server
+    /// For now, this sends a Tell message to "admin" as a simple test
+    /// TODO: Parse message for @tell, /say, etc. commands
+    fn send_chat_message(&mut self, message: String) {
+        info!(target: "net", "Sending chat message: {}", message);
+
+        // Build the GameAction::Tell message (0x005D)
+        // Format: opcode (u32) + message (String) + target (String)
+        let mut message_data = Vec::new();
+        {
+            let mut cursor = Cursor::new(&mut message_data);
+
+            // Write GameAction opcode (Tell = 0x005D)
+            write_u32(&mut cursor, 0x005D).expect("Failed to write opcode");
+
+            // Write message text (AC string format)
+            write_string(&mut cursor, &message).expect("Failed to write message");
+
+            // Write target name (AC string format) - for now, send to "admin"
+            write_string(&mut cursor, "admin").expect("Failed to write target");
+        }
+
+        // Queue for sending
+        self.outgoing_message_queue.push_back(PendingOutgoingMessage::GameAction(message_data));
+        info!(target: "net", "Chat message queued for sending");
+    }
+
     /// Send a TimeSync packet to keep connection alive
     /// Uses includeSequence=false, incrementSequence=false (sequence will be 0)
     async fn send_timesync(&mut self) -> Result<(), std::io::Error> {
@@ -603,6 +630,10 @@ impl Client {
                 ClientAction::SendLoginComplete => {
                     debug!(target: "events", "Action: Sending LoginComplete notification to server");
                     self.send_login_complete_notification();
+                }
+                ClientAction::SendChatMessage { message } => {
+                    debug!(target: "events", "Action: Sending chat message: {}", message);
+                    self.send_chat_message(message);
                 }
             }
         }
@@ -839,8 +870,23 @@ impl Client {
     fn handle_message(&mut self, message: RawMessage) {
         debug!(target: "net", "Received message: {} (0x{:08X})", message.message_type, message.opcode);
 
+        // Emit a network message event for EVERY message received so it shows in debug view
+        let message_name: String;
+        let is_handled: bool;
+
         // Try to parse as GameAction first (lower opcode values)
         if let Ok(game_action) = GameAction::try_from(message.opcode as u32) {
+            message_name = format!("GameAction::{:?}", game_action);
+            is_handled = matches!(game_action, GameAction::CharacterLoginCompleteNotification);
+
+            // Emit network message for debug view
+            let event = GameEvent::NetworkMessage {
+                direction: crate::client::events::MessageDirection::Received,
+                message_type: message_name.clone(),
+            };
+            info!(target: "net", "Emitting NetworkMessage event: {}", message_name);
+            let _ = self.event_tx.send(event);
+
             debug!(target: "net", "Parsed as GameAction: {:?}", game_action);
             self.handle_game_action(game_action, message);
             return;
@@ -849,21 +895,59 @@ impl Client {
         // Otherwise try to parse as S2CMessage
         match S2CMessage::try_from(message.opcode) {
             Ok(msg_type) => {
-                debug!(target: "net", "Parsed as S2CMessage: {:?}", msg_type);
+                message_name = format!("{:?}", msg_type);
+                is_handled = matches!(msg_type,
+                    S2CMessage::LoginLoginCharacterSet |
+                    S2CMessage::DDDInterrogationMessage |
+                    S2CMessage::CharacterCharGenVerificationResponse |
+                    S2CMessage::ItemCreateObject |
+                    S2CMessage::CommunicationTextboxString |
+                    S2CMessage::CommunicationHearSpeech |
+                    S2CMessage::CommunicationHearRangedSpeech |
+                    S2CMessage::OrderedGameEvent
+                );
+
+                // Emit network message for debug view
+                let display_name = if is_handled {
+                    message_name.clone()
+                } else {
+                    format!("⚠ UNHANDLED: {}", message_name)
+                };
+                let event = GameEvent::NetworkMessage {
+                    direction: crate::client::events::MessageDirection::Received,
+                    message_type: display_name.clone(),
+                };
+                info!(target: "net", "Emitting NetworkMessage event: {}", display_name);
+                let _ = self.event_tx.send(event);
+
+                info!(target: "net", "Parsed as S2CMessage: {:?} (0x{:04X})", msg_type, message.opcode);
                 match msg_type {
                     S2CMessage::LoginLoginCharacterSet => self.handle_character_list(message),
                     S2CMessage::DDDInterrogationMessage => self.handle_ddd_interrogation(message),
                     S2CMessage::CharacterCharGenVerificationResponse => self.handle_character_gen_response(message),
                     S2CMessage::ItemCreateObject => self.handle_create_object(message),
+                    S2CMessage::CommunicationTextboxString => self.handle_chat_message(message),
+                    S2CMessage::CommunicationHearSpeech => self.handle_hear_speech(message),
+                    S2CMessage::CommunicationHearRangedSpeech => self.handle_hear_ranged_speech(message),
+                    S2CMessage::OrderedGameEvent => self.handle_game_event(message),
                     // Add more handlers as needed
                     _ => {
-                        debug!(target: "net", "Unhandled S2CMessage: {:?} (0x{:04X})", msg_type, message.opcode);
+                        info!(target: "net", "Unhandled S2CMessage: {:?} (0x{:04X})", msg_type, message.opcode);
                     }
                 }
             }
             Err(_) => {
                 // If neither GameAction nor S2CMessage, log as unknown
-                info!(target: "net", "Unknown message opcode: 0x{:08X} ({:?})", message.opcode, message.opcode);
+                message_name = format!("⚠ UNKNOWN: 0x{:08X}", message.opcode);
+
+                // Emit network message for debug view
+                let event = GameEvent::NetworkMessage {
+                    direction: crate::client::events::MessageDirection::Received,
+                    message_type: message_name.clone(),
+                };
+                let _ = self.event_tx.send(event);
+
+                info!(target: "net", "Unknown message opcode: 0x{:08X}", message.opcode);
             }
         }
     }
@@ -878,6 +962,111 @@ impl Client {
             }
             _ => {
                 warn!(target: "net", "Unhandled GameAction: {:?} (0x{:02X})", action, message.opcode);
+            }
+        }
+    }
+
+    /// Handle OrderedGameEvent (0xF7B0) messages
+    fn handle_game_event(&mut self, message: RawMessage) {
+        info!(target: "net", "Processing OrderedGameEvent message, data len={}", message.data.len());
+
+        // Parse the game event - the data includes opcode (4 bytes) + sequence (4 bytes) + event opcode (4 bytes)
+        // Skip the outer opcode (4 bytes) and sequence (4 bytes), then read the event opcode
+        if message.data.len() < 12 {
+            error!(target: "net", "Game event message too short");
+            return;
+        }
+
+        let mut cursor = Cursor::new(&message.data[8..]); // Skip opcode (4) + sequence (4)
+
+        use acprotocol::readers::ACDataType;
+        use acprotocol::enums::GameEvent as GameEventType;
+
+        // Read the game event opcode
+        match u32::read(&mut cursor) {
+            Ok(event_opcode) => {
+                match GameEventType::try_from(event_opcode) {
+                    Ok(event_type) => {
+                        debug!(target: "net", "Game event type: {:?} (0x{:04X})", event_type, event_opcode);
+
+                        match event_type {
+                            GameEventType::CommunicationHearDirectSpeech => {
+                                self.handle_hear_direct_speech_event(&mut cursor);
+                            }
+                            GameEventType::CommunicationTransientString => {
+                                self.handle_transient_string_event(&mut cursor);
+                            }
+                            _ => {
+                                debug!(target: "net", "Unhandled GameEvent: {:?} (0x{:04X})", event_type, event_opcode);
+                            }
+                        }
+                    }
+                    Err(_) => {
+                        debug!(target: "net", "Unknown game event opcode: 0x{:04X}", event_opcode);
+                    }
+                }
+            }
+            Err(e) => {
+                error!(target: "net", "Failed to read game event opcode: {}", e);
+            }
+        }
+    }
+
+    /// Handle Communication_HearDirectSpeech game event (tell messages)
+    fn handle_hear_direct_speech_event(&mut self, cursor: &mut Cursor<&[u8]>) {
+        use acprotocol::readers::ACDataType;
+
+        // Format: Message, SenderName, SenderId, TargetId, Type, SecretFlags
+        match String::read(cursor) {
+            Ok(text) => {
+                match String::read(cursor) {
+                    Ok(sender_name) => {
+                        // Read remaining fields but we mainly care about the text and sender
+                        let _ = u32::read(cursor); // SenderId (ObjectId is u32)
+                        let _ = u32::read(cursor); // TargetId
+
+                        // Read ChatFragmentType (message type)
+                        let message_type = u32::read(cursor).unwrap_or(0x03); // Default to Tell (0x03)
+
+                        let chat_text = format!("{} tells you, \"{}\"", sender_name, text);
+                        info!(target: "net", "Direct speech: {}", chat_text);
+
+                        let event = GameEvent::ChatMessageReceived {
+                            message: chat_text,
+                            message_type,
+                        };
+
+                        let _ = self.event_tx.send(event);
+                    }
+                    Err(e) => {
+                        error!(target: "net", "Failed to parse sender name: {}", e);
+                    }
+                }
+            }
+            Err(e) => {
+                error!(target: "net", "Failed to parse direct speech message: {}", e);
+            }
+        }
+    }
+
+    /// Handle Communication_TransientString game event (status messages)
+    fn handle_transient_string_event(&mut self, cursor: &mut Cursor<&[u8]>) {
+        use acprotocol::readers::ACDataType;
+
+        // Format: just a string message
+        match String::read(cursor) {
+            Ok(text) => {
+                info!(target: "net", "Transient string: {}", text);
+
+                let event = GameEvent::ChatMessageReceived {
+                    message: text,
+                    message_type: 0x05, // System message type
+                };
+
+                let _ = self.event_tx.send(event);
+            }
+            Err(e) => {
+                error!(target: "net", "Failed to parse transient string: {}", e);
             }
         }
     }
@@ -1041,6 +1230,103 @@ impl Client {
             }
             Err(e) => {
                 error!(target: "net", "Failed to parse create object message: {}", e);
+            }
+        }
+    }
+
+    /// Handle chat message (Communication_TextboxString) from the server
+    fn handle_chat_message(&mut self, message: RawMessage) {
+        debug!(target: "net", "Processing chat message");
+
+        // Parse the incoming message
+        // Note: message.data includes the opcode as the first 4 bytes, skip it
+        let mut cursor = Cursor::new(&message.data[4..]);
+
+        // Communication_TextboxString format:
+        // - String message (AC string format: i16 length + data + padding)
+        // - i32 message_type (ChatMessageType enum)
+
+        use acprotocol::readers::ACDataType;
+        match String::read(&mut cursor) {
+            Ok(chat_text) => {
+                // Read the message type
+                match u32::read(&mut cursor) {
+                    Ok(message_type) => {
+                        info!(target: "net", "Chat message received (type {}): {}", message_type, chat_text);
+
+                        let event = GameEvent::ChatMessageReceived {
+                            message: chat_text,
+                            message_type,
+                        };
+
+                        // Send on channel (ignore error if no subscribers)
+                        let _ = self.event_tx.send(event);
+                    }
+                    Err(e) => {
+                        error!(target: "net", "Failed to parse chat message type: {}", e);
+                    }
+                }
+            }
+            Err(e) => {
+                error!(target: "net", "Failed to parse chat message text: {}", e);
+            }
+        }
+    }
+
+    /// Handle Communication_HearSpeech from the server
+    fn handle_hear_speech(&mut self, message: RawMessage) {
+        debug!(target: "net", "Processing hear speech message");
+
+        // Parse the incoming message
+        let mut cursor = Cursor::new(&message.data[4..]);
+        use acprotocol::messages::s2c::CommunicationHearSpeech;
+        use acprotocol::readers::ACDataType;
+
+        match CommunicationHearSpeech::read(&mut cursor) {
+            Ok(speech) => {
+                let chat_text = format!("{} says, \"{}\"", speech.sender_name, speech.message);
+                let message_type = speech.type_ as u32;
+
+                info!(target: "net", "Hear speech: {}", chat_text);
+
+                let event = GameEvent::ChatMessageReceived {
+                    message: chat_text,
+                    message_type,
+                };
+
+                let _ = self.event_tx.send(event);
+            }
+            Err(e) => {
+                error!(target: "net", "Failed to parse hear speech message: {}", e);
+            }
+        }
+    }
+
+    /// Handle Communication_HearRangedSpeech from the server
+    fn handle_hear_ranged_speech(&mut self, message: RawMessage) {
+        debug!(target: "net", "Processing hear ranged speech message");
+
+        // Parse the incoming message
+        let mut cursor = Cursor::new(&message.data[4..]);
+        use acprotocol::messages::s2c::CommunicationHearRangedSpeech;
+        use acprotocol::readers::ACDataType;
+
+        match CommunicationHearRangedSpeech::read(&mut cursor) {
+            Ok(speech) => {
+                let chat_text = format!("{} says, \"{}\"", speech.sender_name, speech.message);
+                let message_type = speech.type_ as u32;
+
+                info!(target: "net", "Hear ranged speech: {}", chat_text);
+
+                let event = GameEvent::ChatMessageReceived {
+                    message: chat_text,
+                    message_type,
+                };
+
+                let _ = self.event_tx.send(event);
+            }
+            Err(e) => {
+                error!(target: "net", "Failed to parse hear ranged speech message: {}", e);
             }
         }
     }

@@ -1,5 +1,12 @@
 use crate::client::client::PendingOutgoingMessage;
 
+/// Direction of network message
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub enum MessageDirection {
+    Sent,
+    Received,
+}
+
 /// Events that can be broadcast from the client
 #[derive(Debug, Clone)]
 #[derive(serde::Serialize, serde::Deserialize)]
@@ -27,6 +34,16 @@ pub enum GameEvent {
         object_id: u32,
         object_name: String,
     },
+    /// Chat message received from server
+    ChatMessageReceived {
+        message: String,
+        message_type: u32,
+    },
+    /// Network message sent or received (for debug view)
+    NetworkMessage {
+        direction: MessageDirection,
+        message_type: String,
+    },
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -45,4 +62,6 @@ pub enum ClientAction {
     LoginCharacter { character_id: u32, character_name: String, account: String },
     /// Send LoginComplete notification to server after receiving initial objects
     SendLoginComplete,
+    /// Send a chat message
+    SendChatMessage { message: String },
 }
