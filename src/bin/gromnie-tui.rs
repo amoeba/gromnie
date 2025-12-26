@@ -39,6 +39,7 @@ async fn client_task(
     password: String,
     event_tx: tokio::sync::mpsc::UnboundedSender<GameEvent>,
     action_tx_sender: mpsc::UnboundedSender<mpsc::UnboundedSender<ClientAction>>,
+    mut shutdown_rx: tokio::sync::watch::Receiver<bool>,
 ) {
     let (mut client, mut event_rx, action_tx) = Client::new(
         id.to_owned(),
@@ -262,8 +263,15 @@ async fn client_task(
                 }
                 last_keepalive = tokio::time::Instant::now();
             }
+            _ = shutdown_rx.changed() => {
+                info!("Client task received shutdown signal");
+                break;
+            }
         }
     }
+
+    info!("Client task shutting down - cleaning up network connections...");
+    // Socket will be closed when client is dropped
 }
 
 #[tokio::main]
@@ -287,12 +295,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Set up event handler
     let (event_handler, mut tui_event_rx) = EventHandler::new();
-    event_handler.start().await;
+    let event_handler = event_handler.start().await;
 
     // Spawn the client task - it will return a receiver we can use
     // For now, we'll spawn it and communicate through a channel we create
     let (client_event_tx, mut client_event_rx) = tokio::sync::mpsc::unbounded_channel();
     let (action_tx_channel, mut action_tx_rx) = tokio::sync::mpsc::unbounded_channel();
+
+    // Create shutdown channel to coordinate graceful shutdown
+    let (shutdown_tx, shutdown_rx) = tokio::sync::watch::channel(false);
 
     let mut client_handle = tokio::spawn(client_task(
         0,
@@ -301,6 +312,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         cli.password,
         client_event_tx,
         action_tx_channel,
+        shutdown_rx,
     ));
 
     // Wait for the action_tx channel from the client task (with timeout)
@@ -408,7 +420,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                         }
                     }
                     TuiEvent::Quit => {
+                        info!("Received Ctrl+C signal, initiating graceful shutdown...");
                         app.should_quit = true;
+                        // Signal client task to shut down
+                        let _ = shutdown_tx.send(true);
                         break;
                     }
                     TuiEvent::Tick => {
@@ -427,10 +442,35 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
 
         if app.should_quit {
+            // Signal client task to shut down
+            let _ = shutdown_tx.send(true);
             break;
         }
     }
 
-    info!("TUI shut down");
+    info!("TUI shutting down - waiting for client task to finish...");
+
+    // Give client task a moment to clean up gracefully
+    let timeout = tokio::time::Duration::from_secs(2);
+    match tokio::time::timeout(timeout, client_handle).await {
+        Ok(result) => {
+            match result {
+                Ok(_) => info!("Client task shut down gracefully"),
+                Err(e) => error!("Client task panicked: {}", e),
+            }
+        }
+        Err(_) => {
+            error!("Client task did not shut down within timeout, proceeding anyway");
+        }
+    }
+
+    info!("TUI shut down cleanly");
+    
+    // Explicitly restore terminal before exiting
+    drop(tui);
+    
+    // Shutdown event handler task
+    event_handler.shutdown();
+    
     Ok(())
 }
