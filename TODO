@@ -3,11 +3,14 @@ TODO
 - [x] Get raw login packet sent and recv a response (52 bytes)
 - [x] Start building out structs+readers for login request/response
 - [x] Refactor to work on tokio.rs and run multiple clients
+- [x] Get a character list
+- [x] Generalize outgoing message queue (handle_pending_messages)
+- [x] Fix port routing (login vs world) with ServerInfo
+- [x] Parse character list message correctly
 - [ ] Refactor packet code. We should crate a fragment first, then crate a packet
-      from it
+       from it
 - [ ] Figure out hashing
 - [ ] Refactor packet sending code into something more generic
-- [ ] Get a character list
 - [ ] Log into the game world
 - [ ] Send a command to one or more clients
 
