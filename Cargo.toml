@@ -25,6 +25,7 @@ path = "src/bin/gromnie.rs"
 acprotocol = { path = "../asheron-rs/crates/acprotocol" }
 bitflags = "2.6"
 byteorder = "1.5.0"
+chrono = "0.4"
 clap = { version = "4.5.2", features = ["derive"] }
 strum_macros = "0.26.1"
 tokio = { version = "1.36.0", features = ["full"] }
