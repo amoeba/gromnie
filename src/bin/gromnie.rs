@@ -153,17 +153,38 @@ async fn client_task(id: u32, address: String, account_name: String, password: S
                             info!(target: "events", "Character creation action sent - waiting for response...");
                         }
                     }
-                    // If we have a character, print it and we're done
+                    // If we have a character, log in as the first one
                     else if !characters.is_empty() {
                         info!(target: "events", "Found existing character(s):");
                         for char_info in &characters {
                             info!(target: "events", "  Character: {} (ID: {})", char_info.name, char_info.id);
                         }
-                        info!(target: "events", "Done!");
+                        
+                        // Log in as the first character
+                        let first_char = &characters[0];
+                        info!(target: "events", "Attempting to log in as: {} (ID: {})", first_char.name, first_char.id);
+                        
+                        // Send action to login
+                        if let Err(e) = action_tx.send(ClientAction::LoginCharacter {
+                            character_id: first_char.id,
+                            character_name: first_char.name.clone(),
+                            account: account.clone(),
+                        }) {
+                            error!(target: "events", "Failed to send login action: {}", e);
+                        }
                     }
                 }
                 GameEvent::DDDInterrogation { language, region } => {
                     info!(target: "events", "DDD Interrogation: lang={} region={}", language, region);
+                }
+                GameEvent::LoginSucceeded { character_id, character_name } => {
+                    info!(target: "events", "=== LOGIN SUCCEEDED ===");
+                    info!(target: "events", "Character: {} (ID: {})", character_name, character_id);
+                    info!(target: "events", "You are now in the game world!");
+                }
+                GameEvent::LoginFailed { reason } => {
+                    error!(target: "events", "=== LOGIN FAILED ===");
+                    error!(target: "events", "Reason: {}", reason);
                 }
             }
         }
