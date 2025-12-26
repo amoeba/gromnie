@@ -228,7 +228,7 @@ async fn client_task(id: u32, address: String, account_name: String, password: S
     let keepalive_interval = tokio::time::Duration::from_secs(10); // Send keep-alive every 10 seconds
 
     loop {
-        // Use tokio::select! to either receive a packet or timeout for keep-alive
+        // Use tokio::select! to either receive a packet, timeout for keep-alive, or handle Ctrl+C
         tokio::select! {
             recv_result = client.socket.recv_from(&mut buf) => {
                 match recv_result {
@@ -263,8 +263,14 @@ async fn client_task(id: u32, address: String, account_name: String, password: S
                 }
                 last_keepalive = tokio::time::Instant::now();
             }
+            _ = tokio::signal::ctrl_c() => {
+                info!("Received Ctrl+C, shutting down gracefully...");
+                break;
+            }
         }
     }
+
+    info!("Client task shutting down");
 }
 
 #[tokio::main]
@@ -300,8 +306,18 @@ async fn main() -> Result<(), ()> {
         )));
     }
 
-    for task in tasks {
-        task.await.unwrap();
+    // Wait for either all tasks to complete or Ctrl+C
+    tokio::select! {
+        _ = async {
+            for task in tasks {
+                let _ = task.await;
+            }
+        } => {
+            info!("All client tasks completed");
+        }
+        _ = tokio::signal::ctrl_c() => {
+            info!("Received Ctrl+C in main, shutting down...");
+        }
     }
 
     Ok(())

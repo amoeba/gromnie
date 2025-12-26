@@ -15,7 +15,9 @@ pub enum PendingOutgoingMessage {
     CharacterCreation(CharacterSendCharGenResult),
     // ACE-compatible character creation (uses custom serialization format)
     CharacterCreationAce(String, crate::client::ace_protocol::AceCharGenResult),
-    // Character login - sent when selecting a character to enter the game world
+    // Character login request - sent when user clicks "Enter" on character select
+    EnterWorldRequest,
+    // Character login - sent when selecting a character to enter the game world (after server ready)
     EnterWorld(acprotocol::messages::c2s::LoginSendEnterWorld),
     // GameAction message (raw bytes including opcode)
     GameAction(Vec<u8>),
@@ -305,8 +307,14 @@ pub enum ClientLoginState {
 pub enum CharacterLoginState {
     /// No login attempt has been made yet
     Idle,
-    /// Currently attempting to log in a character
-    Attempting,
+    /// Sent EnterWorldRequest (0xF7C8), waiting for ServerReady (0xF7DF)
+    WaitingForServerReady {
+        character_id: u32,
+        character_name: String,
+        account: String,
+    },
+    /// Received ServerReady, sent EnterWorld (0xF657), waiting for world data
+    LoadingWorld,
     /// Login succeeded (received LoginComplete)
     Succeeded,
     /// Login failed (error response from server)
@@ -477,7 +485,8 @@ impl Client {
             CharacterLoginState::Idle => {
                 // OK to proceed
             }
-            CharacterLoginState::Attempting => {
+            CharacterLoginState::WaitingForServerReady { .. } |
+            CharacterLoginState::LoadingWorld => {
                 return Err("Login already in progress".to_string());
             }
             CharacterLoginState::Succeeded => {
@@ -488,20 +497,19 @@ impl Client {
             }
         }
 
-        // Create the enter world message
-        let enter_world = LoginSendEnterWorld {
-            character_id: acprotocol::types::ObjectId(character_id),
+        // Step 1: Send CharacterEnterWorldRequest (0xF7C8)
+        // This tells the server we want to enter the world
+        self.outgoing_message_queue
+            .push_back(PendingOutgoingMessage::EnterWorldRequest);
+
+        // Update state to waiting for server ready
+        self.character_login_state = CharacterLoginState::WaitingForServerReady {
+            character_id,
+            character_name: character_name.clone(),
             account: account.clone(),
         };
 
-        // Queue the message for sending
-        self.outgoing_message_queue
-            .push_back(PendingOutgoingMessage::EnterWorld(enter_world));
-
-        // Update state to Attempting
-        self.character_login_state = CharacterLoginState::Attempting;
-
-        info!(target: "net", "Queued login for character: {} (ID: {})", character_name, character_id);
+        info!(target: "net", "Sent CharacterEnterWorldRequest for character: {} (ID: {})", character_name, character_id);
         Ok(())
     }
 
@@ -509,9 +517,16 @@ impl Client {
     fn send_login_complete_notification(&mut self) {
         info!(target: "net", "Sending LoginComplete notification to server");
 
-        // Build the GameAction message (0x00A1 = Character_LoginCompleteNotification)
+        // GameActions must be wrapped in Ordered_GameAction (0xF7B1)
+        // Format: 0xF7B1 (wrapper opcode) + 0x00A1 (LoginComplete action)
         let mut message_data = Vec::new();
-        message_data.extend_from_slice(&0x00A1u32.to_le_bytes()); // GameAction opcode
+        {
+            let mut cursor = Cursor::new(&mut message_data);
+            // Write wrapper opcode first (0xF7B1 = Ordered_GameAction)
+            write_u32(&mut cursor, 0xF7B1).expect("write failed");
+            // Write GameAction opcode (0x00A1 = Character_LoginCompleteNotification)
+            write_u32(&mut cursor, 0x00A1).expect("write failed");
+        }
 
         // Queue for sending
         self.outgoing_message_queue.push_back(PendingOutgoingMessage::GameAction(message_data));
@@ -653,6 +668,9 @@ impl Client {
             }
             PendingOutgoingMessage::CharacterCreationAce(account, char_gen) => {
                 self.send_character_creation_ace_internal(account, char_gen).await
+            }
+            PendingOutgoingMessage::EnterWorldRequest => {
+                self.send_enter_world_request_internal().await
             }
             PendingOutgoingMessage::EnterWorld(enter_world) => {
                 self.send_enter_world_internal(enter_world).await
@@ -842,12 +860,31 @@ impl Client {
         self.send_fragmented_message(message_data, FragmentGroup::Object).await
     }
 
-    /// Send character login (enter world) request to the login server
+    /// Send character enter world request (0xF7C8) - Step 1 of character login
+    /// Server will respond with CharacterEnterWorldServerReady (0xF7DF)
+    async fn send_enter_world_request_internal(&mut self) -> Result<(), std::io::Error> {
+        info!(target: "net", "Sending Login_SendEnterWorldRequest (0xF7C8)");
+
+        // This message has no payload, just the opcode
+        let mut message_data = Vec::new();
+        {
+            let mut cursor = Cursor::new(&mut message_data);
+            // Write opcode (0xF7C8 = Login_SendEnterWorldRequest)
+            write_u32(&mut cursor, 0xF7C8)
+                .map_err(|e| std::io::Error::other(format!("Write error: {}", e)))?;
+        }
+
+        // Send as a proper fragmented packet
+        self.send_fragmented_message(message_data, FragmentGroup::Object).await
+    }
+
+    /// Send character login (enter world) with character ID - Step 3 of character login
+    /// This is sent after receiving CharacterEnterWorldServerReady (0xF7DF)
     async fn send_enter_world_internal(
         &mut self,
         enter_world: LoginSendEnterWorld,
     ) -> Result<(), std::io::Error> {
-        info!(target: "net", "Sending Login_SendEnterWorld - Character ID: {}", enter_world.character_id.0);
+        info!(target: "net", "Sending Login_SendEnterWorld (0xF657) - Character ID: {}", enter_world.character_id.0);
 
         // Serialize the enter world message with opcode prefix
         let mut message_data = Vec::new();
@@ -900,6 +937,7 @@ impl Client {
                     S2CMessage::LoginLoginCharacterSet |
                     S2CMessage::DDDInterrogationMessage |
                     S2CMessage::CharacterCharGenVerificationResponse |
+                    S2CMessage::LoginEnterGameServerReady |
                     S2CMessage::ItemCreateObject |
                     S2CMessage::CommunicationTextboxString |
                     S2CMessage::CommunicationHearSpeech |
@@ -925,6 +963,7 @@ impl Client {
                     S2CMessage::LoginLoginCharacterSet => self.handle_character_list(message),
                     S2CMessage::DDDInterrogationMessage => self.handle_ddd_interrogation(message),
                     S2CMessage::CharacterCharGenVerificationResponse => self.handle_character_gen_response(message),
+                    S2CMessage::LoginEnterGameServerReady => self.handle_enter_game_server_ready(message),
                     S2CMessage::ItemCreateObject => self.handle_create_object(message),
                     S2CMessage::CommunicationTextboxString => self.handle_chat_message(message),
                     S2CMessage::CommunicationHearSpeech => self.handle_hear_speech(message),
@@ -1169,6 +1208,37 @@ impl Client {
             Err(e) => {
                 error!(target: "net", "Failed to parse character gen response: {}", e);
             }
+        }
+    }
+
+    /// Handle LoginEnterGameServerReady (0xF7DF) - Step 2 of character login
+    /// Server is ready to receive the character ID, so we send EnterWorld (0xF657)
+    fn handle_enter_game_server_ready(&mut self, _message: RawMessage) {
+        info!(target: "net", "Received LoginEnterGameServerReady (0xF7DF) - Server ready for character login");
+
+        // Check if we're in the right state and extract the values we need
+        if let CharacterLoginState::WaitingForServerReady { character_id, character_name, account } = &self.character_login_state {
+            // Clone values we need before mutating state
+            let char_id = *character_id;
+            let char_name = character_name.clone();
+            let acc = account.clone();
+
+            // Create the enter world message with character ID
+            let enter_world = LoginSendEnterWorld {
+                character_id: acprotocol::types::ObjectId(char_id),
+                account: acc,
+            };
+
+            // Queue the message for sending
+            self.outgoing_message_queue
+                .push_back(PendingOutgoingMessage::EnterWorld(enter_world));
+
+            // Update state to loading world
+            self.character_login_state = CharacterLoginState::LoadingWorld;
+
+            info!(target: "net", "Queued EnterWorld (0xF657) for character: {} (ID: {})", char_name, char_id);
+        } else {
+            warn!(target: "net", "Received ServerReady but not in WaitingForServerReady state! Current state: {:?}", self.character_login_state);
         }
     }
 
