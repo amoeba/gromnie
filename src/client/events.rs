@@ -2,6 +2,7 @@ use crate::client::client::PendingOutgoingMessage;
 
 /// Events that can be broadcast from the client
 #[derive(Debug, Clone)]
+#[derive(serde::Serialize, serde::Deserialize)]
 pub enum GameEvent {
     CharacterListReceived {
         account: String,
@@ -21,9 +22,14 @@ pub enum GameEvent {
     LoginFailed {
         reason: String,
     },
+    /// Object created in the game world
+    CreateObject {
+        object_id: u32,
+        object_name: String,
+    },
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct CharacterInfo {
     pub name: String,
     pub id: u32,
@@ -37,4 +43,6 @@ pub enum ClientAction {
     Disconnect,
     /// Log in as a specific character
     LoginCharacter { character_id: u32, character_name: String, account: String },
+    /// Send LoginComplete notification to server after receiving initial objects
+    SendLoginComplete,
 }
