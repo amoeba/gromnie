@@ -2,7 +2,7 @@ use std::collections::{HashMap, VecDeque};
 use std::io::Cursor;
 use std::net::SocketAddr;
 
-use acprotocol::enums::{AuthFlags, PacketHeaderFlags, S2CMessage};
+use acprotocol::enums::{AuthFlags, FragmentGroup, PacketHeaderFlags, S2CMessage};
 use acprotocol::messages::c2s::{CharacterSendCharGenResult, DDDInterrogationResponseMessage};
 use acprotocol::messages::s2c::{DDDInterrogationMessage, LoginLoginCharacterSet};
 use tokio::sync::{broadcast, mpsc};
@@ -19,7 +19,7 @@ use acprotocol::network::{Fragment, RawMessage};
 use acprotocol::packets::c2s_packet::C2SPacket;
 use acprotocol::packets::s2c_packet::S2CPacket;
 use acprotocol::readers::ACDataType;
-use acprotocol::types::{ConnectRequestHeader, PackableList};
+use acprotocol::types::{BlobFragments, ConnectRequestHeader, PackableList};
 use acprotocol::writers::{write_i32, write_string, write_u32, ACWritable, ACWriter};
 use tokio::net::UdpSocket;
 use tracing::{debug, error, info, warn};
@@ -31,6 +31,7 @@ use crate::crypto::magic_number::get_magic_number;
 const CHECKSUM_PLACEHOLDER: u32 = 0xbadd70dd;
 const PACKET_HEADER_SIZE: usize = 20;
 const CHECKSUM_OFFSET: usize = 8;
+const FRAGMENT_HEADER_SIZE: usize = 16; // sequence(4) + id(4) + count(2) + size(2) + index(2) + group(2)
 
 /// Server information tracking both login and world ports
 #[derive(Clone, Debug)]
@@ -229,6 +230,7 @@ pub struct Client {
     pub login_state: ClientLoginState,
     pub send_count: u32,
     pub recv_count: u32,
+    fragment_sequence: u32, // Counter for outgoing fragment sequences
     session: Option<SessionState>,
     pending_fragments: HashMap<u32, Fragment>, // Track incomplete fragment sequences
     message_queue: VecDeque<RawMessage>,       // Queue of parsed messages to process
@@ -271,6 +273,7 @@ impl Client {
             login_state: ClientLoginState::NotLoggedIn,
             send_count: 0,
             recv_count: 0,
+            fragment_sequence: 1, // Start at 1 as per actestclient
             session: None,
             pending_fragments: HashMap::new(),
             message_queue: VecDeque::new(),
@@ -351,6 +354,111 @@ impl Client {
         }
     }
 
+    /// Send a message wrapped in a BlobFragment
+    async fn send_fragmented_message(
+        &mut self,
+        message_data: Vec<u8>,
+        group: FragmentGroup,
+    ) -> Result<(), std::io::Error> {
+        // Get current fragment sequence and increment
+        let frag_sequence = self.fragment_sequence;
+        self.fragment_sequence += 1;
+
+        // Create BlobFragment structure
+        let fragment_size = (FRAGMENT_HEADER_SIZE + message_data.len()) as u16;
+        let blob_fragment = BlobFragments {
+            sequence: frag_sequence,
+            id: 0x80000000, // Object ID (0x80000000 for game messages)
+            count: 1, // Single fragment
+            size: fragment_size,
+            index: 0, // First (and only) fragment
+            group,
+            data: message_data,
+        };
+
+        // Extract session values
+        let (client_id, table) = {
+            let session = self.session.as_ref().expect("Session not established");
+            (session.client_id, session.table)
+        };
+
+        // Increment send_count first, then use it (matches actestclient behavior)
+        self.send_count += 1;
+        let packet_sequence = self.send_count;
+
+        // Create C2SPacket with BlobFragments flag
+        let packet = C2SPacket {
+            sequence: packet_sequence,
+            flags: PacketHeaderFlags::BLOB_FRAGMENTS,
+            checksum: 0, // Will be calculated
+            recipient_id: client_id,
+            time_since_last_packet: 0,
+            size: 0, // Will be calculated during serialization
+            iteration: table,
+            server_switch: None,
+            retransmit_sequences: None,
+            reject_sequences: None,
+            ack_sequence: None,
+            login_request: None,
+            world_login_request: None,
+            connect_response: None,
+            cicmd_command: None,
+            time: None,
+            echo_time: None,
+            flow: None,
+            fragments: Some(blob_fragment),
+        };
+
+        // Serialize packet to get size
+        let mut buffer = Vec::new();
+        {
+            let mut cursor = Cursor::new(&mut buffer);
+            packet
+                .write(&mut cursor)
+                .map_err(|e| std::io::Error::other(format!("Write error: {}", e)))?;
+        }
+
+        // Calculate payload size (everything after the header)
+        let payload_size = buffer.len() - PACKET_HEADER_SIZE;
+
+        // Update the size field in the header
+        buffer[16..18].copy_from_slice(&(payload_size as u16).to_le_bytes());
+
+        // Calculate checksum: header + fragment
+        buffer[CHECKSUM_OFFSET..CHECKSUM_OFFSET + 4]
+            .copy_from_slice(&CHECKSUM_PLACEHOLDER.to_le_bytes());
+
+        // Checksum calculation:
+        // 1. Header checksum (with placeholder)
+        let header_checksum = get_magic_number(&buffer[0..PACKET_HEADER_SIZE], PACKET_HEADER_SIZE, true);
+
+        // 2. Fragment checksum = fragment_header_checksum + fragment_data_checksum
+        let fragment_header_checksum = get_magic_number(
+            &buffer[PACKET_HEADER_SIZE..PACKET_HEADER_SIZE + FRAGMENT_HEADER_SIZE],
+            FRAGMENT_HEADER_SIZE,
+            true,
+        );
+        let fragment_data_size = buffer.len() - PACKET_HEADER_SIZE - FRAGMENT_HEADER_SIZE;
+        let fragment_data_checksum = get_magic_number(
+            &buffer[PACKET_HEADER_SIZE + FRAGMENT_HEADER_SIZE..],
+            fragment_data_size,
+            true,
+        );
+        let fragment_checksum = fragment_header_checksum.wrapping_add(fragment_data_checksum);
+
+        // 3. Total checksum
+        let total_checksum = header_checksum.wrapping_add(fragment_checksum);
+        buffer[CHECKSUM_OFFSET..CHECKSUM_OFFSET + 4].copy_from_slice(&total_checksum.to_le_bytes());
+
+        debug!(target: "net", "Sending fragmented message: seq={}, frag_seq={}, size={}, checksum=0x{:08X}",
+            packet_sequence, frag_sequence, buffer.len(), total_checksum);
+
+        // Send to login server (port 9000)
+        let login_addr = self.server.login_addr().await?;
+        self.socket.send_to(&buffer, login_addr).await?;
+        Ok(())
+    }
+
     /// Send a DDD interrogation response to the login server
     async fn send_ddd_response_internal(
         &mut self,
@@ -359,52 +467,17 @@ impl Client {
         info!(target: "net", "Sending DDD Interrogation Response - Language: {}, Files: {:?}",
             response.language, response.files.list);
 
-        // Serialize the response message
-        let mut payload_buffer = Vec::new();
+        // Serialize the response message (payload data without opcode)
+        let mut message_data = Vec::new();
         {
-            let mut payload_cursor = Cursor::new(&mut payload_buffer);
+            let mut cursor = Cursor::new(&mut message_data);
             response
-                .write(&mut payload_cursor)
+                .write(&mut cursor)
                 .map_err(|e| std::io::Error::other(format!("Write error: {}", e)))?;
         }
 
-        // For now, send as a simple packet with the DDD response
-        // TODO: Properly implement as fragments if needed
-        let payload_size = payload_buffer.len();
-
-        let mut buffer = Vec::with_capacity(PACKET_HEADER_SIZE + payload_size);
-
-        // Write packet header
-        // Extract session values first to avoid borrow issues
-        let (client_id, table) = {
-            let session = self.session.as_ref().expect("Session not established");
-            (session.client_id, session.table)
-        };
-        let sequence = self.next_sequence();
-        buffer.extend_from_slice(&sequence.to_le_bytes());
-        buffer.extend_from_slice(&0u32.to_le_bytes()); // flags
-        buffer.extend_from_slice(&0u32.to_le_bytes()); // checksum placeholder
-        buffer.extend_from_slice(&client_id.to_le_bytes()); // recipient_id
-        buffer.extend_from_slice(&0u16.to_le_bytes()); // time_since_last_packet
-        buffer.extend_from_slice(&(payload_size as u16).to_le_bytes()); // size
-        buffer.extend_from_slice(&table.to_le_bytes()); // iteration
-
-        // Append payload
-        buffer.extend_from_slice(&payload_buffer);
-
-        // Compute checksum
-        buffer[CHECKSUM_OFFSET..CHECKSUM_OFFSET + 4]
-            .copy_from_slice(&CHECKSUM_PLACEHOLDER.to_le_bytes());
-        let checksum1 = get_magic_number(&buffer[0..PACKET_HEADER_SIZE], PACKET_HEADER_SIZE, true);
-        let checksum2 = get_magic_number(&payload_buffer, payload_size, true);
-        let checksum = checksum1.wrapping_add(checksum2);
-        buffer[CHECKSUM_OFFSET..CHECKSUM_OFFSET + 4].copy_from_slice(&checksum.to_le_bytes());
-
-        // Send to login server (port 9000) - DDD interrogation is not a ConnectResponse
-        let login_addr = self.server.login_addr().await?;
-        self.socket.send_to(&buffer, login_addr).await?;
-        info!(target: "net", "DDD response sent successfully");
-        Ok(())
+        // Send as a proper fragmented packet
+        self.send_fragmented_message(message_data, FragmentGroup::Object).await
     }
 
     /// Send character creation request to the login server
@@ -415,51 +488,20 @@ impl Client {
         info!(target: "net", "Sending Character Creation - Name: {}", char_gen.result.name);
 
         // Serialize the character creation message with opcode prefix
-        let mut payload_buffer = Vec::new();
+        let mut message_data = Vec::new();
         {
-            let mut payload_cursor = Cursor::new(&mut payload_buffer);
+            let mut cursor = Cursor::new(&mut message_data);
             // Write opcode first (0xF656 = Character_SendCharGenResult)
-            write_u32(&mut payload_cursor, 0xF656)
+            write_u32(&mut cursor, 0xF656)
                 .map_err(|e| std::io::Error::other(format!("Write error: {}", e)))?;
             // Then write the message payload
             char_gen
-                .write(&mut payload_cursor)
+                .write(&mut cursor)
                 .map_err(|e| std::io::Error::other(format!("Write error: {}", e)))?;
         }
 
-        let payload_size = payload_buffer.len();
-        let mut buffer = Vec::with_capacity(PACKET_HEADER_SIZE + payload_size);
-
-        // Write packet header
-        let (client_id, table) = {
-            let session = self.session.as_ref().expect("Session not established");
-            (session.client_id, session.table)
-        };
-        let sequence = self.next_sequence();
-        buffer.extend_from_slice(&sequence.to_le_bytes());
-        buffer.extend_from_slice(&0u32.to_le_bytes()); // flags
-        buffer.extend_from_slice(&0u32.to_le_bytes()); // checksum placeholder
-        buffer.extend_from_slice(&client_id.to_le_bytes()); // recipient_id
-        buffer.extend_from_slice(&0u16.to_le_bytes()); // time_since_last_packet
-        buffer.extend_from_slice(&(payload_size as u16).to_le_bytes()); // size
-        buffer.extend_from_slice(&table.to_le_bytes()); // iteration
-
-        // Append payload
-        buffer.extend_from_slice(&payload_buffer);
-
-        // Compute checksum
-        buffer[CHECKSUM_OFFSET..CHECKSUM_OFFSET + 4]
-            .copy_from_slice(&CHECKSUM_PLACEHOLDER.to_le_bytes());
-        let checksum1 = get_magic_number(&buffer[0..PACKET_HEADER_SIZE], PACKET_HEADER_SIZE, true);
-        let checksum2 = get_magic_number(&payload_buffer, payload_size, true);
-        let checksum = checksum1.wrapping_add(checksum2);
-        buffer[CHECKSUM_OFFSET..CHECKSUM_OFFSET + 4].copy_from_slice(&checksum.to_le_bytes());
-
-        // Send to login server (port 9000)
-        let login_addr = self.server.login_addr().await?;
-        self.socket.send_to(&buffer, login_addr).await?;
-        info!(target: "net", "Character creation request sent successfully");
-        Ok(())
+        // Send as a proper fragmented packet
+        self.send_fragmented_message(message_data, FragmentGroup::Object).await
     }
 
     /// Handle a single parsed message
