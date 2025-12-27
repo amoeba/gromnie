@@ -85,9 +85,7 @@ pub enum ClientState {
         character_name: String,
     },
     /// Failed state with reason
-    Failed {
-        reason: ClientFailureReason,
-    },
+    Failed { reason: ClientFailureReason },
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -302,7 +300,10 @@ impl Client {
     ) -> Result<(), String> {
         // Check that we're in CharSelect state
         if !matches!(self.state, ClientState::CharSelect) {
-            return Err(format!("Cannot login: not in CharSelect state (current state: {:?})", self.state));
+            return Err(format!(
+                "Cannot login: not in CharSelect state (current state: {:?})",
+                self.state
+            ));
         }
 
         // Check if we've already attempted login
@@ -488,7 +489,11 @@ impl Client {
         const TIMEOUT_DURATION: std::time::Duration = std::time::Duration::from_secs(20);
 
         match &self.state {
-            ClientState::Connecting { started_at, progress, .. } => {
+            ClientState::Connecting {
+                started_at,
+                progress,
+                ..
+            } => {
                 if started_at.elapsed() >= TIMEOUT_DURATION {
                     info!(target: "net", "LoginRequest timeout - no response after 20s (progress: {:?})", progress);
                     self.state = ClientState::Failed {
@@ -500,7 +505,11 @@ impl Client {
                     return true;
                 }
             }
-            ClientState::Patching { started_at, progress, .. } => {
+            ClientState::Patching {
+                started_at,
+                progress,
+                ..
+            } => {
                 if started_at.elapsed() >= TIMEOUT_DURATION {
                     info!(target: "net", "Patching timeout - no character list after 20s (progress: {:?})", progress);
                     self.state = ClientState::Failed {
@@ -522,7 +531,9 @@ impl Client {
             ClientState::Connecting { last_retry_at, .. } => {
                 last_retry_at.elapsed() >= RETRY_INTERVAL
             }
-            ClientState::Patching { last_retry_at, .. } => last_retry_at.elapsed() >= RETRY_INTERVAL,
+            ClientState::Patching { last_retry_at, .. } => {
+                last_retry_at.elapsed() >= RETRY_INTERVAL
+            }
             _ => false,
         }
     }
@@ -530,14 +541,10 @@ impl Client {
     /// Update last retry time for current state
     pub fn update_retry_time(&mut self) {
         match &mut self.state {
-            ClientState::Connecting {
-                last_retry_at, ..
-            } => {
+            ClientState::Connecting { last_retry_at, .. } => {
                 *last_retry_at = std::time::Instant::now();
             }
-            ClientState::Patching {
-                last_retry_at, ..
-            } => {
+            ClientState::Patching { last_retry_at, .. } => {
                 *last_retry_at = std::time::Instant::now();
             }
             _ => {}
@@ -782,9 +789,9 @@ impl Client {
             {
                 if *progress == PatchingProgress::DDDInterrogationReceived {
                     *progress = PatchingProgress::DDDResponseSent;
-                    let _ = self.event_tx.send(GameEvent::UpdatingSetProgress {
-                        progress: 0.66,
-                    });
+                    let _ = self
+                        .event_tx
+                        .send(GameEvent::UpdatingSetProgress { progress: 0.66 });
                     info!(target: "net", "Progress: DDDResponse sent (66%)");
                 }
             }
@@ -1236,9 +1243,9 @@ impl Client {
                 // Transition from Patching to CharSelect state
                 if matches!(self.state, ClientState::Patching { .. }) {
                     // Update progress to 100% before transitioning
-                    let _ = self.event_tx.send(GameEvent::UpdatingSetProgress {
-                        progress: 1.0,
-                    });
+                    let _ = self
+                        .event_tx
+                        .send(GameEvent::UpdatingSetProgress { progress: 1.0 });
                     info!(target: "net", "Progress: CharacterList received (100%)");
 
                     self.state = ClientState::CharSelect;
@@ -1335,9 +1342,9 @@ impl Client {
                 } = &mut self.state
                 {
                     *progress = PatchingProgress::DDDInterrogationReceived;
-                    let _ = self.event_tx.send(GameEvent::UpdatingSetProgress {
-                        progress: 0.33,
-                    });
+                    let _ = self
+                        .event_tx
+                        .send(GameEvent::UpdatingSetProgress { progress: 0.33 });
                     info!(target: "net", "Progress: DDDInterrogation received (33%)");
                 }
 
@@ -1356,7 +1363,8 @@ impl Client {
                 self.ddd_response = Some(response_content.clone());
 
                 // Queue the response to be sent in the next send cycle
-                self.outgoing_message_queue.push_back(OutgoingMessage::new(response_content));
+                self.outgoing_message_queue
+                    .push_back(OutgoingMessage::new(response_content));
                 info!(target: "net", "DDD response cached and queued for sending");
             }
             Err(e) => {
@@ -1590,9 +1598,9 @@ impl Client {
             } = &mut self.state
             {
                 *progress = ConnectingProgress::ConnectRequestReceived;
-                let _ = self.event_tx.send(GameEvent::ConnectingSetProgress {
-                    progress: 0.66,
-                });
+                let _ = self
+                    .event_tx
+                    .send(GameEvent::ConnectingSetProgress { progress: 0.66 });
                 info!(target: "net", "Progress: ConnectRequest received (66%)");
             }
 
@@ -1612,9 +1620,9 @@ impl Client {
                     last_retry_at: now,
                     progress: PatchingProgress::Initial,
                 };
-                let _ = self.event_tx.send(GameEvent::ConnectingSetProgress {
-                    progress: 1.0,
-                });
+                let _ = self
+                    .event_tx
+                    .send(GameEvent::ConnectingSetProgress { progress: 1.0 });
                 info!(target: "net", "Progress: ConnectResponse sent (100%)");
                 info!(target: "net", "State transition: Connecting -> Patching");
             }
@@ -1669,7 +1677,6 @@ impl Client {
     }
     /// Send LoginRequest to server (part of Connecting state)
     pub async fn do_login(&mut self) -> Result<(), std::io::Error> {
-
         let account = self.account.name.to_lowercase();
         let password = self.account.password.clone();
 
@@ -1772,9 +1779,9 @@ impl Client {
         {
             if *progress == ConnectingProgress::Initial {
                 *progress = ConnectingProgress::LoginRequestSent;
-                let _ = self.event_tx.send(GameEvent::ConnectingSetProgress {
-                    progress: 0.33,
-                });
+                let _ = self
+                    .event_tx
+                    .send(GameEvent::ConnectingSetProgress { progress: 0.33 });
                 info!(target: "net", "Progress: LoginRequest sent (33%)");
             }
         }
