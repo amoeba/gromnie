@@ -208,6 +208,34 @@ async fn client_task(
                             } => {
                                 debug!(target: "events", "Network message: {:?} - {}", direction, message_type);
                             }
+                            GameEvent::ConnectingSetProgress { progress: _ } => {
+                                // These events are handled in the TUI app directly
+                                // via the scheduled events mechanism
+                            }
+                            GameEvent::UpdatingSetProgress { progress: _ } => {
+                                // These events are handled in the TUI app directly
+                                // via the scheduled events mechanism
+                            }
+                            GameEvent::FakeProgressComplete => {
+                                // This event is handled in the TUI app directly
+                                // via the scheduled events mechanism
+                            }
+                            GameEvent::ConnectingStart => {
+                                // This event is handled in the TUI app directly
+                                // via the scheduled events mechanism
+                            }
+                            GameEvent::ConnectingDone => {
+                                // This event is handled in the TUI app directly
+                                // via the scheduled events mechanism
+                            }
+                            GameEvent::UpdatingStart => {
+                                // This event is handled in the TUI app directly
+                                // via the scheduled events mechanism
+                            }
+                            GameEvent::UpdatingDone => {
+                                // This event is handled in the TUI app directly
+                                // via the scheduled events mechanism
+                            }
                         }
                     }
                     Err(tokio::sync::broadcast::error::RecvError::Lagged(skipped)) => {
@@ -352,6 +380,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             tui.draw(&app)?;
             last_render_time = now;
         }
+
+        // Process any scheduled events that are due
+        app.process_scheduled_events();
 
         // Centralized event polling and handling
         tokio::select! {

@@ -105,11 +105,24 @@ pub struct App {
     pub chat_input_active: bool,
     /// Currently active tab in the GameWorld scene
     pub game_world_tab: GameWorldTab,
+
+    /// Fake progress for connecting/authenticating (0.0 to 1.0)
+    pub connecting_progress: f64,
+    /// Fake progress for updating/DDD (0.0 to 1.0)
+    pub updating_progress: f64,
+    /// Timestamp of last progress update for connecting
+    pub last_connecting_update: Option<std::time::Instant>,
+    /// Timestamp of last progress update for updating
+    pub last_updating_update: Option<std::time::Instant>,
+    /// Scheduled events that should be fired at specific times
+    pub scheduled_events: Vec<(std::time::Instant, GameEvent)>,
+    /// Flag to indicate if fake progress is complete
+    pub fake_progress_complete: bool,
 }
 
 impl App {
     pub fn new() -> Self {
-        Self {
+        let mut app = Self {
             should_quit: false,
             current_view: AppView::Game,
             game_scene: GameScene::Logging {
@@ -126,7 +139,33 @@ impl App {
             chat_input: String::new(),
             chat_input_active: false,
             game_world_tab: GameWorldTab::World,
-        }
+            connecting_progress: 0.0,
+            updating_progress: 0.0,
+            last_connecting_update: None,
+            last_updating_update: None,
+            scheduled_events: Vec::new(),
+            fake_progress_complete: false,
+        };
+
+        // Schedule fake progress events to take ~3 seconds total
+        // Connect progress: 0% -> 25% -> 50% -> 75% -> 100% (over 1.5 seconds)
+        app.schedule_event(375, GameEvent::ConnectingSetProgress { progress: 0.25 });   // 0.375 sec
+        app.schedule_event(750, GameEvent::ConnectingSetProgress { progress: 0.50 });   // 0.75 sec
+        app.schedule_event(1125, GameEvent::ConnectingSetProgress { progress: 0.75 });  // 1.125 sec
+        app.schedule_event(1500, GameEvent::ConnectingSetProgress { progress: 1.00 });  // 1.5 sec
+
+        // Update progress: 0% -> 25% -> 50% -> 75% -> 100% (over 1.5 more seconds, total 3 seconds)
+        app.schedule_event(1875, GameEvent::UpdatingSetProgress { progress: 0.25 });    // 1.875 sec
+        app.schedule_event(2250, GameEvent::UpdatingSetProgress { progress: 0.50 });    // 2.25 sec
+        app.schedule_event(2625, GameEvent::UpdatingSetProgress { progress: 0.75 });    // 2.625 sec
+        app.schedule_event(3000, GameEvent::UpdatingSetProgress { progress: 1.00 });    // 3.0 sec
+
+        // Schedule a completion event at 3 seconds
+        app.schedule_event(3000, GameEvent::FakeProgressComplete);
+
+        app.fake_progress_complete = false;
+
+        app
     }
 
     pub fn set_channels(
@@ -160,8 +199,9 @@ impl App {
                 self.client_status.characters = characters;
                 self.selected_character_index = 0; // Reset to first character when list updates
 
-                // Transition to character select scene when we have characters
-                if !self.client_status.characters.is_empty() {
+                // If fake progress is already complete, transition immediately
+                // Otherwise, the FakeProgressComplete event will trigger the transition later
+                if !self.client_status.characters.is_empty() && self.fake_progress_complete {
                     self.game_scene = GameScene::CharacterSelect;
                 }
 
@@ -280,6 +320,32 @@ impl App {
                     }
                 }
             }
+            GameEvent::ConnectingSetProgress { progress } => {
+                self.connecting_progress = progress.clamp(0.0, 1.0);
+            }
+            GameEvent::UpdatingSetProgress { progress } => {
+                self.updating_progress = progress.clamp(0.0, 1.0);
+            }
+            GameEvent::FakeProgressComplete => {
+                self.fake_progress_complete = true;
+
+                // If we already received the character list, transition now
+                if !self.client_status.characters.is_empty() {
+                    self.game_scene = GameScene::CharacterSelect;
+                }
+            }
+            GameEvent::ConnectingStart => {
+                // Could add any connecting start logic here
+            }
+            GameEvent::ConnectingDone => {
+                // Could add any connecting done logic here
+            }
+            GameEvent::UpdatingStart => {
+                // Could add any updating start logic here
+            }
+            GameEvent::UpdatingDone => {
+                // Could add any updating done logic here
+            }
         }
     }
 
@@ -287,6 +353,27 @@ impl App {
         self.chat_messages.push_back(message);
         if self.chat_messages.len() > self.max_chat_messages {
             self.chat_messages.pop_front();
+        }
+    }
+
+    /// Schedule an event to be processed at a specific time
+    pub fn schedule_event(&mut self, delay_ms: u64, event: GameEvent) {
+        let when = std::time::Instant::now() + std::time::Duration::from_millis(delay_ms);
+        self.scheduled_events.push((when, event));
+    }
+
+    /// Process any scheduled events that are due
+    pub fn process_scheduled_events(&mut self) {
+        let now = std::time::Instant::now();
+        let mut i = 0;
+        while i < self.scheduled_events.len() {
+            if self.scheduled_events[i].0 <= now {
+                let (_, event) = self.scheduled_events.remove(i);
+                // Process the scheduled event by calling update_from_event
+                self.update_from_event(event);
+            } else {
+                i += 1;
+            }
         }
     }
 }
