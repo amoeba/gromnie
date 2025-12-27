@@ -71,7 +71,7 @@ pub fn render_game_world_view(
 
 /// Render the scene tabs for GameWorld (World, Chat, Map, Inventory)
 fn render_scene_tabs(frame: &mut Frame, area: Rect, app: &App) {
-    let tabs = vec!["World", "Chat", "Map", "Inventory"];
+    let tabs = ["World", "Chat", "Map", "Inventory"];
     let mut spans = vec![];
 
     for (idx, tab_name) in tabs.iter().enumerate() {
@@ -151,11 +151,7 @@ fn render_chat_tab(frame: &mut Frame, area: Rect, app: &App) {
         )));
     } else {
         // Show most recent messages (up to height of area)
-        let max_messages = if app.chat_input_active {
-            (chunks[0].height as usize).saturating_sub(2) // Account for borders
-        } else {
-            (chunks[0].height as usize).saturating_sub(2) // Account for borders
-        };
+        let max_messages = (chunks[0].height as usize).saturating_sub(2); // Account for borders
 
         for message in app.chat_messages.iter().rev().take(max_messages).rev() {
             // Color based on message type

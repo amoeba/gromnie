@@ -12,7 +12,7 @@ fn main() {
     } else {
         // Get git hash
         let git_hash = Command::new("git")
-            .args(&["rev-parse", "--short", "HEAD"])
+            .args(["rev-parse", "--short", "HEAD"])
             .output()
             .ok()
             .and_then(|output| {
@@ -28,7 +28,7 @@ fn main() {
 
         // Check if git workdir is dirty
         let is_dirty = Command::new("git")
-            .args(&["diff-index", "--quiet", "HEAD"])
+            .args(["diff-index", "--quiet", "HEAD"])
             .output()
             .ok()
             .map(|output| !output.status.success())

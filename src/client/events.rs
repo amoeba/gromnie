@@ -73,7 +73,7 @@ pub struct CharacterInfo {
 /// Actions that event handlers can request the client to perform
 #[derive(Debug)]
 pub enum ClientAction {
-    SendMessage(OutgoingMessageContent),
+    SendMessage(Box<OutgoingMessageContent>),
     Disconnect,
     /// Log in as a specific character
     LoginCharacter {
