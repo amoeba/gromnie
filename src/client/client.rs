@@ -1,4 +1,3 @@
-use std::cell::RefCell;
 use std::collections::{HashMap, VecDeque};
 use std::io::Cursor;
 use std::net::SocketAddr;
@@ -13,54 +12,11 @@ use acprotocol::messages::c2s::{
 use acprotocol::messages::s2c::{DDDInterrogationMessage, LoginLoginCharacterSet};
 use tokio::sync::{broadcast, mpsc};
 
-use std::time::Instant;
-
-/// Enum for outgoing messages to be sent in the network loop
-#[derive(Debug)]
-pub enum OutgoingMessageContent {
-    DDDInterrogationResponse(DDDInterrogationResponseMessage),
-    CharacterCreation(CharacterSendCharGenResult),
-    // ACE-compatible character creation (uses custom serialization format)
-    CharacterCreationAce(String, crate::client::ace_protocol::AceCharGenResult),
-    // Character login request - sent when user clicks "Enter" on character select
-    EnterWorldRequest,
-    // Character login - sent when selecting a character to enter the game world (after server ready)
-    EnterWorld(acprotocol::messages::c2s::LoginSendEnterWorld),
-    // GameAction message (raw bytes including opcode)
-    GameAction(Vec<u8>),
-}
-
-/// Struct for outgoing messages that may have attributes like delay, queue, etc.
-#[derive(Debug)]
-pub struct OutgoingMessage {
-    pub content: OutgoingMessageContent,
-    pub deadline: Option<Instant>, // None means send immediately
-                                   // Future attributes could include: queue, priority, etc.
-}
-
-impl OutgoingMessage {
-    /// Create a new immediate message (send right away)
-    pub fn new(content: OutgoingMessageContent) -> Self {
-        Self {
-            content,
-            deadline: None,
-        }
-    }
-
-    /// Add a delay to the message (in seconds from now)
-    pub fn with_delay(mut self, delay_seconds: u64) -> Self {
-        self.deadline = Some(Instant::now() + std::time::Duration::from_secs(delay_seconds));
-        self
-    }
-
-    /// Check if this message is ready to be sent
-    pub fn is_ready(&self) -> bool {
-        match self.deadline {
-            None => true,                                 // No deadline, send immediately
-            Some(deadline) => Instant::now() >= deadline, // Deadline passed, send now
-        }
-    }
-}
+// Import from our new modules
+use crate::client::connection::ServerInfo;
+use crate::client::messages::{OutgoingMessage, OutgoingMessageContent};
+use crate::client::protocol::{C2SPacketExt, CustomLoginRequest};
+use crate::client::session::{Account, SessionState};
 
 use acprotocol::network::packet::PacketHeader;
 use acprotocol::network::{Fragment, RawMessage};
@@ -68,260 +24,16 @@ use acprotocol::packets::c2s_packet::C2SPacket;
 use acprotocol::packets::s2c_packet::S2CPacket;
 use acprotocol::readers::ACDataType;
 use acprotocol::types::{BlobFragments, ConnectRequestHeader, PackableList};
-use acprotocol::writers::{write_i32, write_string, write_u32, ACWritable, ACWriter};
+use acprotocol::writers::{write_string, write_u32, ACWritable};
 use tokio::net::UdpSocket;
 use tracing::{debug, error, info, warn};
 
+use crate::client::constants::*;
 use crate::client::events::{ClientAction, GameEvent};
 use crate::crypto::crypto_system::CryptoSystem;
 use crate::crypto::magic_number::get_magic_number;
 
-// Protocol constants
-const CHECKSUM_PLACEHOLDER: u32 = 0xbadd70dd;
-const PACKET_HEADER_SIZE: usize = 20;
-const CHECKSUM_OFFSET: usize = 8;
-const FRAGMENT_HEADER_SIZE: usize = 16; // sequence(4) + id(4) + count(2) + size(2) + index(2) + group(2)
-
-/// Server information tracking both login and world ports
-#[derive(Clone, Debug)]
-pub struct ServerInfo {
-    pub host: String,
-    pub login_port: u16, // Port 9000 - for LoginRequest and most traffic
-    pub world_port: u16, // Port 9001 - for ConnectResponse and game data
-}
-
-impl ServerInfo {
-    pub fn new(host: String, login_port: u16) -> Self {
-        ServerInfo {
-            host,
-            login_port,
-            world_port: login_port + 1,
-        }
-    }
-
-    /// Check if the given peer address matches this server (either port)
-    pub fn is_from(&self, peer: &SocketAddr) -> bool {
-        let peer_ip = peer.ip().to_string();
-        peer_ip == self.host || peer_ip == "127.0.0.1" || peer_ip == "::1"
-    }
-
-    /// Get the login server address for sending standard messages
-    pub async fn login_addr(&self) -> Result<SocketAddr, std::io::Error> {
-        let addr = format!("{}:{}", self.host, self.login_port);
-        tokio::net::lookup_host(addr)
-            .await?
-            .find(|a| a.is_ipv4())
-            .ok_or_else(|| {
-                std::io::Error::new(
-                    std::io::ErrorKind::NotFound,
-                    "Could not resolve IPv4 address",
-                )
-            })
-    }
-
-    /// Get the world server address for sending ConnectResponse
-    pub async fn world_addr(&self) -> Result<SocketAddr, std::io::Error> {
-        let addr = format!("{}:{}", self.host, self.world_port);
-        tokio::net::lookup_host(addr)
-            .await?
-            .find(|a| a.is_ipv4())
-            .ok_or_else(|| {
-                std::io::Error::new(
-                    std::io::ErrorKind::NotFound,
-                    "Could not resolve IPv4 address",
-                )
-            })
-    }
-}
-
-/// Session state received from the server's ConnectRequest packet
-#[derive(Clone, Debug)]
-struct SessionState {
-    cookie: u64,
-    client_id: u16,
-    table: u16,                            // Table/iteration value from packet header
-    send_generator: RefCell<CryptoSystem>, // Client->Server checksum encryption (initialized from seed_c2s)
-}
-
-/// Custom LoginRequest structure that matches the actual C# client implementation.
-/// This is needed because acprotocol's LoginRequestHeaderType2 is missing the timestamp field.
-#[derive(Clone, Debug)]
-struct CustomLoginRequest {
-    client_version: String,
-    length: u32,
-    login_type: u32, // Password authentication type
-    unknown: u32,    // Always 0
-    timestamp: i32,  // Unix timestamp
-    account: String,
-    password: String, // Raw password string (not WString)
-}
-
-impl ACWritable for CustomLoginRequest {
-    fn write(&self, writer: &mut dyn ACWriter) -> Result<(), Box<dyn std::error::Error>> {
-        // Write client_version string (AC format: i16 length + data + padding to 4-byte alignment)
-        write_string(writer, &self.client_version)?;
-
-        // Write length field
-        write_u32(writer, self.length)?;
-
-        // Write login type (2 for password)
-        write_u32(writer, self.login_type)?;
-
-        // Write unknown (always 0)
-        write_u32(writer, self.unknown)?;
-
-        // Write timestamp
-        write_i32(writer, self.timestamp)?;
-
-        // Write account name
-        write_string(writer, &self.account)?;
-
-        // Write account_to_login_as (always empty = 4 zero bytes for u32)
-        write_u32(writer, 0)?;
-
-        // Write password in C# format (NOT WString):
-        // 1. 4-byte int: length of (packed_byte + string_data)
-        // 2. 1-byte packed length
-        // 3. char array data
-        // 4. padding to 4-byte alignment
-        let password_len = self.password.len();
-        let packed_byte_size = if password_len > 255 { 2 } else { 1 };
-        let total_data_len = packed_byte_size + password_len;
-
-        write_u32(writer, total_data_len as u32)?;
-
-        if password_len <= 255 {
-            writer.write_all(&[password_len as u8])?;
-        } else {
-            // 2-byte packed length for strings > 255
-            let high_byte = ((password_len >> 8) as u8) | 0x80;
-            let low_byte = (password_len & 0xFF) as u8;
-            writer.write_all(&[high_byte, low_byte])?;
-        }
-
-        // Write password chars
-        writer.write_all(self.password.as_bytes())?;
-
-        // Write alignment padding if needed
-        let padding = (4 - (total_data_len % 4)) % 4;
-        if padding > 0 {
-            writer.write_all(&vec![0u8; padding])?;
-        }
-
-        Ok(())
-    }
-}
-
-/// Extension trait for C2SPacket to add serialization with checksum
-/// TODO: Consider putting this in acprotocol
-trait C2SPacketExt {
-    fn serialize(&self, session: Option<&SessionState>) -> Result<Vec<u8>, std::io::Error>;
-    fn calculate_option_size(&self) -> usize;
-}
-
-impl C2SPacketExt for C2SPacket {
-    /// Calculate the size of optional headers based on which fields are present
-    fn calculate_option_size(&self) -> usize {
-        let mut option_size = 0usize;
-
-        // Order matches actestclient's Serialize() method (Packet.cs lines 126-176)
-        if self.ack_sequence.is_some() {
-            option_size += 4; // u32
-        }
-        if self.world_login_request.is_some() {
-            option_size += 8; // u64
-        }
-        if self.connect_response.is_some() {
-            option_size += 8; // u64
-        }
-        // Note: LoginRequest is handled in C2SPacket.write(), so it contributes to size
-        // but is not part of optional headers in the same way
-        if self.time.is_some() {
-            option_size += 8; // u64
-        }
-        if self.echo_time.is_some() {
-            option_size += 4; // f32
-        }
-        if self.flow.is_some() {
-            option_size += 6; // u32 + u16
-        }
-
-        option_size
-    }
-
-    fn serialize(&self, session: Option<&SessionState>) -> Result<Vec<u8>, std::io::Error> {
-        let mut buffer = Vec::new();
-        {
-            let mut cursor = Cursor::new(&mut buffer);
-            self.write(&mut cursor)
-                .map_err(|e| std::io::Error::other(format!("Write error: {}", e)))?;
-        }
-
-        // If this is a fragmented packet with session established, set ENCRYPTED_CHECKSUM flag
-        if self.flags.contains(PacketHeaderFlags::BLOB_FRAGMENTS) && session.is_some() {
-            // Set the ENCRYPTED_CHECKSUM flag (0x2) in the flags field (bytes 4-7)
-            let mut flags = u32::from_le_bytes([buffer[4], buffer[5], buffer[6], buffer[7]]);
-            flags |= 0x2; // ENCRYPTED_CHECKSUM flag
-            buffer[4..8].copy_from_slice(&flags.to_le_bytes());
-        }
-
-        // Calculate option size before we modify the buffer
-        let option_size = self.calculate_option_size();
-
-        // Get the size field from the header (bytes 16-17)
-        // This is the total size of payload + optional headers
-        let header_size = u16::from_le_bytes([buffer[16], buffer[17]]) as usize;
-        let mut checksum_result = 0u32;
-
-        if header_size > 0 {
-            // Step 1: Checksum optional headers if present
-            if option_size > 0 && option_size <= header_size {
-                let option_checksum = get_magic_number(
-                    &buffer[PACKET_HEADER_SIZE..PACKET_HEADER_SIZE + option_size],
-                    option_size,
-                    true,
-                );
-                checksum_result = checksum_result.wrapping_add(option_checksum);
-            }
-
-            // Step 2: Checksum remaining payload (fragments or message data)
-            let remaining = header_size - option_size;
-            if remaining > 0 {
-                let payload_start = PACKET_HEADER_SIZE + option_size;
-                let payload_checksum = get_magic_number(
-                    &buffer[payload_start..payload_start + remaining],
-                    remaining,
-                    true,
-                );
-                checksum_result = checksum_result.wrapping_add(payload_checksum);
-            }
-
-            // Step 3: XOR with seed if this is a fragmented packet with session established
-            // Fragmented packets use encrypted checksums (ENCRYPTED_CHECKSUM flag 0x2)
-            if self.flags.contains(PacketHeaderFlags::BLOB_FRAGMENTS) {
-                if let Some(sess) = session {
-                    let encryption_key = sess.send_generator.borrow_mut().get_send_key();
-                    checksum_result ^= encryption_key;
-                }
-            }
-        }
-
-        // Step 4: Set header checksum to placeholder (0xbadd70dd)
-        buffer[CHECKSUM_OFFSET..CHECKSUM_OFFSET + 4]
-            .copy_from_slice(&CHECKSUM_PLACEHOLDER.to_le_bytes());
-
-        // Step 5: Checksum the entire packet header (with placeholder in checksum field)
-        let header_checksum =
-            get_magic_number(&buffer[0..PACKET_HEADER_SIZE], PACKET_HEADER_SIZE, true);
-        checksum_result = checksum_result.wrapping_add(header_checksum);
-
-        // Step 6: Write final checksum back to the packet
-        buffer[CHECKSUM_OFFSET..CHECKSUM_OFFSET + 4]
-            .copy_from_slice(&checksum_result.to_le_bytes());
-
-        Ok(buffer)
-    }
-}
+use std::cell::RefCell;
 
 // ClientConnectState
 // TODO: Put this somewhere else
@@ -360,11 +72,6 @@ pub enum CharacterLoginState {
 }
 
 // End state machine
-
-struct Account {
-    name: String,
-    password: String,
-}
 
 // TODO: Don't require both bind_address and connect_address. I had to do this
 // to get things to work but I should be able to listen on any random port so

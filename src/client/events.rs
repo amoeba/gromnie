@@ -1,4 +1,4 @@
-use crate::client::client::OutgoingMessageContent;
+use crate::client::messages::OutgoingMessageContent;
 
 /// Direction of network message
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
