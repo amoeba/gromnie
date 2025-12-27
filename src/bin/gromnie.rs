@@ -1,13 +1,16 @@
 use clap::{Parser, Subcommand};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
-use tracing::{error, info, debug};
+use tracing::{debug, error, info};
 use tracing_subscriber::EnvFilter;
 
 use acprotocol::enums::{Gender, HeritageGroup};
 use acprotocol::types::PackableList;
 use gromnie::client::events::{ClientAction, GameEvent};
-use gromnie::client::{Client, PendingOutgoingMessage, ace_protocol::{AceCharGenResult, RawSkillAdvancementClass}};
+use gromnie::client::{
+    ace_protocol::{AceCharGenResult, RawSkillAdvancementClass},
+    Client, PendingOutgoingMessage,
+};
 
 #[derive(Parser)]
 #[command(version, about, long_about = None)]
@@ -138,15 +141,18 @@ async fn client_task(id: u32, address: String, account_name: String, password: S
                                 }
                             },
                             char_name.clone(),
-                            0,  // start_area
-                            0,  // is_admin
-                            0,  // is_envoy
-                            0,  // validation
+                            0, // start_area
+                            0, // is_admin
+                            0, // is_envoy
+                            0, // validation
                         );
 
                         info!(target: "events", "Creating character: {}", char_name);
 
-                        let msg = PendingOutgoingMessage::CharacterCreationAce(account.clone(), char_gen_result);
+                        let msg = PendingOutgoingMessage::CharacterCreationAce(
+                            account.clone(),
+                            char_gen_result,
+                        );
                         if let Err(e) = action_tx.send(ClientAction::SendMessage(msg)) {
                             error!(target: "events", "Failed to send character creation action: {}", e);
                         } else {
@@ -159,11 +165,11 @@ async fn client_task(id: u32, address: String, account_name: String, password: S
                         for char_info in &characters {
                             info!(target: "events", "  Character: {} (ID: {})", char_info.name, char_info.id);
                         }
-                        
+
                         // Log in as the first character
                         let first_char = &characters[0];
                         info!(target: "events", "Attempting to log in as: {} (ID: {})", first_char.name, first_char.id);
-                        
+
                         // Send action to login
                         if let Err(e) = action_tx.send(ClientAction::LoginCharacter {
                             character_id: first_char.id,
@@ -180,7 +186,10 @@ async fn client_task(id: u32, address: String, account_name: String, password: S
                 GameEvent::DDDInterrogation { language, region } => {
                     info!(target: "events", "DDD Interrogation: lang={} region={}", language, region);
                 }
-                GameEvent::LoginSucceeded { character_id, character_name } => {
+                GameEvent::LoginSucceeded {
+                    character_id,
+                    character_name,
+                } => {
                     info!(target: "events", "=== LOGIN SUCCEEDED === Character: {} (ID: {}) | You are now in the game world!", character_name, character_id);
                     // LoginComplete is already sent by the client when 0xF746 is received
                 }
@@ -188,13 +197,22 @@ async fn client_task(id: u32, address: String, account_name: String, password: S
                     error!(target: "events", "=== LOGIN FAILED ===");
                     error!(target: "events", "Reason: {}", reason);
                 }
-                GameEvent::CreateObject { object_id, object_name } => {
+                GameEvent::CreateObject {
+                    object_id,
+                    object_name,
+                } => {
                     info!(target: "events", "CREATE OBJECT: {} (0x{:08X})", object_name, object_id);
                 }
-                GameEvent::ChatMessageReceived { message, message_type } => {
+                GameEvent::ChatMessageReceived {
+                    message,
+                    message_type,
+                } => {
                     info!(target: "events", "CHAT [{}]: {}", message_type, message);
                 }
-                GameEvent::NetworkMessage { direction, message_type } => {
+                GameEvent::NetworkMessage {
+                    direction,
+                    message_type,
+                } => {
                     debug!(target: "events", "Network message: {:?} - {}", direction, message_type);
                 }
             }
