@@ -847,10 +847,14 @@ impl Client {
         info!(target: "net", "Sending DDD Interrogation Response - Language: {}, Files: {:?}",
             response.language, response.files.list);
 
-        // Serialize the response message (payload data without opcode)
+        // Serialize the response message with opcode prefix
         let mut message_data = Vec::new();
         {
             let mut cursor = Cursor::new(&mut message_data);
+            // Write opcode first (0xF7E6 = DDD_InterrogationResponse)
+            write_u32(&mut cursor, 0xF7E6)
+                .map_err(|e| std::io::Error::other(format!("Write error: {}", e)))?;
+            // Then write the message payload
             response
                 .write(&mut cursor)
                 .map_err(|e| std::io::Error::other(format!("Write error: {}", e)))?;
