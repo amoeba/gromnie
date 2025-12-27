@@ -109,7 +109,7 @@ pub struct App {
 
 impl App {
     pub fn new() -> Self {
-        let mut app = Self {
+        Self {
             should_quit: false,
             current_view: AppView::Game,
             game_scene: GameScene::Logging {
@@ -131,9 +131,7 @@ impl App {
             updating_progress: 0.0,
             last_connecting_update: None,
             last_updating_update: None,
-        };
-
-        app
+        }
     }
 
     pub fn set_channels(
