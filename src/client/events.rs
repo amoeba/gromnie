@@ -1,4 +1,4 @@
-use crate::client::client::PendingOutgoingMessage;
+use crate::client::client::OutgoingMessageContent;
 
 /// Direction of network message
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -55,7 +55,7 @@ pub struct CharacterInfo {
 /// Actions that event handlers can request the client to perform
 #[derive(Debug)]
 pub enum ClientAction {
-    SendMessage(PendingOutgoingMessage),
+    SendMessage(OutgoingMessageContent),
     Disconnect,
     /// Log in as a specific character
     LoginCharacter {

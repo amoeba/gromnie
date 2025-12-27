@@ -9,7 +9,8 @@ use acprotocol::types::PackableList;
 use gromnie::client::events::{ClientAction, GameEvent};
 use gromnie::client::{
     ace_protocol::{AceCharGenResult, RawSkillAdvancementClass},
-    Client, PendingOutgoingMessage,
+    Client,
+    OutgoingMessageContent,
 };
 use gromnie::tui::{event_handler::EventHandler, ui::try_init_tui, App};
 use tokio::sync::mpsc;
@@ -158,7 +159,7 @@ async fn client_task(
 
                                     info!(target: "events", "Creating character: {}", char_name);
 
-                                    let msg = PendingOutgoingMessage::CharacterCreationAce(
+                                    let msg = OutgoingMessageContent::CharacterCreationAce(
                                         account.clone(),
                                         char_gen_result,
                                     );
