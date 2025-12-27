@@ -515,6 +515,11 @@ impl Client {
 
     /// Send LoginComplete notification to server after receiving initial world state
     fn send_login_complete_notification(&mut self) {
+        // Only send once - check if we're already succeeded or in progress
+        if self.character_login_state == CharacterLoginState::Succeeded {
+            return;
+        }
+        
         info!(target: "net", "Sending LoginComplete notification to server");
 
         // GameActions must be wrapped in Ordered_GameAction (0xF7B1)
@@ -531,12 +536,26 @@ impl Client {
         // Queue for sending
         self.outgoing_message_queue.push_back(PendingOutgoingMessage::GameAction(message_data));
 
+        // Extract character info from current login state
+        let (character_id, character_name) = match &self.character_login_state {
+            CharacterLoginState::WaitingForServerReady {
+                character_id,
+                character_name,
+                ..
+            } => (*character_id, character_name.clone()),
+            CharacterLoginState::LoadingWorld => (0, String::new()),
+            _ => (0, String::new()),
+        };
+
         // Emit LoginSucceeded event to update UI
         let event = GameEvent::LoginSucceeded {
-            character_id: 0, // TODO: track current character ID
-            character_name: "".to_string(), // TODO: track current character name
+            character_id,
+            character_name,
         };
         let _ = self.event_tx.send(event);
+        
+        // Update state to succeeded
+        self.character_login_state = CharacterLoginState::Succeeded;
 
         info!(target: "net", "LoginComplete notification queued and event emitted");
     }
@@ -959,19 +978,26 @@ impl Client {
                 let _ = self.event_tx.send(event);
 
                 info!(target: "net", "Parsed as S2CMessage: {:?} (0x{:04X})", msg_type, message.opcode);
-                match msg_type {
-                    S2CMessage::LoginLoginCharacterSet => self.handle_character_list(message),
-                    S2CMessage::DDDInterrogationMessage => self.handle_ddd_interrogation(message),
-                    S2CMessage::CharacterCharGenVerificationResponse => self.handle_character_gen_response(message),
-                    S2CMessage::LoginEnterGameServerReady => self.handle_enter_game_server_ready(message),
-                    S2CMessage::ItemCreateObject => self.handle_create_object(message),
-                    S2CMessage::CommunicationTextboxString => self.handle_chat_message(message),
-                    S2CMessage::CommunicationHearSpeech => self.handle_hear_speech(message),
-                    S2CMessage::CommunicationHearRangedSpeech => self.handle_hear_ranged_speech(message),
-                    S2CMessage::OrderedGameEvent => self.handle_game_event(message),
-                    // Add more handlers as needed
-                    _ => {
-                        info!(target: "net", "Unhandled S2CMessage: {:?} (0x{:04X})", msg_type, message.opcode);
+                
+                // Handle LoginCreatePlayer (0xF746) to signal login succeeded (only once)
+                if message.opcode == 0xF746 && self.character_login_state == CharacterLoginState::LoadingWorld {
+                    info!(target: "net", "Received LoginCreatePlayer (0xF746) - character logged in successfully");
+                    self.send_login_complete_notification();
+                } else if message.opcode != 0xF746 {
+                    match msg_type {
+                        S2CMessage::LoginLoginCharacterSet => self.handle_character_list(message),
+                        S2CMessage::DDDInterrogationMessage => self.handle_ddd_interrogation(message),
+                        S2CMessage::CharacterCharGenVerificationResponse => self.handle_character_gen_response(message),
+                        S2CMessage::LoginEnterGameServerReady => self.handle_enter_game_server_ready(message),
+                        S2CMessage::ItemCreateObject => self.handle_create_object(message),
+                        S2CMessage::CommunicationTextboxString => self.handle_chat_message(message),
+                        S2CMessage::CommunicationHearSpeech => self.handle_hear_speech(message),
+                        S2CMessage::CommunicationHearRangedSpeech => self.handle_hear_ranged_speech(message),
+                        S2CMessage::OrderedGameEvent => self.handle_game_event(message),
+                        // Add more handlers as needed
+                        _ => {
+                            info!(target: "net", "Unhandled S2CMessage: {:?} (0x{:04X})", msg_type, message.opcode);
+                        }
                     }
                 }
             }

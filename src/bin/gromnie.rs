@@ -171,6 +171,9 @@ async fn client_task(id: u32, address: String, account_name: String, password: S
                             account: account.clone(),
                         }) {
                             error!(target: "events", "Failed to send login action: {}", e);
+                        } else {
+                            // Store the character for later use
+                            character_created_clone.store(true, Ordering::SeqCst);
                         }
                     }
                 }
@@ -181,15 +184,16 @@ async fn client_task(id: u32, address: String, account_name: String, password: S
                     info!(target: "events", "=== LOGIN SUCCEEDED ===");
                     info!(target: "events", "Character: {} (ID: {})", character_name, character_id);
                     info!(target: "events", "You are now in the game world!");
+                    // LoginComplete is already sent by the client when 0xF746 is received
                 }
                 GameEvent::LoginFailed { reason } => {
                     error!(target: "events", "=== LOGIN FAILED ===");
                     error!(target: "events", "Reason: {}", reason);
                 }
                 GameEvent::CreateObject { object_id, object_name } => {
-                    debug!(target: "events", "=== CREATE OBJECT ===");
-                    debug!(target: "events", "Name: {}", object_name);
-                    debug!(target: "events", "ID: 0x{:08X}", object_id);
+                    info!(target: "events", "=== CREATE OBJECT ===");
+                    info!(target: "events", "Name: {}", object_name);
+                    info!(target: "events", "ID: 0x{:08X}", object_id);
                 }
                 GameEvent::ChatMessageReceived { message, message_type } => {
                     info!(target: "events", "=== CHAT MESSAGE ===");
@@ -278,7 +282,7 @@ async fn main() -> Result<(), ()> {
     // Initialize tracing subscriber with env filter
     tracing_subscriber::fmt()
         .with_env_filter(
-            EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("debug")),
+            EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info")),
         )
         .init();
 
