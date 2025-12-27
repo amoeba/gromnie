@@ -343,6 +343,7 @@ pub struct Client {
     pub recv_count: u32,
     last_acked_to_server: u32, // Last sequence we ACKed to the server
     fragment_sequence: u32, // Counter for outgoing fragment sequences
+    next_game_action_sequence: u32, // Sequence counter for GameAction messages
     session: Option<SessionState>,
     pending_fragments: HashMap<u32, Fragment>, // Track incomplete fragment sequences
     message_queue: VecDeque<RawMessage>,       // Queue of parsed messages to process
@@ -388,6 +389,7 @@ impl Client {
             recv_count: 0,
             last_acked_to_server: 0,
             fragment_sequence: 1, // Start at 1 as per actestclient
+            next_game_action_sequence: 0, // Start at 0 for GameAction sequences
             session: None,
             pending_fragments: HashMap::new(),
             message_queue: VecDeque::new(),
@@ -515,26 +517,29 @@ impl Client {
 
     /// Send LoginComplete notification to server after receiving initial world state
     fn send_login_complete_notification(&mut self) {
-        // Only send once - check if we're already succeeded or in progress
-        if self.character_login_state == CharacterLoginState::Succeeded {
-            return;
-        }
-        
-        info!(target: "net", "Sending LoginComplete notification to server");
+       // Only send once - check if we're already succeeded or in progress
+       if self.character_login_state == CharacterLoginState::Succeeded {
+           return;
+       }
+       
+       info!(target: "net", "Sending LoginComplete notification to server");
 
-        // GameActions must be wrapped in Ordered_GameAction (0xF7B1)
-        // Format: 0xF7B1 (wrapper opcode) + 0x00A1 (LoginComplete action)
-        let mut message_data = Vec::new();
-        {
-            let mut cursor = Cursor::new(&mut message_data);
-            // Write wrapper opcode first (0xF7B1 = Ordered_GameAction)
-            write_u32(&mut cursor, 0xF7B1).expect("write failed");
-            // Write GameAction opcode (0x00A1 = Character_LoginCompleteNotification)
-            write_u32(&mut cursor, 0x00A1).expect("write failed");
-        }
+       // GameAction packet payload: sequence + opcode
+       // Wrap with 0xF7B1 (OrderedGameAction) opcode
+       let mut message_data = Vec::new();
+       {
+           let mut cursor = Cursor::new(&mut message_data);
+           // Write 0xF7B1 opcode (OrderedGameAction wrapper)
+           write_u32(&mut cursor, 0xF7B1).expect("write failed");
+           // Write sequence number
+           write_u32(&mut cursor, self.next_game_action_sequence).expect("write failed");
+           self.next_game_action_sequence += 1;
+           // Write GameAction opcode (0x00A1 = Character_LoginCompleteNotification)
+           write_u32(&mut cursor, 0x00A1).expect("write failed");
+       }
 
-        // Queue for sending
-        self.outgoing_message_queue.push_back(PendingOutgoingMessage::GameAction(message_data));
+       // Queue for sending
+       self.outgoing_message_queue.push_back(PendingOutgoingMessage::GameAction(message_data));
 
         // Extract character info from current login state
         let (character_id, character_name) = match &self.character_login_state {
@@ -567,10 +572,17 @@ impl Client {
         info!(target: "net", "Sending chat message: {}", message);
 
         // Build the GameAction::Tell message (0x005D)
-        // Format: opcode (u32) + message (String) + target (String)
+        // Format: 0xF7B1 (OrderedGameAction) + sequence (u32) + opcode (u32) + message (String) + target (String)
         let mut message_data = Vec::new();
         {
             let mut cursor = Cursor::new(&mut message_data);
+
+            // Write 0xF7B1 opcode (OrderedGameAction wrapper)
+            write_u32(&mut cursor, 0xF7B1).expect("write failed");
+
+            // Write sequence number
+            write_u32(&mut cursor, self.next_game_action_sequence).expect("write failed");
+            self.next_game_action_sequence += 1;
 
             // Write GameAction opcode (Tell = 0x005D)
             write_u32(&mut cursor, 0x005D).expect("Failed to write opcode");
