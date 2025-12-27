@@ -1,5 +1,7 @@
 // Re-export main types
-pub use self::client::Client;
+pub use self::client::{
+    Client, ClientFailureReason, ClientState, ConnectingProgress, PatchingProgress,
+};
 pub use self::connection::ServerInfo;
 pub use self::messages::{OutgoingMessage, OutgoingMessageContent};
 pub use self::protocol::{C2SPacketExt, CustomLoginRequest};

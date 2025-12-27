@@ -83,6 +83,12 @@ impl EventConsumer for LoggingConsumer {
             } => {
                 debug!(target: "events", "Network message: {:?} - {}", direction, message_type);
             }
+            GameEvent::AuthenticationSucceeded => {
+                info!(target: "events", "Authentication succeeded - connected to server");
+            }
+            GameEvent::AuthenticationFailed { reason } => {
+                error!(target: "events", "Authentication failed: {}", reason);
+            }
             // Ignore progress events in the CLI version
             GameEvent::ConnectingSetProgress { .. }
             | GameEvent::UpdatingSetProgress { .. }
@@ -165,6 +171,12 @@ impl EventConsumer for TuiConsumer {
                 message_type,
             } => {
                 debug!(target: "events", "Network message: {:?} - {}", direction, message_type);
+            }
+            GameEvent::AuthenticationSucceeded => {
+                info!(target: "events", "Authentication succeeded - connected to server");
+            }
+            GameEvent::AuthenticationFailed { reason } => {
+                error!(target: "events", "Authentication failed: {}", reason);
             }
             // Progress events are handled by TUI directly
             GameEvent::ConnectingSetProgress { .. }

@@ -106,62 +106,24 @@ async fn run_client_internal<C: EventConsumer>(
         info!(target: "events", "Event handler task stopped");
     });
 
-    // Connect to server
-    if let Err(e) = client.connect().await {
-        error!("Connect failed: {}", e);
-        panic!("Connect failed");
+    // Note: We don't call client.connect() here anymore - the client starts in Connecting state
+    // and we handle retries in the main loop below
+
+    // Send initial LoginRequest
+    if let Err(e) = client.do_login().await {
+        error!("Failed to send initial LoginRequest: {}", e);
+        panic!("Failed to send initial LoginRequest");
     }
-
-    // Perform login handshake with timeout and retry
-    let login_timeout = tokio::time::Duration::from_secs(120); // 2 minute total timeout
-    let retry_interval = tokio::time::Duration::from_secs(5); // Retry every 5 seconds
-    let start_time = tokio::time::Instant::now();
-
-    loop {
-        match tokio::time::timeout(tokio::time::Duration::from_secs(10), client.do_login()).await {
-            Ok(Ok(_)) => {
-                info!("Login request sent successfully");
-                break;
-            }
-            Ok(Err(e)) => {
-                error!("Login failed: {}", e);
-
-                // Check if we've exceeded total timeout
-                if start_time.elapsed() >= login_timeout {
-                    error!(
-                        "Failed to connect to server after {} seconds",
-                        login_timeout.as_secs()
-                    );
-                    panic!("Connection timeout - server may be down");
-                }
-
-                // Wait before retry
-                info!("Retrying in {} seconds...", retry_interval.as_secs());
-                tokio::time::sleep(retry_interval).await;
-            }
-            Err(_) => {
-                error!("Login request timed out");
-
-                // Check if we've exceeded total timeout
-                if start_time.elapsed() >= login_timeout {
-                    error!(
-                        "Failed to connect to server after {} seconds",
-                        login_timeout.as_secs()
-                    );
-                    panic!("Connection timeout - server may be down");
-                }
-
-                // Wait before retry
-                info!("Retrying in {} seconds...", retry_interval.as_secs());
-                tokio::time::sleep(retry_interval).await;
-            }
-        }
-    }
+    info!("Initial LoginRequest sent - entering state machine loop");
 
     // Main network loop
     let mut buf = [0u8; 1024];
     let mut last_keepalive = tokio::time::Instant::now();
     let keepalive_interval = tokio::time::Duration::from_secs(10);
+
+    // Tick interval for checking retries and timeouts
+    let tick_interval = tokio::time::Duration::from_millis(100); // Check every 100ms
+    let mut last_tick = tokio::time::Instant::now();
 
     loop {
         tokio::select! {
@@ -188,11 +150,51 @@ async fn run_client_internal<C: EventConsumer>(
                     }
                 }
             }
-            _ = tokio::time::sleep_until(last_keepalive + keepalive_interval) => {
-                if let Err(e) = client.send_keepalive().await {
-                    error!("Failed to send keep-alive: {}", e);
+            _ = tokio::time::sleep_until(last_tick + tick_interval) => {
+                last_tick = tokio::time::Instant::now();
+
+                // Check for state timeouts
+                if client.check_state_timeout() {
+                    error!("Client entered Failed state - shutting down");
+                    break;
                 }
-                last_keepalive = tokio::time::Instant::now();
+
+                // Check if we should retry in current state
+                if client.should_retry() {
+                    use crate::client::ClientState;
+                    match client.get_state() {
+                        ClientState::Connecting { .. } => {
+                            info!("Retrying LoginRequest...");
+                            if let Err(e) = client.do_login().await {
+                                error!("Failed to send LoginRequest retry: {}", e);
+                            }
+                            client.update_retry_time();
+                        }
+                        ClientState::Patching { progress, .. } => {
+                            // Only retry if we've already sent the DDD response and are waiting for character list
+                            // (i.e., we're in DDDResponseSent state)
+                            if matches!(progress, crate::client::PatchingProgress::DDDResponseSent) {
+                                if client.get_ddd_response().is_some() {
+                                    info!("Retrying DDDInterrogationResponse...");
+                                    if let Err(e) = client.retry_ddd_response().await {
+                                        error!("Failed to retry DDDInterrogationResponse: {}", e);
+                                    }
+                                }
+                            }
+                            // If we're still waiting for DDDInterrogation, just wait (no retry)
+                            client.update_retry_time();
+                        }
+                        _ => {}
+                    }
+                }
+
+                // Send keepalive if needed
+                if last_keepalive.elapsed() >= keepalive_interval {
+                    if let Err(e) = client.send_keepalive().await {
+                        error!("Failed to send keep-alive: {}", e);
+                    }
+                    last_keepalive = tokio::time::Instant::now();
+                }
             }
             _ = async {
                 if let Some(ref mut rx) = shutdown_rx {
