@@ -7,10 +7,9 @@
 /// Rather than modifying ACE (the reference implementation), we match its expectations
 /// by providing custom serialization here. This module contains structures that serialize
 /// in the format ACE expects.
-
 use acprotocol::enums::{Gender, HeritageGroup};
 use acprotocol::types::PackableList;
-use acprotocol::writers::{ACWritable, ACWriter, write_u32};
+use acprotocol::writers::{write_u32, ACWritable, ACWriter};
 
 /// Wrapper for raw u32 skill advancement class values
 /// ACE server defines Inactive = 0, but acprotocol only defines 1, 2, 3
@@ -34,8 +33,8 @@ impl ACWritable for RawSkillAdvancementClass {
 #[derive(Clone, Debug)]
 pub struct AceCharGenResult {
     pub one: u32,
-    pub heritage_group: u32,  // u32, not u8 like in acprotocol
-    pub gender: u32,           // u32, not u8 like in acprotocol
+    pub heritage_group: u32, // u32, not u8 like in acprotocol
+    pub gender: u32,         // u32, not u8 like in acprotocol
     pub eyes_strip: u32,
     pub nose_strip: u32,
     pub mouth_strip: u32,
@@ -160,7 +159,7 @@ impl ACWritable for AceCharGenResult {
     fn write(&self, writer: &mut dyn ACWriter) -> Result<(), Box<dyn std::error::Error>> {
         // NOTE: ACE does NOT expect the account string here. It reads the account
         // from the outer Character_SendCharGenResult message wrapper instead.
-        
+
         acprotocol::writers::write_u32(writer, self.one)?;
         acprotocol::writers::write_u32(writer, self.heritage_group)?;
         acprotocol::writers::write_u32(writer, self.gender)?;

@@ -19,14 +19,21 @@ impl EventHandler {
     pub fn new() -> (Self, mpsc::UnboundedReceiver<TuiEvent>) {
         let (tx, rx) = mpsc::unbounded_channel();
         let (shutdown_tx, _) = mpsc::unbounded_channel();
-        (Self { tx, shutdown_tx, task_handle: None }, rx)
+        (
+            Self {
+                tx,
+                shutdown_tx,
+                task_handle: None,
+            },
+            rx,
+        )
     }
 
     pub async fn start(mut self) -> Self {
         let tx = self.tx.clone();
         let (shutdown_tx, mut shutdown_rx) = mpsc::unbounded_channel();
         self.shutdown_tx = shutdown_tx;
-        
+
         // Spawn a task that polls for terminal events
         let handle = tokio::spawn(async move {
             loop {
@@ -65,7 +72,7 @@ impl EventHandler {
     pub fn shutdown(self) {
         // Send shutdown signal to the event handler task
         let _ = self.shutdown_tx.send(());
-        
+
         // Give it a moment to shut down gracefully
         if let Some(handle) = self.task_handle {
             handle.abort();
@@ -77,6 +84,10 @@ impl Default for EventHandler {
     fn default() -> Self {
         let (tx, _) = mpsc::unbounded_channel();
         let (shutdown_tx, _) = mpsc::unbounded_channel();
-        Self { tx, shutdown_tx, task_handle: None }
+        Self {
+            tx,
+            shutdown_tx,
+            task_handle: None,
+        }
     }
 }

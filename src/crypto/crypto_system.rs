@@ -23,7 +23,7 @@ impl CryptoSystem {
         seed_array[20..24].copy_from_slice(&seed.to_le_bytes());
         seed_array[24..28].copy_from_slice(&seed.to_le_bytes());
         seed_array[28..32].copy_from_slice(&seed.to_le_bytes());
-        
+
         let rng = IsaacRng::from_seed(seed_array);
         CryptoSystem { rng }
     }
@@ -43,12 +43,12 @@ mod tests {
     #[test]
     fn test_crypto_system_sequence() {
         let mut crypto = CryptoSystem::new(0x12345678);
-        
+
         // Each call should produce a different value
         let key1 = crypto.get_send_key();
         let key2 = crypto.get_send_key();
         let key3 = crypto.get_send_key();
-        
+
         assert_ne!(key1, key2);
         assert_ne!(key2, key3);
         assert_ne!(key1, key3);
@@ -58,7 +58,7 @@ mod tests {
     fn test_crypto_system_deterministic() {
         let mut crypto1 = CryptoSystem::new(0x12345678);
         let mut crypto2 = CryptoSystem::new(0x12345678);
-        
+
         // Same seed should produce same sequence
         assert_eq!(crypto1.get_send_key(), crypto2.get_send_key());
         assert_eq!(crypto1.get_send_key(), crypto2.get_send_key());

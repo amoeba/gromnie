@@ -2,15 +2,18 @@ use clap::Parser;
 use crossterm::event::KeyCode;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
-use tracing::{error, info, debug};
+use tracing::{debug, error, info};
 use tracing_subscriber::EnvFilter;
 
 use acprotocol::enums::{Gender, HeritageGroup};
 use acprotocol::types::PackableList;
 use gromnie::client::events::{ClientAction, GameEvent};
-use gromnie::client::{Client, PendingOutgoingMessage, ace_protocol::{AceCharGenResult, RawSkillAdvancementClass}};
+use gromnie::client::{
+    ace_protocol::{AceCharGenResult, RawSkillAdvancementClass},
+    Client, PendingOutgoingMessage,
+};
+use gromnie::tui::{event_handler::EventHandler, ui::try_init_tui, App};
 use tokio::sync::mpsc;
-use gromnie::tui::{App, event_handler::EventHandler, ui::try_init_tui};
 
 #[derive(Parser)]
 #[command(version, about, long_about = None)]
@@ -48,7 +51,7 @@ async fn client_task(
         password.to_owned(),
     )
     .await;
-    
+
     // Send the action_tx channel back to the TUI so it can send login actions
     let _ = action_tx_sender.send(action_tx.clone());
 
@@ -69,123 +72,142 @@ async fn client_task(
                         let _ = tx.send(event.clone());
 
                         match event {
-                GameEvent::CharacterListReceived {
-                    account,
-                    characters,
-                    num_slots,
-                } => {
-                    info!(target: "events", "=== Character List Event ===");
-                    info!(target: "events", "Account: {}", account);
-                    info!(target: "events", "Slots: {}", num_slots);
-                    info!(target: "events", "Number of characters: {}", characters.len());
+                            GameEvent::CharacterListReceived {
+                                account,
+                                characters,
+                                num_slots,
+                            } => {
+                                info!(target: "events", "=== Character List Event ===");
+                                info!(target: "events", "Account: {}", account);
+                                info!(target: "events", "Slots: {}", num_slots);
+                                info!(target: "events", "Number of characters: {}", characters.len());
 
-                    // Print character names
-                    for char_info in &characters {
-                        if char_info.delete_pending {
-                            info!(target: "events", "  - {} (ID: {}) [PENDING DELETION]", char_info.name, char_info.id);
-                        } else {
-                            info!(target: "events", "  - {} (ID: {})", char_info.name, char_info.id);
-                        }
-                    }
-
-                    // If we don't have any characters, create one
-                    if characters.is_empty() && !character_created_clone.load(Ordering::SeqCst) {
-                        info!(target: "events", "No characters found - creating a new character...");
-
-                        // Mark that we're creating a character
-                        character_created_clone.store(true, Ordering::SeqCst);
-
-                        // Create a simple character with default values
-                        let char_name =
-                            format!("TestChar{}", chrono::Utc::now().timestamp() % 10000);
-
-                        // Use ACE-compatible character generation format
-                        let char_gen_result = AceCharGenResult::from_generic(
-                            HeritageGroup::Aluvian,
-                            Gender::Male,
-                            0,  // eyes_strip
-                            0,  // nose_strip
-                            0,  // mouth_strip
-                            0,  // hair_color
-                            0,  // eye_color
-                            0,  // hair_style
-                            0,  // headgear_style
-                            0,  // headgear_color
-                            0,  // shirt_style
-                            0,  // shirt_color
-                            0,  // trousers_style
-                            0,  // trousers_color
-                            0,  // footwear_style
-                            0,  // footwear_color
-                            0,  // skin_shade
-                            0,  // hair_shade
-                            0,  // headgear_shade
-                            0,  // shirt_shade
-                            0,  // trousers_shade
-                            0,  // tootwear_shade
-                            0,  // template_num
-                            10, // strength
-                            10, // endurance
-                            10, // coordination
-                            10, // quickness
-                            10, // focus
-                            10, // self_
-                            0,  // slot
-                            0,  // class_id
-                            {
-                                // Create a list of 55 skill entries, all set to Inactive (0)
-                                let mut skills = vec![];
-                                for _ in 0..55 {
-                                    skills.push(RawSkillAdvancementClass(0));
+                                // Print character names
+                                for char_info in &characters {
+                                    if char_info.delete_pending {
+                                        info!(target: "events", "  - {} (ID: {}) [PENDING DELETION]", char_info.name, char_info.id);
+                                    } else {
+                                        info!(target: "events", "  - {} (ID: {})", char_info.name, char_info.id);
+                                    }
                                 }
-                                PackableList {
-                                    count: 55,
-                                    list: skills,
+
+                                // If we don't have any characters, create one
+                                if characters.is_empty()
+                                    && !character_created_clone.load(Ordering::SeqCst)
+                                {
+                                    info!(target: "events", "No characters found - creating a new character...");
+
+                                    // Mark that we're creating a character
+                                    character_created_clone.store(true, Ordering::SeqCst);
+
+                                    // Create a simple character with default values
+                                    let char_name = format!(
+                                        "TestChar{}",
+                                        chrono::Utc::now().timestamp() % 10000
+                                    );
+
+                                    // Use ACE-compatible character generation format
+                                    let char_gen_result = AceCharGenResult::from_generic(
+                                        HeritageGroup::Aluvian,
+                                        Gender::Male,
+                                        0,  // eyes_strip
+                                        0,  // nose_strip
+                                        0,  // mouth_strip
+                                        0,  // hair_color
+                                        0,  // eye_color
+                                        0,  // hair_style
+                                        0,  // headgear_style
+                                        0,  // headgear_color
+                                        0,  // shirt_style
+                                        0,  // shirt_color
+                                        0,  // trousers_style
+                                        0,  // trousers_color
+                                        0,  // footwear_style
+                                        0,  // footwear_color
+                                        0,  // skin_shade
+                                        0,  // hair_shade
+                                        0,  // headgear_shade
+                                        0,  // shirt_shade
+                                        0,  // trousers_shade
+                                        0,  // tootwear_shade
+                                        0,  // template_num
+                                        10, // strength
+                                        10, // endurance
+                                        10, // coordination
+                                        10, // quickness
+                                        10, // focus
+                                        10, // self_
+                                        0,  // slot
+                                        0,  // class_id
+                                        {
+                                            // Create a list of 55 skill entries, all set to Inactive (0)
+                                            let mut skills = vec![];
+                                            for _ in 0..55 {
+                                                skills.push(RawSkillAdvancementClass(0));
+                                            }
+                                            PackableList {
+                                                count: 55,
+                                                list: skills,
+                                            }
+                                        },
+                                        char_name.clone(),
+                                        0, // start_area
+                                        0, // is_admin
+                                        0, // is_envoy
+                                        0, // validation
+                                    );
+
+                                    info!(target: "events", "Creating character: {}", char_name);
+
+                                    let msg = PendingOutgoingMessage::CharacterCreationAce(
+                                        account.clone(),
+                                        char_gen_result,
+                                    );
+                                    if let Err(e) = action_tx.send(ClientAction::SendMessage(msg)) {
+                                        error!(target: "events", "Failed to send character creation action: {}", e);
+                                    } else {
+                                        info!(target: "events", "Character creation action sent - waiting for response...");
+                                    }
                                 }
-                            },
-                            char_name.clone(),
-                            0,  // start_area
-                            0,  // is_admin
-                            0,  // is_envoy
-                            0,  // validation
-                        );
-
-                        info!(target: "events", "Creating character: {}", char_name);
-
-                        let msg = PendingOutgoingMessage::CharacterCreationAce(account.clone(), char_gen_result);
-                        if let Err(e) = action_tx.send(ClientAction::SendMessage(msg)) {
-                            error!(target: "events", "Failed to send character creation action: {}", e);
-                        } else {
-                            info!(target: "events", "Character creation action sent - waiting for response...");
-                        }
-                    }
-                    // Character list received - user will select from TUI
-                    else if !characters.is_empty() {
-                        info!(target: "events", "Found existing character(s):");
-                        for char_info in &characters {
-                            info!(target: "events", "  Character: {} (ID: {})", char_info.name, char_info.id);
-                        }
-                    }
-                }
-                GameEvent::DDDInterrogation { language, region } => {
-                    info!(target: "events", "DDD Interrogation: lang={} region={}", language, region);
-                }
-                GameEvent::LoginSucceeded { character_id, character_name } => {
-                    info!(target: "events", "=== LOGIN SUCCEEDED === Character: {} (ID: {}) | You are now in the game world!", character_name, character_id);
-                }
-                GameEvent::LoginFailed { reason } => {
-                    error!(target: "events", "=== LOGIN FAILED ===");
-                    error!(target: "events", "Reason: {}", reason);
-                }
-                GameEvent::CreateObject { object_id, object_name } => {
-                    debug!(target: "events", "CREATE OBJECT: {} (0x{:08X})", object_name, object_id);
-                }
-                GameEvent::ChatMessageReceived { message, message_type } => {
-                    info!(target: "events", "CHAT [{}]: {}", message_type, message);
-                }
-                GameEvent::NetworkMessage { direction, message_type } => {
-                    debug!(target: "events", "Network message: {:?} - {}", direction, message_type);
-                }
+                                // Character list received - user will select from TUI
+                                else if !characters.is_empty() {
+                                    info!(target: "events", "Found existing character(s):");
+                                    for char_info in &characters {
+                                        info!(target: "events", "  Character: {} (ID: {})", char_info.name, char_info.id);
+                                    }
+                                }
+                            }
+                            GameEvent::DDDInterrogation { language, region } => {
+                                info!(target: "events", "DDD Interrogation: lang={} region={}", language, region);
+                            }
+                            GameEvent::LoginSucceeded {
+                                character_id,
+                                character_name,
+                            } => {
+                                info!(target: "events", "=== LOGIN SUCCEEDED === Character: {} (ID: {}) | You are now in the game world!", character_name, character_id);
+                            }
+                            GameEvent::LoginFailed { reason } => {
+                                error!(target: "events", "=== LOGIN FAILED ===");
+                                error!(target: "events", "Reason: {}", reason);
+                            }
+                            GameEvent::CreateObject {
+                                object_id,
+                                object_name,
+                            } => {
+                                debug!(target: "events", "CREATE OBJECT: {} (0x{:08X})", object_name, object_id);
+                            }
+                            GameEvent::ChatMessageReceived {
+                                message,
+                                message_type,
+                            } => {
+                                info!(target: "events", "CHAT [{}]: {}", message_type, message);
+                            }
+                            GameEvent::NetworkMessage {
+                                direction,
+                                message_type,
+                            } => {
+                                debug!(target: "events", "Network message: {:?} - {}", direction, message_type);
+                            }
                         }
                     }
                     Err(tokio::sync::broadcast::error::RecvError::Lagged(skipped)) => {
@@ -274,7 +296,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Set RUST_LOG=info to see error messages
     tracing_subscriber::fmt()
         .with_env_filter(
-            EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("off"))
+            EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("off")),
         )
         .init();
 
@@ -310,10 +332,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     ));
 
     // Wait for the action_tx channel from the client task (with timeout)
-    match tokio::time::timeout(
-        tokio::time::Duration::from_secs(5),
-        action_tx_rx.recv()
-    ).await {
+    match tokio::time::timeout(tokio::time::Duration::from_secs(5), action_tx_rx.recv()).await {
         Ok(Some(action_tx)) => {
             app.action_tx = Some(action_tx);
         }
@@ -334,10 +353,21 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
                 match tui_event {
                     TuiEvent::Key(key) => {
-                         // Handle chat input if focused
-                         if app.chat_input_focused {
+                         // ALWAYS handle Tab/BackTab for GameWorld tab switching
+                         if matches!(app.game_scene, gromnie::tui::app::GameScene::GameWorld { .. })
+                             && matches!(key.code, KeyCode::Tab | KeyCode::BackTab) {
                              match key.code {
-                                 KeyCode::Enter => {
+                                 KeyCode::Tab => {
+                                     app.next_tab();
+                                 }
+                                 KeyCode::BackTab => {
+                                     app.previous_tab();
+                                 }
+                                 _ => unreachable!(),
+                             }
+                         } else if app.chat_input_focused {
+                              match key.code {
+                                  KeyCode::Enter => {
                                      // Send chat message
                                      if !app.chat_input.is_empty() {
                                          if let Some(ref tx) = app.action_tx {
@@ -402,8 +432,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
                             // Global controls (only when not in chat input mode)
                             match key.code {
-                                KeyCode::Tab => {
-                                    app.toggle_view();
+                                KeyCode::Char('1') => {
+                                    app.switch_view(gromnie::tui::app::AppView::Game);
+                                }
+                                KeyCode::Char('2') => {
+                                    app.switch_view(gromnie::tui::app::AppView::Debug);
                                 }
                                 KeyCode::Char('q') => {
                                     app.should_quit = true;
@@ -447,24 +480,22 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Give client task a moment to clean up gracefully
     let timeout = tokio::time::Duration::from_secs(2);
     match tokio::time::timeout(timeout, client_handle).await {
-        Ok(result) => {
-            match result {
-                Ok(_) => info!("Client task shut down gracefully"),
-                Err(e) => error!("Client task panicked: {}", e),
-            }
-        }
+        Ok(result) => match result {
+            Ok(_) => info!("Client task shut down gracefully"),
+            Err(e) => error!("Client task panicked: {}", e),
+        },
         Err(_) => {
             error!("Client task did not shut down within timeout, proceeding anyway");
         }
     }
 
     info!("TUI shut down cleanly");
-    
+
     // Explicitly restore terminal before exiting
     drop(tui);
-    
+
     // Shutdown event handler task
     event_handler.shutdown();
-    
+
     Ok(())
 }

@@ -6,7 +6,7 @@ use ratatui::prelude::*;
 use std::io;
 
 use crate::tui::app::App;
-use crate::tui::views::{render_game_view, render_debug_view};
+use crate::tui::views::{render_debug_view, render_game_view};
 
 pub struct Tui {
     terminal: Terminal<CrosstermBackend<io::Stdout>>,
@@ -24,11 +24,9 @@ impl Tui {
     }
 
     pub fn draw(&mut self, app: &App) -> io::Result<()> {
-        self.terminal.draw(|frame| {
-            match app.current_view {
-                crate::tui::app::AppView::Game => render_game_view(frame, app),
-                crate::tui::app::AppView::Debug => render_debug_view(frame, app),
-            }
+        self.terminal.draw(|frame| match app.current_view {
+            crate::tui::app::AppView::Game => render_game_view(frame, app),
+            crate::tui::app::AppView::Debug => render_debug_view(frame, app),
         })?;
 
         Ok(())

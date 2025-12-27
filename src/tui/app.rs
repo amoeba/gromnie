@@ -1,6 +1,6 @@
-use crate::client::events::{ClientAction, GameEvent, CharacterInfo};
-use tokio::sync::{broadcast, mpsc};
+use crate::client::events::{CharacterInfo, ClientAction, GameEvent};
 use std::collections::VecDeque;
+use tokio::sync::{broadcast, mpsc};
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum AppView {
@@ -12,9 +12,7 @@ pub enum AppView {
 #[derive(Debug, Clone, PartialEq)]
 pub enum GameScene {
     /// Authenticating and waiting for DDD
-    Logging {
-        ddd_received: bool,
-    },
+    Logging { ddd_received: bool },
     /// Character selection - showing list and allowing selection
     CharacterSelect,
     /// In game world - showing created objects
@@ -33,6 +31,15 @@ pub enum GameWorldState {
     LoggedIn,
     /// Logging out - received LogOff notification
     LoggingOut,
+}
+
+/// Tabs available in the GameWorld scene
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum GameWorldTab {
+    World,
+    Chat,
+    Map,
+    Inventory,
 }
 
 #[derive(Debug, Clone)]
@@ -96,6 +103,8 @@ pub struct App {
     pub chat_input: String,
     /// Whether the chat input is focused (user is typing)
     pub chat_input_focused: bool,
+    /// Currently active tab in the GameWorld scene
+    pub game_world_tab: GameWorldTab,
 }
 
 impl App {
@@ -116,6 +125,7 @@ impl App {
             max_chat_messages: 100,
             chat_input: String::new(),
             chat_input_focused: false,
+            game_world_tab: GameWorldTab::World,
         }
     }
 
@@ -128,64 +138,8 @@ impl App {
         self.action_tx = Some(action_tx);
     }
 
-    pub fn toggle_view(&mut self) {
-        self.current_view = match self.current_view {
-            AppView::Game => AppView::Debug,
-            AppView::Debug => AppView::Game,
-        };
-    }
-
-    /// Select the next character in the list
-    pub fn select_next_character(&mut self) {
-        if !self.client_status.characters.is_empty() {
-            self.selected_character_index =
-                (self.selected_character_index + 1) % self.client_status.characters.len();
-        }
-    }
-
-    /// Select the previous character in the list
-    pub fn select_previous_character(&mut self) {
-        if !self.client_status.characters.is_empty() {
-            if self.selected_character_index == 0 {
-                self.selected_character_index = self.client_status.characters.len() - 1;
-            } else {
-                self.selected_character_index -= 1;
-            }
-        }
-    }
-
-    /// Get the currently selected character, if any
-    pub fn get_selected_character(&self) -> Option<&CharacterInfo> {
-        self.client_status
-            .characters
-            .get(self.selected_character_index)
-    }
-
-    /// Login with the selected character
-    pub fn login_selected_character(&mut self) -> Result<(), String> {
-        // Get character info first to avoid borrow conflicts
-        let (character_id, character_name) = if let Some(character) = self.get_selected_character() {
-            (character.id, character.name.clone())
-        } else {
-            return Err("No character selected".to_string());
-        };
-
-        if let Some(ref tx) = self.action_tx {
-            // Immediately transition to GameWorld::LoggingIn
-            self.game_scene = GameScene::GameWorld {
-                state: GameWorldState::LoggingIn,
-                created_objects: Vec::new(),
-            };
-
-            tx.send(ClientAction::LoginCharacter {
-                character_id,
-                character_name,
-                account: self.client_status.account_name.clone(),
-            })
-            .map_err(|e| format!("Failed to send login action: {}", e))
-        } else {
-            Err("No action channel available".to_string())
-        }
+    pub fn switch_view(&mut self, view: AppView) {
+        self.current_view = view;
     }
 
     pub fn add_network_message(&mut self, message: NetworkMessage) {
@@ -205,32 +159,30 @@ impl App {
                 self.client_status.account_name = account;
                 self.client_status.characters = characters;
                 self.selected_character_index = 0; // Reset to first character when list updates
-                
+
                 // Transition to character select scene when we have characters
                 if !self.client_status.characters.is_empty() {
                     self.game_scene = GameScene::CharacterSelect;
                 }
-                
+
                 self.add_network_message(NetworkMessage::Received {
                     opcode: "0xF4A0".to_string(),
                     description: format!("Character list for {}", self.client_status.account_name),
                     timestamp: chrono::Utc::now(),
                 });
             }
-            GameEvent::DDDInterrogation {
-                language,
-                region,
-            } => {
+            GameEvent::DDDInterrogation { language, region } => {
                 // Mark that we received DDD interrogation
                 if let GameScene::Logging { .. } = self.game_scene {
-                    self.game_scene = GameScene::Logging {
-                        ddd_received: true,
-                    };
+                    self.game_scene = GameScene::Logging { ddd_received: true };
                 }
-                
+
                 self.add_network_message(NetworkMessage::Received {
                     opcode: "0xF758".to_string(),
-                    description: format!("DDD Interrogation (lang={}, region={})", language, region),
+                    description: format!(
+                        "DDD Interrogation (lang={}, region={})",
+                        language, region
+                    ),
                     timestamp: chrono::Utc::now(),
                 });
             }
@@ -248,7 +200,10 @@ impl App {
 
                 self.add_network_message(NetworkMessage::Received {
                     opcode: "0xF656".to_string(),
-                    description: format!("Login succeeded: {} (ID: {})", character_name, character_id),
+                    description: format!(
+                        "Login succeeded: {} (ID: {})",
+                        character_name, character_id
+                    ),
                     timestamp: chrono::Utc::now(),
                 });
             }
@@ -259,9 +214,16 @@ impl App {
                     timestamp: chrono::Utc::now(),
                 });
             }
-            GameEvent::CreateObject { object_id, object_name } => {
+            GameEvent::CreateObject {
+                object_id,
+                object_name,
+            } => {
                 // Add object to the list if we're in the game world scene
-                if let GameScene::GameWorld { ref mut state, ref mut created_objects } = self.game_scene {
+                if let GameScene::GameWorld {
+                    ref mut state,
+                    ref mut created_objects,
+                } = self.game_scene
+                {
                     created_objects.push((object_id, object_name.clone()));
 
                     // After receiving first object while logging in, send LoginComplete notification
@@ -278,7 +240,10 @@ impl App {
                     timestamp: chrono::Utc::now(),
                 });
             }
-            GameEvent::ChatMessageReceived { message, message_type } => {
+            GameEvent::ChatMessageReceived {
+                message,
+                message_type,
+            } => {
                 // Add chat message to the list
                 self.add_chat_message(ChatMessage {
                     text: message.clone(),
@@ -292,7 +257,10 @@ impl App {
                     timestamp: chrono::Utc::now(),
                 });
             }
-            GameEvent::NetworkMessage { direction, message_type } => {
+            GameEvent::NetworkMessage {
+                direction,
+                message_type,
+            } => {
                 // Add all network messages to the debug view
                 use crate::client::events::MessageDirection;
                 match direction {

@@ -4,7 +4,9 @@ use std::io::Cursor;
 use std::net::SocketAddr;
 
 use acprotocol::enums::{AuthFlags, FragmentGroup, GameAction, PacketHeaderFlags, S2CMessage};
-use acprotocol::messages::c2s::{CharacterSendCharGenResult, DDDInterrogationResponseMessage, LoginSendEnterWorld};
+use acprotocol::messages::c2s::{
+    CharacterSendCharGenResult, DDDInterrogationResponseMessage, LoginSendEnterWorld,
+};
 use acprotocol::messages::s2c::{DDDInterrogationMessage, LoginLoginCharacterSet};
 use tokio::sync::{broadcast, mpsc};
 
@@ -100,9 +102,9 @@ impl ServerInfo {
 struct SessionState {
     cookie: u64,
     client_id: u16,
-    table: u16,                                    // Table/iteration value from packet header
-    send_generator: RefCell<CryptoSystem>,        // Client->Server checksum encryption (initialized from seed_c2s)
-    recv_generator: RefCell<CryptoSystem>,        // Server->Client checksum encryption (initialized from seed_s2c)
+    table: u16,                            // Table/iteration value from packet header
+    send_generator: RefCell<CryptoSystem>, // Client->Server checksum encryption (initialized from seed_c2s)
+    recv_generator: RefCell<CryptoSystem>, // Server->Client checksum encryption (initialized from seed_s2c)
 }
 
 /// Custom LoginRequest structure that matches the actual C# client implementation.
@@ -273,11 +275,13 @@ impl C2SPacketExt for C2SPacket {
             .copy_from_slice(&CHECKSUM_PLACEHOLDER.to_le_bytes());
 
         // Step 5: Checksum the entire packet header (with placeholder in checksum field)
-        let header_checksum = get_magic_number(&buffer[0..PACKET_HEADER_SIZE], PACKET_HEADER_SIZE, true);
+        let header_checksum =
+            get_magic_number(&buffer[0..PACKET_HEADER_SIZE], PACKET_HEADER_SIZE, true);
         checksum_result = checksum_result.wrapping_add(header_checksum);
 
         // Step 6: Write final checksum back to the packet
-        buffer[CHECKSUM_OFFSET..CHECKSUM_OFFSET + 4].copy_from_slice(&checksum_result.to_le_bytes());
+        buffer[CHECKSUM_OFFSET..CHECKSUM_OFFSET + 4]
+            .copy_from_slice(&checksum_result.to_le_bytes());
 
         Ok(buffer)
     }
@@ -341,8 +345,8 @@ pub struct Client {
     character_login_state: CharacterLoginState,
     pub send_count: u32,
     pub recv_count: u32,
-    last_acked_to_server: u32, // Last sequence we ACKed to the server
-    fragment_sequence: u32, // Counter for outgoing fragment sequences
+    last_acked_to_server: u32,      // Last sequence we ACKed to the server
+    fragment_sequence: u32,         // Counter for outgoing fragment sequences
     next_game_action_sequence: u32, // Sequence counter for GameAction messages
     session: Option<SessionState>,
     pending_fragments: HashMap<u32, Fragment>, // Track incomplete fragment sequences
@@ -388,7 +392,7 @@ impl Client {
             send_count: 0,
             recv_count: 0,
             last_acked_to_server: 0,
-            fragment_sequence: 1, // Start at 1 as per actestclient
+            fragment_sequence: 1,         // Start at 1 as per actestclient
             next_game_action_sequence: 0, // Start at 0 for GameAction sequences
             session: None,
             pending_fragments: HashMap::new(),
@@ -481,14 +485,19 @@ impl Client {
 
     /// Attempt to log in as the specified character
     /// Returns Ok if login was queued, or an error if already attempted or in wrong state
-    pub fn attempt_character_login(&mut self, character_id: u32, character_name: String, account: String) -> Result<(), String> {
+    pub fn attempt_character_login(
+        &mut self,
+        character_id: u32,
+        character_name: String,
+        account: String,
+    ) -> Result<(), String> {
         // Check if we've already attempted login
         match &self.character_login_state {
             CharacterLoginState::Idle => {
                 // OK to proceed
             }
-            CharacterLoginState::WaitingForServerReady { .. } |
-            CharacterLoginState::LoadingWorld => {
+            CharacterLoginState::WaitingForServerReady { .. }
+            | CharacterLoginState::LoadingWorld => {
                 return Err("Login already in progress".to_string());
             }
             CharacterLoginState::Succeeded => {
@@ -517,29 +526,30 @@ impl Client {
 
     /// Send LoginComplete notification to server after receiving initial world state
     fn send_login_complete_notification(&mut self) {
-       // Only send once - check if we're already succeeded or in progress
-       if self.character_login_state == CharacterLoginState::Succeeded {
-           return;
-       }
-       
-       info!(target: "net", "Sending LoginComplete notification to server");
+        // Only send once - check if we're already succeeded or in progress
+        if self.character_login_state == CharacterLoginState::Succeeded {
+            return;
+        }
 
-       // GameAction packet payload: sequence + opcode
-       // Wrap with 0xF7B1 (OrderedGameAction) opcode
-       let mut message_data = Vec::new();
-       {
-           let mut cursor = Cursor::new(&mut message_data);
-           // Write 0xF7B1 opcode (OrderedGameAction wrapper)
-           write_u32(&mut cursor, 0xF7B1).expect("write failed");
-           // Write sequence number
-           write_u32(&mut cursor, self.next_game_action_sequence).expect("write failed");
-           self.next_game_action_sequence += 1;
-           // Write GameAction opcode (0x00A1 = Character_LoginCompleteNotification)
-           write_u32(&mut cursor, 0x00A1).expect("write failed");
-       }
+        info!(target: "net", "Sending LoginComplete notification to server");
 
-       // Queue for sending
-       self.outgoing_message_queue.push_back(PendingOutgoingMessage::GameAction(message_data));
+        // GameAction packet payload: sequence + opcode
+        // Wrap with 0xF7B1 (OrderedGameAction) opcode
+        let mut message_data = Vec::new();
+        {
+            let mut cursor = Cursor::new(&mut message_data);
+            // Write 0xF7B1 opcode (OrderedGameAction wrapper)
+            write_u32(&mut cursor, 0xF7B1).expect("write failed");
+            // Write sequence number
+            write_u32(&mut cursor, self.next_game_action_sequence).expect("write failed");
+            self.next_game_action_sequence += 1;
+            // Write GameAction opcode (0x00A1 = Character_LoginCompleteNotification)
+            write_u32(&mut cursor, 0x00A1).expect("write failed");
+        }
+
+        // Queue for sending
+        self.outgoing_message_queue
+            .push_back(PendingOutgoingMessage::GameAction(message_data));
 
         // Extract character info from current login state
         let (character_id, character_name) = match &self.character_login_state {
@@ -558,7 +568,7 @@ impl Client {
             character_name,
         };
         let _ = self.event_tx.send(event);
-        
+
         // Update state to succeeded
         self.character_login_state = CharacterLoginState::Succeeded;
 
@@ -595,7 +605,8 @@ impl Client {
         }
 
         // Queue for sending
-        self.outgoing_message_queue.push_back(PendingOutgoingMessage::GameAction(message_data));
+        self.outgoing_message_queue
+            .push_back(PendingOutgoingMessage::GameAction(message_data));
         info!(target: "net", "Chat message queued for sending");
     }
 
@@ -603,9 +614,10 @@ impl Client {
     /// Uses includeSequence=false, incrementSequence=false (sequence will be 0)
     async fn send_timesync(&mut self) -> Result<(), std::io::Error> {
         let (client_id, table) = {
-            let session = self.session.as_ref().ok_or_else(|| {
-                std::io::Error::other("Session not established")
-            })?;
+            let session = self
+                .session
+                .as_ref()
+                .ok_or_else(|| std::io::Error::other("Session not established"))?;
             (session.client_id, session.table)
         };
 
@@ -667,9 +679,15 @@ impl Client {
                     info!(target: "events", "Action: Disconnecting");
                     self.connect_state = ClientConnectState::Disconnected;
                 }
-                ClientAction::LoginCharacter { character_id, character_name, account } => {
+                ClientAction::LoginCharacter {
+                    character_id,
+                    character_name,
+                    account,
+                } => {
                     debug!(target: "events", "Action: Logging in as character {} (ID: {})", character_name, character_id);
-                    if let Err(e) = self.attempt_character_login(character_id, character_name, account) {
+                    if let Err(e) =
+                        self.attempt_character_login(character_id, character_name, account)
+                    {
                         error!(target: "events", "Failed to attempt character login: {}", e);
                     }
                 }
@@ -698,7 +716,8 @@ impl Client {
                 self.send_character_creation_internal(char_gen).await
             }
             PendingOutgoingMessage::CharacterCreationAce(account, char_gen) => {
-                self.send_character_creation_ace_internal(account, char_gen).await
+                self.send_character_creation_ace_internal(account, char_gen)
+                    .await
             }
             PendingOutgoingMessage::EnterWorldRequest => {
                 self.send_enter_world_request_internal().await
@@ -707,7 +726,8 @@ impl Client {
                 self.send_enter_world_internal(enter_world).await
             }
             PendingOutgoingMessage::GameAction(message_data) => {
-                self.send_fragmented_message(message_data, FragmentGroup::Object).await
+                self.send_fragmented_message(message_data, FragmentGroup::Object)
+                    .await
             }
         }
     }
@@ -727,7 +747,7 @@ impl Client {
         let blob_fragment = BlobFragments {
             sequence: frag_sequence,
             id: 0x80000000, // Object ID (0x80000000 for game messages)
-            count: 1, // Single fragment
+            count: 1,       // Single fragment
             size: fragment_size,
             index: 0, // First (and only) fragment
             group,
@@ -788,7 +808,8 @@ impl Client {
 
         // Checksum calculation:
         // 1. Header checksum (with placeholder)
-        let header_checksum = get_magic_number(&buffer[0..PACKET_HEADER_SIZE], PACKET_HEADER_SIZE, true);
+        let header_checksum =
+            get_magic_number(&buffer[0..PACKET_HEADER_SIZE], PACKET_HEADER_SIZE, true);
 
         // 2. Fragment checksum = fragment_header_checksum + fragment_data_checksum
         let fragment_header_checksum = get_magic_number(
@@ -836,7 +857,8 @@ impl Client {
         }
 
         // Send as a proper fragmented packet
-        self.send_fragmented_message(message_data, FragmentGroup::Object).await
+        self.send_fragmented_message(message_data, FragmentGroup::Object)
+            .await
     }
 
     /// Send character creation request to the login server
@@ -860,7 +882,8 @@ impl Client {
         }
 
         // Send as a proper fragmented packet
-        self.send_fragmented_message(message_data, FragmentGroup::Object).await
+        self.send_fragmented_message(message_data, FragmentGroup::Object)
+            .await
     }
 
     /// Send character creation request with ACE-compatible serialization
@@ -888,7 +911,8 @@ impl Client {
         }
 
         // Send as a proper fragmented packet
-        self.send_fragmented_message(message_data, FragmentGroup::Object).await
+        self.send_fragmented_message(message_data, FragmentGroup::Object)
+            .await
     }
 
     /// Send character enter world request (0xF7C8) - Step 1 of character login
@@ -906,7 +930,8 @@ impl Client {
         }
 
         // Send as a proper fragmented packet
-        self.send_fragmented_message(message_data, FragmentGroup::Object).await
+        self.send_fragmented_message(message_data, FragmentGroup::Object)
+            .await
     }
 
     /// Send character login (enter world) with character ID - Step 3 of character login
@@ -931,7 +956,8 @@ impl Client {
         }
 
         // Send as a proper fragmented packet
-        self.send_fragmented_message(message_data, FragmentGroup::Object).await
+        self.send_fragmented_message(message_data, FragmentGroup::Object)
+            .await
     }
 
     /// Handle a single parsed message
@@ -964,16 +990,17 @@ impl Client {
         match S2CMessage::try_from(message.opcode) {
             Ok(msg_type) => {
                 message_name = format!("{:?}", msg_type);
-                is_handled = matches!(msg_type,
-                    S2CMessage::LoginLoginCharacterSet |
-                    S2CMessage::DDDInterrogationMessage |
-                    S2CMessage::CharacterCharGenVerificationResponse |
-                    S2CMessage::LoginEnterGameServerReady |
-                    S2CMessage::ItemCreateObject |
-                    S2CMessage::CommunicationTextboxString |
-                    S2CMessage::CommunicationHearSpeech |
-                    S2CMessage::CommunicationHearRangedSpeech |
-                    S2CMessage::OrderedGameEvent
+                is_handled = matches!(
+                    msg_type,
+                    S2CMessage::LoginLoginCharacterSet
+                        | S2CMessage::DDDInterrogationMessage
+                        | S2CMessage::CharacterCharGenVerificationResponse
+                        | S2CMessage::LoginEnterGameServerReady
+                        | S2CMessage::ItemCreateObject
+                        | S2CMessage::CommunicationTextboxString
+                        | S2CMessage::CommunicationHearSpeech
+                        | S2CMessage::CommunicationHearRangedSpeech
+                        | S2CMessage::OrderedGameEvent
                 );
 
                 // Emit network message for debug view
@@ -990,21 +1017,31 @@ impl Client {
                 let _ = self.event_tx.send(event);
 
                 info!(target: "net", "Parsed as S2CMessage: {:?} (0x{:04X})", msg_type, message.opcode);
-                
+
                 // Handle LoginCreatePlayer (0xF746) to signal login succeeded (only once)
-                if message.opcode == 0xF746 && self.character_login_state == CharacterLoginState::LoadingWorld {
+                if message.opcode == 0xF746
+                    && self.character_login_state == CharacterLoginState::LoadingWorld
+                {
                     info!(target: "net", "Received LoginCreatePlayer (0xF746) - character logged in successfully");
                     self.send_login_complete_notification();
                 } else if message.opcode != 0xF746 {
                     match msg_type {
                         S2CMessage::LoginLoginCharacterSet => self.handle_character_list(message),
-                        S2CMessage::DDDInterrogationMessage => self.handle_ddd_interrogation(message),
-                        S2CMessage::CharacterCharGenVerificationResponse => self.handle_character_gen_response(message),
-                        S2CMessage::LoginEnterGameServerReady => self.handle_enter_game_server_ready(message),
+                        S2CMessage::DDDInterrogationMessage => {
+                            self.handle_ddd_interrogation(message)
+                        }
+                        S2CMessage::CharacterCharGenVerificationResponse => {
+                            self.handle_character_gen_response(message)
+                        }
+                        S2CMessage::LoginEnterGameServerReady => {
+                            self.handle_enter_game_server_ready(message)
+                        }
                         S2CMessage::ItemCreateObject => self.handle_create_object(message),
                         S2CMessage::CommunicationTextboxString => self.handle_chat_message(message),
                         S2CMessage::CommunicationHearSpeech => self.handle_hear_speech(message),
-                        S2CMessage::CommunicationHearRangedSpeech => self.handle_hear_ranged_speech(message),
+                        S2CMessage::CommunicationHearRangedSpeech => {
+                            self.handle_hear_ranged_speech(message)
+                        }
                         S2CMessage::OrderedGameEvent => self.handle_game_event(message),
                         // Add more handlers as needed
                         _ => {
@@ -1056,33 +1093,31 @@ impl Client {
 
         let mut cursor = Cursor::new(&message.data[8..]); // Skip opcode (4) + sequence (4)
 
-        use acprotocol::readers::ACDataType;
         use acprotocol::enums::GameEvent as GameEventType;
+        use acprotocol::readers::ACDataType;
 
         // Read the game event opcode
         match u32::read(&mut cursor) {
-            Ok(event_opcode) => {
-                match GameEventType::try_from(event_opcode) {
-                    Ok(event_type) => {
-                        debug!(target: "net", "Game event type: {:?} (0x{:04X})", event_type, event_opcode);
+            Ok(event_opcode) => match GameEventType::try_from(event_opcode) {
+                Ok(event_type) => {
+                    debug!(target: "net", "Game event type: {:?} (0x{:04X})", event_type, event_opcode);
 
-                        match event_type {
-                            GameEventType::CommunicationHearDirectSpeech => {
-                                self.handle_hear_direct_speech_event(&mut cursor);
-                            }
-                            GameEventType::CommunicationTransientString => {
-                                self.handle_transient_string_event(&mut cursor);
-                            }
-                            _ => {
-                                debug!(target: "net", "Unhandled GameEvent: {:?} (0x{:04X})", event_type, event_opcode);
-                            }
+                    match event_type {
+                        GameEventType::CommunicationHearDirectSpeech => {
+                            self.handle_hear_direct_speech_event(&mut cursor);
+                        }
+                        GameEventType::CommunicationTransientString => {
+                            self.handle_transient_string_event(&mut cursor);
+                        }
+                        _ => {
+                            debug!(target: "net", "Unhandled GameEvent: {:?} (0x{:04X})", event_type, event_opcode);
                         }
                     }
-                    Err(_) => {
-                        debug!(target: "net", "Unknown game event opcode: 0x{:04X}", event_opcode);
-                    }
                 }
-            }
+                Err(_) => {
+                    debug!(target: "net", "Unknown game event opcode: 0x{:04X}", event_opcode);
+                }
+            },
             Err(e) => {
                 error!(target: "net", "Failed to read game event opcode: {}", e);
             }
@@ -1159,7 +1194,7 @@ impl Client {
 
         // Emit event to broadcast channel
         let event = GameEvent::LoginSucceeded {
-            character_id: 0, // TODO: Parse this from message if available
+            character_id: 0,                       // TODO: Parse this from message if available
             character_name: "Unknown".to_string(), // TODO: Parse this from message if available
         };
 
@@ -1233,16 +1268,14 @@ impl Client {
         let mut cursor = Cursor::new(&message.data[4..]);
         use acprotocol::messages::s2c::CharacterCharGenVerificationResponse;
         match CharacterCharGenVerificationResponse::read(&mut cursor) {
-            Ok(response) => {
-                match response {
-                    CharacterCharGenVerificationResponse::Type1(char_info) => {
-                        info!(target: "net", "Character creation successful!");
-                        info!(target: "net", "  - Character: {}", char_info.name);
-                        info!(target: "net", "  - ID: {}", char_info.character_id.0);
-                        info!(target: "net", "  - Seconds until deletion: {}", char_info.seconds_until_deletion);
-                    }
+            Ok(response) => match response {
+                CharacterCharGenVerificationResponse::Type1(char_info) => {
+                    info!(target: "net", "Character creation successful!");
+                    info!(target: "net", "  - Character: {}", char_info.name);
+                    info!(target: "net", "  - ID: {}", char_info.character_id.0);
+                    info!(target: "net", "  - Seconds until deletion: {}", char_info.seconds_until_deletion);
                 }
-            }
+            },
             Err(e) => {
                 error!(target: "net", "Failed to parse character gen response: {}", e);
             }
@@ -1255,7 +1288,12 @@ impl Client {
         info!(target: "net", "Received LoginEnterGameServerReady (0xF7DF) - Server ready for character login");
 
         // Check if we're in the right state and extract the values we need
-        if let CharacterLoginState::WaitingForServerReady { character_id, character_name, account } = &self.character_login_state {
+        if let CharacterLoginState::WaitingForServerReady {
+            character_id,
+            character_name,
+            account,
+        } = &self.character_login_state
+        {
             // Clone values we need before mutating state
             let char_id = *character_id;
             let char_name = character_name.clone();

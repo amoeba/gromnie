@@ -8,8 +8,7 @@ pub enum MessageDirection {
 }
 
 /// Events that can be broadcast from the client
-#[derive(Debug, Clone)]
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub enum GameEvent {
     CharacterListReceived {
         account: String,
@@ -59,9 +58,15 @@ pub enum ClientAction {
     SendMessage(PendingOutgoingMessage),
     Disconnect,
     /// Log in as a specific character
-    LoginCharacter { character_id: u32, character_name: String, account: String },
+    LoginCharacter {
+        character_id: u32,
+        character_name: String,
+        account: String,
+    },
     /// Send LoginComplete notification to server after receiving initial objects
     SendLoginComplete,
     /// Send a chat message
-    SendChatMessage { message: String },
+    SendChatMessage {
+        message: String,
+    },
 }
