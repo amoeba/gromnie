@@ -191,14 +191,10 @@ async fn client_task(id: u32, address: String, account_name: String, password: S
                     error!(target: "events", "Reason: {}", reason);
                 }
                 GameEvent::CreateObject { object_id, object_name } => {
-                    info!(target: "events", "=== CREATE OBJECT ===");
-                    info!(target: "events", "Name: {}", object_name);
-                    info!(target: "events", "ID: 0x{:08X}", object_id);
+                    info!(target: "events", "CREATE OBJECT: {} (0x{:08X})", object_name, object_id);
                 }
                 GameEvent::ChatMessageReceived { message, message_type } => {
-                    info!(target: "events", "=== CHAT MESSAGE ===");
-                    info!(target: "events", "Type: {}", message_type);
-                    info!(target: "events", "Message: {}", message);
+                    info!(target: "events", "CHAT [{}]: {}", message_type, message);
                 }
                 GameEvent::NetworkMessage { direction, message_type } => {
                     debug!(target: "events", "Network message: {:?} - {}", direction, message_type);
