@@ -173,12 +173,12 @@ async fn run_client_internal<C: EventConsumer>(
                         ClientState::Patching { progress, .. } => {
                             // Only retry if we've already sent the DDD response and are waiting for character list
                             // (i.e., we're in DDDResponseSent state)
-                            if matches!(progress, crate::client::PatchingProgress::DDDResponseSent) {
-                                if client.get_ddd_response().is_some() {
-                                    info!("Retrying DDDInterrogationResponse...");
-                                    if let Err(e) = client.retry_ddd_response().await {
-                                        error!("Failed to retry DDDInterrogationResponse: {}", e);
-                                    }
+                            if matches!(progress, crate::client::PatchingProgress::DDDResponseSent)
+                                && client.get_ddd_response().is_some()
+                            {
+                                info!("Retrying DDDInterrogationResponse...");
+                                if let Err(e) = client.retry_ddd_response().await {
+                                    error!("Failed to retry DDDInterrogationResponse: {}", e);
                                 }
                             }
                             // If we're still waiting for DDDInterrogation, just wait (no retry)

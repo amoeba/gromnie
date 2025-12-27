@@ -782,8 +782,8 @@ impl Client {
         // Update progress to DDDResponseSent (66%)
         if result.is_ok() {
             if let ClientState::Patching {
-                started_at,
-                last_retry_at,
+                started_at: _,
+                last_retry_at: _,
                 progress,
             } = &mut self.state
             {
@@ -1336,8 +1336,8 @@ impl Client {
 
                 // Update progress to DDDInterrogationReceived (33%)
                 if let ClientState::Patching {
-                    started_at,
-                    last_retry_at,
+                    started_at: _,
+                    last_retry_at: _,
                     progress,
                 } = &mut self.state
                 {
@@ -1592,8 +1592,8 @@ impl Client {
 
             // Update progress to ConnectRequestReceived (66%)
             if let ClientState::Connecting {
-                started_at,
-                last_retry_at,
+                started_at: _,
+                last_retry_at: _,
                 progress,
             } = &mut self.state
             {
@@ -1772,8 +1772,8 @@ impl Client {
 
         // Update progress to LoginRequestSent (33%)
         if let ClientState::Connecting {
-            started_at,
-            last_retry_at,
+            started_at: _,
+            last_retry_at: _,
             progress,
         } = &mut self.state
         {
