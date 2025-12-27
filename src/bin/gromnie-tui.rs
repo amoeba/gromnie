@@ -9,8 +9,7 @@ use acprotocol::types::PackableList;
 use gromnie::client::events::{ClientAction, GameEvent};
 use gromnie::client::{
     ace_protocol::{AceCharGenResult, RawSkillAdvancementClass},
-    Client,
-    OutgoingMessageContent,
+    Client, OutgoingMessageContent,
 };
 use gromnie::tui::{event_handler::EventHandler, ui::try_init_tui, App};
 use tokio::sync::mpsc;
@@ -454,8 +453,10 @@ fn handle_tui_event(
     match tui_event {
         TuiEvent::Key(key) => {
             // ALWAYS handle Tab/BackTab for GameWorld tab switching
-            if matches!(app.game_scene, gromnie::tui::app::GameScene::GameWorld { .. })
-                && matches!(key.code, KeyCode::Tab | KeyCode::BackTab)
+            if matches!(
+                app.game_scene,
+                gromnie::tui::app::GameScene::GameWorld { .. }
+            ) && matches!(key.code, KeyCode::Tab | KeyCode::BackTab)
             {
                 match key.code {
                     KeyCode::Tab => {
@@ -512,8 +513,11 @@ fn handle_tui_event(
                         }
                         KeyCode::Enter => {
                             // If in GameWorld scene and on Chat tab, activate chat input
-                            if matches!(app.game_scene, gromnie::tui::app::GameScene::GameWorld { .. })
-                                && app.game_world_tab == gromnie::tui::app::GameWorldTab::Chat {
+                            if matches!(
+                                app.game_scene,
+                                gromnie::tui::app::GameScene::GameWorld { .. }
+                            ) && app.game_world_tab == gromnie::tui::app::GameWorldTab::Chat
+                            {
                                 // Activate chat input when on Chat tab
                                 app.chat_input_active = true;
                             } else {
@@ -530,7 +534,10 @@ fn handle_tui_event(
                         }
                         KeyCode::Char('c') => {
                             // Activate chat input when in game world
-                            if matches!(app.game_scene, gromnie::tui::app::GameScene::GameWorld { .. }) {
+                            if matches!(
+                                app.game_scene,
+                                gromnie::tui::app::GameScene::GameWorld { .. }
+                            ) {
                                 app.chat_input_active = true;
                             }
                         }

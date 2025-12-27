@@ -1,7 +1,7 @@
-use ratatui::prelude::*;
-use ratatui::widgets::*;
 use crate::tui::app::App;
 use crate::tui::components::{render_header, render_status_bar};
+use ratatui::prelude::*;
+use ratatui::widgets::*;
 
 pub fn render_debug_view(frame: &mut Frame, app: &App) {
     let area = frame.area();

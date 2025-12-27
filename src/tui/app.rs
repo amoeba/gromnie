@@ -149,16 +149,16 @@ impl App {
 
         // Schedule fake progress events to take ~3 seconds total
         // Connect progress: 0% -> 25% -> 50% -> 75% -> 100% (over 1.5 seconds)
-        app.schedule_event(375, GameEvent::ConnectingSetProgress { progress: 0.25 });   // 0.375 sec
-        app.schedule_event(750, GameEvent::ConnectingSetProgress { progress: 0.50 });   // 0.75 sec
-        app.schedule_event(1125, GameEvent::ConnectingSetProgress { progress: 0.75 });  // 1.125 sec
-        app.schedule_event(1500, GameEvent::ConnectingSetProgress { progress: 1.00 });  // 1.5 sec
+        app.schedule_event(375, GameEvent::ConnectingSetProgress { progress: 0.25 }); // 0.375 sec
+        app.schedule_event(750, GameEvent::ConnectingSetProgress { progress: 0.50 }); // 0.75 sec
+        app.schedule_event(1125, GameEvent::ConnectingSetProgress { progress: 0.75 }); // 1.125 sec
+        app.schedule_event(1500, GameEvent::ConnectingSetProgress { progress: 1.00 }); // 1.5 sec
 
         // Update progress: 0% -> 25% -> 50% -> 75% -> 100% (over 1.5 more seconds, total 3 seconds)
-        app.schedule_event(1875, GameEvent::UpdatingSetProgress { progress: 0.25 });    // 1.875 sec
-        app.schedule_event(2250, GameEvent::UpdatingSetProgress { progress: 0.50 });    // 2.25 sec
-        app.schedule_event(2625, GameEvent::UpdatingSetProgress { progress: 0.75 });    // 2.625 sec
-        app.schedule_event(3000, GameEvent::UpdatingSetProgress { progress: 1.00 });    // 3.0 sec
+        app.schedule_event(1875, GameEvent::UpdatingSetProgress { progress: 0.25 }); // 1.875 sec
+        app.schedule_event(2250, GameEvent::UpdatingSetProgress { progress: 0.50 }); // 2.25 sec
+        app.schedule_event(2625, GameEvent::UpdatingSetProgress { progress: 0.75 }); // 2.625 sec
+        app.schedule_event(3000, GameEvent::UpdatingSetProgress { progress: 1.00 }); // 3.0 sec
 
         // Schedule a completion event at 3 seconds
         app.schedule_event(3000, GameEvent::FakeProgressComplete);
