@@ -1234,13 +1234,7 @@ impl Client {
                     })
                     .collect();
 
-                let event = GameEvent::CharacterListReceived {
-                    account: char_list.account.clone(),
-                    characters,
-                    num_slots: char_list.num_allowed_characters,
-                };
-
-                // Transition from Patching to CharSelect state
+                // Transition from Patching to CharSelect state (before delay)
                 if matches!(self.state, ClientState::Patching { .. }) {
                     // Update progress to 100% before transitioning
                     let _ = self
@@ -1254,8 +1248,18 @@ impl Client {
                     info!(target: "net", "State transition: Patching -> CharSelect");
                 }
 
-                // Send on channel (ignore error if no subscribers)
-                let _ = self.event_tx.send(event);
+                // Delay sending the CharacterListReceived event (to make UI progress visible)
+                let event = GameEvent::CharacterListReceived {
+                    account: char_list.account.clone(),
+                    characters,
+                    num_slots: char_list.num_allowed_characters,
+                };
+                let event_tx = self.event_tx.clone();
+                tokio::spawn(async move {
+                    tokio::time::sleep(tokio::time::Duration::from_millis(UI_DELAY_MS)).await;
+                    let _ = event_tx.send(event);
+                });
+                info!(target: "net", "CharacterListReceived event scheduled with {}ms delay", UI_DELAY_MS);
             }
             Err(e) => {
                 error!(target: "net", "Failed to parse character list: {}", e);
@@ -1362,10 +1366,10 @@ impl Client {
                 let response_content = OutgoingMessageContent::DDDInterrogationResponse(response);
                 self.ddd_response = Some(response_content.clone());
 
-                // Queue the response to be sent in the next send cycle
+                // Queue the response with delay (to make UI progress visible)
                 self.outgoing_message_queue
-                    .push_back(OutgoingMessage::new(response_content));
-                info!(target: "net", "DDD response cached and queued for sending");
+                    .push_back(OutgoingMessage::new(response_content).with_delay_ms(UI_DELAY_MS));
+                info!(target: "net", "DDD response cached and queued for sending with {}ms delay", UI_DELAY_MS);
             }
             Err(e) => {
                 error!(target: "net", "Failed to parse DDD interrogation message: {}", e);
@@ -1604,10 +1608,8 @@ impl Client {
                 info!(target: "net", "Progress: ConnectRequest received (66%)");
             }
 
-            // Small delay to avoid race condition with server's async authentication
-            // The server validates the password asynchronously, so we need to wait
-            // for it to transition to AuthConnectResponse state before sending ConnectResponse
-            tokio::time::sleep(tokio::time::Duration::from_millis(200)).await;
+            // Delay before sending ConnectResponse (to make UI progress visible)
+            tokio::time::sleep(tokio::time::Duration::from_millis(UI_DELAY_MS)).await;
 
             // Send ConnectResponse
             let _ = self.do_connect_response().await;

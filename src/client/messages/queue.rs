@@ -42,6 +42,12 @@ impl OutgoingMessage {
         self
     }
 
+    /// Add a delay to the message (in milliseconds from now)
+    pub fn with_delay_ms(mut self, delay_ms: u64) -> Self {
+        self.deadline = Some(Instant::now() + std::time::Duration::from_millis(delay_ms));
+        self
+    }
+
     /// Check if this message is ready to be sent
     pub fn is_ready(&self) -> bool {
         match self.deadline {
