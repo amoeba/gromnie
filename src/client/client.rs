@@ -3,10 +3,8 @@ use std::collections::{HashMap, VecDeque};
 use std::io::Cursor;
 use std::net::SocketAddr;
 
-use acprotocol::enums::{
-    AuthFlags, FragmentGroup, GameAction, HoldKey, PacketHeaderFlags, S2CMessage,
-};
-use acprotocol::gameactions::{CharacterLoginCompleteNotification, CommunicationEmote};
+use acprotocol::enums::{AuthFlags, FragmentGroup, GameAction, PacketHeaderFlags, S2CMessage};
+use acprotocol::gameactions::CharacterLoginCompleteNotification;
 use acprotocol::message::{C2SMessage, GameActionMessage};
 use acprotocol::messages::c2s::{
     CharacterSendCharGenResult, DDDInterrogationResponseMessage, LoginSendEnterWorld,
@@ -143,7 +141,6 @@ struct SessionState {
     client_id: u16,
     table: u16,                            // Table/iteration value from packet header
     send_generator: RefCell<CryptoSystem>, // Client->Server checksum encryption (initialized from seed_c2s)
-    recv_generator: RefCell<CryptoSystem>, // Server->Client checksum encryption (initialized from seed_s2c)
 }
 
 /// Custom LoginRequest structure that matches the actual C# client implementation.
@@ -360,8 +357,6 @@ pub enum CharacterLoginState {
     LoadingWorld,
     /// Login succeeded (received LoginComplete)
     Succeeded,
-    /// Login failed (error response from server)
-    Failed(String),
 }
 
 // End state machine
@@ -384,7 +379,6 @@ pub struct Client {
     character_login_state: CharacterLoginState,
     pub send_count: u32,
     pub recv_count: u32,
-    last_acked_to_server: u32,      // Last sequence we ACKed to the server
     fragment_sequence: u32,         // Counter for outgoing fragment sequences
     next_game_action_sequence: u32, // Sequence counter for GameAction messages
     session: Option<SessionState>,
@@ -392,10 +386,8 @@ pub struct Client {
     pending_fragments: HashMap<u32, Fragment>,   // Track incomplete fragment sequences
     message_queue: VecDeque<RawMessage>,         // Queue of parsed messages to process
     outgoing_message_queue: VecDeque<OutgoingMessage>, // Queue of messages to send with optional delays
-    delayed_chat_sent: bool, // Track if delayed chat message has been sent
-    delayed_wave_sent: bool, // Track if delayed wave animation has been sent
-    event_tx: broadcast::Sender<GameEvent>, // Broadcast events to handlers
-    action_rx: mpsc::UnboundedReceiver<ClientAction>, // Receive actions from handlers
+    event_tx: broadcast::Sender<GameEvent>,            // Broadcast events to handlers
+    action_rx: mpsc::UnboundedReceiver<ClientAction>,  // Receive actions from handlers
 }
 
 impl Client {
@@ -433,13 +425,10 @@ impl Client {
             character_login_state: CharacterLoginState::Idle,
             send_count: 0,
             recv_count: 0,
-            last_acked_to_server: 0,
             fragment_sequence: 1,         // Start at 1 as per actestclient
             next_game_action_sequence: 0, // Start at 0 for GameAction sequences
             session: None,
-            login_timestamp: None,    // Initialize to None
-            delayed_chat_sent: false, // Initialize to false
-            delayed_wave_sent: false, // Initialize to false
+            login_timestamp: None, // Initialize to None
             pending_fragments: HashMap::new(),
             message_queue: VecDeque::new(),
             outgoing_message_queue: VecDeque::new(),
@@ -566,9 +555,6 @@ impl Client {
             CharacterLoginState::Succeeded => {
                 return Err("Login already succeeded".to_string());
             }
-            CharacterLoginState::Failed(reason) => {
-                return Err(format!("Previous login failed: {}", reason));
-            }
         }
 
         // Step 1: Send CharacterEnterWorldRequest (0xF7C8)
@@ -670,137 +656,6 @@ impl Client {
             OutgoingMessageContent::GameAction(message_data),
         ));
         info!(target: "net", "Chat message queued for sending");
-
-        // Also send a wave emote after the chat message (with 5 second delay)
-        // This will send the wave animation 5 seconds after the chat message
-        self.send_wave_emote_with_delay(5);
-    }
-
-    /// Send a wave emote to the server
-    fn send_wave_emote(&mut self) {
-        info!(target: "net", "Sending wave emote");
-
-        // Create OrderedGameAction with CommunicationEmote for the text representation
-        let mut message_data = Vec::new();
-        {
-            let mut cursor = Cursor::new(&mut message_data);
-            // Use CommunicationEmote for emote messages
-            let action = GameActionMessage::CommunicationEmote(CommunicationEmote {
-                message: "waves".to_string(), // The text representation of the emote
-            });
-            let msg = C2SMessage::OrderedGameAction {
-                sequence: self.next_game_action_sequence,
-                action,
-            };
-            self.next_game_action_sequence += 1;
-            msg.write(&mut cursor).expect("write failed");
-        }
-
-        // Queue for sending
-        self.outgoing_message_queue.push_back(OutgoingMessage::new(
-            OutgoingMessageContent::GameAction(message_data),
-        ));
-        info!(target: "net", "Wave emote text queued for sending");
-
-        // Also send the visual animation using Movement_DoMovementCommand
-        self.send_wave_animation();
-    }
-
-    /// Send a wave emote to the server with a delay
-    fn send_wave_emote_with_delay(&mut self, delay_seconds: u64) {
-        info!(target: "net", "Sending wave emote with {} second delay", delay_seconds);
-
-        // Create OrderedGameAction with CommunicationEmote for the text representation
-        let mut message_data = Vec::new();
-        {
-            let mut cursor = Cursor::new(&mut message_data);
-            // Use CommunicationEmote for emote messages
-            let action = GameActionMessage::CommunicationEmote(CommunicationEmote {
-                message: "waves".to_string(), // The text representation of the emote
-            });
-            let msg = C2SMessage::OrderedGameAction {
-                sequence: self.next_game_action_sequence,
-                action,
-            };
-            self.next_game_action_sequence += 1;
-            msg.write(&mut cursor).expect("write failed");
-        }
-
-        // Queue for sending with delay
-        self.outgoing_message_queue.push_back(
-            OutgoingMessage::new(OutgoingMessageContent::GameAction(message_data))
-                .with_delay(delay_seconds),
-        );
-        info!(target: "net", "Wave emote text queued for sending with {} second delay", delay_seconds);
-
-        // Also send the visual animation using Movement_DoMovementCommand with additional delay
-        self.send_wave_animation_with_delay(delay_seconds);
-    }
-
-    /// Send a wave animation to trigger the visual emote
-    fn send_wave_animation(&mut self) {
-        info!(target: "net", "Sending wave animation");
-
-        // Create OrderedGameAction with Movement_DoMovementCommand for the visual animation
-        let mut message_data = Vec::new();
-        {
-            let mut cursor = Cursor::new(&mut message_data);
-            // Use Movement_DoMovementCommand for the visual animation
-            // Use the proper enum for Wave motion instead of hardcoded value
-            use acprotocol::enums::Command as MotionCommand;
-            use acprotocol::gameactions::MovementDoMovementCommand;
-            let action = GameActionMessage::MovementDoMovementCommand(MovementDoMovementCommand {
-                motion: MotionCommand::Wave as u32, // Wave motion from Command enum
-                speed: 1.0,                         // Normal speed
-                hold_key: HoldKey::None,            // No hold key
-            });
-            let msg = C2SMessage::OrderedGameAction {
-                sequence: self.next_game_action_sequence,
-                action,
-            };
-            self.next_game_action_sequence += 1;
-            msg.write(&mut cursor).expect("write failed");
-        }
-
-        // Queue for sending
-        self.outgoing_message_queue.push_back(OutgoingMessage::new(
-            OutgoingMessageContent::GameAction(message_data),
-        ));
-        info!(target: "net", "Wave animation queued for sending");
-    }
-
-    /// Send a wave animation to trigger the visual emote with a delay
-    fn send_wave_animation_with_delay(&mut self, delay_seconds: u64) {
-        info!(target: "net", "Sending wave animation with {} second delay", delay_seconds);
-
-        // Create OrderedGameAction with Movement_DoMovementCommand for the visual animation
-        let mut message_data = Vec::new();
-        {
-            let mut cursor = Cursor::new(&mut message_data);
-            // Use Movement_DoMovementCommand for the visual animation
-            // Use the proper enum for Wave motion instead of hardcoded value
-            use acprotocol::enums::Command as MotionCommand;
-            use acprotocol::enums::HoldKey;
-            use acprotocol::gameactions::MovementDoMovementCommand;
-            let action = GameActionMessage::MovementDoMovementCommand(MovementDoMovementCommand {
-                motion: MotionCommand::Wave as u32, // Wave motion from Command enum
-                speed: 1.0,                         // Normal speed
-                hold_key: HoldKey::None,            // No hold key
-            });
-            let msg = C2SMessage::OrderedGameAction {
-                sequence: self.next_game_action_sequence,
-                action,
-            };
-            self.next_game_action_sequence += 1;
-            msg.write(&mut cursor).expect("write failed");
-        }
-
-        // Queue for sending with delay
-        self.outgoing_message_queue.push_back(
-            OutgoingMessage::new(OutgoingMessageContent::GameAction(message_data))
-                .with_delay(delay_seconds),
-        );
-        info!(target: "net", "Wave animation queued for sending with {} second delay", delay_seconds);
     }
 
     /// Send a TimeSync packet to keep connection alive
@@ -867,7 +722,7 @@ impl Client {
                 ClientAction::SendMessage(msg) => {
                     debug!(target: "events", "Action: Enqueueing message from event handler");
                     self.outgoing_message_queue
-                        .push_back(OutgoingMessage::new(msg));
+                        .push_back(OutgoingMessage::new(*msg));
                 }
                 ClientAction::Disconnect => {
                     info!(target: "events", "Action: Disconnecting");
@@ -898,23 +753,6 @@ impl Client {
     }
 
     /// Check and send delayed messages based on login time
-    fn process_delayed_messages(&mut self) {
-        if let Some(login_time) = self.login_timestamp {
-            let elapsed = login_time.elapsed();
-
-            // Send chat message 5 seconds after login (if not already sent)
-            if elapsed.as_secs() >= 5 && !self.delayed_chat_sent {
-                self.send_chat_message("Hello, world!".to_string());
-                self.delayed_chat_sent = true;
-            }
-            // Send wave animation 10 seconds after login (5 seconds after chat, if not already sent)
-            else if elapsed.as_secs() >= 10 && !self.delayed_wave_sent {
-                self.send_wave_animation();
-                self.delayed_wave_sent = true;
-            }
-        }
-    }
-
     /// Send a single outgoing message
     async fn send_outgoing_message(
         &mut self,
@@ -1172,12 +1010,10 @@ impl Client {
 
         // Emit a network message event for EVERY message received so it shows in debug view
         let message_name: String;
-        let is_handled: bool;
 
         // Try to parse as GameAction first (lower opcode values)
-        if let Ok(game_action) = GameAction::try_from(message.opcode as u32) {
+        if let Ok(game_action) = GameAction::try_from(message.opcode) {
             message_name = format!("GameAction::{:?}", game_action);
-            is_handled = matches!(game_action, GameAction::CharacterLoginCompleteNotification);
 
             // Emit network message for debug view
             let event = GameEvent::NetworkMessage {
@@ -1196,7 +1032,7 @@ impl Client {
         match S2CMessage::try_from(message.opcode) {
             Ok(msg_type) => {
                 message_name = format!("{:?}", msg_type);
-                is_handled = matches!(
+                let is_handled = matches!(
                     msg_type,
                     S2CMessage::LoginLoginCharacterSet
                         | S2CMessage::DDDInterrogationMessage
@@ -1830,7 +1666,6 @@ impl Client {
                 client_id: connect_req_packet.net_id as u16, // Use net_id from payload - this is our session index!
                 table: packet.iteration, // Use iteration from packet header as table value
                 send_generator: RefCell::new(CryptoSystem::new(connect_req_packet.incoming_seed)), // Client->Server seed
-                recv_generator: RefCell::new(CryptoSystem::new(connect_req_packet.outgoing_seed)), // Server->Client seed
             });
 
             // Small delay to avoid race condition with server's async authentication

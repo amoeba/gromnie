@@ -8,7 +8,7 @@ use acprotocol::enums::{Gender, HeritageGroup};
 use acprotocol::types::PackableList;
 use gromnie::client::events::{ClientAction, GameEvent};
 use gromnie::client::{
-    ace_protocol::{AceCharGenResult, RawSkillAdvancementClass},
+    ace_protocol::{AceCharGenConfig, AceCharGenResult, RawSkillAdvancementClass},
     Client, OutgoingMessageContent,
 };
 use gromnie::tui::{event_handler::EventHandler, ui::try_init_tui, App};
@@ -106,55 +106,56 @@ async fn client_task(
                                     );
 
                                     // Use ACE-compatible character generation format
-                                    let char_gen_result = AceCharGenResult::from_generic(
-                                        HeritageGroup::Aluvian,
-                                        Gender::Male,
-                                        0,  // eyes_strip
-                                        0,  // nose_strip
-                                        0,  // mouth_strip
-                                        0,  // hair_color
-                                        0,  // eye_color
-                                        0,  // hair_style
-                                        0,  // headgear_style
-                                        0,  // headgear_color
-                                        0,  // shirt_style
-                                        0,  // shirt_color
-                                        0,  // trousers_style
-                                        0,  // trousers_color
-                                        0,  // footwear_style
-                                        0,  // footwear_color
-                                        0,  // skin_shade
-                                        0,  // hair_shade
-                                        0,  // headgear_shade
-                                        0,  // shirt_shade
-                                        0,  // trousers_shade
-                                        0,  // tootwear_shade
-                                        0,  // template_num
-                                        10, // strength
-                                        10, // endurance
-                                        10, // coordination
-                                        10, // quickness
-                                        10, // focus
-                                        10, // self_
-                                        0,  // slot
-                                        0,  // class_id
-                                        {
-                                            // Create a list of 55 skill entries, all set to Inactive (0)
-                                            let mut skills = vec![];
-                                            for _ in 0..55 {
-                                                skills.push(RawSkillAdvancementClass(0));
-                                            }
-                                            PackableList {
-                                                count: 55,
-                                                list: skills,
-                                            }
-                                        },
-                                        char_name.clone(),
-                                        0, // start_area
-                                        0, // is_admin
-                                        0, // is_envoy
-                                        0, // validation
-                                    );
+                                    let char_gen_result =
+                                        AceCharGenResult::from_generic(AceCharGenConfig {
+                                            heritage: HeritageGroup::Aluvian,
+                                            gender: Gender::Male,
+                                            eyes_strip: 0,     // eyes_strip
+                                            nose_strip: 0,     // nose_strip
+                                            mouth_strip: 0,    // mouth_strip
+                                            hair_color: 0,     // hair_color
+                                            eye_color: 0,      // eye_color
+                                            hair_style: 0,     // hair_style
+                                            headgear_style: 0, // headgear_style
+                                            headgear_color: 0, // headgear_color
+                                            shirt_style: 0,    // shirt_style
+                                            shirt_color: 0,    // shirt_color
+                                            trousers_style: 0, // trousers_style
+                                            trousers_color: 0, // trousers_color
+                                            footwear_style: 0, // footwear_style
+                                            footwear_color: 0, // footwear_color
+                                            skin_shade: 0,     // skin_shade
+                                            hair_shade: 0,     // hair_shade
+                                            headgear_shade: 0, // headgear_shade
+                                            shirt_shade: 0,    // shirt_shade
+                                            trousers_shade: 0, // trousers_shade
+                                            tootwear_shade: 0, // tootwear_shade
+                                            template_num: 0,   // template_num
+                                            strength: 10,      // strength
+                                            endurance: 10,     // endurance
+                                            coordination: 10,  // coordination
+                                            quickness: 10,     // quickness
+                                            focus: 10,         // focus
+                                            self_: 10,         // self_
+                                            slot: 0,           // slot
+                                            class_id: 0,       // class_id
+                                            skills: {
+                                                // Create a list of 55 skill entries, all set to Inactive (0)
+                                                let mut skills = vec![];
+                                                for _ in 0..55 {
+                                                    skills.push(RawSkillAdvancementClass(0));
+                                                }
+                                                PackableList {
+                                                    count: 55,
+                                                    list: skills,
+                                                }
+                                            },
+                                            name: char_name.clone(),
+                                            start_area: 0, // start_area
+                                            is_admin: 0,   // is_admin
+                                            is_envoy: 0,   // is_envoy
+                                            validation: 0, // validation
+                                        });
 
                                     info!(target: "events", "Creating character: {}", char_name);
 
@@ -162,7 +163,9 @@ async fn client_task(
                                         account.clone(),
                                         char_gen_result,
                                     );
-                                    if let Err(e) = action_tx.send(ClientAction::SendMessage(msg)) {
+                                    if let Err(e) =
+                                        action_tx.send(ClientAction::SendMessage(Box::new(msg)))
+                                    {
                                         error!(target: "events", "Failed to send character creation action: {}", e);
                                     } else {
                                         info!(target: "events", "Character creation action sent - waiting for response...");

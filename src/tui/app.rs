@@ -42,25 +42,13 @@ pub enum GameWorldTab {
     Inventory,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct ClientStatus {
     pub connected: bool,
     pub logged_in: bool,
     pub account_name: String,
     pub current_character: Option<String>,
     pub characters: Vec<CharacterInfo>,
-}
-
-impl Default for ClientStatus {
-    fn default() -> Self {
-        Self {
-            connected: false,
-            logged_in: false,
-            account_name: String::new(),
-            current_character: None,
-            characters: Vec::new(),
-        }
-    }
 }
 
 #[derive(Debug, Clone)]
