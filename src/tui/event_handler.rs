@@ -42,8 +42,8 @@ impl EventHandler {
                         // Shutdown signal received
                         break;
                     }
-                    _ = tokio::time::sleep(std::time::Duration::from_millis(200)) => {
-                        if event::poll(std::time::Duration::from_millis(0)).unwrap_or(false) {
+                    _ = tokio::time::sleep(std::time::Duration::from_millis(10)) => {
+                        if event::poll(std::time::Duration::from_millis(1)).unwrap_or(false) {
                             if let Ok(Event::Key(key)) = event::read() {
                                 // Check for Ctrl+C to quit
                                 if key.modifiers.contains(KeyModifiers::CONTROL)

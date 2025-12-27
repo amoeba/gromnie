@@ -1,5 +1,4 @@
 use clap::Parser;
-use crossterm::event::KeyCode;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use tracing::{debug, error, info};
@@ -342,123 +341,33 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     // Main TUI loop
-    loop {
-        // Draw current UI
-        tui.draw(&app)?;
+    let mut last_render_time = std::time::Instant::now();
+    let min_render_interval = std::time::Duration::from_millis(16); // ~60 FPS max
 
-        // Handle both TUI events and client events
+    loop {
+        // Draw current UI (only if enough time has passed and state has changed)
+        let now = std::time::Instant::now();
+        if now.duration_since(last_render_time) >= min_render_interval {
+            tui.draw(&app)?;
+            last_render_time = now;
+        }
+
+        // Centralized event polling and handling
         tokio::select! {
             Some(tui_event) = tui_event_rx.recv() => {
-                use gromnie::tui::event_handler::TuiEvent;
+                // Handle TUI events through centralized message passing
+                if let Err(e) = handle_tui_event(&mut app, tui_event, &shutdown_tx) {
+                    error!("Error handling TUI event: {}", e);
+                    break;
+                }
 
-                match tui_event {
-                    TuiEvent::Key(key) => {
-                         // ALWAYS handle Tab/BackTab for GameWorld tab switching
-                         if matches!(app.game_scene, gromnie::tui::app::GameScene::GameWorld { .. })
-                             && matches!(key.code, KeyCode::Tab | KeyCode::BackTab) {
-                             match key.code {
-                                 KeyCode::Tab => {
-                                     app.next_tab();
-                                 }
-                                 KeyCode::BackTab => {
-                                     app.previous_tab();
-                                 }
-                                 _ => unreachable!(),
-                             }
-                         } else if app.chat_input_focused {
-                              match key.code {
-                                  KeyCode::Enter => {
-                                     // Send chat message
-                                     if !app.chat_input.is_empty() {
-                                         if let Some(ref tx) = app.action_tx {
-                                             let message = app.chat_input.clone();
-                                             if let Err(e) = tx.send(ClientAction::SendChatMessage { message }) {
-                                                 error!("Failed to send chat message action: {}", e);
-                                             }
-                                         }
-                                         // Clear input
-                                         app.chat_input.clear();
-                                     }
-                                     // Unfocus chat input
-                                     app.chat_input_focused = false;
-                                 }
-                                 KeyCode::Esc => {
-                                     // Cancel chat input
-                                     app.chat_input.clear();
-                                     app.chat_input_focused = false;
-                                 }
-                                 KeyCode::Backspace => {
-                                     // Delete last character
-                                     app.chat_input.pop();
-                                 }
-                                 KeyCode::Char(c) => {
-                                     // Add character to input (but don't process control keys like Ctrl+C)
-                                     if !key.modifiers.contains(crossterm::event::KeyModifiers::CONTROL) {
-                                         app.chat_input.push(c);
-                                     }
-                                 }
-                                 _ => {}
-                             }
-                         } else {
-                             // Handle GameView character selection controls
-                             if app.current_view == gromnie::tui::app::AppView::Game {
-                                 match key.code {
-                                     KeyCode::Up => {
-                                         app.select_previous_character();
-                                     }
-                                     KeyCode::Down => {
-                                         app.select_next_character();
-                                     }
-                                     KeyCode::Enter => {
-                                         // Try to login with selected character
-                                         match app.login_selected_character() {
-                                            Ok(_) => {
-                                                info!("Logging in with selected character");
-                                            }
-                                            Err(e) => {
-                                                error!("Failed to login: {}", e);
-                                            }
-                                        }
-                                    }
-                                    KeyCode::Char('c') => {
-                                        // Focus chat input when in game world
-                                        if matches!(app.game_scene, gromnie::tui::app::GameScene::GameWorld { .. }) {
-                                            app.chat_input_focused = true;
-                                        }
-                                    }
-                                    _ => {}
-                                }
-                            }
-
-                            // Global controls (only when not in chat input mode)
-                            match key.code {
-                                KeyCode::Char('1') => {
-                                    app.switch_view(gromnie::tui::app::AppView::Game);
-                                }
-                                KeyCode::Char('2') => {
-                                    app.switch_view(gromnie::tui::app::AppView::Debug);
-                                }
-                                KeyCode::Char('q') => {
-                                    app.should_quit = true;
-                                    break;
-                                }
-                                _ => {}
-                            }
-                        }
-                    }
-                    TuiEvent::Quit => {
-                        info!("Received Ctrl+C signal, initiating graceful shutdown...");
-                        app.should_quit = true;
-                        // Signal client task to shut down
-                        let _ = shutdown_tx.send(true);
-                        break;
-                    }
-                    TuiEvent::Tick => {
-                        // Periodic update opportunity
-                    }
+                // Check if the event handler requested to quit
+                if app.should_quit {
+                    break;
                 }
             }
             Some(game_event) = client_event_rx.recv() => {
+                // Handle game events through centralized message passing
                 app.update_from_event(game_event);
             }
             // Check if client task exited
@@ -497,5 +406,133 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Shutdown event handler task
     event_handler.shutdown();
 
+    Ok(())
+}
+
+// Handle TUI events in a centralized function
+fn handle_tui_event(
+    app: &mut App,
+    tui_event: gromnie::tui::event_handler::TuiEvent,
+    shutdown_tx: &tokio::sync::watch::Sender<bool>,
+) -> Result<(), Box<dyn std::error::Error>> {
+    use crossterm::event::{KeyCode, KeyModifiers};
+    use gromnie::tui::event_handler::TuiEvent;
+    use tracing::{error, info};
+
+    match tui_event {
+        TuiEvent::Key(key) => {
+            // ALWAYS handle Tab/BackTab for GameWorld tab switching
+            if matches!(app.game_scene, gromnie::tui::app::GameScene::GameWorld { .. })
+                && matches!(key.code, KeyCode::Tab | KeyCode::BackTab)
+            {
+                match key.code {
+                    KeyCode::Tab => {
+                        app.next_tab();
+                    }
+                    KeyCode::BackTab => {
+                        app.previous_tab();
+                    }
+                    _ => unreachable!(),
+                }
+            } else if app.chat_input_active {
+                match key.code {
+                    KeyCode::Enter => {
+                        // Send chat message if there's text
+                        if !app.chat_input.is_empty() {
+                            if let Some(ref tx) = app.action_tx {
+                                let message = app.chat_input.clone();
+                                if let Err(e) = tx.send(ClientAction::SendChatMessage { message }) {
+                                    error!("Failed to send chat message action: {}", e);
+                                }
+                            }
+                            // Clear input
+                            app.chat_input.clear();
+                        }
+                        // Deactivate chat input after sending
+                        app.chat_input_active = false;
+                    }
+                    KeyCode::Esc => {
+                        // Cancel chat input
+                        app.chat_input.clear();
+                        app.chat_input_active = false;
+                    }
+                    KeyCode::Backspace => {
+                        // Delete last character
+                        app.chat_input.pop();
+                    }
+                    KeyCode::Char(c) => {
+                        // Add character to input (but don't process control keys like Ctrl+C)
+                        if !key.modifiers.contains(KeyModifiers::CONTROL) {
+                            app.chat_input.push(c);
+                        }
+                    }
+                    _ => {}
+                }
+            } else {
+                // Handle GameView character selection controls
+                if app.current_view == gromnie::tui::app::AppView::Game {
+                    match key.code {
+                        KeyCode::Up => {
+                            app.select_previous_character();
+                        }
+                        KeyCode::Down => {
+                            app.select_next_character();
+                        }
+                        KeyCode::Enter => {
+                            // If in GameWorld scene and on Chat tab, activate chat input
+                            if matches!(app.game_scene, gromnie::tui::app::GameScene::GameWorld { .. })
+                                && app.game_world_tab == gromnie::tui::app::GameWorldTab::Chat {
+                                // Activate chat input when on Chat tab
+                                app.chat_input_active = true;
+                            } else {
+                                // Try to login with selected character (in other scenes)
+                                match app.login_selected_character() {
+                                    Ok(_) => {
+                                        info!("Logging in with selected character");
+                                    }
+                                    Err(e) => {
+                                        error!("Failed to login: {}", e);
+                                    }
+                                }
+                            }
+                        }
+                        KeyCode::Char('c') => {
+                            // Activate chat input when in game world
+                            if matches!(app.game_scene, gromnie::tui::app::GameScene::GameWorld { .. }) {
+                                app.chat_input_active = true;
+                            }
+                        }
+                        _ => {}
+                    }
+                }
+
+                // Handle global controls (only when chat input is not active)
+                if !app.chat_input_active {
+                    match key.code {
+                        KeyCode::Char('1') => {
+                            app.switch_view(gromnie::tui::app::AppView::Game);
+                        }
+                        KeyCode::Char('2') => {
+                            app.switch_view(gromnie::tui::app::AppView::Debug);
+                        }
+                        KeyCode::Char('q') => {
+                            app.should_quit = true;
+                            return Ok(()); // Return Ok to break from main loop
+                        }
+                        _ => {}
+                    }
+                }
+            }
+        }
+        TuiEvent::Quit => {
+            info!("Received Ctrl+C signal, initiating graceful shutdown...");
+            app.should_quit = true;
+            // Signal client task to shut down
+            let _ = shutdown_tx.send(true);
+        }
+        TuiEvent::Tick => {
+            // Periodic update opportunity - currently unused
+        }
+    }
     Ok(())
 }

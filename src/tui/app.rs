@@ -101,8 +101,8 @@ pub struct App {
     pub max_chat_messages: usize,
     /// Current chat input text being typed by the user
     pub chat_input: String,
-    /// Whether the chat input is focused (user is typing)
-    pub chat_input_focused: bool,
+    /// Whether the chat input is active (visible and ready for input)
+    pub chat_input_active: bool,
     /// Currently active tab in the GameWorld scene
     pub game_world_tab: GameWorldTab,
 }
@@ -124,7 +124,7 @@ impl App {
             chat_messages: VecDeque::new(),
             max_chat_messages: 100,
             chat_input: String::new(),
-            chat_input_focused: false,
+            chat_input_active: false,
             game_world_tab: GameWorldTab::World,
         }
     }
