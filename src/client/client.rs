@@ -4,8 +4,11 @@ use std::io::Cursor;
 use std::net::SocketAddr;
 
 use acprotocol::enums::{AuthFlags, FragmentGroup, GameAction, PacketHeaderFlags, S2CMessage};
+use acprotocol::gameactions::{CharacterLoginCompleteNotification, CommunicationTalkDirectByName};
+use acprotocol::message::{C2SMessage, GameActionMessage};
 use acprotocol::messages::c2s::{
     CharacterSendCharGenResult, DDDInterrogationResponseMessage, LoginSendEnterWorld,
+    LoginSendEnterWorldRequest,
 };
 use acprotocol::messages::s2c::{DDDInterrogationMessage, LoginLoginCharacterSet};
 use tokio::sync::{broadcast, mpsc};
@@ -533,18 +536,19 @@ impl Client {
 
         info!(target: "net", "Sending LoginComplete notification to server");
 
-        // GameAction packet payload: sequence + opcode
-        // Wrap with 0xF7B1 (OrderedGameAction) opcode
+        // Create OrderedGameAction with CharacterLoginCompleteNotification
         let mut message_data = Vec::new();
         {
             let mut cursor = Cursor::new(&mut message_data);
-            // Write 0xF7B1 opcode (OrderedGameAction wrapper)
-            write_u32(&mut cursor, 0xF7B1).expect("write failed");
-            // Write sequence number
-            write_u32(&mut cursor, self.next_game_action_sequence).expect("write failed");
+            let action = GameActionMessage::CharacterLoginCompleteNotification(
+                CharacterLoginCompleteNotification {},
+            );
+            let msg = C2SMessage::OrderedGameAction {
+                sequence: self.next_game_action_sequence,
+                action,
+            };
             self.next_game_action_sequence += 1;
-            // Write GameAction opcode (0x00A1 = Character_LoginCompleteNotification)
-            write_u32(&mut cursor, 0x00A1).expect("write failed");
+            msg.write(&mut cursor).expect("write failed");
         }
 
         // Queue for sending
@@ -581,27 +585,22 @@ impl Client {
     fn send_chat_message(&mut self, message: String) {
         info!(target: "net", "Sending chat message: {}", message);
 
-        // Build the GameAction::Tell message (0x005D)
-        // Format: 0xF7B1 (OrderedGameAction) + sequence (u32) + opcode (u32) + message (String) + target (String)
+        // Create OrderedGameAction with CommunicationTalkDirectByName
         let mut message_data = Vec::new();
         {
             let mut cursor = Cursor::new(&mut message_data);
-
-            // Write 0xF7B1 opcode (OrderedGameAction wrapper)
-            write_u32(&mut cursor, 0xF7B1).expect("write failed");
-
-            // Write sequence number
-            write_u32(&mut cursor, self.next_game_action_sequence).expect("write failed");
+            let action = GameActionMessage::CommunicationTalkDirectByName(
+                CommunicationTalkDirectByName {
+                    message: message.clone(),
+                    target_name: "admin".to_string(),
+                },
+            );
+            let msg = C2SMessage::OrderedGameAction {
+                sequence: self.next_game_action_sequence,
+                action,
+            };
             self.next_game_action_sequence += 1;
-
-            // Write GameAction opcode (Tell = 0x005D)
-            write_u32(&mut cursor, 0x005D).expect("Failed to write opcode");
-
-            // Write message text (AC string format)
-            write_string(&mut cursor, &message).expect("Failed to write message");
-
-            // Write target name (AC string format) - for now, send to "admin"
-            write_string(&mut cursor, "admin").expect("Failed to write target");
+            msg.write(&mut cursor).expect("write failed");
         }
 
         // Queue for sending
@@ -847,15 +846,11 @@ impl Client {
         info!(target: "net", "Sending DDD Interrogation Response - Language: {}, Files: {:?}",
             response.language, response.files.list);
 
-        // Serialize the response message with opcode prefix
+        // Serialize the message using acprotocol's C2SMessage wrapper (handles opcode automatically)
         let mut message_data = Vec::new();
         {
             let mut cursor = Cursor::new(&mut message_data);
-            // Write opcode first (0xF7E6 = DDD_InterrogationResponse)
-            write_u32(&mut cursor, 0xF7E6)
-                .map_err(|e| std::io::Error::other(format!("Write error: {}", e)))?;
-            // Then write the message payload
-            response
+            C2SMessage::DDDInterrogationResponseMessage(response)
                 .write(&mut cursor)
                 .map_err(|e| std::io::Error::other(format!("Write error: {}", e)))?;
         }
@@ -872,15 +867,11 @@ impl Client {
     ) -> Result<(), std::io::Error> {
         info!(target: "net", "Sending Character Creation - Name: {}", char_gen.result.name);
 
-        // Serialize the character creation message with opcode prefix
+        // Serialize the message using acprotocol's C2SMessage wrapper (handles opcode automatically)
         let mut message_data = Vec::new();
         {
             let mut cursor = Cursor::new(&mut message_data);
-            // Write opcode first (0xF656 = Character_SendCharGenResult)
-            write_u32(&mut cursor, 0xF656)
-                .map_err(|e| std::io::Error::other(format!("Write error: {}", e)))?;
-            // Then write the message payload
-            char_gen
+            C2SMessage::CharacterSendCharGenResult(char_gen)
                 .write(&mut cursor)
                 .map_err(|e| std::io::Error::other(format!("Write error: {}", e)))?;
         }
@@ -924,12 +915,12 @@ impl Client {
     async fn send_enter_world_request_internal(&mut self) -> Result<(), std::io::Error> {
         info!(target: "net", "Sending Login_SendEnterWorldRequest (0xF7C8)");
 
-        // This message has no payload, just the opcode
+        // Serialize the message using acprotocol's C2SMessage wrapper (handles opcode automatically)
         let mut message_data = Vec::new();
         {
             let mut cursor = Cursor::new(&mut message_data);
-            // Write opcode (0xF7C8 = Login_SendEnterWorldRequest)
-            write_u32(&mut cursor, 0xF7C8)
+            C2SMessage::LoginSendEnterWorldRequest(LoginSendEnterWorldRequest {})
+                .write(&mut cursor)
                 .map_err(|e| std::io::Error::other(format!("Write error: {}", e)))?;
         }
 
@@ -946,15 +937,11 @@ impl Client {
     ) -> Result<(), std::io::Error> {
         info!(target: "net", "Sending Login_SendEnterWorld (0xF657) - Character ID: {}", enter_world.character_id.0);
 
-        // Serialize the enter world message with opcode prefix
+        // Serialize the message using acprotocol's C2SMessage wrapper (handles opcode automatically)
         let mut message_data = Vec::new();
         {
             let mut cursor = Cursor::new(&mut message_data);
-            // Write opcode first (0xF657 = Login_SendEnterWorld)
-            write_u32(&mut cursor, 0xF657)
-                .map_err(|e| std::io::Error::other(format!("Write error: {}", e)))?;
-            // Then write the message payload
-            enter_world
+            C2SMessage::LoginSendEnterWorld(enter_world)
                 .write(&mut cursor)
                 .map_err(|e| std::io::Error::other(format!("Write error: {}", e)))?;
         }
