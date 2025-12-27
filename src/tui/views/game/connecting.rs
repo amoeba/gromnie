@@ -59,9 +59,9 @@ impl App {
 }
 
 pub fn render_connecting_view(frame: &mut ratatui::Frame, area: ratatui::layout::Rect, app: &App) {
-    use ratatui::widgets::{Block, Borders, Paragraph, BorderType, Gauge};
-    use ratatui::style::{Style, Color, Modifier};
-    use ratatui::layout::{Layout, Constraint, Direction};
+    use ratatui::layout::{Constraint, Direction, Layout};
+    use ratatui::style::{Color, Modifier, Style};
+    use ratatui::widgets::{Block, BorderType, Borders, Gauge, Paragraph};
 
     // Create a block that fills the entire area
     let outer_block = Block::default()
@@ -78,7 +78,7 @@ pub fn render_connecting_view(frame: &mut ratatui::Frame, area: ratatui::layout:
     let vertical_chunks = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
-            Constraint::Min(0),  // Main content area
+            Constraint::Min(0),    // Main content area
             Constraint::Length(3), // Bottom area for status bars
         ])
         .split(inner_area);
@@ -86,17 +86,18 @@ pub fn render_connecting_view(frame: &mut ratatui::Frame, area: ratatui::layout:
     // Main content area - centered "Asheron's Call" text
     let title_paragraph = Paragraph::new("Asheron's Call")
         .alignment(ratatui::layout::Alignment::Center)
-        .style(Style::default().fg(Color::White).add_modifier(Modifier::BOLD));
+        .style(
+            Style::default()
+                .fg(Color::White)
+                .add_modifier(Modifier::BOLD),
+        );
 
     frame.render_widget(title_paragraph, vertical_chunks[0]);
 
     // Bottom area - split for "Connecting" and "Updating" progress bars
     let bottom_chunks = Layout::default()
         .direction(Direction::Horizontal)
-        .constraints([
-            Constraint::Percentage(50),
-            Constraint::Percentage(50),
-        ])
+        .constraints([Constraint::Percentage(50), Constraint::Percentage(50)])
         .split(vertical_chunks[1]);
 
     // "Connecting" progress bar (for authentication)
@@ -106,7 +107,7 @@ pub fn render_connecting_view(frame: &mut ratatui::Frame, area: ratatui::layout:
             Block::default()
                 .borders(Borders::ALL)
                 .border_type(BorderType::Plain)
-                .title("Connecting")
+                .title("Connecting"),
         )
         .gauge_style(Style::default().fg(Color::Green))
         .ratio(app.connecting_progress);
@@ -120,7 +121,7 @@ pub fn render_connecting_view(frame: &mut ratatui::Frame, area: ratatui::layout:
             Block::default()
                 .borders(Borders::ALL)
                 .border_type(BorderType::Plain)
-                .title("Updating")
+                .title("Updating"),
         )
         .gauge_style(Style::default().fg(Color::Yellow))
         .ratio(app.updating_progress);

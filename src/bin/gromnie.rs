@@ -9,8 +9,7 @@ use acprotocol::types::PackableList;
 use gromnie::client::events::{ClientAction, GameEvent};
 use gromnie::client::{
     ace_protocol::{AceCharGenResult, RawSkillAdvancementClass},
-    Client,
-    OutgoingMessageContent,
+    Client, OutgoingMessageContent,
 };
 
 #[derive(Parser)]
@@ -193,7 +192,7 @@ async fn client_task(id: u32, address: String, account_name: String, password: S
                 } => {
                     info!(target: "events", "=== LOGIN SUCCEEDED === Character: {} (ID: {}) | You are now in the game world!", character_name, character_id);
                     // LoginComplete is already sent by the client when 0xF746 is received
-                    
+
                     // Send a chat message after successful login
                     info!(target: "events", "Sending chat message...");
                     if let Err(e) = action_tx.send(ClientAction::SendChatMessage {

@@ -132,18 +132,13 @@ fn render_chat_tab(frame: &mut Frame, area: Rect, app: &App) {
         // Show both messages and input when active
         Layout::default()
             .direction(Direction::Vertical)
-            .constraints([
-                Constraint::Min(0),
-                Constraint::Length(3),
-            ])
+            .constraints([Constraint::Min(0), Constraint::Length(3)])
             .split(area)
     } else {
         // Show only messages when input is not active
         Layout::default()
             .direction(Direction::Vertical)
-            .constraints([
-                Constraint::Min(0),
-            ])
+            .constraints([Constraint::Min(0)])
             .split(area)
     };
 
@@ -165,12 +160,12 @@ fn render_chat_tab(frame: &mut Frame, area: Rect, app: &App) {
         for message in app.chat_messages.iter().rev().take(max_messages).rev() {
             // Color based on message type
             let color = match message.message_type {
-                0x00 => Color::White,       // Broadcast
-                0x03 => Color::Cyan,        // Tell (incoming)
-                0x04 => Color::Green,       // OutgoingTell
-                0x05 => Color::Yellow,      // System
-                0x06 => Color::Red,         // Combat
-                0x07 => Color::Magenta,     // Magic
+                0x00 => Color::White,   // Broadcast
+                0x03 => Color::Cyan,    // Tell (incoming)
+                0x04 => Color::Green,   // OutgoingTell
+                0x05 => Color::Yellow,  // System
+                0x06 => Color::Red,     // Combat
+                0x07 => Color::Magenta, // Magic
                 _ => Color::White,
             };
 
@@ -195,7 +190,12 @@ fn render_chat_tab(frame: &mut Frame, area: Rect, app: &App) {
         let input_style = Style::default().fg(Color::Yellow);
 
         let chat_input_widget = Paragraph::new(app.chat_input.as_str())
-            .block(Block::default().title(input_title).borders(Borders::ALL).border_style(input_style))
+            .block(
+                Block::default()
+                    .title(input_title)
+                    .borders(Borders::ALL)
+                    .border_style(input_style),
+            )
             .style(input_style);
 
         frame.render_widget(chat_input_widget, chunks[1]);
