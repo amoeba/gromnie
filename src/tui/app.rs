@@ -12,7 +12,10 @@ pub enum AppView {
 #[derive(Debug, Clone, PartialEq)]
 pub enum GameScene {
     /// Authenticating and waiting for DDD
-    Logging { ddd_received: bool },
+    Logging {
+        authenticated: bool,
+        ddd_received: bool,
+    },
     /// Character selection - showing list and allowing selection
     CharacterSelect,
     /// In game world - showing created objects
@@ -114,6 +117,7 @@ impl App {
             should_quit: false,
             current_view: AppView::Game,
             game_scene: GameScene::Logging {
+                authenticated: false,
                 ddd_received: false,
             },
             client_status: ClientStatus::default(),
@@ -201,8 +205,11 @@ impl App {
             }
             GameEvent::DDDInterrogation { language, region } => {
                 // Mark that we received DDD interrogation
-                if let GameScene::Logging { .. } = self.game_scene {
-                    self.game_scene = GameScene::Logging { ddd_received: true };
+                if let GameScene::Logging { authenticated, .. } = self.game_scene {
+                    self.game_scene = GameScene::Logging {
+                        authenticated,
+                        ddd_received: true,
+                    };
                 }
 
                 self.add_network_message(NetworkMessage::Received {
@@ -333,6 +340,29 @@ impl App {
             }
             GameEvent::UpdatingDone => {
                 // Could add any updating done logic here
+            }
+            GameEvent::AuthenticationSucceeded => {
+                // Mark that authentication succeeded (received ConnectRequest)
+                if let GameScene::Logging { ddd_received, .. } = self.game_scene {
+                    self.game_scene = GameScene::Logging {
+                        authenticated: true,
+                        ddd_received,
+                    };
+                }
+                self.client_status.connected = true;
+
+                self.add_network_message(NetworkMessage::Received {
+                    opcode: "CONNECT".to_string(),
+                    description: "Authentication succeeded - ConnectRequest received".to_string(),
+                    timestamp: chrono::Utc::now(),
+                });
+            }
+            GameEvent::AuthenticationFailed { reason } => {
+                self.add_network_message(NetworkMessage::Received {
+                    opcode: "ERROR".to_string(),
+                    description: format!("Authentication failed: {}", reason),
+                    timestamp: chrono::Utc::now(),
+                });
             }
         }
     }

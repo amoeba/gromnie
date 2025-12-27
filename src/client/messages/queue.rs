@@ -5,7 +5,7 @@ use acprotocol::messages::c2s::{
 };
 
 /// Enum for outgoing messages to be sent in the network loop
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum OutgoingMessageContent {
     DDDInterrogationResponse(DDDInterrogationResponseMessage),
     CharacterCreation(CharacterSendCharGenResult),

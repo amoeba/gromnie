@@ -29,7 +29,13 @@ pub fn render_game_view(frame: &mut Frame, app: &App) {
 
     // Main content - render appropriate scene
     match &app.game_scene {
-        GameScene::Logging { ddd_received: _ } => {
+        GameScene::Logging {
+            authenticated: _,
+            ddd_received: _,
+        } => {
+            // Show connecting screen during entire authentication phase
+            // The authenticated flag tracks whether we've received ConnectRequest
+            // but we continue showing this screen until we get character list
             render_connecting_view(frame, chunks[1], app);
         }
         GameScene::CharacterSelect => {

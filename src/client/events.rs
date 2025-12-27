@@ -57,6 +57,12 @@ pub enum GameEvent {
     ConnectingStart,
     /// Signal connecting phase is done
     ConnectingDone,
+    /// Authentication succeeded - received ConnectRequest from server
+    AuthenticationSucceeded,
+    /// Authentication failed - login credentials rejected
+    AuthenticationFailed {
+        reason: String,
+    },
     /// Signal updating phase has started
     UpdatingStart,
     /// Signal updating phase is done
