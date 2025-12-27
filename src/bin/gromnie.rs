@@ -224,6 +224,27 @@ async fn client_task(id: u32, address: String, account_name: String, password: S
                 } => {
                     debug!(target: "events", "Network message: {:?} - {}", direction, message_type);
                 }
+                GameEvent::ConnectingSetProgress { progress: _ } => {
+                    // Ignore progress events in the CLI version
+                }
+                GameEvent::UpdatingSetProgress { progress: _ } => {
+                    // Ignore progress events in the CLI version
+                }
+                GameEvent::FakeProgressComplete => {
+                    // Ignore progress completion events in the CLI version
+                }
+                GameEvent::ConnectingStart => {
+                    // Ignore connecting start events in the CLI version
+                }
+                GameEvent::ConnectingDone => {
+                    // Ignore connecting done events in the CLI version
+                }
+                GameEvent::UpdatingStart => {
+                    // Ignore updating start events in the CLI version
+                }
+                GameEvent::UpdatingDone => {
+                    // Ignore updating done events in the CLI version
+                }
             }
         }
 

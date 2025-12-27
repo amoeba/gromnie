@@ -59,20 +59,71 @@ impl App {
 }
 
 pub fn render_connecting_view(frame: &mut ratatui::Frame, area: ratatui::layout::Rect, app: &App) {
-    let status_text = if matches!(app.game_scene, GameScene::Logging { ddd_received: true }) {
-        "Connected to server\n\nDDD Interrogation received ✓\n\nWaiting for character list..."
-    } else {
-        "Connecting to server...\n\nWaiting for DDD Interrogation..."
-    };
+    use ratatui::widgets::{Block, Borders, Paragraph, BorderType, Gauge};
+    use ratatui::style::{Style, Color, Modifier};
+    use ratatui::layout::{Layout, Constraint, Direction};
 
-    let paragraph = ratatui::widgets::Paragraph::new(status_text)
-        .block(
-            ratatui::widgets::Block::default()
-                .title("Logging In")
-                .borders(ratatui::widgets::Borders::ALL),
-        )
+    // Create a block that fills the entire area
+    let outer_block = Block::default()
+        .borders(Borders::ALL)
+        .border_type(BorderType::Plain)
+        .title("Asheron's Call");
+
+    frame.render_widget(outer_block.clone(), area);
+
+    // Calculate inner area (excluding borders)
+    let inner_area = outer_block.inner(area);
+
+    // Split the inner area into two parts: main content and bottom status
+    let vertical_chunks = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([
+            Constraint::Min(0),  // Main content area
+            Constraint::Length(3), // Bottom area for status bars
+        ])
+        .split(inner_area);
+
+    // Main content area - centered "Asheron's Call" text
+    let title_paragraph = Paragraph::new("Asheron's Call")
         .alignment(ratatui::layout::Alignment::Center)
-        .style(ratatui::style::Style::default().fg(ratatui::style::Color::White));
+        .style(Style::default().fg(Color::White).add_modifier(Modifier::BOLD));
 
-    frame.render_widget(paragraph, area);
+    frame.render_widget(title_paragraph, vertical_chunks[0]);
+
+    // Bottom area - split for "Connecting" and "Updating" progress bars
+    let bottom_chunks = Layout::default()
+        .direction(Direction::Horizontal)
+        .constraints([
+            Constraint::Percentage(50),
+            Constraint::Percentage(50),
+        ])
+        .split(vertical_chunks[1]);
+
+    // "Connecting" progress bar (for authentication)
+    // Use the fake progress value
+    let connecting_gauge = Gauge::default()
+        .block(
+            Block::default()
+                .borders(Borders::ALL)
+                .border_type(BorderType::Plain)
+                .title("Connecting")
+        )
+        .gauge_style(Style::default().fg(Color::Green))
+        .ratio(app.connecting_progress);
+
+    frame.render_widget(connecting_gauge, bottom_chunks[0]);
+
+    // "Updating" progress bar (for DDD messages)
+    // Use the fake progress value
+    let updating_gauge = Gauge::default()
+        .block(
+            Block::default()
+                .borders(Borders::ALL)
+                .border_type(BorderType::Plain)
+                .title("Updating")
+        )
+        .gauge_style(Style::default().fg(Color::Yellow))
+        .ratio(app.updating_progress);
+
+    frame.render_widget(updating_gauge, bottom_chunks[1]);
 }

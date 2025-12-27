@@ -43,6 +43,24 @@ pub enum GameEvent {
         direction: MessageDirection,
         message_type: String,
     },
+    /// Set connecting progress (for authentication)
+    ConnectingSetProgress {
+        progress: f64,
+    },
+    /// Set updating progress (for DDD messages)
+    UpdatingSetProgress {
+        progress: f64,
+    },
+    /// Signal that fake progress is complete
+    FakeProgressComplete,
+    /// Signal connecting phase has started
+    ConnectingStart,
+    /// Signal connecting phase is done
+    ConnectingDone,
+    /// Signal updating phase has started
+    UpdatingStart,
+    /// Signal updating phase is done
+    UpdatingDone,
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
