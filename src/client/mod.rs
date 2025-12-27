@@ -1,5 +1,16 @@
-pub use self::client::{Client, OutgoingMessage, OutgoingMessageContent};
+// Re-export main types
+pub use self::client::Client;
+pub use self::connection::ServerInfo;
+pub use self::messages::{OutgoingMessage, OutgoingMessageContent};
+pub use self::protocol::{C2SPacketExt, CustomLoginRequest};
+pub use self::session::{Account, SessionState};
+
 pub mod ace_protocol;
 #[allow(clippy::module_inception)]
 mod client;
+mod connection;
+mod constants;
 pub mod events;
+mod messages;
+mod protocol;
+mod session;

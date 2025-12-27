@@ -20,4 +20,5 @@
 
 pub mod client;
 pub mod crypto;
+pub mod runner;
 pub mod tui;
