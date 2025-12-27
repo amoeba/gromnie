@@ -101,7 +101,6 @@ pub fn render_connecting_view(frame: &mut ratatui::Frame, area: ratatui::layout:
         .split(vertical_chunks[1]);
 
     // "Connecting" progress bar (for authentication)
-    // Use the fake progress value
     let connecting_gauge = Gauge::default()
         .block(
             Block::default()
@@ -115,7 +114,6 @@ pub fn render_connecting_view(frame: &mut ratatui::Frame, area: ratatui::layout:
     frame.render_widget(connecting_gauge, bottom_chunks[0]);
 
     // "Updating" progress bar (for DDD messages)
-    // Use the fake progress value
     let updating_gauge = Gauge::default()
         .block(
             Block::default()

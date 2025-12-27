@@ -92,7 +92,6 @@ impl EventConsumer for LoggingConsumer {
             // Ignore progress events in the CLI version
             GameEvent::ConnectingSetProgress { .. }
             | GameEvent::UpdatingSetProgress { .. }
-            | GameEvent::FakeProgressComplete
             | GameEvent::ConnectingStart
             | GameEvent::ConnectingDone
             | GameEvent::UpdatingStart
@@ -181,7 +180,6 @@ impl EventConsumer for TuiConsumer {
             // Progress events are handled by TUI directly
             GameEvent::ConnectingSetProgress { .. }
             | GameEvent::UpdatingSetProgress { .. }
-            | GameEvent::FakeProgressComplete
             | GameEvent::ConnectingStart
             | GameEvent::ConnectingDone
             | GameEvent::UpdatingStart

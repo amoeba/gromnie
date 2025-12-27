@@ -94,9 +94,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             last_render_time = now;
         }
 
-        // Process any scheduled events that are due
-        app.process_scheduled_events();
-
         // Centralized event polling and handling
         tokio::select! {
             Some(tui_event) = tui_event_rx.recv() => {

@@ -51,8 +51,6 @@ pub enum GameEvent {
     UpdatingSetProgress {
         progress: f64,
     },
-    /// Signal that fake progress is complete
-    FakeProgressComplete,
     /// Signal connecting phase has started
     ConnectingStart,
     /// Signal connecting phase is done
