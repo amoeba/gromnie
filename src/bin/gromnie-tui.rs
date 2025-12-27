@@ -171,9 +171,7 @@ async fn client_task(
                     info!(target: "events", "DDD Interrogation: lang={} region={}", language, region);
                 }
                 GameEvent::LoginSucceeded { character_id, character_name } => {
-                    info!(target: "events", "=== LOGIN SUCCEEDED ===");
-                    info!(target: "events", "Character: {} (ID: {})", character_name, character_id);
-                    info!(target: "events", "You are now in the game world!");
+                    info!(target: "events", "=== LOGIN SUCCEEDED === Character: {} (ID: {}) | You are now in the game world!", character_name, character_id);
                 }
                 GameEvent::LoginFailed { reason } => {
                     error!(target: "events", "=== LOGIN FAILED ===");
