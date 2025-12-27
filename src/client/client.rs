@@ -4,7 +4,7 @@ use std::io::Cursor;
 use std::net::SocketAddr;
 
 use acprotocol::enums::{AuthFlags, FragmentGroup, GameAction, PacketHeaderFlags, S2CMessage};
-use acprotocol::gameactions::{CharacterLoginCompleteNotification, CommunicationTalkDirectByName};
+use acprotocol::gameactions::{CharacterLoginCompleteNotification, CommunicationTalk, CommunicationTalkDirectByName};
 use acprotocol::message::{C2SMessage, GameActionMessage};
 use acprotocol::messages::c2s::{
     CharacterSendCharGenResult, DDDInterrogationResponseMessage, LoginSendEnterWorld,
@@ -471,6 +471,7 @@ impl Client {
     /// Send all pending outgoing messages
     pub async fn send_pending_messages(&mut self) -> Result<(), std::io::Error> {
         while let Some(message) = self.outgoing_message_queue.pop_front() {
+            info!(target: "net", "send_pending_messages: sending message: {:?}", std::mem::discriminant(&message));
             self.send_outgoing_message(message).await?;
         }
         Ok(())
@@ -580,19 +581,22 @@ impl Client {
     }
 
     /// Send a chat message to the server
-    /// For now, this sends a Tell message to "admin" as a simple test
-    /// TODO: Parse message for @tell, /say, etc. commands
+    /// For now, this sends a general chat message using the correct Communication_Talk action
+    /// TODO: Parse message for @tell, /say, /emote, etc. commands
     fn send_chat_message(&mut self, message: String) {
         info!(target: "net", "Sending chat message: {}", message);
 
-        // Create OrderedGameAction with CommunicationTalkDirectByName
+        // Create OrderedGameAction with CommunicationTalk (for general chat)
+        // This is the correct message type for general chat (equivalent to /say command)
         let mut message_data = Vec::new();
         {
             let mut cursor = Cursor::new(&mut message_data);
-            let action = GameActionMessage::CommunicationTalkDirectByName(
-                CommunicationTalkDirectByName {
+            // Use CommunicationTalk instead of CommunicationTalkDirectByName
+            // CommunicationTalk is for general chat messages (/say)
+            use acprotocol::gameactions::CommunicationTalk;
+            let action = GameActionMessage::CommunicationTalk(
+                CommunicationTalk {
                     message: message.clone(),
-                    target_name: "admin".to_string(),
                 },
             );
             let msg = C2SMessage::OrderedGameAction {
@@ -737,6 +741,8 @@ impl Client {
         message_data: Vec<u8>,
         group: FragmentGroup,
     ) -> Result<(), std::io::Error> {
+        info!(target: "net", "send_fragmented_message: message_data len={}, group={:?}", message_data.len(), group);
+        
         // Get current fragment sequence and increment
         let frag_sequence = self.fragment_sequence;
         self.fragment_sequence += 1;
