@@ -3,6 +3,7 @@ pub use self::client::{
     Client, ClientFailureReason, ClientState, ConnectingProgress, PatchingProgress,
 };
 pub use self::connection::ServerInfo;
+pub use self::constants::UI_DELAY_MS;
 pub use self::messages::{OutgoingMessage, OutgoingMessageContent};
 pub use self::protocol::{C2SPacketExt, CustomLoginRequest};
 pub use self::session::{Account, SessionState};

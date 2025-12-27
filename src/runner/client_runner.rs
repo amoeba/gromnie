@@ -109,6 +109,12 @@ async fn run_client_internal<C: EventConsumer>(
     // Note: We don't call client.connect() here anymore - the client starts in Connecting state
     // and we handle retries in the main loop below
 
+    // Wait before sending initial LoginRequest (to make UI progress visible)
+    tokio::time::sleep(tokio::time::Duration::from_millis(
+        crate::client::UI_DELAY_MS,
+    ))
+    .await;
+
     // Send initial LoginRequest
     if let Err(e) = client.do_login().await {
         error!("Failed to send initial LoginRequest: {}", e);
