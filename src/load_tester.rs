@@ -85,6 +85,19 @@ impl ClientNaming {
     }
 }
 
+/// Generate and print client naming information
+///
+/// Used as a CLI utility for load testing. Accepts a client ID and outputs
+/// the corresponding account name, password, and character name.
+pub fn generate_naming_info(client_id: u32) {
+    let naming = ClientNaming::new(client_id);
+
+    println!("Client ID: {}", client_id);
+    println!("Account: {}", naming.account_name());
+    println!("Password: {}", naming.password());
+    println!("Character: {}", naming.character_name());
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
