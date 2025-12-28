@@ -222,7 +222,7 @@ impl Client {
         if self.recv_count > self.last_ack_sent {
             packet.ack_sequence = Some(self.recv_count);
             packet.flags |= PacketHeaderFlags::ACK_SEQUENCE; // CRITICAL: Must set flag for ACK to be serialized!
-            packet.size += 4; // ACK sequence is 4 bytes (u32)
+            // Note: Size is automatically calculated during serialization based on actual packet contents
             self.last_ack_sent = self.recv_count;
             debug!(target: "net", "📤 Sending ACK for server seq={} in outgoing packet (send_count={})",
                 self.recv_count, self.send_count);
