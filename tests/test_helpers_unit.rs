@@ -1,7 +1,6 @@
 /// Unit tests for test helpers
 ///
 /// These tests verify that the helper functions used in other tests work correctly.
-
 mod helpers {
     use acprotocol::enums::PacketHeaderFlags;
     use byteorder::{ByteOrder, LittleEndian};
