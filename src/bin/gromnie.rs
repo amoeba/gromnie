@@ -1,6 +1,7 @@
 use std::error::Error;
 
 use clap::Parser;
+use gromnie::runner::{ClientConfig, LoggingConsumer};
 use ratatui::{TerminalOptions, Viewport};
 use tracing::info;
 use tracing_subscriber::EnvFilter;
@@ -80,17 +81,14 @@ async fn main() -> Result<(), Box<dyn Error>> {
         let account = wizard.get_selected_account();
 
         let address = format!("{}:{}", server.host, server.port);
-        info!("Selected server: {}", address);
-        info!("Selected account: {}", account.username);
 
-        // TODO: Launch the client
-        // let client_config = ClientConfig {
-        //     id: 0,
-        //     address,
-        //     account_name: account.username.clone(),
-        //     password: account.password.clone(),
-        // };
-        // gromnie::runner::run_client(client_config, LoggingConsumer::new, None).await;
+        let client_config = ClientConfig {
+            id: 0,
+            address,
+            account_name: account.username.clone(),
+            password: account.password.clone(),
+        };
+        gromnie::runner::run_client(client_config, LoggingConsumer::new, None).await;
     }
 
     Ok(())

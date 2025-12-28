@@ -128,6 +128,7 @@ pub struct Client {
     character_login_state: CharacterLoginState,
     pub send_count: u32,
     pub recv_count: u32,
+    last_ack_sent: u32,             // Track the last sequence we ACKed to the server
     fragment_sequence: u32,         // Counter for outgoing fragment sequences
     next_game_action_sequence: u32, // Sequence counter for GameAction messages
     session: Option<SessionState>,
@@ -179,6 +180,7 @@ impl Client {
             character_login_state: CharacterLoginState::Idle,
             send_count: 0,
             recv_count: 0,
+            last_ack_sent: 0,             // Initialize to 0
             fragment_sequence: 1,         // Start at 1 as per actestclient
             next_game_action_sequence: 0, // Start at 0 for GameAction sequences
             session: None,
@@ -199,6 +201,7 @@ impl Client {
     /// - incrementSequence: increment send_count BEFORE using it
     /// - includeSequence: use send_count in packet header, otherwise use 0
     /// - Id/Table are only set if ClientId > 0 (actestclient line 292-297)
+    /// - Automatically includes ACKs when we have received packets that need acknowledging
     async fn send_packet(
         &mut self,
         mut packet: C2SPacket,
@@ -212,6 +215,15 @@ impl Client {
 
         // Set sequence based on include_sequence flag
         packet.sequence = if include_sequence { self.send_count } else { 0 };
+
+        // CRITICAL: Automatically include ACK if we have received packets that need acknowledging
+        // This matches actestclient behavior (NetworkManager.Send lines 266-270)
+        // The server uses ACKs to determine if the client is still alive!
+        if self.recv_count > self.last_ack_sent {
+            packet.ack_sequence = Some(self.recv_count);
+            self.last_ack_sent = self.recv_count;
+            debug!(target: "net", "Including ACK for sequence {} in outgoing packet", self.recv_count);
+        }
 
         // CRITICAL: Only set recipient_id and iteration if ClientId > 0
         // (matches actestclient NetworkManager.Send lines 292-297)
@@ -682,6 +694,16 @@ impl Client {
         self.send_count += 1;
         let packet_sequence = self.send_count;
 
+        // CRITICAL: Automatically include ACK if we have received packets that need acknowledging
+        // This matches actestclient behavior and keeps the connection alive!
+        let ack_sequence = if self.recv_count > self.last_ack_sent {
+            self.last_ack_sent = self.recv_count;
+            debug!(target: "net", "Including ACK for sequence {} in fragmented message", self.recv_count);
+            Some(self.recv_count)
+        } else {
+            None
+        };
+
         // Create C2SPacket with BlobFragments flag
         let packet = C2SPacket {
             sequence: packet_sequence,
@@ -694,7 +716,7 @@ impl Client {
             server_switch: None,
             retransmit_sequences: None,
             reject_sequences: None,
-            ack_sequence: None,
+            ack_sequence,
             login_request: None,
             world_login_request: None,
             connect_response: None,
