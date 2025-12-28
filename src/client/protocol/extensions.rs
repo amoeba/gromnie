@@ -61,6 +61,12 @@ impl C2SPacketExt for C2SPacket {
             buffer[4..8].copy_from_slice(&flags.to_le_bytes());
         }
 
+        // IMPORTANT: Automatically recalculate size field from actual buffer contents
+        // This ensures the size is always correct regardless of what was set during packet construction
+        // Size = total payload after header (includes optional headers + any message data)
+        let actual_payload_size = buffer.len().saturating_sub(PACKET_HEADER_SIZE);
+        buffer[16..18].copy_from_slice(&(actual_payload_size as u16).to_le_bytes());
+
         // Calculate option size before we modify the buffer
         let option_size = self.calculate_option_size();
 
