@@ -81,7 +81,7 @@ impl C2SPacketExt for C2SPacket {
             }
 
             // Step 2: Checksum remaining payload (fragments or message data)
-            let remaining = header_size - option_size;
+            let remaining = header_size.saturating_sub(option_size);
             if remaining > 0 {
                 let payload_start = PACKET_HEADER_SIZE + option_size;
                 let payload_checksum = get_magic_number(
