@@ -44,9 +44,7 @@ impl Config {
     pub fn config_path() -> PathBuf {
         #[cfg(target_os = "macos")]
         {
-            let mut path = PathBuf::from(
-                std::env::var("HOME").unwrap_or_else(|_| ".".to_string()),
-            );
+            let mut path = PathBuf::from(std::env::var("HOME").unwrap_or_else(|_| ".".to_string()));
             path.push(".config/gromnie/config.toml");
             path
         }
@@ -54,8 +52,8 @@ impl Config {
         #[cfg(not(target_os = "macos"))]
         {
             use directories::ProjectDirs;
-            let proj_dirs = ProjectDirs::from("", "", "gromnie")
-                .expect("Failed to determine config directory");
+            let proj_dirs =
+                ProjectDirs::from("", "", "gromnie").expect("Failed to determine config directory");
             proj_dirs.config_dir().join("config.toml")
         }
     }
@@ -116,7 +114,7 @@ impl Config {
 
         // Ask if they want to add more servers
         loop {
-            if Self::prompt_yes_no("Add another server?")?  {
+            if Self::prompt_yes_no("Add another server?")? {
                 let server_key = Self::prompt("Server name/key")?;
                 let server_host = Self::prompt("Server host")?;
                 let server_port = Self::prompt_with_default("Server port", "9000")?;
@@ -143,10 +141,7 @@ impl Config {
         println!("\nLet's add an account:");
         let username = Self::prompt("Username")?;
         let password = Self::prompt("Password")?;
-        accounts.insert(
-            username.clone(),
-            AccountConfig { username, password },
-        );
+        accounts.insert(username.clone(), AccountConfig { username, password });
         config = Config {
             servers: servers.clone(),
             accounts: accounts.clone(),
@@ -159,10 +154,7 @@ impl Config {
             if Self::prompt_yes_no("Add another account?")? {
                 let username = Self::prompt("Username")?;
                 let password = Self::prompt("Password")?;
-                accounts.insert(
-                    username.clone(),
-                    AccountConfig { username, password },
-                );
+                accounts.insert(username.clone(), AccountConfig { username, password });
                 config = Config {
                     servers: servers.clone(),
                     accounts: accounts.clone(),
@@ -190,7 +182,10 @@ impl Config {
         Ok(input.trim().to_string())
     }
 
-    fn prompt_with_default(prompt: &str, default: &str) -> Result<String, Box<dyn std::error::Error>> {
+    fn prompt_with_default(
+        prompt: &str,
+        default: &str,
+    ) -> Result<String, Box<dyn std::error::Error>> {
         print!("{} [{}]: ", prompt, default);
         io::stdout().flush()?;
 
@@ -222,10 +217,10 @@ impl Config {
 
         let config_path = Self::config_path();
         let servers: Vec<_> = self.servers.values().cloned().collect();
-        
+
         println!("Welcome to Gromnie!");
         println!("{}\n", config_path.display());
-        
+
         enable_raw_mode()?;
         let backend = CrosstermBackend::new(io::stdout());
         let viewport_height = (1 + servers.len()).min(30) as u16;
@@ -233,7 +228,7 @@ impl Config {
             viewport: ratatui::Viewport::Inline(viewport_height),
         };
         let mut terminal = Terminal::with_options(backend, options)?;
-        
+
         let mut selected = 0;
         let mut confirmed = false;
 
@@ -254,7 +249,6 @@ impl Config {
             })?;
 
             if confirmed {
-                std::thread::sleep(std::time::Duration::from_millis(200));
                 disable_raw_mode()?;
                 return Ok(servers[selected].clone());
             }
@@ -290,14 +284,17 @@ impl Config {
         }
     }
 
-    pub fn select_account(&self, server: &ServerConfig) -> Result<AccountConfig, Box<dyn std::error::Error>> {
+    pub fn select_account(
+        &self,
+        server: &ServerConfig,
+    ) -> Result<AccountConfig, Box<dyn std::error::Error>> {
         if self.accounts.is_empty() {
             return Err("No accounts configured".into());
         }
 
         let accounts: Vec<_> = self.accounts.values().cloned().collect();
         let server_display = format!("Server: {}:{}", server.host, server.port);
-        
+
         enable_raw_mode()?;
         let backend = CrosstermBackend::new(io::stdout());
         let viewport_height = (2 + accounts.len()).min(30) as u16;
@@ -305,7 +302,7 @@ impl Config {
             viewport: ratatui::Viewport::Inline(viewport_height),
         };
         let mut terminal = Terminal::with_options(backend, options)?;
-        
+
         let mut selected = 0;
         let mut confirmed = false;
 
@@ -329,7 +326,6 @@ impl Config {
             })?;
 
             if confirmed {
-                std::thread::sleep(std::time::Duration::from_millis(200));
                 disable_raw_mode()?;
                 return Ok(accounts[selected].clone());
             }
@@ -364,5 +360,4 @@ impl Config {
             }
         }
     }
-
 }
