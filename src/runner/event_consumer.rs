@@ -7,7 +7,9 @@ use tracing::{debug, error, info};
 use crate::client::events::{CharacterInfo, ClientAction, GameEvent};
 use crate::client::OutgoingMessageContent;
 use crate::runner::CharacterBuilder;
+#[cfg(feature = "discord")]
 use serenity::http::Http;
+#[cfg(feature = "discord")]
 use serenity::model::id::ChannelId;
 
 /// Trait for consuming game events - allows different implementations for CLI vs TUI
@@ -190,6 +192,7 @@ impl EventConsumer for TuiConsumer {
 }
 
 /// Shared uptime data structure
+#[cfg(feature = "discord")]
 #[derive(Clone)]
 pub struct UptimeData {
     pub bot_start: Instant,
@@ -197,6 +200,7 @@ pub struct UptimeData {
 }
 
 /// Event consumer that forwards chat messages to Discord
+#[cfg(feature = "discord")]
 pub struct DiscordConsumer {
     action_tx: UnboundedSender<ClientAction>,
     http: Arc<Http>,
@@ -207,6 +211,7 @@ pub struct DiscordConsumer {
     uptime_data: Option<Arc<tokio::sync::RwLock<UptimeData>>>,
 }
 
+#[cfg(feature = "discord")]
 impl DiscordConsumer {
     pub fn new(
         action_tx: UnboundedSender<ClientAction>,
@@ -242,6 +247,7 @@ impl DiscordConsumer {
     }
 }
 
+#[cfg(feature = "discord")]
 impl EventConsumer for DiscordConsumer {
     fn handle_event(&mut self, event: GameEvent) {
         match event {
