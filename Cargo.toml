@@ -13,6 +13,9 @@ categories = []
 
 license = "Apache-2.0"
 
+[features]
+discord = ["dep:serenity"]
+
 [lib]
 name = "gromnie"
 path = "src/lib.rs"
@@ -28,6 +31,7 @@ path = "src/bin/cli.rs"
 [[bin]]
 name = "discord-bot"
 path = "src/bin/discord-bot.rs"
+required-features = ["discord"]
 
 [[bin]]
 name = "load-tester"
@@ -51,6 +55,6 @@ crossterm = "0.28"
 serde = { version = "1.0", features = ["derive"] }
 toml = "0.8"
 directories = "5.0"
-serenity = { version = "0.12", features = ["client", "gateway", "http", "utils"] }
+serenity = { version = "0.12", features = ["client", "gateway", "http", "utils"], optional = true }
 
 [dev-dependencies]
