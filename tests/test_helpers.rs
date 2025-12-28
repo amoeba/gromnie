@@ -1,9 +1,8 @@
-/// Shared helpers for regression testing
-/// 
-/// This module provides utilities for building test packets and validating their structure.
-
-use acprotocol::packets::c2s_packet::C2SPacket;
 use acprotocol::enums::PacketHeaderFlags;
+/// Shared helpers for regression testing
+///
+/// This module provides utilities for building test packets and validating their structure.
+use acprotocol::packets::c2s_packet::C2SPacket;
 use byteorder::{ByteOrder, LittleEndian};
 use gromnie::client::C2SPacketExt;
 
@@ -31,13 +30,19 @@ pub fn extract_checksum(buffer: &[u8]) -> u32 {
 
 /// Extract recipient_id field from packet header
 pub fn extract_recipient_id(buffer: &[u8]) -> u16 {
-    assert!(buffer.len() >= 14, "Buffer too small for recipient_id field");
+    assert!(
+        buffer.len() >= 14,
+        "Buffer too small for recipient_id field"
+    );
     LittleEndian::read_u16(&buffer[12..14])
 }
 
 /// Extract time_since_last_packet field from packet header
 pub fn extract_time_since_last_packet(buffer: &[u8]) -> u16 {
-    assert!(buffer.len() >= 16, "Buffer too small for time_since_last_packet field");
+    assert!(
+        buffer.len() >= 16,
+        "Buffer too small for time_since_last_packet field"
+    );
     LittleEndian::read_u16(&buffer[14..16])
 }
 
@@ -67,7 +72,10 @@ pub fn extract_payload(buffer: &[u8]) -> &[u8] {
     assert!(buffer.len() >= 20, "Buffer must have at least header");
     let size = extract_size(buffer) as usize;
     let payload_offset = 20; // Just after header, optional headers are part of size
-    assert!(buffer.len() >= payload_offset + size, "Buffer too small for payload");
+    assert!(
+        buffer.len() >= payload_offset + size,
+        "Buffer too small for payload"
+    );
     &buffer[payload_offset..]
 }
 
@@ -76,16 +84,16 @@ pub fn extract_payload(buffer: &[u8]) -> &[u8] {
 // ============================================================================
 
 /// Verify basic packet structure invariants
-pub fn verify_basic_structure(
-    buffer: &[u8],
-    expected_flags: u32,
-) {
-    assert!(buffer.len() >= 20, "Packet must have at least 20-byte header");
+pub fn verify_basic_structure(buffer: &[u8], expected_flags: u32) {
+    assert!(
+        buffer.len() >= 20,
+        "Packet must have at least 20-byte header"
+    );
     assert_eq!(buffer.len() % 4, 0, "Packet must be 4-byte aligned");
-    
+
     let flags = extract_flags(buffer);
     assert_eq!(flags, expected_flags, "Flags mismatch");
-    
+
     let size = extract_size(buffer) as usize;
     assert_eq!(buffer.len(), 20 + size, "Total length = header + size");
 }
@@ -94,7 +102,10 @@ pub fn verify_basic_structure(
 pub fn verify_checksum_calculated(buffer: &[u8]) {
     let checksum = extract_checksum(buffer);
     assert_ne!(checksum, 0, "Checksum should not be zero");
-    assert_ne!(checksum, 0xbadd70dd, "Checksum should be calculated, not placeholder");
+    assert_ne!(
+        checksum, 0xbadd70dd,
+        "Checksum should be calculated, not placeholder"
+    );
 }
 
 /// Verify packet structure for packets with payload
@@ -104,7 +115,7 @@ pub fn verify_structure_with_payload(
     expected_payload_size: usize,
 ) {
     verify_basic_structure(buffer, expected_flags);
-    
+
     let size = extract_size(buffer) as usize;
     assert_eq!(size, expected_payload_size, "Payload size mismatch");
 }
@@ -165,8 +176,7 @@ pub fn build_empty_packet(sequence: u32, flags: PacketHeaderFlags) -> C2SPacket 
 
 /// Build a packet with ACK sequence for testing optional headers
 pub fn build_packet_with_ack(sequence: u32, ack_seq: u32) -> C2SPacket {
-    build_empty_packet(sequence, PacketHeaderFlags::empty())
-        .with_ack_sequence(ack_seq)
+    build_empty_packet(sequence, PacketHeaderFlags::empty()).with_ack_sequence(ack_seq)
 }
 
 // ============================================================================
@@ -205,29 +215,26 @@ pub fn format_hex_pretty(buffer: &[u8], bytes_per_line: usize) -> String {
 
 /// Compare packet headers, ignoring sequence and checksum fields
 /// Useful for regression testing when sequence is dynamic
-pub fn compare_headers_ignore_sequence_checksum(
-    buffer1: &[u8],
-    buffer2: &[u8],
-) -> bool {
+pub fn compare_headers_ignore_sequence_checksum(buffer1: &[u8], buffer2: &[u8]) -> bool {
     // Bytes 0-4: sequence (skip)
     // Bytes 4-8: flags (compare)
     // Bytes 8-12: checksum (skip)
     // Bytes 12-20: rest of header (compare)
-    
+
     if buffer1.len() < 20 || buffer2.len() < 20 {
         return false;
     }
-    
+
     // Compare flags
     if &buffer1[4..8] != &buffer2[4..8] {
         return false;
     }
-    
+
     // Compare rest of header (recipient_id, time_since_last_packet, size, iteration)
     if &buffer1[12..20] != &buffer2[12..20] {
         return false;
     }
-    
+
     true
 }
 
@@ -236,9 +243,8 @@ pub fn compare_payloads(buffer1: &[u8], buffer2: &[u8]) -> bool {
     if buffer1.len() < 20 || buffer2.len() < 20 {
         return false;
     }
-    
+
     let payload1 = &buffer1[20..];
     let payload2 = &buffer2[20..];
     payload1 == payload2
 }
-
