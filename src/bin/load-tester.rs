@@ -18,6 +18,26 @@ use gromnie::runner::{CharacterBuilder, ClientConfig, EventConsumer};
 #[command(name = "load-tester")]
 #[command(about = "Load testing tool for AC server")]
 pub struct Args {
+    #[command(subcommand)]
+    command: Option<Command>,
+
+    #[command(flatten)]
+    run_args: RunArgs,
+}
+
+#[derive(Parser, Debug)]
+pub enum Command {
+    /// Generate naming info for a specific client ID
+    Naming {
+        /// Client ID to generate naming for
+        client_id: u32,
+    },
+    /// Run the load tester
+    Run(RunArgs),
+}
+
+#[derive(Parser, Debug, Clone, Default)]
+pub struct RunArgs {
     /// Number of clients to spawn
     #[arg(short, long, default_value = "5")]
     clients: u32,
@@ -212,6 +232,14 @@ impl EventConsumer for LoadTesterConsumer {
 
 #[tokio::main]
 async fn main() {
+    let args = Args::parse();
+
+    // Handle naming subcommand early (doesn't need tracing setup)
+    if let Some(Command::Naming { client_id }) = args.command {
+        gromnie::load_tester::generate_naming_info(client_id);
+        return;
+    }
+
     // Set up file appender for load_tester.log
     let file_appender = tracing_appender::rolling::never(".", "load_tester.log");
     let (non_blocking_file, _guard) = tracing_appender::non_blocking(file_appender);
@@ -234,19 +262,23 @@ async fn main() {
         )
         .init();
 
-    let args = Args::parse();
+    let run_args = if let Some(Command::Run(args)) = args.command {
+        args
+    } else {
+        args.run_args
+    };
 
     // Validate rate_limit is non-zero
-    if args.rate_limit == 0 {
+    if run_args.rate_limit == 0 {
         error!("Rate limit must be a non-zero value (milliseconds)");
         std::process::exit(1);
     }
 
     info!(
         "Starting load tester: {} clients to {}:{}",
-        args.clients, args.host, args.port
+        run_args.clients, run_args.host, run_args.port
     );
-    info!("Rate limiting: {} ms between connections", args.rate_limit);
+    info!("Rate limiting: {} ms between connections", run_args.rate_limit);
 
     let event_counts = Arc::new(EventCounts::default());
     let (shutdown_tx, _) = watch::channel(false);
@@ -255,16 +287,16 @@ async fn main() {
     let start_time = Instant::now();
 
     // Spawn client tasks
-    for client_id in 0..args.clients {
+    for client_id in 0..run_args.clients {
         // Increment attempted counter for each client we try to spawn
         event_counts.attempted.fetch_add(1, Ordering::SeqCst);
 
-        let host = args.host.clone();
-        let port = args.port;
+        let host = run_args.host.clone();
+        let port = run_args.port;
         let mut shutdown_rx = shutdown_tx.subscribe();
         let event_counts = event_counts.clone();
-        let verbose = args.verbose;
-        let rate_limit = args.rate_limit;
+        let verbose = run_args.verbose;
+        let rate_limit = run_args.rate_limit;
 
         let handle = tokio::spawn(async move {
             // Rate limiting: stagger client connections
@@ -319,7 +351,7 @@ async fn main() {
 
     // Stats display task
     let event_counts_stats = event_counts.clone();
-    let stats_interval = args.stats_interval;
+    let stats_interval = run_args.stats_interval;
     let stats_handle = tokio::spawn(async move {
         loop {
             tokio::time::sleep(Duration::from_secs(stats_interval)).await;
