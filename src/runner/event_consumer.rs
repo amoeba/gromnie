@@ -6,6 +6,8 @@ use tracing::{debug, error, info};
 use crate::client::events::{CharacterInfo, ClientAction, GameEvent};
 use crate::client::OutgoingMessageContent;
 use crate::runner::CharacterBuilder;
+use serenity::http::Http;
+use serenity::model::id::ChannelId;
 
 /// Trait for consuming game events - allows different implementations for CLI vs TUI
 pub trait EventConsumer: Send + 'static {
@@ -176,6 +178,103 @@ impl EventConsumer for TuiConsumer {
                 error!(target: "events", "Authentication failed: {}", reason);
             }
             // Progress events are handled by TUI directly
+            GameEvent::ConnectingSetProgress { .. }
+            | GameEvent::UpdatingSetProgress { .. }
+            | GameEvent::ConnectingStart
+            | GameEvent::ConnectingDone
+            | GameEvent::UpdatingStart
+            | GameEvent::UpdatingDone => {}
+        }
+    }
+}
+
+/// Event consumer that forwards chat messages to Discord
+pub struct DiscordConsumer {
+    action_tx: UnboundedSender<ClientAction>,
+    http: Arc<Http>,
+    channel_id: ChannelId,
+    character_created: Arc<AtomicBool>,
+}
+
+impl DiscordConsumer {
+    pub fn new(
+        action_tx: UnboundedSender<ClientAction>,
+        http: Arc<Http>,
+        channel_id: ChannelId,
+    ) -> Self {
+        Self {
+            action_tx,
+            http,
+            channel_id,
+            character_created: Arc::new(AtomicBool::new(false)),
+        }
+    }
+}
+
+impl EventConsumer for DiscordConsumer {
+    fn handle_event(&mut self, event: GameEvent) {
+        match event {
+            GameEvent::CharacterListReceived {
+                account,
+                characters,
+                num_slots,
+            } => {
+                handle_character_list(
+                    &account,
+                    &characters,
+                    num_slots,
+                    &self.action_tx,
+                    &self.character_created,
+                );
+            }
+            GameEvent::ChatMessageReceived {
+                message,
+                message_type,
+            } => {
+                info!(target: "events", "CHAT [{}]: {}", message_type, message);
+                
+                // Forward to Discord
+                let discord_message = format!("[{}] {}", message_type, message);
+                let http = self.http.clone();
+                let channel_id = self.channel_id;
+                
+                tokio::spawn(async move {
+                    if let Err(e) = channel_id.say(&http, &discord_message).await {
+                        error!("Failed to send Discord message: {}", e);
+                    }
+                });
+            }
+            GameEvent::LoginSucceeded {
+                character_id,
+                character_name,
+            } => {
+                info!(target: "events", "LoginSucceeded -- Character: {} (ID: {})", character_name, character_id);
+            }
+            GameEvent::LoginFailed { reason } => {
+                error!(target: "events", "LoginFailed -- Reason: {}", reason);
+            }
+            GameEvent::DDDInterrogation { language, region } => {
+                info!(target: "events", "DDD Interrogation: lang={} region={}", language, region);
+            }
+            GameEvent::CreateObject {
+                object_id,
+                object_name,
+            } => {
+                debug!(target: "events", "CREATE OBJECT: {} (0x{:08X})", object_name, object_id);
+            }
+            GameEvent::NetworkMessage {
+                direction,
+                message_type,
+            } => {
+                debug!(target: "events", "Network message: {:?} - {}", direction, message_type);
+            }
+            GameEvent::AuthenticationSucceeded => {
+                info!(target: "events", "Authentication succeeded - connected to server");
+            }
+            GameEvent::AuthenticationFailed { reason } => {
+                error!(target: "events", "Authentication failed: {}", reason);
+            }
+            // Ignore progress events
             GameEvent::ConnectingSetProgress { .. }
             | GameEvent::UpdatingSetProgress { .. }
             | GameEvent::ConnectingStart

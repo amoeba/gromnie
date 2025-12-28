@@ -25,6 +25,10 @@ path = "src/bin/tui.rs"
 name = "cli"
 path = "src/bin/cli.rs"
 
+[[bin]]
+name = "discord-bot"
+path = "src/bin/discord-bot.rs"
+
 [dependencies]
 acprotocol = { git = "https://github.com/amoeba/asheron-rs" , rev = "a165e6ca82dd913281cb6280538ee5ab3bd1ef4b"}
 bitflags = "2.6"
@@ -42,5 +46,6 @@ crossterm = "0.28"
 serde = { version = "1.0", features = ["derive"] }
 toml = "0.8"
 directories = "5.0"
+serenity = { version = "0.12", features = ["client", "gateway", "http", "utils"] }
 
 [dev-dependencies]
