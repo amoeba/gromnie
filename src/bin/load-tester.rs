@@ -6,6 +6,8 @@ use tokio::sync::mpsc;
 use tokio::sync::watch;
 use tracing::{error, info};
 use tracing_subscriber::EnvFilter;
+use tracing_subscriber::layer::SubscriberExt;
+use tracing_subscriber::util::SubscriberInitExt;
 
 use gromnie::client::events::{ClientAction, GameEvent};
 use gromnie::client::OutgoingMessageContent;
@@ -44,10 +46,13 @@ pub struct Args {
 /// Statistics collector for all clients
 #[derive(Default)]
 struct EventCounts {
+    attempted: AtomicU32,      // Number of clients we tried to spawn
+    spawned: AtomicU32,        // Number of clients that successfully started
     authenticated: AtomicU32,
     character_created: AtomicU32,
     logged_in: AtomicU32,
     errors: AtomicU32,
+    task_failures: AtomicU32, // Number of client tasks that panicked or failed to start
 }
 
 /// Load tester client state machine
@@ -207,9 +212,25 @@ impl EventConsumer for LoadTesterConsumer {
 
 #[tokio::main]
 async fn main() {
-    tracing_subscriber::fmt()
-        .with_env_filter(
-            EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info")),
+    // Set up file appender for load_tester.log
+    let file_appender = tracing_appender::rolling::never(".", "load_tester.log");
+    let (non_blocking_file, _guard) = tracing_appender::non_blocking(file_appender);
+
+    // Create the env filter
+    let env_filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info"));
+
+    // Set up layered subscriber that writes to both stdout and file
+    tracing_subscriber::registry()
+        .with(env_filter)
+        .with(
+            tracing_subscriber::fmt::layer()
+                .with_writer(std::io::stdout)
+                .with_ansi(true)
+        )
+        .with(
+            tracing_subscriber::fmt::layer()
+                .with_writer(non_blocking_file)
+                .with_ansi(false)
         )
         .init();
 
@@ -229,6 +250,9 @@ async fn main() {
 
     // Spawn client tasks
     for client_id in 0..args.clients {
+        // Increment attempted counter for each client we try to spawn
+        event_counts.attempted.fetch_add(1, Ordering::SeqCst);
+
         let host = args.host.clone();
         let port = args.port;
         let shutdown_rx = shutdown_tx.subscribe();
@@ -254,17 +278,21 @@ async fn main() {
                 password,
             };
 
-            let event_counts = event_counts.clone();
+            let event_counts_inner = event_counts.clone();
             let consumer_factory = move |action_tx| {
+                // Mark that we successfully spawned this client
+                event_counts.spawned.fetch_add(1, Ordering::SeqCst);
+
                 LoadTesterConsumer::new(
                     client_id,
                     character_name.clone(),
-                    event_counts.clone(),
+                    event_counts_inner.clone(),
                     action_tx,
                     verbose,
                 )
             };
 
+            // Run the client
             gromnie::runner::run_client(client_config, consumer_factory, Some(shutdown_rx)).await;
         });
 
@@ -281,14 +309,17 @@ async fn main() {
             tokio::time::sleep(Duration::from_secs(stats_interval)).await;
 
             let elapsed = start_time.elapsed().as_secs();
+            let attempted = event_counts_stats.attempted.load(Ordering::SeqCst);
+            let spawned = event_counts_stats.spawned.load(Ordering::SeqCst);
             let auth = event_counts_stats.authenticated.load(Ordering::SeqCst);
             let login = event_counts_stats.logged_in.load(Ordering::SeqCst);
             let char_created = event_counts_stats.character_created.load(Ordering::SeqCst);
             let errors = event_counts_stats.errors.load(Ordering::SeqCst);
+            let task_failures = event_counts_stats.task_failures.load(Ordering::SeqCst);
 
             info!(
-                "[Stats @ {}s] Auth: {} | LoggedIn: {} | CharCreated: {} | Errors: {}",
-                elapsed, auth, login, char_created, errors
+                "[Stats @ {}s] Attempted: {} | Spawned: {} | Auth: {} | LoggedIn: {} | CharCreated: {} | Errors: {} | TaskFailures: {}",
+                elapsed, attempted, spawned, auth, login, char_created, errors, task_failures
             );
         }
     });
@@ -305,25 +336,54 @@ async fn main() {
     }
 
     // Wait for all client tasks to complete
-    for handle in join_handles {
-        let _ = handle.await;
+    for (idx, handle) in join_handles.into_iter().enumerate() {
+        match handle.await {
+            Ok(_) => {
+                // Task completed normally
+            }
+            Err(e) => {
+                // Task panicked or was cancelled
+                event_counts.task_failures.fetch_add(1, Ordering::SeqCst);
+                if e.is_panic() {
+                    error!("[Client {}] Task panicked: {:?}", idx, e);
+                } else {
+                    error!("[Client {}] Task was cancelled", idx);
+                }
+            }
+        }
     }
 
     stats_handle.abort();
 
     // Display final stats
     let total_time = start_time.elapsed();
+    let attempted = event_counts.attempted.load(Ordering::SeqCst);
+    let spawned = event_counts.spawned.load(Ordering::SeqCst);
     let auth = event_counts.authenticated.load(Ordering::SeqCst);
     let login = event_counts.logged_in.load(Ordering::SeqCst);
     let errors = event_counts.errors.load(Ordering::SeqCst);
+    let task_failures = event_counts.task_failures.load(Ordering::SeqCst);
 
+    info!("========================================");
     info!("Load test complete");
     info!("Total time: {:.2}s", total_time.as_secs_f64());
-    info!("Total authenticated: {}", auth);
-    info!("Total logged in: {}", login);
-    info!("Total errors: {}", errors);
+    info!("========================================");
+    info!("Client Launch:");
+    info!("  Attempted:      {}", attempted);
+    info!("  Spawned:        {}", spawned);
+    info!("  Task failures:  {}", task_failures);
+    info!("  Failed to spawn: {}", attempted - spawned - task_failures);
+    info!("========================================");
+    info!("Client Progress:");
+    info!("  Authenticated:  {}", auth);
+    info!("  Logged in:      {}", login);
+    info!("  Auth/login errors: {}", errors);
+    info!("========================================");
     info!(
-        "Success rate: {:.1}%",
-        (login as f64 / args.clients as f64) * 100.0
+        "Success rate: {:.1}% ({} / {} attempted)",
+        (login as f64 / attempted as f64) * 100.0,
+        login,
+        attempted
     );
+    info!("========================================");
 }
