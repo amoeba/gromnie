@@ -9,10 +9,8 @@ use tracing_subscriber::EnvFilter;
 
 use gromnie::client::events::{ClientAction, GameEvent};
 use gromnie::client::OutgoingMessageContent;
+use gromnie::load_tester::ClientNaming;
 use gromnie::runner::{CharacterBuilder, ClientConfig, EventConsumer};
-
-mod naming;
-use naming::ClientNaming;
 
 #[derive(Parser)]
 #[command(name = "load-tester")]
