@@ -12,19 +12,18 @@ keywords = []
 categories = []
 
 license = "Apache-2.0"
-default-run = "gromnie"
 
 [lib]
 name = "gromnie"
 path = "src/lib.rs"
 
 [[bin]]
-name = "gromnie"
-path = "src/bin/gromnie-tui.rs"
+name = "tui"
+path = "src/bin/tui.rs"
 
 [[bin]]
-name = "gromnie-cli"
-path = "src/bin/gromnie.rs"
+name = "cli"
+path = "src/bin/cli.rs"
 
 [dependencies]
 acprotocol = { git = "https://github.com/amoeba/asheron-rs" , rev = "a165e6ca82dd913281cb6280538ee5ab3bd1ef4b"}

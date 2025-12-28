@@ -70,9 +70,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     let mut app = App::new_with_config(config);
     let app_result = cli::run(&mut app, &mut terminal);
-
     ratatui::restore();
-
     app_result?;
 
     // Extract selected server and account from completed wizard
