@@ -57,7 +57,12 @@ pub trait C2SPacketExt {
     fn validate(&self) -> Result<(), &'static str>;
 
     /// Helper to set a field and its corresponding flag atomically
-    fn set_field_with_flag<T>(self, field_setter: impl FnOnce(&mut Self) -> &mut Option<T>, value: T, flag: PacketHeaderFlags) -> Self;
+    fn set_field_with_flag<T>(
+        self,
+        field_setter: impl FnOnce(&mut Self) -> &mut Option<T>,
+        value: T,
+        flag: PacketHeaderFlags,
+    ) -> Self;
 }
 
 impl C2SPacketExt for C2SPacket {
@@ -99,35 +104,67 @@ impl C2SPacketExt for C2SPacket {
     ///     .with_ack_sequence(recv_count);
     /// ```
     fn with_ack_sequence(self, ack_seq: u32) -> Self {
-        self.set_field_with_flag(|p| &mut p.ack_sequence, ack_seq, PacketHeaderFlags::ACK_SEQUENCE)
+        self.set_field_with_flag(
+            |p| &mut p.ack_sequence,
+            ack_seq,
+            PacketHeaderFlags::ACK_SEQUENCE,
+        )
     }
 
     fn with_server_switch(self, header: acprotocol::types::ServerSwitchHeader) -> Self {
-        self.set_field_with_flag(|p| &mut p.server_switch, header, PacketHeaderFlags::SERVER_SWITCH)
+        self.set_field_with_flag(
+            |p| &mut p.server_switch,
+            header,
+            PacketHeaderFlags::SERVER_SWITCH,
+        )
     }
 
     fn with_retransmit_sequences(self, sequences: acprotocol::types::PackableList<u32>) -> Self {
-        self.set_field_with_flag(|p| &mut p.retransmit_sequences, sequences, PacketHeaderFlags::REQUEST_RETRANSMIT)
+        self.set_field_with_flag(
+            |p| &mut p.retransmit_sequences,
+            sequences,
+            PacketHeaderFlags::REQUEST_RETRANSMIT,
+        )
     }
 
     fn with_reject_sequences(self, sequences: acprotocol::types::PackableList<u32>) -> Self {
-        self.set_field_with_flag(|p| &mut p.reject_sequences, sequences, PacketHeaderFlags::REJECT_RETRANSMIT)
+        self.set_field_with_flag(
+            |p| &mut p.reject_sequences,
+            sequences,
+            PacketHeaderFlags::REJECT_RETRANSMIT,
+        )
     }
 
     fn with_login_request(self, header: acprotocol::types::LoginRequestHeader) -> Self {
-        self.set_field_with_flag(|p| &mut p.login_request, header, PacketHeaderFlags::LOGIN_REQUEST)
+        self.set_field_with_flag(
+            |p| &mut p.login_request,
+            header,
+            PacketHeaderFlags::LOGIN_REQUEST,
+        )
     }
 
     fn with_world_login_request(self, value: u64) -> Self {
-        self.set_field_with_flag(|p| &mut p.world_login_request, value, PacketHeaderFlags::WORLD_LOGIN_REQUEST)
+        self.set_field_with_flag(
+            |p| &mut p.world_login_request,
+            value,
+            PacketHeaderFlags::WORLD_LOGIN_REQUEST,
+        )
     }
 
     fn with_connect_response(self, cookie: u64) -> Self {
-        self.set_field_with_flag(|p| &mut p.connect_response, cookie, PacketHeaderFlags::CONNECT_RESPONSE)
+        self.set_field_with_flag(
+            |p| &mut p.connect_response,
+            cookie,
+            PacketHeaderFlags::CONNECT_RESPONSE,
+        )
     }
 
     fn with_cicmd_command(self, header: acprotocol::types::CICMDCommandHeader) -> Self {
-        self.set_field_with_flag(|p| &mut p.cicmd_command, header, PacketHeaderFlags::CICMDCOMMAND)
+        self.set_field_with_flag(
+            |p| &mut p.cicmd_command,
+            header,
+            PacketHeaderFlags::CICMDCOMMAND,
+        )
     }
 
     fn with_time_sync(self, time: u64) -> Self {
@@ -147,12 +184,21 @@ impl C2SPacketExt for C2SPacket {
     }
 
     fn with_fragments(self, fragments: acprotocol::types::BlobFragments) -> Self {
-        self.set_field_with_flag(|p| &mut p.fragments, fragments, PacketHeaderFlags::BLOB_FRAGMENTS)
+        self.set_field_with_flag(
+            |p| &mut p.fragments,
+            fragments,
+            PacketHeaderFlags::BLOB_FRAGMENTS,
+        )
     }
 
     /// Helper to set a field and its corresponding flag atomically
     #[inline]
-    fn set_field_with_flag<T>(mut self, field_setter: impl FnOnce(&mut Self) -> &mut Option<T>, value: T, flag: PacketHeaderFlags) -> Self {
+    fn set_field_with_flag<T>(
+        mut self,
+        field_setter: impl FnOnce(&mut Self) -> &mut Option<T>,
+        value: T,
+        flag: PacketHeaderFlags,
+    ) -> Self {
         *field_setter(&mut self) = Some(value);
         self.flags |= flag;
         self
