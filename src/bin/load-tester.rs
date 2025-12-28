@@ -5,9 +5,9 @@ use std::time::{Duration, Instant};
 use tokio::sync::mpsc;
 use tokio::sync::watch;
 use tracing::{error, info};
-use tracing_subscriber::EnvFilter;
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
+use tracing_subscriber::EnvFilter;
 
 use gromnie::client::events::{ClientAction, GameEvent};
 use gromnie::client::OutgoingMessageContent;
@@ -46,8 +46,8 @@ pub struct Args {
 /// Statistics collector for all clients
 #[derive(Default)]
 struct EventCounts {
-    attempted: AtomicU32,      // Number of clients we tried to spawn
-    spawned: AtomicU32,        // Number of clients that successfully started
+    attempted: AtomicU32, // Number of clients we tried to spawn
+    spawned: AtomicU32,   // Number of clients that successfully started
     authenticated: AtomicU32,
     character_created: AtomicU32,
     logged_in: AtomicU32,
@@ -225,12 +225,12 @@ async fn main() {
         .with(
             tracing_subscriber::fmt::layer()
                 .with_writer(std::io::stdout)
-                .with_ansi(true)
+                .with_ansi(true),
         )
         .with(
             tracing_subscriber::fmt::layer()
                 .with_writer(non_blocking_file)
-                .with_ansi(false)
+                .with_ansi(false),
         )
         .init();
 
