@@ -221,8 +221,14 @@ impl Client {
         // The server uses ACKs to determine if the client is still alive!
         if self.recv_count > self.last_ack_sent {
             packet.ack_sequence = Some(self.recv_count);
+            packet.flags |= PacketHeaderFlags::ACK_SEQUENCE; // CRITICAL: Must set flag for ACK to be serialized!
+            packet.size += 4; // ACK sequence is 4 bytes (u32)
             self.last_ack_sent = self.recv_count;
-            debug!(target: "net", "Including ACK for sequence {} in outgoing packet", self.recv_count);
+            debug!(target: "net", "📤 Sending ACK for server seq={} in outgoing packet (send_count={})",
+                self.recv_count, self.send_count);
+        } else if self.recv_count > 0 {
+            debug!(target: "net", "📤 No new ACK needed (recv_count={}, last_ack_sent={})",
+                self.recv_count, self.last_ack_sent);
         }
 
         // CRITICAL: Only set recipient_id and iteration if ClientId > 0
@@ -1588,7 +1594,12 @@ impl Client {
         // Track server's packet sequence (for ACKing back to server)
         // Only update if this is a sequenced packet (sequence > 0) and it's newer than what we've seen
         if packet.sequence > 0 && packet.sequence > self.recv_count {
+            debug!(target: "net", "📥 Received packet with seq={}, updating recv_count from {} to {}",
+                packet.sequence, self.recv_count, packet.sequence);
             self.recv_count = packet.sequence;
+        } else if packet.sequence > 0 {
+            debug!(target: "net", "📥 Received packet with seq={} (not newer than recv_count={})",
+                packet.sequence, self.recv_count);
         }
 
         let flags = packet.flags;
@@ -1609,6 +1620,8 @@ impl Client {
             // IMPORTANT: Use net_id from payload (our ClientId/session index), NOT packet.id (ServerId)!
             // The server uses packet.Header.Id for the SERVER's ID, not ours
             // Our session index is in the payload's net_id field
+            debug!(target: "net", "🔑 Session established: client_id={}, table={}, server_id={}, cookie=0x{:016X}",
+                connect_req_packet.net_id, packet.iteration, packet.id, connect_req_packet.cookie);
             self.session = Some(SessionState {
                 cookie: connect_req_packet.cookie,
                 client_id: connect_req_packet.net_id as u16, // Use net_id from payload - this is our session index!
@@ -1661,7 +1674,10 @@ impl Client {
             let mut cursor = Cursor::new(&buffer[..size]);
             // Skip past the packet header to read the payload
             cursor.set_position(PACKET_HEADER_SIZE as u64);
-            let _acked_seq = u32::read(&mut cursor).unwrap();
+            let acked_seq = u32::read(&mut cursor).unwrap();
+
+            debug!(target: "net", "📨 Received ACK from server for our seq={} (packet.seq={}, recv_count={})",
+                acked_seq, packet.sequence, self.recv_count);
 
             // Server is acknowledging our packets - we could track this to resend unacked packets
             // For now, we just note that we received the ACK
@@ -1672,7 +1688,7 @@ impl Client {
             // Read the server time (8-byte double)
             let mut cursor = Cursor::new(&buffer[..size]);
             cursor.set_position(PACKET_HEADER_SIZE as u64);
-            let _server_time = f64::from_le_bytes([
+            let server_time = f64::from_le_bytes([
                 buffer[PACKET_HEADER_SIZE],
                 buffer[PACKET_HEADER_SIZE + 1],
                 buffer[PACKET_HEADER_SIZE + 2],
@@ -1682,6 +1698,9 @@ impl Client {
                 buffer[PACKET_HEADER_SIZE + 6],
                 buffer[PACKET_HEADER_SIZE + 7],
             ]);
+
+            debug!(target: "net", "⏰ Received TIME_SYNC from server: time={:.3}, seq={}, recv_count={}",
+                server_time, packet.sequence, self.recv_count);
 
             // TODO: Store server time if needed for future use
         }
