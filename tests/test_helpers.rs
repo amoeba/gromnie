@@ -226,12 +226,12 @@ pub fn compare_headers_ignore_sequence_checksum(buffer1: &[u8], buffer2: &[u8]) 
     }
 
     // Compare flags
-    if &buffer1[4..8] != &buffer2[4..8] {
+    if buffer1[4..8] != buffer2[4..8] {
         return false;
     }
 
     // Compare rest of header (recipient_id, time_since_last_packet, size, iteration)
-    if &buffer1[12..20] != &buffer2[12..20] {
+    if buffer1[12..20] != buffer2[12..20] {
         return false;
     }
 
