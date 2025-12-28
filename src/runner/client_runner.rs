@@ -130,7 +130,7 @@ async fn run_client_internal<C: EventConsumer>(
     let keepalive_interval = tokio::time::Duration::from_secs(5);
 
     // Tick interval for checking retries and timeouts
-    let tick_interval = tokio::time::Duration::from_millis(100); // Check every 100ms
+    let tick_interval = tokio::time::Duration::from_millis(16); // Check every 16ms (~60 FPS)
     let mut last_tick = tokio::time::Instant::now();
 
     loop {
