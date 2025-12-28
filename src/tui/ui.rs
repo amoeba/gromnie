@@ -14,7 +14,7 @@ impl Tui {
         enable_raw_mode()?;
         let backend = CrosstermBackend::new(io::stdout());
         let options = ratatui::TerminalOptions {
-            viewport: ratatui::Viewport::Inline(1),
+            viewport: ratatui::Viewport::Fullscreen,
         };
         let terminal = Terminal::with_options(backend, options)?;
 
