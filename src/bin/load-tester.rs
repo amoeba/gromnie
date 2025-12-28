@@ -30,8 +30,8 @@ pub struct Args {
     #[arg(short, long, default_value = "9000")]
     port: u16,
 
-    /// Delay between client connections in seconds
-    #[arg(short, long, default_value = "1")]
+    /// Delay between client connections in milliseconds
+    #[arg(short, long, default_value = "1000")]
     rate_limit: u64,
 
     /// Enable verbose per-client logging
@@ -236,11 +236,17 @@ async fn main() {
 
     let args = Args::parse();
 
+    // Validate rate_limit is non-zero
+    if args.rate_limit == 0 {
+        error!("Rate limit must be a non-zero value (milliseconds)");
+        std::process::exit(1);
+    }
+
     info!(
         "Starting load tester: {} clients to {}:{}",
         args.clients, args.host, args.port
     );
-    info!("Rate limiting: {} sec between connections", args.rate_limit);
+    info!("Rate limiting: {} ms between connections", args.rate_limit);
 
     let event_counts = Arc::new(EventCounts::default());
     let (shutdown_tx, _) = watch::channel(false);
@@ -262,7 +268,7 @@ async fn main() {
 
         let handle = tokio::spawn(async move {
             // Rate limiting: stagger client connections
-            tokio::time::sleep(Duration::from_secs(client_id as u64 * rate_limit)).await;
+            tokio::time::sleep(Duration::from_millis(client_id as u64 * rate_limit)).await;
 
             let naming = ClientNaming::new(client_id);
             let account_name = naming.account_name();
