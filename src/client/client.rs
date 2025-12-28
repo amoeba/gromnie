@@ -128,8 +128,8 @@ pub struct Client {
     character_login_state: CharacterLoginState,
     pub send_count: u32,
     pub recv_count: u32,
-    last_ack_sent: u32,             // Track the last sequence we ACKed to the server
-    fragment_sequence: u32,         // Counter for outgoing fragment sequences
+    last_ack_sent: u32,     // Track the last sequence we ACKed to the server
+    fragment_sequence: u32, // Counter for outgoing fragment sequences
     next_game_action_sequence: u32, // Sequence counter for GameAction messages
     session: Option<SessionState>,
     login_timestamp: Option<std::time::Instant>, // Time when login was completed
@@ -1224,22 +1224,26 @@ impl Client {
         let mut cursor = Cursor::new(payload);
         match LoginLoginCharacterSet::read(&mut cursor) {
             Ok(char_list) => {
-                info!(target: "net", "=== Character List for Account: {} ===", char_list.account);
-                info!(target: "net", "Available character slots: {}", char_list.num_allowed_characters);
-                info!(target: "net", "Characters on account: {}", char_list.characters.list.len());
+                // Format character list for logging
+                let chars = char_list
+                    .characters
+                    .list
+                    .iter()
+                    .map(|c| {
+                        if c.seconds_greyed_out > 0 {
+                            format!(
+                                "{} (ID: {:?}) [PENDING DELETION in {} seconds]",
+                                c.name, c.character_id, c.seconds_greyed_out
+                            )
+                        } else {
+                            format!("{} (ID: {:?})", c.name, c.character_id)
+                        }
+                    })
+                    .collect::<Vec<_>>()
+                    .join(", ");
 
-                for character in &char_list.characters.list {
-                    if character.seconds_greyed_out > 0 {
-                        info!(target: "net", "  - {} (ID: {:?}) [PENDING DELETION in {} seconds]",
-                            character.name, character.character_id, character.seconds_greyed_out);
-                    } else {
-                        info!(target: "net", "  - {} (ID: {:?})", character.name, character.character_id);
-                    }
-                }
-
-                if !char_list.deleted_characters.list.is_empty() {
-                    info!(target: "net", "Characters pending deletion: {}", char_list.deleted_characters.list.len());
-                }
+                info!(target: "net", "CharacterList -- Account: {}, Slots: {}, Characters: [{}]",
+                    char_list.account, char_list.num_allowed_characters, chars);
 
                 // Emit event to broadcast channel
                 use crate::client::events::CharacterInfo;
