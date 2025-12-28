@@ -51,9 +51,9 @@ impl EventConsumer for LoggingConsumer {
                 character_id,
                 character_name,
             } => {
-                info!(target: "events", "=== LOGIN SUCCEEDED === Character: {} (ID: {}) | You are now in the game world!", character_name, character_id);
+                info!(target: "events", "LoginSucceeded -- Character: {} (ID: {})", character_name, character_id);
 
-                // Send a chat message after successful login
+                // Testing: Send a chat message after successful login
                 info!(target: "events", "Sending chat message...");
                 if let Err(e) = self.action_tx.send(ClientAction::SendChatMessage {
                     message: "Hello from gromnie!".to_string(),
@@ -62,8 +62,7 @@ impl EventConsumer for LoggingConsumer {
                 }
             }
             GameEvent::LoginFailed { reason } => {
-                error!(target: "events", "=== LOGIN FAILED ===");
-                error!(target: "events", "Reason: {}", reason);
+                error!(target: "events", "LoginFailed -- Reason: {}", reason);
             }
             GameEvent::CreateObject {
                 object_id,
@@ -147,11 +146,10 @@ impl EventConsumer for TuiConsumer {
                 character_id,
                 character_name,
             } => {
-                info!(target: "events", "=== LOGIN SUCCEEDED === Character: {} (ID: {}) | You are now in the game world!", character_name, character_id);
+                info!(target: "events", "LoginSucceeded --  Character: {} (ID: {}) | You are now in the game world!", character_name, character_id);
             }
             GameEvent::LoginFailed { reason } => {
-                error!(target: "events", "=== LOGIN FAILED ===");
-                error!(target: "events", "Reason: {}", reason);
+                error!(target: "events", "LoginFailed -- Reason {}", reason);
             }
             GameEvent::CreateObject {
                 object_id,
@@ -196,19 +194,12 @@ fn handle_character_list(
     action_tx: &UnboundedSender<ClientAction>,
     character_created: &Arc<AtomicBool>,
 ) {
-    info!(target: "events", "=== Character List Event ===");
-    info!(target: "events", "Account: {}", account);
-    info!(target: "events", "Slots: {}", num_slots);
-    info!(target: "events", "Number of characters: {}", characters.len());
-
-    // Print character names
-    for char_info in characters {
-        if char_info.delete_pending {
-            info!(target: "events", "  - {} (ID: {}) [PENDING DELETION]", char_info.name, char_info.id);
-        } else {
-            info!(target: "events", "  - {} (ID: {})", char_info.name, char_info.id);
-        }
-    }
+    let names = characters
+        .iter()
+        .map(|c| format!("{} ({})", c.name, c.id))
+        .collect::<Vec<_>>()
+        .join(", ");
+    info!(target: "events", "CharacterList -- Account: {}, Slots: {}, Number of Chars: {}, Chars: {}", account, num_slots, characters.len(), names);
 
     // If we don't have any characters, create one
     if characters.is_empty() && !character_created.load(Ordering::SeqCst) {
