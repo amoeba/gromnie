@@ -139,6 +139,7 @@ pub struct Client {
     event_tx: broadcast::Sender<GameEvent>,            // Broadcast events to handlers
     action_rx: mpsc::UnboundedReceiver<ClientAction>,  // Receive actions from handlers
     ddd_response: Option<OutgoingMessageContent>,      // Cached DDD response for retries
+    known_characters: Vec<crate::client::events::CharacterInfo>, // Track characters from list and creation
 }
 
 impl Client {
@@ -191,6 +192,7 @@ impl Client {
             event_tx,
             action_rx,
             ddd_response: None,
+            known_characters: Vec::new(),
         };
 
         (client, event_rx, action_tx)
@@ -1259,7 +1261,7 @@ impl Client {
 
                 // Emit event to broadcast channel
                 use crate::client::events::CharacterInfo;
-                let characters = char_list
+                let characters: Vec<CharacterInfo> = char_list
                     .characters
                     .list
                     .iter()
@@ -1271,6 +1273,9 @@ impl Client {
                         }
                     })
                     .collect();
+                
+                // Store the character list for future reference (e.g., after character creation)
+                self.known_characters = characters.clone();
 
                 // Transition from Patching to CharSelect state (before delay)
                 if matches!(self.state, ClientState::Patching { .. }) {
@@ -1320,6 +1325,29 @@ impl Client {
                     info!(target: "net", "  - Character: {}", char_info.name);
                     info!(target: "net", "  - ID: {}", char_info.character_id.0);
                     info!(target: "net", "  - Seconds until deletion: {}", char_info.seconds_until_deletion);
+
+                    // Add the new character to known_characters
+                    use crate::client::events::CharacterInfo;
+                    let new_char = CharacterInfo {
+                        name: char_info.name.clone(),
+                        id: char_info.character_id.0,
+                        delete_pending: char_info.seconds_until_deletion > 0,
+                    };
+                    self.known_characters.push(new_char);
+
+                    // Re-emit CharacterListReceived event with updated character list
+                    let account = self.account.name.clone();
+                    let characters = self.known_characters.clone();
+                    let event = GameEvent::CharacterListReceived {
+                        account,
+                        characters,
+                        num_slots: 0, // We don't track slots, but this shouldn't matter for login
+                    };
+                    let event_tx = self.event_tx.clone();
+                    tokio::spawn(async move {
+                        tokio::time::sleep(tokio::time::Duration::from_millis(UI_DELAY_MS)).await;
+                        let _ = event_tx.send(event);
+                    });
                 }
             },
             Err(e) => {
