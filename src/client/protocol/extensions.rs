@@ -13,6 +13,51 @@ use crate::crypto::magic_number::get_magic_number;
 pub trait C2SPacketExt {
     fn serialize(&self, session: Option<&SessionState>) -> Result<Vec<u8>, std::io::Error>;
     fn calculate_option_size(&self) -> usize;
+
+    /// Safely set the ACK sequence, ensuring both the field and flag are set together.
+    fn with_ack_sequence(self, ack_seq: u32) -> Self;
+
+    /// Safely set the server switch header, ensuring both the field and flag are set together.
+    fn with_server_switch(self, header: acprotocol::types::ServerSwitchHeader) -> Self;
+
+    /// Safely set retransmit sequences, ensuring both the field and flag are set together.
+    fn with_retransmit_sequences(self, sequences: acprotocol::types::PackableList<u32>) -> Self;
+
+    /// Safely set reject sequences, ensuring both the field and flag are set together.
+    fn with_reject_sequences(self, sequences: acprotocol::types::PackableList<u32>) -> Self;
+
+    /// Safely set the login request header, ensuring both the field and flag are set together.
+    fn with_login_request(self, header: acprotocol::types::LoginRequestHeader) -> Self;
+
+    /// Safely set the world login request, ensuring both the field and flag are set together.
+    fn with_world_login_request(self, value: u64) -> Self;
+
+    /// Safely set the connect response (cookie), ensuring both the field and flag are set together.
+    fn with_connect_response(self, cookie: u64) -> Self;
+
+    /// Safely set the CICMD command header, ensuring both the field and flag are set together.
+    fn with_cicmd_command(self, header: acprotocol::types::CICMDCommandHeader) -> Self;
+
+    /// Safely set the time sync value, ensuring both the field and flag are set together.
+    fn with_time_sync(self, time: u64) -> Self;
+
+    /// Safely set the echo request time, ensuring both the field and flag are set together.
+    fn with_echo_request(self, time: f32) -> Self;
+
+    /// Safely set the echo response time, ensuring both the field and flag are set together.
+    fn with_echo_response(self, time: f32) -> Self;
+
+    /// Safely set the flow header, ensuring both the field and flag are set together.
+    fn with_flow(self, flow: acprotocol::types::FlowHeader) -> Self;
+
+    /// Safely set the blob fragments, ensuring both the field and flag are set together.
+    fn with_fragments(self, fragments: acprotocol::types::BlobFragments) -> Self;
+
+    /// Validate that the packet is properly formed (optional fields match their flags).
+    fn validate(&self) -> Result<(), &'static str>;
+
+    /// Helper to set a field and its corresponding flag atomically
+    fn set_field_with_flag<T>(self, field_setter: impl FnOnce(&mut Self) -> &mut Option<T>, value: T, flag: PacketHeaderFlags) -> Self;
 }
 
 impl C2SPacketExt for C2SPacket {
@@ -45,7 +90,102 @@ impl C2SPacketExt for C2SPacket {
         option_size
     }
 
+    /// Safely set the ACK sequence, ensuring both the field and flag are set together.
+    /// This prevents bugs where ack_sequence is Some but the ACK_SEQUENCE flag is missing.
+    ///
+    /// # Example
+    /// ```
+    /// let packet = C2SPacket { ... }
+    ///     .with_ack_sequence(recv_count);
+    /// ```
+    fn with_ack_sequence(self, ack_seq: u32) -> Self {
+        self.set_field_with_flag(|p| &mut p.ack_sequence, ack_seq, PacketHeaderFlags::ACK_SEQUENCE)
+    }
+
+    fn with_server_switch(self, header: acprotocol::types::ServerSwitchHeader) -> Self {
+        self.set_field_with_flag(|p| &mut p.server_switch, header, PacketHeaderFlags::SERVER_SWITCH)
+    }
+
+    fn with_retransmit_sequences(self, sequences: acprotocol::types::PackableList<u32>) -> Self {
+        self.set_field_with_flag(|p| &mut p.retransmit_sequences, sequences, PacketHeaderFlags::REQUEST_RETRANSMIT)
+    }
+
+    fn with_reject_sequences(self, sequences: acprotocol::types::PackableList<u32>) -> Self {
+        self.set_field_with_flag(|p| &mut p.reject_sequences, sequences, PacketHeaderFlags::REJECT_RETRANSMIT)
+    }
+
+    fn with_login_request(self, header: acprotocol::types::LoginRequestHeader) -> Self {
+        self.set_field_with_flag(|p| &mut p.login_request, header, PacketHeaderFlags::LOGIN_REQUEST)
+    }
+
+    fn with_world_login_request(self, value: u64) -> Self {
+        self.set_field_with_flag(|p| &mut p.world_login_request, value, PacketHeaderFlags::WORLD_LOGIN_REQUEST)
+    }
+
+    fn with_connect_response(self, cookie: u64) -> Self {
+        self.set_field_with_flag(|p| &mut p.connect_response, cookie, PacketHeaderFlags::CONNECT_RESPONSE)
+    }
+
+    fn with_cicmd_command(self, header: acprotocol::types::CICMDCommandHeader) -> Self {
+        self.set_field_with_flag(|p| &mut p.cicmd_command, header, PacketHeaderFlags::CICMDCOMMAND)
+    }
+
+    fn with_time_sync(self, time: u64) -> Self {
+        self.set_field_with_flag(|p| &mut p.time, time, PacketHeaderFlags::TIME_SYNC)
+    }
+
+    fn with_echo_request(self, time: f32) -> Self {
+        self.set_field_with_flag(|p| &mut p.echo_time, time, PacketHeaderFlags::ECHO_REQUEST)
+    }
+
+    fn with_echo_response(self, time: f32) -> Self {
+        self.set_field_with_flag(|p| &mut p.echo_time, time, PacketHeaderFlags::ECHO_RESPONSE)
+    }
+
+    fn with_flow(self, flow: acprotocol::types::FlowHeader) -> Self {
+        self.set_field_with_flag(|p| &mut p.flow, flow, PacketHeaderFlags::FLOW)
+    }
+
+    fn with_fragments(self, fragments: acprotocol::types::BlobFragments) -> Self {
+        self.set_field_with_flag(|p| &mut p.fragments, fragments, PacketHeaderFlags::BLOB_FRAGMENTS)
+    }
+
+    /// Helper to set a field and its corresponding flag atomically
+    #[inline]
+    fn set_field_with_flag<T>(mut self, field_setter: impl FnOnce(&mut Self) -> &mut Option<T>, value: T, flag: PacketHeaderFlags) -> Self {
+        *field_setter(&mut self) = Some(value);
+        self.flags |= flag;
+        self
+    }
+
+    /// Validate that the packet is properly formed.
+    /// Checks that ack_sequence and ACK_SEQUENCE flag are in sync.
+    ///
+    /// Returns an error if:
+    /// - ack_sequence is Some but ACK_SEQUENCE flag is not set
+    /// - ack_sequence is None but ACK_SEQUENCE flag is set
+    fn validate(&self) -> Result<(), &'static str> {
+        let has_ack_field = self.ack_sequence.is_some();
+        let has_ack_flag = self.flags.contains(PacketHeaderFlags::ACK_SEQUENCE);
+
+        if has_ack_field && !has_ack_flag {
+            return Err("ack_sequence is Some but ACK_SEQUENCE flag is not set");
+        }
+        if !has_ack_field && has_ack_flag {
+            return Err("ACK_SEQUENCE flag is set but ack_sequence is None");
+        }
+
+        Ok(())
+    }
+
     fn serialize(&self, session: Option<&SessionState>) -> Result<Vec<u8>, std::io::Error> {
+        // Validate packet before serialization (debug only - catches programming errors)
+        debug_assert!(
+            self.validate().is_ok(),
+            "Packet validation failed: {:?}",
+            self.validate().unwrap_err()
+        );
+
         let mut buffer = Vec::new();
         {
             let mut cursor = Cursor::new(&mut buffer);

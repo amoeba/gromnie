@@ -220,12 +220,11 @@ impl Client {
         // This matches actestclient behavior (NetworkManager.Send lines 266-270)
         // The server uses ACKs to determine if the client is still alive!
         if self.recv_count > self.last_ack_sent {
-            packet.ack_sequence = Some(self.recv_count);
-            packet.flags |= PacketHeaderFlags::ACK_SEQUENCE; // CRITICAL: Must set flag for ACK to be serialized!
-                                                             // Note: Size is automatically calculated during serialization based on actual packet contents
-            self.last_ack_sent = self.recv_count;
+            let ack_seq = self.recv_count;
+            packet = packet.with_ack_sequence(ack_seq); // Safely sets both field and flag
+            self.last_ack_sent = ack_seq;
             debug!(target: "net", "📤 Sending ACK for server seq={} in outgoing packet (send_count={})",
-                self.recv_count, self.send_count);
+                ack_seq, self.send_count);
         } else if self.recv_count > 0 {
             debug!(target: "net", "📤 No new ACK needed (recv_count={}, last_ack_sent={})",
                 self.recv_count, self.last_ack_sent);
@@ -702,24 +701,20 @@ impl Client {
 
         // CRITICAL: Automatically include ACK if we have received packets that need acknowledging
         // This matches actestclient behavior and keeps the connection alive!
-        let ack_sequence = if self.recv_count > self.last_ack_sent {
-            self.last_ack_sent = self.recv_count;
-            debug!(target: "net", "Including ACK for sequence {} in fragmented message", self.recv_count);
-            Some(self.recv_count)
+        let should_ack = self.recv_count > self.last_ack_sent;
+        let ack_seq = if should_ack {
+            let seq = self.recv_count;
+            self.last_ack_sent = seq;
+            debug!(target: "net", "Including ACK for sequence {} in fragmented message", seq);
+            Some(seq)
         } else {
             None
         };
 
-        // Build flags: always include BLOB_FRAGMENTS, and add ACK_SEQUENCE if we have an ACK
-        let mut flags = PacketHeaderFlags::BLOB_FRAGMENTS;
-        if ack_sequence.is_some() {
-            flags |= PacketHeaderFlags::ACK_SEQUENCE; // CRITICAL: Must set flag for ACK to be serialized!
-        }
-
         // Create C2SPacket with BlobFragments flag
-        let packet = C2SPacket {
+        let mut packet = C2SPacket {
             sequence: packet_sequence,
-            flags,
+            flags: PacketHeaderFlags::BLOB_FRAGMENTS,
             checksum: 0, // Will be calculated
             recipient_id: client_id,
             time_since_last_packet: 0,
@@ -728,7 +723,7 @@ impl Client {
             server_switch: None,
             retransmit_sequences: None,
             reject_sequences: None,
-            ack_sequence,
+            ack_sequence: None, // Will be set via with_ack_sequence if needed
             login_request: None,
             world_login_request: None,
             connect_response: None,
@@ -738,6 +733,11 @@ impl Client {
             flow: None,
             fragments: Some(blob_fragment),
         };
+
+        // Safely add ACK if needed (sets both field and flag together)
+        if let Some(seq) = ack_seq {
+            packet = packet.with_ack_sequence(seq);
+        }
 
         // Serialize packet to get size
         let mut buffer = Vec::new();
