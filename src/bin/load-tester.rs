@@ -52,6 +52,17 @@ struct EventCounts {
     errors: AtomicU32,
 }
 
+/// Load tester client state machine
+#[derive(Clone, Debug, PartialEq)]
+enum LoadTesterState {
+    /// Waiting for character list, haven't found our character yet
+    WaitingForCharList,
+    /// Character not found in list, creation in progress
+    CharacterCreationInProgress,
+    /// Character found in list, ready to log in
+    CharacterFound,
+}
+
 /// Event consumer for load testing
 struct LoadTesterConsumer {
     client_id: u32,
@@ -59,7 +70,7 @@ struct LoadTesterConsumer {
     event_counts: Arc<EventCounts>,
     action_tx: mpsc::UnboundedSender<ClientAction>,
     verbose: bool,
-    character_created: Arc<std::sync::atomic::AtomicBool>,
+    state: LoadTesterState,
 }
 
 impl LoadTesterConsumer {
@@ -76,7 +87,7 @@ impl LoadTesterConsumer {
             event_counts,
             action_tx,
             verbose,
-            character_created: Arc::new(std::sync::atomic::AtomicBool::new(false)),
+            state: LoadTesterState::WaitingForCharList,
         }
     }
 }
@@ -124,40 +135,49 @@ impl EventConsumer for LoadTesterConsumer {
                     );
                 }
 
-                // Load tester specific logic: Look for character with our exact name pattern
-                if !self.character_created.load(Ordering::SeqCst) {
-                    self.character_created.store(true, Ordering::SeqCst);
+                // Handle based on current state
+                match self.state {
+                    LoadTesterState::WaitingForCharList | LoadTesterState::CharacterCreationInProgress => {
+                        // Check if our character exists
+                        if let Some(char_info) = characters.iter().find(|c| c.name == self.character_name) {
+                            // Character found (either was there initially or just created)
+                            if self.verbose {
+                                info!(
+                                    "[Client {}] Found character: {} (ID: {})",
+                                    self.client_id, char_info.name, char_info.id
+                                );
+                            }
+                            // Update state and proceed to login
+                            self.state = LoadTesterState::CharacterFound;
+                            if let Err(e) = self.action_tx.send(ClientAction::LoginCharacter {
+                                character_id: char_info.id,
+                                character_name: char_info.name.clone(),
+                                account: account.clone(),
+                            }) {
+                                error!("[Client {}] Failed to send login action: {}", self.client_id, e);
+                            }
+                        } else if self.state == LoadTesterState::WaitingForCharList {
+                            // Character doesn't exist yet - create it
+                            if self.verbose {
+                                info!("[Client {}] Creating character: {}", self.client_id, self.character_name);
+                            }
+                            self.event_counts.character_created.fetch_add(1, Ordering::SeqCst);
+                            self.state = LoadTesterState::CharacterCreationInProgress;
 
-                    // Check if our character already exists
-                    if let Some(char_info) = characters.iter().find(|c| c.name == self.character_name) {
-                        // Character exists - log in to it
-                        if self.verbose {
-                            info!(
-                                "[Client {}] Found existing character: {} (ID: {})",
-                                self.client_id, char_info.name, char_info.id
+                            let char_gen_result = CharacterBuilder::new(self.character_name.clone()).build();
+                            let msg = OutgoingMessageContent::CharacterCreationAce(
+                                account.clone(),
+                                char_gen_result,
                             );
+                            if let Err(e) = self.action_tx.send(ClientAction::SendMessage(Box::new(msg))) {
+                                error!("[Client {}] Failed to send character creation: {}", self.client_id, e);
+                            }
                         }
-                        if let Err(e) = self.action_tx.send(ClientAction::LoginCharacter {
-                            character_id: char_info.id,
-                            character_name: char_info.name.clone(),
-                            account: account.clone(),
-                        }) {
-                            error!("[Client {}] Failed to send login action: {}", self.client_id, e);
-                        }
-                    } else {
-                        // Character doesn't exist - create it
+                    }
+                    LoadTesterState::CharacterFound => {
+                        // Already found and logging in, ignore further character list updates
                         if self.verbose {
-                            info!("[Client {}] Creating character: {}", self.client_id, self.character_name);
-                        }
-                        self.event_counts.character_created.fetch_add(1, Ordering::SeqCst);
-
-                        let char_gen_result = CharacterBuilder::new(self.character_name.clone()).build();
-                        let msg = OutgoingMessageContent::CharacterCreationAce(
-                            account.clone(),
-                            char_gen_result,
-                        );
-                        if let Err(e) = self.action_tx.send(ClientAction::SendMessage(Box::new(msg))) {
-                            error!("[Client {}] Failed to send character creation: {}", self.client_id, e);
+                            info!("[Client {}] Already processing login, ignoring character list update", self.client_id);
                         }
                     }
                 }
