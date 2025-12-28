@@ -1,4 +1,4 @@
-<?xml version='1.0' encoding='windows-1252'?>
+<?xml version='1.0' encoding='windows-1252' ?>
 <!--
   Copyright (C) 2017 Christopher R. Field.
 
@@ -14,7 +14,6 @@
   See the License for the specific language governing permissions and
   limitations under the License.
 -->
-
 <!--
   The "cargo wix" subcommand provides a variety of predefined variables available
   for customization of this template. The values for each variable are set at
@@ -43,7 +42,6 @@
                       "Major.Minor.Fix" semantic versioning number of the Rust
                       package.
 -->
-
 <!--
   Please do not remove these pre-processor If-Else blocks. These are used with
   the `cargo wix` subcommand to automatically determine the installation
@@ -51,11 +49,10 @@
   cause installation errors.
 -->
 <?if $(sys.BUILDARCH) = x64 or $(sys.BUILDARCH) = arm64 ?>
-    <?define PlatformProgramFilesFolder = "ProgramFiles64Folder" ?>
+<?define PlatformProgramFilesFolder = "ProgramFiles64Folder" ?>
 <?else ?>
-    <?define PlatformProgramFilesFolder = "ProgramFilesFolder" ?>
+<?define PlatformProgramFilesFolder = "ProgramFilesFolder" ?>
 <?endif ?>
-
 <Wix xmlns='http://schemas.microsoft.com/wix/2006/wi'>
 
     <Product
@@ -65,9 +62,11 @@
         Manufacturer='Bryce Mecum &lt;petridish@gmail.com'
         Language='1033'
         Codepage='1252'
-        Version='$(var.Version)'>
+        Version='$(var.Version)'
+    >
 
-        <Package Id='*'
+        <Package
+            Id='*'
             Keywords='Installer'
             Description='Asheron&#39;s Call client test'
             Manufacturer='Bryce Mecum &lt;petridish@gmail.com'
@@ -76,19 +75,25 @@
             Compressed='yes'
             InstallScope='perMachine'
             SummaryCodepage='1252'
-            />
+        />
 
         <MajorUpgrade
             Schedule='afterInstallInitialize'
-            DowngradeErrorMessage='A newer version of [ProductName] is already installed. Setup will now exit.'/>
+            DowngradeErrorMessage='A newer version of [ProductName] is already installed. Setup will now exit.'
+        />
 
-        <Media Id='1' Cabinet='media1.cab' EmbedCab='yes' DiskPrompt='CD-ROM #1'/>
-        <Property Id='DiskPrompt' Value='gromnie Installation'/>
+        <Media
+            Id='1'
+            Cabinet='media1.cab'
+            EmbedCab='yes'
+            DiskPrompt='CD-ROM #1'
+        />
+        <Property Id='DiskPrompt' Value='gromnie Installation' />
 
         <Directory Id='TARGETDIR' Name='SourceDir'>
             <Directory Id='$(var.PlatformProgramFilesFolder)' Name='PFiles'>
                 <Directory Id='APPLICATIONFOLDER' Name='gromnie'>
-                    
+
                     <!--
                       Enabling the license sidecar file in the installer is a four step process:
 
@@ -110,7 +115,11 @@
                     -->
 
                     <Directory Id='Bin' Name='bin'>
-                        <Component Id='Path' Guid='7ED6234A-E478-4CCB-A39C-FCEC36646EC5' KeyPath='yes'>
+                        <Component
+                            Id='Path'
+                            Guid='7ED6234A-E478-4CCB-A39C-FCEC36646EC5'
+                            KeyPath='yes'
+                        >
                             <Environment
                                 Id='PATH'
                                 Name='PATH'
@@ -118,47 +127,44 @@
                                 Permanent='no'
                                 Part='last'
                                 Action='set'
-                                System='yes'/>
+                                System='yes'
+                            />
                         </Component>
-                        <Component Id='binary0' Guid='*'>
+                        <Component Id='cli' Guid='*'>
                             <File
                                 Id='exe0'
                                 Name='cli.exe'
                                 DiskId='1'
                                 Source='$(var.CargoTargetBinDir)\cli.exe'
-                                KeyPath='yes'/>
+                                KeyPath='yes'
+                            />
                         </Component>
-                        <Component Id='binary1' Guid='*'>
+                        <Component Id='discord-bot' Guid='*'>
                             <File
                                 Id='exe1'
                                 Name='discord-bot.exe'
                                 DiskId='1'
                                 Source='$(var.CargoTargetBinDir)\discord-bot.exe'
-                                KeyPath='yes'/>
+                                KeyPath='yes'
+                            />
                         </Component>
-                        <Component Id='binary2' Guid='*'>
+                        <Component Id='load-tester' Guid='*'>
                             <File
                                 Id='exe2'
                                 Name='load-tester.exe'
                                 DiskId='1'
                                 Source='$(var.CargoTargetBinDir)\load-tester.exe'
-                                KeyPath='yes'/>
+                                KeyPath='yes'
+                            />
                         </Component>
-                        <Component Id='binary3' Guid='*'>
+                        <Component Id='tui' Guid='*'>
                             <File
                                 Id='exe3'
-                                Name='naming.exe'
-                                DiskId='1'
-                                Source='$(var.CargoTargetBinDir)\naming.exe'
-                                KeyPath='yes'/>
-                        </Component>
-                        <Component Id='binary4' Guid='*'>
-                            <File
-                                Id='exe4'
                                 Name='tui.exe'
                                 DiskId='1'
                                 Source='$(var.CargoTargetBinDir)\tui.exe'
-                                KeyPath='yes'/>
+                                KeyPath='yes'
+                            />
                         </Component>
                     </Directory>
                 </Directory>
@@ -173,33 +179,38 @@
             ConfigurableDirectory='APPLICATIONFOLDER'
             AllowAdvertise='no'
             Display='expand'
-            Absent='disallow'>
-            
+            Absent='disallow'
+        >
+
             <!--
               Uncomment the following `ComponentRef` tag to add the license
               sidecar file to the installer.
             -->
             <!--<ComponentRef Id='License'/>-->
 
-            <ComponentRef Id='binary0'/>
-            <ComponentRef Id='binary1'/>
-            <ComponentRef Id='binary2'/>
-            <ComponentRef Id='binary3'/>
-            <ComponentRef Id='binary4'/>
+            <ComponentRef Id='cli' />
+            <ComponentRef Id='discord-bot' />
+            <ComponentRef Id='load-tester' />
+            <ComponentRef Id='tui' />
 
             <Feature
                 Id='Environment'
                 Title='PATH Environment Variable'
                 Description='Add the install location of the [ProductName] executable to the PATH system environment variable. This allows the [ProductName] executable to be called from any location.'
                 Level='1'
-                Absent='allow'>
-                <ComponentRef Id='Path'/>
+                Absent='allow'
+            >
+                <ComponentRef Id='Path' />
             </Feature>
         </Feature>
 
-        <SetProperty Id='ARPINSTALLLOCATION' Value='[APPLICATIONFOLDER]' After='CostFinalize'/>
+        <SetProperty
+            Id='ARPINSTALLLOCATION'
+            Value='[APPLICATIONFOLDER]'
+            After='CostFinalize'
+        />
 
-        
+
         <!--
           Uncomment the following `Icon` and `Property` tags to change the product icon.
 
@@ -209,11 +220,14 @@
         <!--<Icon Id='ProductICO' SourceFile='wix\Product.ico'/>-->
         <!--<Property Id='ARPPRODUCTICON' Value='ProductICO' />-->
 
-        <Property Id='ARPHELPLINK' Value='https://github.com/amoeba/gromnie.git'/>
-        
+        <Property
+            Id='ARPHELPLINK'
+            Value='https://github.com/amoeba/gromnie.git'
+        />
+
         <UI>
-            <UIRef Id='WixUI_FeatureTree'/>
-            
+            <UIRef Id='WixUI_FeatureTree' />
+
             <!--
               Enabling the EULA dialog in the installer is a three step process:
 
@@ -224,12 +238,24 @@
                    the path to a RTF file that will be used as the EULA and
                    displayed in the license agreement dialog.
             -->
-            <Publish Dialog='WelcomeDlg' Control='Next' Event='NewDialog' Value='CustomizeDlg' Order='99'>1</Publish>
-            <Publish Dialog='CustomizeDlg' Control='Back' Event='NewDialog' Value='WelcomeDlg' Order='99'>1</Publish>
+            <Publish
+                Dialog='WelcomeDlg'
+                Control='Next'
+                Event='NewDialog'
+                Value='CustomizeDlg'
+                Order='99'
+            >1</Publish>
+            <Publish
+                Dialog='CustomizeDlg'
+                Control='Back'
+                Event='NewDialog'
+                Value='WelcomeDlg'
+                Order='99'
+            >1</Publish>
 
         </UI>
 
-        
+
         <!--
           Enabling the EULA dialog in the installer requires uncommenting
           the following `WixUILicenseRTF` tag and changing the `Value`
@@ -237,7 +263,7 @@
         -->
         <!-- <WixVariable Id='WixUILicenseRtf' Value='Relative\Path\to\Eula.rtf'/> -->
 
-        
+
         <!--
           Uncomment the next `WixVariable` tag to customize the installer's
           Graphical User Interface (GUI) and add a custom banner image across
@@ -248,7 +274,7 @@
         -->
         <!--<WixVariable Id='WixUIBannerBmp' Value='wix\Banner.bmp'/>-->
 
-        
+
         <!--
           Uncomment the next `WixVariable` tag to customize the installer's
           Graphical User Interface (GUI) and add a custom image to the first
