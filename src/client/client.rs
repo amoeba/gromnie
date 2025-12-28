@@ -222,7 +222,7 @@ impl Client {
         if self.recv_count > self.last_ack_sent {
             packet.ack_sequence = Some(self.recv_count);
             packet.flags |= PacketHeaderFlags::ACK_SEQUENCE; // CRITICAL: Must set flag for ACK to be serialized!
-            // Note: Size is automatically calculated during serialization based on actual packet contents
+                                                             // Note: Size is automatically calculated during serialization based on actual packet contents
             self.last_ack_sent = self.recv_count;
             debug!(target: "net", "📤 Sending ACK for server seq={} in outgoing packet (send_count={})",
                 self.recv_count, self.send_count);
@@ -710,10 +710,16 @@ impl Client {
             None
         };
 
+        // Build flags: always include BLOB_FRAGMENTS, and add ACK_SEQUENCE if we have an ACK
+        let mut flags = PacketHeaderFlags::BLOB_FRAGMENTS;
+        if ack_sequence.is_some() {
+            flags |= PacketHeaderFlags::ACK_SEQUENCE; // CRITICAL: Must set flag for ACK to be serialized!
+        }
+
         // Create C2SPacket with BlobFragments flag
         let packet = C2SPacket {
             sequence: packet_sequence,
-            flags: PacketHeaderFlags::BLOB_FRAGMENTS,
+            flags,
             checksum: 0, // Will be calculated
             recipient_id: client_id,
             time_since_last_packet: 0,
