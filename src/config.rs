@@ -257,9 +257,7 @@ impl Config {
                 if let Event::Key(key) = event::read()? {
                     match key.code {
                         KeyCode::Up => {
-                            if selected > 0 {
-                                selected -= 1;
-                            }
+                            selected = selected.saturating_sub(1);
                         }
                         KeyCode::Down => {
                             if selected < servers.len() - 1 {
@@ -334,9 +332,7 @@ impl Config {
                 if let Event::Key(key) = event::read()? {
                     match key.code {
                         KeyCode::Up => {
-                            if selected > 0 {
-                                selected -= 1;
-                            }
+                            selected = selected.saturating_sub(1);
                         }
                         KeyCode::Down => {
                             if selected < accounts.len() - 1 {

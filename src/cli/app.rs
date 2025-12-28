@@ -14,6 +14,12 @@ pub struct App {
     pub config_wizard: Option<ConfigWizard>,
 }
 
+impl Default for App {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl App {
     pub fn new() -> Self {
         Self {
@@ -112,28 +118,33 @@ impl App {
                                             if !wizard.current_input.is_empty() {
                                                 wizard.server_name = wizard.current_input.clone();
                                                 wizard.current_input.clear();
-                                                wizard.stage = ConfigWizardStage::EnteringServerHost;
+                                                wizard.stage =
+                                                    ConfigWizardStage::EnteringServerHost;
                                             }
                                         }
                                         ConfigWizardStage::EnteringServerHost => {
                                             if !wizard.current_input.is_empty() {
                                                 wizard.server_host = wizard.current_input.clone();
                                                 wizard.current_input.clear();
-                                                wizard.stage = ConfigWizardStage::EnteringServerPort;
+                                                wizard.stage =
+                                                    ConfigWizardStage::EnteringServerPort;
                                             }
                                         }
                                         ConfigWizardStage::EnteringServerPort => {
-                                            wizard.server_port = if wizard.current_input.is_empty() {
+                                            wizard.server_port = if wizard.current_input.is_empty()
+                                            {
                                                 "9000".to_string()
                                             } else {
                                                 wizard.current_input.clone()
                                             };
                                             wizard.current_input.clear();
-                                            wizard.stage = ConfigWizardStage::EnteringAccountUsername;
+                                            wizard.stage =
+                                                ConfigWizardStage::EnteringAccountUsername;
                                         }
                                         ConfigWizardStage::EnteringAccountUsername => {
                                             if !wizard.current_input.is_empty() {
-                                                wizard.account_username = wizard.current_input.clone();
+                                                wizard.account_username =
+                                                    wizard.current_input.clone();
                                                 wizard.current_input.clear();
                                                 wizard.stage =
                                                     ConfigWizardStage::EnteringAccountPassword;
@@ -141,7 +152,8 @@ impl App {
                                         }
                                         ConfigWizardStage::EnteringAccountPassword => {
                                             if !wizard.current_input.is_empty() {
-                                                wizard.account_password = wizard.current_input.clone();
+                                                wizard.account_password =
+                                                    wizard.current_input.clone();
                                                 wizard.current_input.clear();
                                                 wizard.stage = ConfigWizardStage::Confirming;
                                             }
@@ -195,7 +207,8 @@ impl App {
                                     },
                                     KeyCode::Down => match wizard.stage {
                                         WizardStage::SelectingServer => {
-                                            if wizard.selected_server_idx < wizard.server_list.len() - 1
+                                            if wizard.selected_server_idx
+                                                < wizard.server_list.len() - 1
                                             {
                                                 wizard.selected_server_idx += 1;
                                             }

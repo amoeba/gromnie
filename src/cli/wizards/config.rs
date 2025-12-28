@@ -29,6 +29,12 @@ pub struct ConfigWizard {
     pub current_input: String,
 }
 
+impl Default for ConfigWizard {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl ConfigWizard {
     pub fn new() -> Self {
         Self {
