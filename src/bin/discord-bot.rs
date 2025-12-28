@@ -1,14 +1,19 @@
 use clap::Parser;
+use serenity::all::{
+    CommandInteraction, CreateCommand, CreateInteractionResponse, CreateInteractionResponseMessage,
+    Interaction,
+};
 use serenity::client::Context;
 use serenity::model::gateway::Ready;
 use serenity::prelude::{EventHandler, GatewayIntents};
 use std::sync::Arc;
-use tokio::sync::Mutex;
+use std::time::Instant;
+use tokio::sync::RwLock;
 use tracing::{error, info};
 use tracing_subscriber::EnvFilter;
 
 use gromnie::client::events::{ClientAction, GameEvent};
-use gromnie::runner::{ClientConfig, DiscordConsumer};
+use gromnie::runner::{ClientConfig, DiscordConsumer, UptimeData};
 
 #[derive(Parser)]
 #[command(version, about, long_about = None)]
@@ -20,13 +25,45 @@ pub struct Cli {
 
 struct Handler {
     target_channel_id: serenity::model::id::ChannelId,
-    action_tx: Arc<Mutex<Option<tokio::sync::mpsc::UnboundedSender<ClientAction>>>>,
+    action_tx: Arc<tokio::sync::Mutex<Option<tokio::sync::mpsc::UnboundedSender<ClientAction>>>>,
+    uptime_data: Arc<RwLock<UptimeData>>,
 }
 
 #[serenity::async_trait]
 impl EventHandler for Handler {
-    async fn ready(&self, _: Context, ready: Ready) {
+    async fn ready(&self, ctx: Context, ready: Ready) {
         info!("Discord bot logged in as: {}", ready.user.name);
+
+        // Register slash command
+        let uptime_command =
+            CreateCommand::new("uptime").description("Show bot uptime and in-game time");
+
+        if let Err(e) = ctx.http.create_global_command(&uptime_command).await {
+            error!("Failed to create uptime command: {}", e);
+        } else {
+            info!("Slash commands registered");
+        }
+    }
+
+    async fn interaction_create(&self, ctx: Context, interaction: Interaction) {
+        if let Interaction::Command(command) = interaction {
+            info!(
+                "Received command {} from user {}",
+                command.data.name, command.user.id
+            );
+
+            match command.data.name.as_str() {
+                "uptime" => self.handle_uptime_command(&ctx, &command).await,
+                _ => {
+                    let data = CreateInteractionResponseMessage::new()
+                        .content("Unknown command".to_string());
+                    let builder = CreateInteractionResponse::Message(data);
+                    if let Err(e) = command.create_response(&ctx.http, builder).await {
+                        error!("Failed to respond to unknown command: {}", e);
+                    }
+                }
+            }
+        }
     }
 
     async fn message(&self, _: Context, msg: serenity::model::channel::Message) {
@@ -55,6 +92,48 @@ impl EventHandler for Handler {
                     info!("Forwarded Discord message to game");
                 }
             }
+        }
+    }
+}
+
+impl Handler {
+    async fn handle_uptime_command(&self, ctx: &Context, command: &CommandInteraction) {
+        let uptime_data = self.uptime_data.read().await;
+
+        let bot_uptime = uptime_data.bot_start.elapsed();
+        let bot_secs = bot_uptime.as_secs();
+        let bot_hours = bot_secs / 3600;
+        let bot_mins = (bot_secs % 3600) / 60;
+        let bot_secs_remainder = bot_secs % 60;
+
+        let response_text = if let Some(ingame_start) = uptime_data.ingame_start {
+            let ingame_uptime = ingame_start.elapsed();
+            let ingame_secs = ingame_uptime.as_secs();
+            let ingame_hours = ingame_secs / 3600;
+            let ingame_mins = (ingame_secs % 3600) / 60;
+            let ingame_secs_remainder = ingame_secs % 60;
+
+            format!(
+                "**Bot Uptime:** {:02}:{:02}:{:02}\n**In-Game Time:** {:02}:{:02}:{:02}",
+                bot_hours,
+                bot_mins,
+                bot_secs_remainder,
+                ingame_hours,
+                ingame_mins,
+                ingame_secs_remainder
+            )
+        } else {
+            format!(
+                "**Bot Uptime:** {:02}:{:02}:{:02}\n**In-Game Time:** Not logged in yet",
+                bot_hours, bot_mins, bot_secs_remainder
+            )
+        };
+
+        let data = CreateInteractionResponseMessage::new().content(response_text);
+        let builder = CreateInteractionResponse::Message(data);
+
+        if let Err(e) = command.create_response(&ctx.http, builder).await {
+            error!("Failed to respond to uptime command: {}", e);
         }
     }
 }
@@ -111,6 +190,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Create shutdown channel
     let (_shutdown_tx, shutdown_rx) = tokio::sync::watch::channel(false);
 
+    // Create shared uptime data
+    let uptime_data = Arc::new(RwLock::new(UptimeData {
+        bot_start: Instant::now(),
+        ingame_start: None,
+    }));
+
     // Create client configuration
     let config = ClientConfig {
         id: 0,
@@ -121,15 +206,23 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Spawn client task
     let http_clone = http.clone();
+    let uptime_data_clone = uptime_data.clone();
     let mut client_handle = tokio::spawn(gromnie::runner::run_client_with_action_channel(
         config,
-        move |action_tx| DiscordConsumer::new(action_tx.clone(), http_clone.clone(), channel_id),
+        move |action_tx| {
+            DiscordConsumer::new_with_uptime(
+                action_tx.clone(),
+                http_clone.clone(),
+                channel_id,
+                uptime_data_clone.clone(),
+            )
+        },
         action_tx_channel,
         shutdown_rx,
     ));
 
     // Create Arc<Mutex<>> for action_tx so it can be shared with Discord handler
-    let action_tx_arc = Arc::new(Mutex::new(None));
+    let action_tx_arc = Arc::new(tokio::sync::Mutex::new(None));
 
     // Wait for the action_tx channel from the client task (with timeout)
     match tokio::time::timeout(tokio::time::Duration::from_secs(5), action_tx_rx.recv()).await {
@@ -141,6 +234,43 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             error!("Failed to receive action_tx from game client task");
         }
     }
+
+    // Spawn periodic uptime logging task
+    let uptime_data_periodic = uptime_data.clone();
+    tokio::spawn(async move {
+        let mut interval = tokio::time::interval(tokio::time::Duration::from_secs(300)); // 5 minutes
+        loop {
+            interval.tick().await;
+            let data = uptime_data_periodic.read().await;
+            let total_uptime = data.bot_start.elapsed();
+            let total_secs = total_uptime.as_secs();
+            let total_hours = total_secs / 3600;
+            let total_mins = (total_secs % 3600) / 60;
+            let total_secs_remainder = total_secs % 60;
+
+            if let Some(ingame_start) = data.ingame_start {
+                let ingame_uptime = ingame_start.elapsed();
+                let ingame_secs = ingame_uptime.as_secs();
+                let ingame_hours = ingame_secs / 3600;
+                let ingame_mins = (ingame_secs % 3600) / 60;
+                let ingame_secs_remainder = ingame_secs % 60;
+                info!(
+                    "Uptime - Bot: {:02}:{:02}:{:02} | In-game: {:02}:{:02}:{:02}",
+                    total_hours,
+                    total_mins,
+                    total_secs_remainder,
+                    ingame_hours,
+                    ingame_mins,
+                    ingame_secs_remainder
+                );
+            } else {
+                info!(
+                    "Bot uptime: {:02}:{:02}:{:02} (not in-game yet)",
+                    total_hours, total_mins, total_secs_remainder
+                );
+            }
+        }
+    });
 
     info!("Starting Discord bot gateway connection");
 
@@ -154,6 +284,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     .event_handler(Handler {
         target_channel_id: channel_id,
         action_tx: action_tx_arc,
+        uptime_data: uptime_data.clone(),
     })
     .await
     .map_err(|e| format!("Failed to create Discord client: {}", e))?;
