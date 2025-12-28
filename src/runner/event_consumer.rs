@@ -1,6 +1,5 @@
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
-use std::time::Instant;
 use tokio::sync::mpsc::UnboundedSender;
 use tracing::{debug, error, info};
 
@@ -11,6 +10,8 @@ use crate::runner::CharacterBuilder;
 use serenity::http::Http;
 #[cfg(feature = "discord")]
 use serenity::model::id::ChannelId;
+#[cfg(feature = "discord")]
+use std::time::Instant;
 
 /// Trait for consuming game events - allows different implementations for CLI vs TUI
 pub trait EventConsumer: Send + 'static {
