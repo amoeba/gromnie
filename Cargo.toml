@@ -13,6 +13,12 @@ categories = []
 
 license = "Apache-2.0"
 
+[package.metadata.wix]
+upgrade-guid = "9BB5785A-15C5-42AC-80F2-8CE8C0319DE0"
+path-guid = "7ED6234A-E478-4CCB-A39C-FCEC36646EC5"
+license = false
+eula = false
+
 [features]
 discord = ["dep:serenity"]
 
@@ -58,3 +64,8 @@ directories = "5.0"
 serenity = { version = "0.12", features = ["client", "gateway", "http", "utils"], optional = true }
 
 [dev-dependencies]
+
+# The profile that 'dist' will build with
+[profile.dist]
+inherits = "release"
+lto = "thin"
