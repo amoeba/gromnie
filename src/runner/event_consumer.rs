@@ -348,12 +348,27 @@ impl EventConsumer for DiscordConsumer {
 }
 
 /// Shared logic for handling character list received event
-fn handle_character_list(
+///
+/// If character_name is provided, it will be used for character creation.
+/// Otherwise, a default test character name is generated.
+pub fn handle_character_list(
     account: &str,
     characters: &[CharacterInfo],
     num_slots: u32,
     action_tx: &UnboundedSender<ClientAction>,
     character_created: &Arc<AtomicBool>,
+) {
+    handle_character_list_with_name(account, characters, num_slots, action_tx, character_created, None)
+}
+
+/// Shared logic for handling character list received event with custom character name
+pub fn handle_character_list_with_name(
+    account: &str,
+    characters: &[CharacterInfo],
+    num_slots: u32,
+    action_tx: &UnboundedSender<ClientAction>,
+    character_created: &Arc<AtomicBool>,
+    custom_char_name: Option<&str>,
 ) {
     let names = characters
         .iter()
@@ -369,8 +384,13 @@ fn handle_character_list(
         // Mark that we're creating a character
         character_created.store(true, Ordering::SeqCst);
 
-        // Create character using builder
-        let char_gen_result = CharacterBuilder::new_test_character().build();
+        // Create character using builder with custom name or test default
+        let char_builder = if let Some(name) = custom_char_name {
+            CharacterBuilder::new(name.to_string())
+        } else {
+            CharacterBuilder::new_test_character()
+        };
+        let char_gen_result = char_builder.build();
         let char_name = char_gen_result.name.clone();
 
         info!(target: "events", "Creating character: {}", char_name);

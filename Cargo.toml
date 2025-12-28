@@ -29,6 +29,10 @@ path = "src/bin/cli.rs"
 name = "discord-bot"
 path = "src/bin/discord-bot.rs"
 
+[[bin]]
+name = "load-tester"
+path = "src/bin/load-tester.rs"
+
 [dependencies]
 acprotocol = { git = "https://github.com/amoeba/asheron-rs" , rev = "a165e6ca82dd913281cb6280538ee5ab3bd1ef4b"}
 bitflags = "2.6"
