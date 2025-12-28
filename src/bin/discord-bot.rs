@@ -184,7 +184,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     // Create channels for client communication
-    let (client_event_tx, _client_event_rx) = tokio::sync::mpsc::unbounded_channel::<GameEvent>();
+    let (_client_event_tx, _client_event_rx) = tokio::sync::mpsc::unbounded_channel::<GameEvent>();
     let (action_tx_channel, mut action_tx_rx) = tokio::sync::mpsc::unbounded_channel();
 
     // Create shutdown channel
@@ -207,7 +207,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Spawn client task
     let http_clone = http.clone();
     let uptime_data_clone = uptime_data.clone();
-    let mut client_handle = tokio::spawn(gromnie::runner::run_client_with_action_channel(
+    let _client_handle = tokio::spawn(gromnie::runner::run_client_with_action_channel(
         config,
         move |action_tx| {
             DiscordConsumer::new_with_uptime(
