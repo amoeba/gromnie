@@ -261,14 +261,24 @@ async fn main() {
 
         let host = args.host.clone();
         let port = args.port;
-        let shutdown_rx = shutdown_tx.subscribe();
+        let mut shutdown_rx = shutdown_tx.subscribe();
         let event_counts = event_counts.clone();
         let verbose = args.verbose;
         let rate_limit = args.rate_limit;
 
         let handle = tokio::spawn(async move {
             // Rate limiting: stagger client connections
-            tokio::time::sleep(Duration::from_millis(client_id as u64 * rate_limit)).await;
+            // Use tokio::select to allow shutdown during sleep
+            let sleep_duration = Duration::from_millis(client_id as u64 * rate_limit);
+            tokio::select! {
+                _ = tokio::time::sleep(sleep_duration) => {
+                    // Sleep completed normally, proceed with client connection
+                }
+                _ = shutdown_rx.changed() => {
+                    // Shutdown signal received during sleep, exit early
+                    return;
+                }
+            }
 
             let naming = ClientNaming::new(client_id);
             let account_name = naming.account_name();
@@ -334,6 +344,7 @@ async fn main() {
     match tokio::signal::ctrl_c().await {
         Ok(()) => {
             info!("Received Ctrl+C, shutting down all clients...");
+            info!("Press Ctrl+C again to force quit");
             let _ = shutdown_tx.send(true);
         }
         Err(e) => {
@@ -341,21 +352,36 @@ async fn main() {
         }
     }
 
-    // Wait for all client tasks to complete
-    for (idx, handle) in join_handles.into_iter().enumerate() {
-        match handle.await {
-            Ok(_) => {
-                // Task completed normally
-            }
-            Err(e) => {
-                // Task panicked or was cancelled
-                event_counts.task_failures.fetch_add(1, Ordering::SeqCst);
-                if e.is_panic() {
-                    error!("[Client {}] Task panicked: {:?}", idx, e);
-                } else {
-                    error!("[Client {}] Task was cancelled", idx);
+    // Wait for all client tasks to complete with timeout or second Ctrl+C
+    let shutdown_timeout = Duration::from_secs(5);
+    let wait_future = async {
+        for (idx, handle) in join_handles.into_iter().enumerate() {
+            match handle.await {
+                Ok(_) => {
+                    // Task completed normally
+                }
+                Err(e) => {
+                    // Task panicked or was cancelled
+                    event_counts.task_failures.fetch_add(1, Ordering::SeqCst);
+                    if e.is_panic() {
+                        error!("[Client {}] Task panicked: {:?}", idx, e);
+                    } else {
+                        error!("[Client {}] Task was cancelled", idx);
+                    }
                 }
             }
+        }
+    };
+
+    tokio::select! {
+        _ = wait_future => {
+            info!("All clients shut down gracefully");
+        }
+        _ = tokio::time::sleep(shutdown_timeout) => {
+            info!("Shutdown timeout reached, forcing exit");
+        }
+        _ = tokio::signal::ctrl_c() => {
+            info!("Second Ctrl+C received, forcing immediate exit");
         }
     }
 
