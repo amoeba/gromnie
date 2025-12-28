@@ -1,5 +1,6 @@
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
+use std::time::Instant;
 use tokio::sync::mpsc::UnboundedSender;
 use tracing::{debug, error, info};
 
@@ -188,12 +189,22 @@ impl EventConsumer for TuiConsumer {
     }
 }
 
+/// Shared uptime data structure
+#[derive(Clone)]
+pub struct UptimeData {
+    pub bot_start: Instant,
+    pub ingame_start: Option<Instant>,
+}
+
 /// Event consumer that forwards chat messages to Discord
 pub struct DiscordConsumer {
     action_tx: UnboundedSender<ClientAction>,
     http: Arc<Http>,
     channel_id: ChannelId,
     character_created: Arc<AtomicBool>,
+    bot_start_time: Instant,
+    ingame_start_time: Option<Instant>,
+    uptime_data: Option<Arc<tokio::sync::RwLock<UptimeData>>>,
 }
 
 impl DiscordConsumer {
@@ -207,6 +218,26 @@ impl DiscordConsumer {
             http,
             channel_id,
             character_created: Arc::new(AtomicBool::new(false)),
+            bot_start_time: Instant::now(),
+            ingame_start_time: None,
+            uptime_data: None,
+        }
+    }
+
+    pub fn new_with_uptime(
+        action_tx: UnboundedSender<ClientAction>,
+        http: Arc<Http>,
+        channel_id: ChannelId,
+        uptime_data: Arc<tokio::sync::RwLock<UptimeData>>,
+    ) -> Self {
+        Self {
+            action_tx,
+            http,
+            channel_id,
+            character_created: Arc::new(AtomicBool::new(false)),
+            bot_start_time: Instant::now(),
+            ingame_start_time: None,
+            uptime_data: Some(uptime_data),
         }
     }
 }
@@ -231,7 +262,17 @@ impl EventConsumer for DiscordConsumer {
                 message,
                 message_type,
             } => {
-                info!(target: "events", "CHAT [{}]: {}", message_type, message);
+                // Log with uptime info if available
+                if let Some(ingame_start) = self.ingame_start_time {
+                    let ingame_uptime = ingame_start.elapsed();
+                    let ingame_secs = ingame_uptime.as_secs();
+                    let ingame_hours = ingame_secs / 3600;
+                    let ingame_mins = (ingame_secs % 3600) / 60;
+                    let ingame_secs_remainder = ingame_secs % 60;
+                    info!(target: "events", "CHAT [{}]: {} | In-game: {:02}:{:02}:{:02}", message_type, message, ingame_hours, ingame_mins, ingame_secs_remainder);
+                } else {
+                    info!(target: "events", "CHAT [{}]: {}", message_type, message);
+                }
 
                 // Forward to Discord
                 let discord_message = format!("[{}] {}", message_type, message);
@@ -248,7 +289,28 @@ impl EventConsumer for DiscordConsumer {
                 character_id,
                 character_name,
             } => {
+                // Record in-game start time
+                let now = Instant::now();
+                self.ingame_start_time = Some(now);
+
+                // Update shared uptime data if available
+                if let Some(ref uptime_data) = self.uptime_data {
+                    let uptime_data_clone = uptime_data.clone();
+                    tokio::spawn(async move {
+                        let mut data = uptime_data_clone.write().await;
+                        data.ingame_start = Some(now);
+                    });
+                }
+
+                // Calculate total uptime
+                let total_uptime = self.bot_start_time.elapsed();
+                let total_secs = total_uptime.as_secs();
+                let total_hours = total_secs / 3600;
+                let total_mins = (total_secs % 3600) / 60;
+                let total_secs_remainder = total_secs % 60;
+
                 info!(target: "events", "LoginSucceeded -- Character: {} (ID: {})", character_name, character_id);
+                info!(target: "events", "Bot uptime: {:02}:{:02}:{:02} | Now tracking in-game time", total_hours, total_mins, total_secs_remainder);
             }
             GameEvent::LoginFailed { reason } => {
                 error!(target: "events", "LoginFailed -- Reason: {}", reason);
