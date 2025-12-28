@@ -99,9 +99,9 @@ impl C2SPacketExt for C2SPacket {
     /// This prevents bugs where ack_sequence is Some but the ACK_SEQUENCE flag is missing.
     ///
     /// # Example
-    /// ```
-    /// let packet = C2SPacket { ... }
-    ///     .with_ack_sequence(recv_count);
+    /// ```ignore
+    /// let packet = C2SPacket::default()
+    ///     .with_ack_sequence(1234);
     /// ```
     fn with_ack_sequence(self, ack_seq: u32) -> Self {
         self.set_field_with_flag(
