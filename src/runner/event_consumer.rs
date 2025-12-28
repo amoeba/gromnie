@@ -232,12 +232,12 @@ impl EventConsumer for DiscordConsumer {
                 message_type,
             } => {
                 info!(target: "events", "CHAT [{}]: {}", message_type, message);
-                
+
                 // Forward to Discord
                 let discord_message = format!("[{}] {}", message_type, message);
                 let http = self.http.clone();
                 let channel_id = self.channel_id;
-                
+
                 tokio::spawn(async move {
                     if let Err(e) = channel_id.say(&http, &discord_message).await {
                         error!("Failed to send Discord message: {}", e);
