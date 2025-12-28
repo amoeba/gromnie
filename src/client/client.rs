@@ -1273,7 +1273,7 @@ impl Client {
                         }
                     })
                     .collect();
-                
+
                 // Store the character list for future reference (e.g., after character creation)
                 self.known_characters = characters.clone();
 

@@ -358,7 +358,14 @@ pub fn handle_character_list(
     action_tx: &UnboundedSender<ClientAction>,
     character_created: &Arc<AtomicBool>,
 ) {
-    handle_character_list_with_name(account, characters, num_slots, action_tx, character_created, None)
+    handle_character_list_with_name(
+        account,
+        characters,
+        num_slots,
+        action_tx,
+        character_created,
+        None,
+    )
 }
 
 /// Shared logic for handling character list received event with custom character name
