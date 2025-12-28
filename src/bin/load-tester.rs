@@ -9,7 +9,7 @@ use tracing_subscriber::EnvFilter;
 
 use gromnie::client::events::{ClientAction, GameEvent};
 use gromnie::client::OutgoingMessageContent;
-use gromnie::runner::{ClientConfig, EventConsumer, CharacterBuilder};
+use gromnie::runner::{CharacterBuilder, ClientConfig, EventConsumer};
 
 mod naming;
 use naming::ClientNaming;
@@ -96,7 +96,9 @@ impl EventConsumer for LoadTesterConsumer {
     fn handle_event(&mut self, event: GameEvent) {
         match event {
             GameEvent::AuthenticationSucceeded => {
-                self.event_counts.authenticated.fetch_add(1, Ordering::SeqCst);
+                self.event_counts
+                    .authenticated
+                    .fetch_add(1, Ordering::SeqCst);
                 if self.verbose {
                     info!("[Client {}] Authentication succeeded", self.client_id);
                 }
@@ -137,9 +139,12 @@ impl EventConsumer for LoadTesterConsumer {
 
                 // Handle based on current state
                 match self.state {
-                    LoadTesterState::WaitingForCharList | LoadTesterState::CharacterCreationInProgress => {
+                    LoadTesterState::WaitingForCharList
+                    | LoadTesterState::CharacterCreationInProgress => {
                         // Check if our character exists
-                        if let Some(char_info) = characters.iter().find(|c| c.name == self.character_name) {
+                        if let Some(char_info) =
+                            characters.iter().find(|c| c.name == self.character_name)
+                        {
                             // Character found (either was there initially or just created)
                             if self.verbose {
                                 info!(
@@ -154,23 +159,38 @@ impl EventConsumer for LoadTesterConsumer {
                                 character_name: char_info.name.clone(),
                                 account: account.clone(),
                             }) {
-                                error!("[Client {}] Failed to send login action: {}", self.client_id, e);
+                                error!(
+                                    "[Client {}] Failed to send login action: {}",
+                                    self.client_id, e
+                                );
                             }
                         } else if self.state == LoadTesterState::WaitingForCharList {
                             // Character doesn't exist yet - create it
                             if self.verbose {
-                                info!("[Client {}] Creating character: {}", self.client_id, self.character_name);
+                                info!(
+                                    "[Client {}] Creating character: {}",
+                                    self.client_id, self.character_name
+                                );
                             }
-                            self.event_counts.character_created.fetch_add(1, Ordering::SeqCst);
+                            self.event_counts
+                                .character_created
+                                .fetch_add(1, Ordering::SeqCst);
                             self.state = LoadTesterState::CharacterCreationInProgress;
 
-                            let char_gen_result = CharacterBuilder::new(self.character_name.clone()).build();
+                            let char_gen_result =
+                                CharacterBuilder::new(self.character_name.clone()).build();
                             let msg = OutgoingMessageContent::CharacterCreationAce(
                                 account.clone(),
                                 char_gen_result,
                             );
-                            if let Err(e) = self.action_tx.send(ClientAction::SendMessage(Box::new(msg))) {
-                                error!("[Client {}] Failed to send character creation: {}", self.client_id, e);
+                            if let Err(e) = self
+                                .action_tx
+                                .send(ClientAction::SendMessage(Box::new(msg)))
+                            {
+                                error!(
+                                    "[Client {}] Failed to send character creation: {}",
+                                    self.client_id, e
+                                );
                             }
                         }
                     }
@@ -197,7 +217,10 @@ async fn main() {
 
     let args = Args::parse();
 
-    info!("Starting load tester: {} clients to {}:{}", args.clients, args.host, args.port);
+    info!(
+        "Starting load tester: {} clients to {}:{}",
+        args.clients, args.host, args.port
+    );
     info!("Rate limiting: {} sec between connections", args.rate_limit);
 
     let event_counts = Arc::new(EventCounts::default());
@@ -244,8 +267,7 @@ async fn main() {
                 )
             };
 
-            gromnie::runner::run_client(client_config, consumer_factory, Some(shutdown_rx))
-                .await;
+            gromnie::runner::run_client(client_config, consumer_factory, Some(shutdown_rx)).await;
         });
 
         join_handles.push(handle);
@@ -302,5 +324,8 @@ async fn main() {
     info!("Total authenticated: {}", auth);
     info!("Total logged in: {}", login);
     info!("Total errors: {}", errors);
-    info!("Success rate: {:.1}%", (login as f64 / args.clients as f64) * 100.0);
+    info!(
+        "Success rate: {:.1}%",
+        (login as f64 / args.clients as f64) * 100.0
+    );
 }
