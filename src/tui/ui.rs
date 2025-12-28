@@ -1,7 +1,4 @@
-use crossterm::{
-    execute,
-    terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
-};
+use crossterm::terminal::{disable_raw_mode, enable_raw_mode};
 use ratatui::prelude::*;
 use std::io;
 
@@ -15,10 +12,11 @@ pub struct Tui {
 impl Tui {
     pub fn new() -> io::Result<Self> {
         enable_raw_mode()?;
-        let mut stdout = io::stdout();
-        execute!(stdout, EnterAlternateScreen)?;
-        let backend = CrosstermBackend::new(stdout);
-        let terminal = Terminal::new(backend)?;
+        let backend = CrosstermBackend::new(io::stdout());
+        let options = ratatui::TerminalOptions {
+            viewport: ratatui::Viewport::Inline(1),
+        };
+        let terminal = Terminal::with_options(backend, options)?;
 
         Ok(Self { terminal })
     }
@@ -36,8 +34,6 @@ impl Tui {
 impl Drop for Tui {
     fn drop(&mut self) {
         disable_raw_mode().ok();
-        let mut stdout = io::stdout();
-        execute!(stdout, LeaveAlternateScreen).ok();
     }
 }
 
