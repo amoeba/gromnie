@@ -147,7 +147,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Create the Discord client
     let mut discord_client = serenity::client::Client::builder(
         &discord_token,
-        GatewayIntents::DIRECT_MESSAGES | GatewayIntents::MESSAGE_CONTENT | GatewayIntents::GUILD_MESSAGES,
+        GatewayIntents::DIRECT_MESSAGES
+            | GatewayIntents::MESSAGE_CONTENT
+            | GatewayIntents::GUILD_MESSAGES,
     )
     .event_handler(Handler {
         target_channel_id: channel_id,
