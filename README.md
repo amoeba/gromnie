@@ -1,14 +1,18 @@
-# Gromnie
+# gromnie
 
-Asheron's Call client test suite and tools.
+Command-line Asheron's Call client implementation.
 
-## Tools
+## Acknowledgements
+
+TODO
+
+## Status
+
+TODO
+
+## Binaries
 
 - **tui**: Terminal user interface client
 - **cli**: Command-line interface client
 - **discord-bot**: Discord bot integration
 - **load-tester**: Load testing tool for AC servers
-
-## License
-
-Licensed under the Apache License 2.0.
