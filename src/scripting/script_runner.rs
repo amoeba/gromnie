@@ -145,14 +145,14 @@ impl EventConsumer for ScriptRunner {
         // Update client state
         self.update_client_state(&event);
 
-        // Tick all scripts if enough time has elapsed
-        self.tick_scripts(now);
-
-        // Tick timers (this is still called here for compatibility with on_event timer checks)
+        // Tick timers FIRST so they're marked as fired
         let fired_timers = self.tick_timers(now);
         if !fired_timers.is_empty() {
             debug!(target: "scripting", "Timers fired: {:?}", fired_timers);
         }
+
+        // THEN tick scripts so they can detect fired timers
+        self.tick_scripts(now);
 
         // Dispatch event to each script that's interested
         for script in &mut self.scripts {
