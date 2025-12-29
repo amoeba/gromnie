@@ -43,16 +43,15 @@ impl EventHandler {
                         break;
                     }
                     _ = tokio::time::sleep(std::time::Duration::from_millis(10)) => {
-                        if event::poll(std::time::Duration::from_millis(1)).unwrap_or(false) {
-                            if let Ok(Event::Key(key)) = event::read() {
-                                // Check for Ctrl+C to quit
-                                if key.modifiers.contains(KeyModifiers::CONTROL)
-                                    && key.code == KeyCode::Char('c')
-                                {
-                                    let _ = tx.send(TuiEvent::Quit);
-                                } else {
-                                    let _ = tx.send(TuiEvent::Key(key));
-                                }
+                        if event::poll(std::time::Duration::from_millis(1)).unwrap_or(false)
+                            && let Ok(Event::Key(key)) = event::read() {
+                            // Check for Ctrl+C to quit
+                            if key.modifiers.contains(KeyModifiers::CONTROL)
+                                && key.code == KeyCode::Char('c')
+                            {
+                                let _ = tx.send(TuiEvent::Quit);
+                            } else {
+                                let _ = tx.send(TuiEvent::Key(key));
                             }
                         }
                         // Send periodic tick events

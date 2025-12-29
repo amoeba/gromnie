@@ -235,10 +235,11 @@ impl App {
                     created_objects.push((object_id, object_name.clone()));
 
                     // After receiving first object while logging in, send LoginComplete notification
-                    if *state == GameWorldState::LoggingIn && created_objects.len() == 1 {
-                        if let Some(ref tx) = self.action_tx {
-                            let _ = tx.send(ClientAction::SendLoginComplete);
-                        }
+                    if *state == GameWorldState::LoggingIn
+                        && created_objects.len() == 1
+                        && let Some(ref tx) = self.action_tx
+                    {
+                        let _ = tx.send(ClientAction::SendLoginComplete);
                     }
                 }
 

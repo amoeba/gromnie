@@ -1,16 +1,16 @@
 use clap::Parser;
-use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicU32, Ordering};
 use std::time::{Duration, Instant};
 use tokio::sync::mpsc;
 use tokio::sync::watch;
 use tracing::{error, info};
+use tracing_subscriber::EnvFilter;
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
-use tracing_subscriber::EnvFilter;
 
-use gromnie::client::events::{ClientAction, GameEvent};
 use gromnie::client::OutgoingMessageContent;
+use gromnie::client::events::{ClientAction, GameEvent};
 use gromnie::load_tester::ClientNaming;
 use gromnie::runner::{CharacterBuilder, ClientConfig, EventConsumer};
 
@@ -220,7 +220,10 @@ impl EventConsumer for LoadTesterConsumer {
                     LoadTesterState::CharacterFound => {
                         // Already found and logging in, ignore further character list updates
                         if self.verbose {
-                            info!("[Client {}] Already processing login, ignoring character list update", self.client_id);
+                            info!(
+                                "[Client {}] Already processing login, ignoring character list update",
+                                self.client_id
+                            );
                         }
                     }
                 }

@@ -24,7 +24,7 @@ use acprotocol::packets::c2s_packet::C2SPacket;
 use acprotocol::packets::s2c_packet::S2CPacket;
 use acprotocol::readers::ACDataType;
 use acprotocol::types::{BlobFragments, ConnectRequestHeader, PackableList};
-use acprotocol::writers::{write_string, write_u32, ACWritable};
+use acprotocol::writers::{ACWritable, write_string, write_u32};
 use tokio::net::UdpSocket;
 use tracing::{debug, error, info, warn};
 
@@ -816,21 +816,19 @@ impl Client {
             .await;
 
         // Update progress to DDDResponseSent (66%)
-        if result.is_ok() {
-            if let ClientState::Patching {
+        if result.is_ok()
+            && let ClientState::Patching {
                 started_at: _,
                 last_retry_at: _,
                 progress,
             } = &mut self.state
-            {
-                if *progress == PatchingProgress::DDDInterrogationReceived {
-                    *progress = PatchingProgress::DDDResponseSent;
-                    let _ = self
-                        .event_tx
-                        .send(GameEvent::UpdatingSetProgress { progress: 0.66 });
-                    info!(target: "net", "Progress: DDDResponse sent (66%)");
-                }
-            }
+            && *progress == PatchingProgress::DDDInterrogationReceived
+        {
+            *progress = PatchingProgress::DDDResponseSent;
+            let _ = self
+                .event_tx
+                .send(GameEvent::UpdatingSetProgress { progress: 0.66 });
+            info!(target: "net", "Progress: DDDResponse sent (66%)");
         }
 
         result
@@ -1857,14 +1855,13 @@ impl Client {
             last_retry_at: _,
             progress,
         } = &mut self.state
+            && *progress == ConnectingProgress::Initial
         {
-            if *progress == ConnectingProgress::Initial {
-                *progress = ConnectingProgress::LoginRequestSent;
-                let _ = self
-                    .event_tx
-                    .send(GameEvent::ConnectingSetProgress { progress: 0.33 });
-                info!(target: "net", "Progress: LoginRequest sent (33%)");
-            }
+            *progress = ConnectingProgress::LoginRequestSent;
+            let _ = self
+                .event_tx
+                .send(GameEvent::ConnectingSetProgress { progress: 0.33 });
+            info!(target: "net", "Progress: LoginRequest sent (33%)");
         }
 
         Ok(())

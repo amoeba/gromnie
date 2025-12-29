@@ -1,4 +1,4 @@
-use acprotocol::writers::{write_i32, write_string, write_u32, ACWritable, ACWriter};
+use acprotocol::writers::{ACWritable, ACWriter, write_i32, write_string, write_u32};
 
 /// Custom LoginRequest structure that matches the actual C# client implementation.
 /// This is needed because acprotocol's LoginRequestHeaderType2 is missing the timestamp field.

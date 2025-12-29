@@ -4,7 +4,7 @@ use tracing_subscriber::EnvFilter;
 
 use gromnie::client::events::ClientAction;
 use gromnie::runner::{ClientConfig, TuiConsumer};
-use gromnie::tui::{event_handler::EventHandler, ui::try_init_tui, App};
+use gromnie::tui::{App, event_handler::EventHandler, ui::try_init_tui};
 
 #[derive(Parser)]
 #[command(version, about, long_about = None)]

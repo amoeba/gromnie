@@ -146,10 +146,9 @@ async fn run_client_internal<C: EventConsumer>(
 
                         client.process_actions();
 
-                        if client.has_pending_outgoing_messages() {
-                            if let Err(e) = client.send_pending_messages().await {
-                                error!("Failed to send pending messages: {}", e);
-                            }
+                        if client.has_pending_outgoing_messages()
+                            && let Err(e) = client.send_pending_messages().await {
+                            error!("Failed to send pending messages: {}", e);
                         }
                     }
                     Err(e) => {
