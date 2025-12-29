@@ -24,7 +24,6 @@ name = "cli"
 
 [[bin]]
 name = "discord-bot"
-features = ["discord"]
 
 [[bin]]
 name = "load-tester"

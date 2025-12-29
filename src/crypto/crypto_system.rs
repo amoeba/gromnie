@@ -32,7 +32,7 @@ impl CryptoSystem {
     /// This advances the RNG state, so each call produces a different value
     pub fn get_send_key(&mut self) -> u32 {
         use rand::Rng;
-        self.rng.gen::<u32>()
+        self.rng.r#gen::<u32>()
     }
 }
 

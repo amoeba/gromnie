@@ -9,5 +9,4 @@ pub use event_consumer::{
     TuiConsumer,
 };
 
-#[cfg(feature = "discord")]
 pub use event_consumer::{DiscordConsumer, UptimeData};
