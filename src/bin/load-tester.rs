@@ -278,7 +278,10 @@ async fn main() {
         "Starting load tester: {} clients to {}:{}",
         run_args.clients, run_args.host, run_args.port
     );
-    info!("Rate limiting: {} ms between connections", run_args.rate_limit);
+    info!(
+        "Rate limiting: {} ms between connections",
+        run_args.rate_limit
+    );
 
     let event_counts = Arc::new(EventCounts::default());
     let (shutdown_tx, _) = watch::channel(false);
