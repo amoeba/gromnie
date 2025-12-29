@@ -39,27 +39,24 @@ impl Script for HelloWorldScript {
     }
 
     fn on_event(&mut self, event: &GameEvent, ctx: &mut ScriptContext) {
-        match event {
-            GameEvent::LoginSucceeded { .. } => {
-                // Schedule a timer to send greeting after 5 seconds
-                info!(target: "scripts", "HelloWorldScript: Login detected, scheduling 5-second greeting timer");
-                let timer_id = ctx.schedule_timer(5, "greeting");
-                self.timer_id = Some(timer_id);
-            }
-            _ => {}
+        if let GameEvent::LoginSucceeded { .. } = event {
+            // Schedule a timer to send greeting after 5 seconds
+            info!(target: "scripts", "HelloWorldScript: Login detected, scheduling 5-second greeting timer");
+            let timer_id = ctx.schedule_timer(5, "greeting");
+            self.timer_id = Some(timer_id);
         }
     }
 
     fn on_tick(&mut self, ctx: &mut ScriptContext, _delta: Duration) {
         // Check if our timer has fired
-        if let Some(timer_id) = self.timer_id {
-            if ctx.check_timer(timer_id) {
-                info!(target: "scripts", "HelloWorldScript: Timer fired! Sending greeting");
-                ctx.send_chat("Hello, world!");
-                // TODO: Add wave animation support
-                // For now, just send the chat message
-                self.timer_id = None;
-            }
+        if let Some(timer_id) = self.timer_id
+            && ctx.check_timer(timer_id)
+        {
+            info!(target: "scripts", "HelloWorldScript: Timer fired! Sending greeting");
+            ctx.send_chat("Hello, world!");
+            // TODO: Add wave animation support
+            // For now, just send the chat message
+            self.timer_id = None;
         }
     }
 

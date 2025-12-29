@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use tokio::sync::mpsc::UnboundedSender;
 use tracing::{debug, warn};
 
@@ -37,8 +37,15 @@ impl ScriptRegistry {
         enabled_scripts: &[String],
     ) -> ScriptRunner {
         let mut runner = ScriptRunner::new(action_tx);
+        let mut loaded = HashSet::new();
 
         for script_id in enabled_scripts {
+            // Skip if already loaded
+            if !loaded.insert(script_id.clone()) {
+                warn!(target: "scripting", "Script '{}' listed multiple times in config, skipping duplicate", script_id);
+                continue;
+            }
+
             match self.factories.get(script_id) {
                 Some(factory) => {
                     let script = factory();
@@ -83,4 +90,166 @@ macro_rules! register_scripts {
             );
         )+
     };
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::client::events::GameEvent;
+    use crate::scripting::{EventFilter, ScriptContext};
+    use std::any::Any;
+    use std::time::Duration;
+
+    /// Test script that counts how many times it's been created
+    #[derive(Default)]
+    struct TestScript {
+        #[allow(dead_code)]
+        instance_id: usize,
+    }
+
+    // Use a static counter to track instances across test script creations
+    static mut INSTANCE_COUNTER: usize = 0;
+
+    impl TestScript {
+        fn new() -> Self {
+            unsafe {
+                INSTANCE_COUNTER += 1;
+                Self {
+                    instance_id: INSTANCE_COUNTER,
+                }
+            }
+        }
+
+        fn reset_counter() {
+            unsafe {
+                INSTANCE_COUNTER = 0;
+            }
+        }
+    }
+
+    impl Script for TestScript {
+        fn id(&self) -> &'static str {
+            "test_script"
+        }
+
+        fn name(&self) -> &'static str {
+            "Test Script"
+        }
+
+        fn description(&self) -> &'static str {
+            "A test script for unit testing"
+        }
+
+        fn on_load(&mut self, _ctx: &mut ScriptContext) {}
+
+        fn on_unload(&mut self, _ctx: &mut ScriptContext) {}
+
+        fn subscribed_events(&self) -> &[EventFilter] {
+            &[]
+        }
+
+        fn on_event(&mut self, _event: &GameEvent, _ctx: &mut ScriptContext) {}
+
+        fn on_tick(&mut self, _ctx: &mut ScriptContext, _delta: Duration) {}
+
+        fn as_any_mut(&mut self) -> &mut dyn Any {
+            self
+        }
+    }
+
+    #[test]
+    fn test_nonexistent_script_in_config() {
+        // Setup
+        let mut registry = ScriptRegistry::new();
+        registry.register("test_script", || Box::new(TestScript::new()));
+
+        // Create runner with a mix of valid and invalid script IDs
+        let (action_tx, _rx) = tokio::sync::mpsc::unbounded_channel();
+        let enabled_scripts = vec![
+            "test_script".to_string(),
+            "nonexistent_script".to_string(),
+            "another_missing_script".to_string(),
+        ];
+
+        let runner = registry.create_runner(action_tx, &enabled_scripts);
+
+        // Assert: Only the valid script should be loaded
+        assert_eq!(
+            runner.script_count(),
+            1,
+            "Should only load the 1 valid script"
+        );
+        assert_eq!(
+            runner.script_ids(),
+            vec!["test_script"],
+            "Should only have test_script loaded"
+        );
+    }
+
+    #[test]
+    fn test_duplicate_script_in_config() {
+        // Reset the instance counter before the test
+        TestScript::reset_counter();
+
+        // Setup
+        let mut registry = ScriptRegistry::new();
+        registry.register("test_script", || Box::new(TestScript::new()));
+
+        // Create runner with duplicate script IDs
+        let (action_tx, _rx) = tokio::sync::mpsc::unbounded_channel();
+        let enabled_scripts = vec![
+            "test_script".to_string(),
+            "test_script".to_string(),
+            "test_script".to_string(),
+        ];
+
+        let runner = registry.create_runner(action_tx, &enabled_scripts);
+
+        // Assert: Only one instance should be created (duplicates are filtered)
+        assert_eq!(
+            runner.script_count(),
+            1,
+            "Duplicate scripts should be filtered, only loading once"
+        );
+        assert_eq!(
+            runner.script_ids(),
+            vec!["test_script"],
+            "Only one instance should be registered despite duplicates in config"
+        );
+    }
+
+    #[test]
+    fn test_available_scripts() {
+        // Setup
+        let mut registry = ScriptRegistry::new();
+        registry.register("script_one", || Box::new(TestScript::new()));
+        registry.register("script_two", || Box::new(TestScript::new()));
+        registry.register("script_three", || Box::new(TestScript::new()));
+
+        // Get available scripts
+        let mut available = registry.available_scripts();
+        available.sort(); // HashMap order is not guaranteed
+
+        // Assert
+        assert_eq!(available.len(), 3);
+        assert!(available.contains(&"script_one".to_string()));
+        assert!(available.contains(&"script_two".to_string()));
+        assert!(available.contains(&"script_three".to_string()));
+    }
+
+    #[test]
+    fn test_empty_enabled_scripts() {
+        // Setup
+        let mut registry = ScriptRegistry::new();
+        registry.register("test_script", || Box::new(TestScript::new()));
+
+        // Create runner with empty enabled scripts
+        let (action_tx, _rx) = tokio::sync::mpsc::unbounded_channel();
+        let enabled_scripts: Vec<String> = vec![];
+
+        let runner = registry.create_runner(action_tx, &enabled_scripts);
+
+        // Assert: No scripts should be loaded
+        assert_eq!(runner.script_count(), 0, "Should not load any scripts");
+    }
 }

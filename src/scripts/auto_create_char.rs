@@ -1,8 +1,8 @@
 use std::any::Any;
 use std::time::Duration;
 
-use crate::client::events::GameEvent;
 use crate::client::OutgoingMessageContent;
+use crate::client::events::GameEvent;
 use crate::runner::CharacterBuilder;
 use crate::scripting::{EventFilter, Script, ScriptContext};
 use tracing::info;

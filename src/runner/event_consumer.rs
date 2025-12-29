@@ -17,12 +17,12 @@ pub trait EventConsumer: Send + 'static {
 
 /// Event consumer that logs events to the console (for CLI version)
 pub struct LoggingConsumer {
-    action_tx: UnboundedSender<ClientAction>,
+    _action_tx: UnboundedSender<ClientAction>,
 }
 
 impl LoggingConsumer {
     pub fn new(action_tx: UnboundedSender<ClientAction>) -> Self {
-        Self { action_tx }
+        Self { _action_tx: action_tx }
     }
 }
 
@@ -90,7 +90,7 @@ impl EventConsumer for LoggingConsumer {
 
 /// Event consumer that forwards events to TUI and logs to console
 pub struct TuiConsumer {
-    action_tx: UnboundedSender<ClientAction>,
+    _action_tx: UnboundedSender<ClientAction>,
     tui_event_tx: UnboundedSender<GameEvent>,
 }
 
@@ -100,7 +100,7 @@ impl TuiConsumer {
         tui_event_tx: UnboundedSender<GameEvent>,
     ) -> Self {
         Self {
-            action_tx,
+            _action_tx: action_tx,
             tui_event_tx,
         }
     }
@@ -181,7 +181,7 @@ pub struct UptimeData {
 
 /// Event consumer that forwards chat messages to Discord
 pub struct DiscordConsumer {
-    action_tx: UnboundedSender<ClientAction>,
+    _action_tx: UnboundedSender<ClientAction>,
     http: Arc<Http>,
     channel_id: ChannelId,
     bot_start_time: Instant,
@@ -196,7 +196,7 @@ impl DiscordConsumer {
         channel_id: ChannelId,
     ) -> Self {
         Self {
-            action_tx,
+            _action_tx: action_tx,
             http,
             channel_id,
             bot_start_time: Instant::now(),
@@ -212,7 +212,7 @@ impl DiscordConsumer {
         uptime_data: Arc<tokio::sync::RwLock<UptimeData>>,
     ) -> Self {
         Self {
-            action_tx,
+            _action_tx: action_tx,
             http,
             channel_id,
             bot_start_time: Instant::now(),

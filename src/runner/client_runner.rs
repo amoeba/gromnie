@@ -53,7 +53,9 @@ pub async fn run_client_with_consumers<F>(
     consumers_factory: F,
     shutdown_rx: Option<tokio::sync::watch::Receiver<bool>>,
 ) where
-    F: FnOnce(mpsc::UnboundedSender<crate::client::events::ClientAction>) -> Vec<Box<dyn EventConsumer>>,
+    F: FnOnce(
+        mpsc::UnboundedSender<crate::client::events::ClientAction>,
+    ) -> Vec<Box<dyn EventConsumer>>,
 {
     let (client, event_rx, action_tx) = Client::new(
         config.id,

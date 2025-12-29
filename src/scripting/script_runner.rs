@@ -68,6 +68,16 @@ impl ScriptRunner {
         self.scripts.push(script);
     }
 
+    /// Get the number of registered scripts
+    pub fn script_count(&self) -> usize {
+        self.scripts.len()
+    }
+
+    /// Get the IDs of all registered scripts
+    pub fn script_ids(&self) -> Vec<&str> {
+        self.scripts.iter().map(|s| s.id()).collect()
+    }
+
     /// Update client state based on events
     fn update_client_state(&mut self, event: &GameEvent) {
         match event {

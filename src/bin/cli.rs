@@ -1,7 +1,9 @@
 use std::error::Error;
 
 use clap::Parser;
-use gromnie::runner::{ClientConfig, LoggingConsumer, create_script_consumer, run_client_with_consumers};
+use gromnie::runner::{
+    ClientConfig, LoggingConsumer, create_script_consumer, run_client_with_consumers,
+};
 use ratatui::{TerminalOptions, Viewport};
 use tracing::info;
 use tracing_subscriber::EnvFilter;
@@ -95,15 +97,15 @@ async fn main() -> Result<(), Box<dyn Error>> {
             run_client_with_consumers(
                 client_config,
                 move |action_tx| {
-                    let mut consumers: Vec<Box<dyn gromnie::runner::EventConsumer>> = vec![];
-
-                    // Add logging consumer
-                    consumers.push(Box::new(LoggingConsumer::new(action_tx.clone())));
-
-                    // Add script runner (handles auto-login via scripts)
-                    consumers.push(Box::new(create_script_consumer(action_tx, &scripting_config)));
-
-                    consumers
+                    vec![
+                        // Add logging consumer
+                        Box::new(LoggingConsumer::new(action_tx.clone())),
+                        // Add script runner (handles auto-login via scripts)
+                        Box::new(create_script_consumer(
+                            action_tx,
+                            &scripting_config,
+                        )),
+                    ]
                 },
                 None,
             )
@@ -111,7 +113,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
         } else {
             gromnie::runner::run_client(
                 client_config,
-                move |action_tx| LoggingConsumer::new(action_tx),
+                LoggingConsumer::new,
                 None,
             )
             .await;
