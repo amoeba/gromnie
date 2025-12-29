@@ -1,5 +1,5 @@
 use serde::{Deserialize, Serialize};
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap};
 use std::fs;
 use std::path::PathBuf;
 use tracing::info;
@@ -20,6 +20,9 @@ impl std::fmt::Display for ServerConfig {
 pub struct AccountConfig {
     pub username: String,
     pub password: String,
+    /// Character to auto-login: specific name, "*" for any character, or None to create new
+    #[serde(default)]
+    pub character: Option<String>,
 }
 
 impl std::fmt::Display for AccountConfig {
@@ -28,10 +31,44 @@ impl std::fmt::Display for AccountConfig {
     }
 }
 
+/// Helper function for default true value
+fn default_true() -> bool {
+    true
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ScriptingConfig {
+    /// Whether scripting is enabled
+    #[serde(default = "default_true")]
+    pub enabled: bool,
+
+    /// List of script IDs to enable
+    #[serde(default)]
+    pub enabled_scripts: Vec<String>,
+
+    /// Per-script configuration (script ID -> config values)
+    #[serde(default)]
+    pub config: HashMap<String, toml::Value>,
+}
+
+impl Default for ScriptingConfig {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            enabled_scripts: Vec::new(),
+            config: HashMap::new(),
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Config {
     pub servers: BTreeMap<String, ServerConfig>,
     pub accounts: BTreeMap<String, AccountConfig>,
+
+    /// Scripting configuration
+    #[serde(default)]
+    pub scripting: ScriptingConfig,
 }
 
 impl Config {

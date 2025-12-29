@@ -44,6 +44,60 @@ pub async fn run_client<C, F>(
     run_client_internal(client, event_rx, event_consumer, shutdown_rx).await;
 }
 
+/// Run the client with multiple event consumers (event bus pattern)
+///
+/// This allows registering multiple independent event consumers that each receive
+/// all events from the client's event broadcast channel.
+pub async fn run_client_with_consumers<F>(
+    config: ClientConfig,
+    consumers_factory: F,
+    shutdown_rx: Option<tokio::sync::watch::Receiver<bool>>,
+) where
+    F: FnOnce(mpsc::UnboundedSender<crate::client::events::ClientAction>) -> Vec<Box<dyn EventConsumer>>,
+{
+    let (client, event_rx, action_tx) = Client::new(
+        config.id,
+        config.address.clone(),
+        config.account_name.clone(),
+        config.password.clone(),
+    )
+    .await;
+
+    // Create all event consumers
+    let mut consumers = consumers_factory(action_tx);
+
+    // Spawn a task for each consumer with its own event receiver
+    for (idx, mut consumer) in consumers.drain(..).enumerate() {
+        let mut consumer_rx = client.subscribe_events();
+        tokio::spawn(async move {
+            info!(target: "events", "Event consumer {} started", idx);
+
+            loop {
+                match consumer_rx.recv().await {
+                    Ok(event) => {
+                        consumer.handle_event(event);
+                    }
+                    Err(tokio::sync::broadcast::error::RecvError::Lagged(skipped)) => {
+                        error!(target: "events", "Consumer {} lagged, {} messages were skipped", idx, skipped);
+                    }
+                    Err(tokio::sync::broadcast::error::RecvError::Closed) => {
+                        info!(target: "events", "Event channel closed for consumer {}", idx);
+                        break;
+                    }
+                }
+            }
+
+            info!(target: "events", "Event consumer {} stopped", idx);
+        });
+    }
+
+    // Drop the original event_rx since we're not using it
+    drop(event_rx);
+
+    // Run the main client loop without event handling (consumers handle events)
+    run_client_loop(client, shutdown_rx).await;
+}
+
 /// Run the client and also send the action_tx channel back to the caller
 ///
 /// This variant is useful for the TUI version where the app needs the action_tx
@@ -79,10 +133,10 @@ pub async fn run_client_with_action_channel<C, F>(
 
 /// Internal client runner implementation
 async fn run_client_internal<C: EventConsumer>(
-    mut client: Client,
+    client: Client,
     mut event_rx: tokio::sync::broadcast::Receiver<crate::client::events::GameEvent>,
     mut event_consumer: C,
-    mut shutdown_rx: Option<tokio::sync::watch::Receiver<bool>>,
+    shutdown_rx: Option<tokio::sync::watch::Receiver<bool>>,
 ) {
     // Spawn event handler task
     tokio::spawn(async move {
@@ -106,6 +160,15 @@ async fn run_client_internal<C: EventConsumer>(
         info!(target: "events", "Event handler task stopped");
     });
 
+    // Run the main client loop
+    run_client_loop(client, shutdown_rx).await;
+}
+
+/// Main client network loop
+async fn run_client_loop(
+    mut client: Client,
+    mut shutdown_rx: Option<tokio::sync::watch::Receiver<bool>>,
+) {
     // Note: We don't call client.connect() here anymore - the client starts in Connecting state
     // and we handle retries in the main loop below
 

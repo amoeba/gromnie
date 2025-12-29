@@ -3,9 +3,9 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use tokio::sync::mpsc::UnboundedSender;
 use tracing::{debug, error, info};
 
-use crate::client::OutgoingMessageContent;
 use crate::client::events::{CharacterInfo, ClientAction, GameEvent};
-use crate::runner::CharacterBuilder;
+use crate::config::ScriptingConfig;
+use crate::scripting::ScriptRunner;
 use serenity::http::Http;
 use serenity::model::id::ChannelId;
 use std::time::Instant;
@@ -20,6 +20,7 @@ pub trait EventConsumer: Send + 'static {
 pub struct LoggingConsumer {
     action_tx: UnboundedSender<ClientAction>,
     character_created: Arc<AtomicBool>,
+    character_config: Option<String>,
 }
 
 impl LoggingConsumer {
@@ -27,6 +28,18 @@ impl LoggingConsumer {
         Self {
             action_tx,
             character_created: Arc::new(AtomicBool::new(false)),
+            character_config: Some("*".to_string()),
+        }
+    }
+
+    pub fn new_with_character(
+        action_tx: UnboundedSender<ClientAction>,
+        character_config: Option<String>,
+    ) -> Self {
+        Self {
+            action_tx,
+            character_created: Arc::new(AtomicBool::new(false)),
+            character_config,
         }
     }
 }
@@ -45,6 +58,7 @@ impl EventConsumer for LoggingConsumer {
                     num_slots,
                     &self.action_tx,
                     &self.character_created,
+                    self.character_config.as_deref(),
                 );
             }
             GameEvent::DDDInterrogation { language, region } => {
@@ -55,14 +69,6 @@ impl EventConsumer for LoggingConsumer {
                 character_name,
             } => {
                 info!(target: "events", "LoginSucceeded -- Character: {} (ID: {})", character_name, character_id);
-
-                // Testing: Send a chat message after successful login
-                info!(target: "events", "Sending chat message...");
-                if let Err(e) = self.action_tx.send(ClientAction::SendChatMessage {
-                    message: "Hello from gromnie!".to_string(),
-                }) {
-                    error!(target: "events", "Failed to send chat message: {}", e);
-                }
             }
             GameEvent::LoginFailed { reason } => {
                 error!(target: "events", "LoginFailed -- Reason: {}", reason);
@@ -107,6 +113,7 @@ pub struct TuiConsumer {
     action_tx: UnboundedSender<ClientAction>,
     tui_event_tx: UnboundedSender<GameEvent>,
     character_created: Arc<AtomicBool>,
+    character_config: Option<String>,
 }
 
 impl TuiConsumer {
@@ -118,6 +125,20 @@ impl TuiConsumer {
             action_tx,
             tui_event_tx,
             character_created: Arc::new(AtomicBool::new(false)),
+            character_config: Some("*".to_string()),
+        }
+    }
+
+    pub fn new_with_character(
+        action_tx: UnboundedSender<ClientAction>,
+        tui_event_tx: UnboundedSender<GameEvent>,
+        character_config: Option<String>,
+    ) -> Self {
+        Self {
+            action_tx,
+            tui_event_tx,
+            character_created: Arc::new(AtomicBool::new(false)),
+            character_config,
         }
     }
 }
@@ -140,6 +161,7 @@ impl EventConsumer for TuiConsumer {
                     num_slots,
                     &self.action_tx,
                     &self.character_created,
+                    self.character_config.as_deref(),
                 );
             }
             GameEvent::DDDInterrogation { language, region } => {
@@ -205,6 +227,7 @@ pub struct DiscordConsumer {
     bot_start_time: Instant,
     ingame_start_time: Option<Instant>,
     uptime_data: Option<Arc<tokio::sync::RwLock<UptimeData>>>,
+    character_config: Option<String>,
 }
 
 impl DiscordConsumer {
@@ -221,6 +244,7 @@ impl DiscordConsumer {
             bot_start_time: Instant::now(),
             ingame_start_time: None,
             uptime_data: None,
+            character_config: Some("*".to_string()),
         }
     }
 
@@ -238,6 +262,26 @@ impl DiscordConsumer {
             bot_start_time: Instant::now(),
             ingame_start_time: None,
             uptime_data: Some(uptime_data),
+            character_config: Some("*".to_string()),
+        }
+    }
+
+    pub fn new_with_character(
+        action_tx: UnboundedSender<ClientAction>,
+        http: Arc<Http>,
+        channel_id: ChannelId,
+        uptime_data: Arc<tokio::sync::RwLock<UptimeData>>,
+        character_config: Option<String>,
+    ) -> Self {
+        Self {
+            action_tx,
+            http,
+            channel_id,
+            character_created: Arc::new(AtomicBool::new(false)),
+            bot_start_time: Instant::now(),
+            ingame_start_time: None,
+            uptime_data: Some(uptime_data),
+            character_config,
         }
     }
 }
@@ -256,6 +300,7 @@ impl EventConsumer for DiscordConsumer {
                     num_slots,
                     &self.action_tx,
                     &self.character_created,
+                    self.character_config.as_deref(),
                 );
             }
             GameEvent::ChatMessageReceived {
@@ -349,33 +394,18 @@ impl EventConsumer for DiscordConsumer {
 
 /// Shared logic for handling character list received event
 ///
-/// If character_name is provided, it will be used for character creation.
-/// Otherwise, a default test character name is generated.
+/// Auto-login behavior based on character_config:
+/// - If character_config is Some(name): Login to that specific character (error if not found)
+/// - If character_config is Some("*"): Login to any character (first one)
+/// - If character_config is None: Error (must specify character)
+/// - If no characters exist: Always error
 pub fn handle_character_list(
     account: &str,
     characters: &[CharacterInfo],
     num_slots: u32,
     action_tx: &UnboundedSender<ClientAction>,
     character_created: &Arc<AtomicBool>,
-) {
-    handle_character_list_with_name(
-        account,
-        characters,
-        num_slots,
-        action_tx,
-        character_created,
-        None,
-    )
-}
-
-/// Shared logic for handling character list received event with custom character name
-pub fn handle_character_list_with_name(
-    account: &str,
-    characters: &[CharacterInfo],
-    num_slots: u32,
-    action_tx: &UnboundedSender<ClientAction>,
-    character_created: &Arc<AtomicBool>,
-    custom_char_name: Option<&str>,
+    character_config: Option<&str>,
 ) {
     let names = characters
         .iter()
@@ -384,53 +414,107 @@ pub fn handle_character_list_with_name(
         .join(", ");
     info!(target: "events", "CharacterList -- Account: {}, Slots: {}, Number of Chars: {}, Chars: {}", account, num_slots, characters.len(), names);
 
-    // If we don't have any characters, create one
-    if characters.is_empty() && !character_created.load(Ordering::SeqCst) {
-        info!(target: "events", "No characters found - creating a new character...");
+    // Check if already handled
+    if character_created.load(Ordering::SeqCst) {
+        return;
+    }
 
-        // Mark that we're creating a character
+    // If no characters exist, error
+    if characters.is_empty() {
+        error!(target: "events", "No characters found on account '{}'. Please create a character first.", account);
+        error!(target: "events", "Character creation is not yet supported. Use the official client to create a character.");
         character_created.store(true, Ordering::SeqCst);
-
-        // Create character using builder with custom name or test default
-        let char_builder = if let Some(name) = custom_char_name {
-            CharacterBuilder::new(name.to_string())
-        } else {
-            CharacterBuilder::new_test_character()
-        };
-        let char_gen_result = char_builder.build();
-        let char_name = char_gen_result.name.clone();
-
-        info!(target: "events", "Creating character: {}", char_name);
-
-        let msg =
-            OutgoingMessageContent::CharacterCreationAce(account.to_string(), char_gen_result);
-        if let Err(e) = action_tx.send(ClientAction::SendMessage(Box::new(msg))) {
-            error!(target: "events", "Failed to send character creation action: {}", e);
-        } else {
-            info!(target: "events", "Character creation action sent - waiting for response...");
-        }
+        return;
     }
-    // If we have characters, log in as the first one
-    else if !characters.is_empty() {
-        info!(target: "events", "Found existing character(s):");
-        for char_info in characters {
-            info!(target: "events", "  Character: {} (ID: {})", char_info.name, char_info.id);
-        }
 
-        // Log in as the first character
-        let first_char = &characters[0];
-        info!(target: "events", "Attempting to log in as: {} (ID: {})", first_char.name, first_char.id);
-
-        // Send action to login
-        if let Err(e) = action_tx.send(ClientAction::LoginCharacter {
-            character_id: first_char.id,
-            character_name: first_char.name.clone(),
-            account: account.to_string(),
-        }) {
-            error!(target: "events", "Failed to send login action: {}", e);
-        } else {
-            // Mark that we've handled character login
+    // Characters exist - determine which one to login
+    let character_to_login = match character_config {
+        None | Some("") => {
+            error!(target: "events", "Character must be specified in account config. Set 'character' to a character name or \"*\" for any.");
             character_created.store(true, Ordering::SeqCst);
+            return;
+        }
+        Some("*") => {
+            // Login to first character
+            info!(target: "events", "Auto-login: Using first available character");
+            &characters[0]
+        }
+        Some(char_name) => {
+            // Find specific character
+            match characters.iter().find(|c| c.name == char_name) {
+                Some(char) => {
+                    info!(target: "events", "Auto-login: Found requested character '{}'", char_name);
+                    char
+                }
+                None => {
+                    error!(target: "events", "Character '{}' not found on account '{}'. Available characters: {}", char_name, account, names);
+                    character_created.store(true, Ordering::SeqCst);
+                    return;
+                }
+            }
+        }
+    };
+
+    info!(target: "events", "Attempting to log in as: {} (ID: {})", character_to_login.name, character_to_login.id);
+
+    // Send action to login
+    if let Err(e) = action_tx.send(ClientAction::LoginCharacter {
+        character_id: character_to_login.id,
+        character_name: character_to_login.name.clone(),
+        account: account.to_string(),
+    }) {
+        error!(target: "events", "Failed to send login action: {}", e);
+    } else {
+        character_created.store(true, Ordering::SeqCst);
+    }
+}
+
+/// Auto-login consumer that handles character selection and login
+pub struct AutoLoginConsumer {
+    action_tx: UnboundedSender<ClientAction>,
+    character_created: Arc<AtomicBool>,
+    character_config: Option<String>,
+}
+
+impl AutoLoginConsumer {
+    pub fn new(
+        action_tx: UnboundedSender<ClientAction>,
+        character_config: Option<String>,
+    ) -> Self {
+        Self {
+            action_tx,
+            character_created: Arc::new(AtomicBool::new(false)),
+            character_config,
         }
     }
+}
+
+impl EventConsumer for AutoLoginConsumer {
+    fn handle_event(&mut self, event: GameEvent) {
+        // Only handle character list events
+        if let GameEvent::CharacterListReceived {
+            ref account,
+            ref characters,
+            num_slots,
+        } = event
+        {
+            handle_character_list(
+                account,
+                characters,
+                num_slots,
+                &self.action_tx,
+                &self.character_created,
+                self.character_config.as_deref(),
+            );
+        }
+    }
+}
+
+/// Create a script runner consumer with the specified configuration
+pub fn create_script_consumer(
+    action_tx: UnboundedSender<ClientAction>,
+    config: &ScriptingConfig,
+) -> ScriptRunner {
+    let registry = crate::scripts::create_registry();
+    registry.create_runner(action_tx, &config.enabled_scripts)
 }
