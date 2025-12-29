@@ -15,8 +15,6 @@ targets = ["aarch64-apple-darwin", "aarch64-unknown-linux-gnu", "x86_64-apple-da
 install-path = "CARGO_HOME"
 # Whether to install an updater program
 install-updater = false
-# Enable discord feature for all dist builds
-features = ["discord"]
 
 [[bin]]
 name = "tui"
@@ -26,6 +24,7 @@ name = "cli"
 
 [[bin]]
 name = "discord-bot"
+features = ["discord"]
 
 [[bin]]
 name = "load-tester"
