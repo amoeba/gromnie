@@ -53,7 +53,6 @@ impl Script for AutoLoginScript {
             // Check if there are any characters
             if characters.is_empty() {
                 error!(target: "scripts", "Auto Login: No characters found on account '{}'. Cannot auto-login.", account);
-                error!(target: "scripts", "Auto Login: Please create a character first or enable the auto_create_char script.");
                 return;
             }
 
