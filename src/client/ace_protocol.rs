@@ -9,7 +9,7 @@
 /// in the format ACE expects.
 use acprotocol::enums::{Gender, HeritageGroup};
 use acprotocol::types::PackableList;
-use acprotocol::writers::{write_u32, ACWritable, ACWriter};
+use acprotocol::writers::{ACWritable, ACWriter, write_u32};
 
 /// Wrapper for raw u32 skill advancement class values
 /// ACE server defines Inactive = 0, but acprotocol only defines 1, 2, 3

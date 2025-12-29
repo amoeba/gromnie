@@ -79,95 +79,89 @@ impl App {
                         }
 
                         // Poll for keyboard events
-                        if event::poll(std::time::Duration::from_millis(16))? {
-                            if let Event::Key(key) = event::read()? {
-                                match key.code {
-                                    KeyCode::Char('c')
-                                        if key.modifiers.contains(KeyModifiers::CONTROL) =>
-                                    {
-                                        return Err("Configuration cancelled".into());
+                        if event::poll(std::time::Duration::from_millis(16))?
+                            && let Event::Key(key) = event::read()?
+                        {
+                            match key.code {
+                                KeyCode::Char('c')
+                                    if key.modifiers.contains(KeyModifiers::CONTROL) =>
+                                {
+                                    return Err("Configuration cancelled".into());
+                                }
+                                KeyCode::Char(c) => {
+                                    // Only accept input during text entry stages
+                                    if matches!(
+                                        wizard.stage,
+                                        ConfigWizardStage::EnteringServerName
+                                            | ConfigWizardStage::EnteringServerHost
+                                            | ConfigWizardStage::EnteringServerPort
+                                            | ConfigWizardStage::EnteringAccountUsername
+                                            | ConfigWizardStage::EnteringAccountPassword
+                                    ) {
+                                        wizard.current_input.push(c);
                                     }
-                                    KeyCode::Char(c) => {
-                                        // Only accept input during text entry stages
-                                        if matches!(
-                                            wizard.stage,
-                                            ConfigWizardStage::EnteringServerName
-                                                | ConfigWizardStage::EnteringServerHost
-                                                | ConfigWizardStage::EnteringServerPort
-                                                | ConfigWizardStage::EnteringAccountUsername
-                                                | ConfigWizardStage::EnteringAccountPassword
-                                        ) {
-                                            wizard.current_input.push(c);
+                                }
+                                KeyCode::Backspace => {
+                                    // Remove last character during text entry
+                                    if matches!(
+                                        wizard.stage,
+                                        ConfigWizardStage::EnteringServerName
+                                            | ConfigWizardStage::EnteringServerHost
+                                            | ConfigWizardStage::EnteringServerPort
+                                            | ConfigWizardStage::EnteringAccountUsername
+                                            | ConfigWizardStage::EnteringAccountPassword
+                                    ) {
+                                        wizard.current_input.pop();
+                                    }
+                                }
+                                KeyCode::Enter => match wizard.stage {
+                                    ConfigWizardStage::EnteringServerName => {
+                                        if !wizard.current_input.is_empty() {
+                                            wizard.server_name = wizard.current_input.clone();
+                                            wizard.current_input.clear();
+                                            wizard.stage = ConfigWizardStage::EnteringServerHost;
                                         }
                                     }
-                                    KeyCode::Backspace => {
-                                        // Remove last character during text entry
-                                        if matches!(
-                                            wizard.stage,
-                                            ConfigWizardStage::EnteringServerName
-                                                | ConfigWizardStage::EnteringServerHost
-                                                | ConfigWizardStage::EnteringServerPort
-                                                | ConfigWizardStage::EnteringAccountUsername
-                                                | ConfigWizardStage::EnteringAccountPassword
-                                        ) {
-                                            wizard.current_input.pop();
+                                    ConfigWizardStage::EnteringServerHost => {
+                                        if !wizard.current_input.is_empty() {
+                                            wizard.server_host = wizard.current_input.clone();
+                                            wizard.current_input.clear();
+                                            wizard.stage = ConfigWizardStage::EnteringServerPort;
                                         }
                                     }
-                                    KeyCode::Enter => match wizard.stage {
-                                        ConfigWizardStage::EnteringServerName => {
-                                            if !wizard.current_input.is_empty() {
-                                                wizard.server_name = wizard.current_input.clone();
-                                                wizard.current_input.clear();
-                                                wizard.stage =
-                                                    ConfigWizardStage::EnteringServerHost;
-                                            }
-                                        }
-                                        ConfigWizardStage::EnteringServerHost => {
-                                            if !wizard.current_input.is_empty() {
-                                                wizard.server_host = wizard.current_input.clone();
-                                                wizard.current_input.clear();
-                                                wizard.stage =
-                                                    ConfigWizardStage::EnteringServerPort;
-                                            }
-                                        }
-                                        ConfigWizardStage::EnteringServerPort => {
-                                            wizard.server_port = if wizard.current_input.is_empty()
-                                            {
-                                                "9000".to_string()
-                                            } else {
-                                                wizard.current_input.clone()
-                                            };
+                                    ConfigWizardStage::EnteringServerPort => {
+                                        wizard.server_port = if wizard.current_input.is_empty() {
+                                            "9000".to_string()
+                                        } else {
+                                            wizard.current_input.clone()
+                                        };
+                                        wizard.current_input.clear();
+                                        wizard.stage = ConfigWizardStage::EnteringAccountUsername;
+                                    }
+                                    ConfigWizardStage::EnteringAccountUsername => {
+                                        if !wizard.current_input.is_empty() {
+                                            wizard.account_username = wizard.current_input.clone();
                                             wizard.current_input.clear();
                                             wizard.stage =
-                                                ConfigWizardStage::EnteringAccountUsername;
+                                                ConfigWizardStage::EnteringAccountPassword;
                                         }
-                                        ConfigWizardStage::EnteringAccountUsername => {
-                                            if !wizard.current_input.is_empty() {
-                                                wizard.account_username =
-                                                    wizard.current_input.clone();
-                                                wizard.current_input.clear();
-                                                wizard.stage =
-                                                    ConfigWizardStage::EnteringAccountPassword;
-                                            }
+                                    }
+                                    ConfigWizardStage::EnteringAccountPassword => {
+                                        if !wizard.current_input.is_empty() {
+                                            wizard.account_password = wizard.current_input.clone();
+                                            wizard.current_input.clear();
+                                            wizard.stage = ConfigWizardStage::Confirming;
                                         }
-                                        ConfigWizardStage::EnteringAccountPassword => {
-                                            if !wizard.current_input.is_empty() {
-                                                wizard.account_password =
-                                                    wizard.current_input.clone();
-                                                wizard.current_input.clear();
-                                                wizard.stage = ConfigWizardStage::Confirming;
-                                            }
-                                        }
-                                        ConfigWizardStage::Confirming => {
-                                            wizard.stage = ConfigWizardStage::Complete;
-                                        }
-                                        _ => {}
-                                    },
-                                    KeyCode::Esc => {
-                                        return Err("Configuration cancelled".into());
+                                    }
+                                    ConfigWizardStage::Confirming => {
+                                        wizard.stage = ConfigWizardStage::Complete;
                                     }
                                     _ => {}
+                                },
+                                KeyCode::Esc => {
+                                    return Err("Configuration cancelled".into());
                                 }
+                                _ => {}
                             }
                         }
                     } else {
@@ -189,61 +183,60 @@ impl App {
                         }
 
                         // Poll for keyboard events
-                        if event::poll(std::time::Duration::from_millis(100))? {
-                            if let Event::Key(key) = event::read()? {
-                                match key.code {
-                                    KeyCode::Up => match wizard.stage {
-                                        WizardStage::SelectingServer => {
-                                            if wizard.selected_server_idx > 0 {
-                                                wizard.selected_server_idx -= 1;
-                                            }
+                        if event::poll(std::time::Duration::from_millis(100))?
+                            && let Event::Key(key) = event::read()?
+                        {
+                            match key.code {
+                                KeyCode::Up => match wizard.stage {
+                                    WizardStage::SelectingServer => {
+                                        if wizard.selected_server_idx > 0 {
+                                            wizard.selected_server_idx -= 1;
                                         }
-                                        WizardStage::SelectingAccount => {
-                                            if wizard.selected_account_idx > 0 {
-                                                wizard.selected_account_idx -= 1;
-                                            }
-                                        }
-                                        _ => {}
-                                    },
-                                    KeyCode::Down => match wizard.stage {
-                                        WizardStage::SelectingServer => {
-                                            if wizard.selected_server_idx
-                                                < wizard.server_list.len() - 1
-                                            {
-                                                wizard.selected_server_idx += 1;
-                                            }
-                                        }
-                                        WizardStage::SelectingAccount => {
-                                            if wizard.selected_account_idx
-                                                < wizard.account_list.len() - 1
-                                            {
-                                                wizard.selected_account_idx += 1;
-                                            }
-                                        }
-                                        _ => {}
-                                    },
-                                    KeyCode::Enter => match wizard.stage {
-                                        WizardStage::SelectingServer => {
-                                            wizard.stage = WizardStage::SelectingAccount;
-                                        }
-                                        WizardStage::SelectingAccount => {
-                                            wizard.stage = WizardStage::Confirming;
-                                        }
-                                        WizardStage::Confirming => {
-                                            wizard.stage = WizardStage::Complete;
-                                        }
-                                        _ => {}
-                                    },
-                                    KeyCode::Esc => {
-                                        return Err("Selection cancelled".into());
                                     }
-                                    KeyCode::Char('c')
-                                        if key.modifiers.contains(KeyModifiers::CONTROL) =>
-                                    {
-                                        return Err("Selection cancelled".into());
+                                    WizardStage::SelectingAccount => {
+                                        if wizard.selected_account_idx > 0 {
+                                            wizard.selected_account_idx -= 1;
+                                        }
                                     }
                                     _ => {}
+                                },
+                                KeyCode::Down => match wizard.stage {
+                                    WizardStage::SelectingServer => {
+                                        if wizard.selected_server_idx < wizard.server_list.len() - 1
+                                        {
+                                            wizard.selected_server_idx += 1;
+                                        }
+                                    }
+                                    WizardStage::SelectingAccount => {
+                                        if wizard.selected_account_idx
+                                            < wizard.account_list.len() - 1
+                                        {
+                                            wizard.selected_account_idx += 1;
+                                        }
+                                    }
+                                    _ => {}
+                                },
+                                KeyCode::Enter => match wizard.stage {
+                                    WizardStage::SelectingServer => {
+                                        wizard.stage = WizardStage::SelectingAccount;
+                                    }
+                                    WizardStage::SelectingAccount => {
+                                        wizard.stage = WizardStage::Confirming;
+                                    }
+                                    WizardStage::Confirming => {
+                                        wizard.stage = WizardStage::Complete;
+                                    }
+                                    _ => {}
+                                },
+                                KeyCode::Esc => {
+                                    return Err("Selection cancelled".into());
                                 }
+                                KeyCode::Char('c')
+                                    if key.modifiers.contains(KeyModifiers::CONTROL) =>
+                                {
+                                    return Err("Selection cancelled".into());
+                                }
+                                _ => {}
                             }
                         }
                     } else {

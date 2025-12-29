@@ -286,11 +286,11 @@ impl C2SPacketExt for C2SPacket {
 
             // Step 3: XOR with seed if this is a fragmented packet with session established
             // Fragmented packets use encrypted checksums (ENCRYPTED_CHECKSUM flag 0x2)
-            if self.flags.contains(PacketHeaderFlags::BLOB_FRAGMENTS) {
-                if let Some(sess) = session {
-                    let encryption_key = sess.send_generator.borrow_mut().get_send_key();
-                    checksum_result ^= encryption_key;
-                }
+            if self.flags.contains(PacketHeaderFlags::BLOB_FRAGMENTS)
+                && let Some(sess) = session
+            {
+                let encryption_key = sess.send_generator.borrow_mut().get_send_key();
+                checksum_result ^= encryption_key;
             }
         }
 
