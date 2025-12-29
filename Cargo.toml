@@ -1,26 +1,18 @@
 [package]
 name = "gromnie"
-version = "0.1.0-beta"
-edition = "2021"
-authors = ["Bryce Mecum <petridish@gmail.com"]
-
-readme = "README.md"
 description = "Asheron's Call client test"
+version = "0.1.0-beta"
+authors = ["Bryce Mecum <petridish@gmail.com>"]
+license = "MIT"
+edition = "2024"
 repository = "https://github.com/amoeba/gromnie.git"
-
-keywords = []
-categories = []
-
-license = "Apache-2.0"
+readme = "README.md"
 
 [package.metadata.wix]
 upgrade-guid = "9BB5785A-15C5-42AC-80F2-8CE8C0319DE0"
 path-guid = "7ED6234A-E478-4CCB-A39C-FCEC36646EC5"
 license = false
 eula = false
-
-[features]
-discord = ["dep:serenity"]
 
 [lib]
 name = "gromnie"
@@ -37,7 +29,6 @@ path = "src/bin/cli.rs"
 [[bin]]
 name = "discord-bot"
 path = "src/bin/discord-bot.rs"
-required-features = ["discord"]
 
 [[bin]]
 name = "load-tester"
@@ -61,7 +52,7 @@ crossterm = "0.28"
 serde = { version = "1.0", features = ["derive"] }
 toml = "0.8"
 directories = "5.0"
-serenity = { version = "0.12", features = ["client", "gateway", "http", "utils"], optional = true }
+serenity = { version = "0.12", features = ["client", "gateway", "http", "utils"] }
 
 [dev-dependencies]
 
