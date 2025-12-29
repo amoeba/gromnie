@@ -20,9 +20,6 @@ impl std::fmt::Display for ServerConfig {
 pub struct AccountConfig {
     pub username: String,
     pub password: String,
-    /// Character to auto-login: specific name, "*" for any character, or None to create new
-    #[serde(default)]
-    pub character: Option<String>,
 }
 
 impl std::fmt::Display for AccountConfig {

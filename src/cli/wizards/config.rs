@@ -64,17 +64,13 @@ impl ConfigWizard {
         );
 
         let mut accounts = BTreeMap::new();
-        let character = if self.character_name.is_empty() {
-            None
-        } else {
-            Some(self.character_name.clone())
-        };
+        // Note: character_name is collected but no longer stored in AccountConfig
+        // Auto-login is now handled by the scripting system (auto_login script)
         accounts.insert(
             self.account_username.clone(),
             crate::config::AccountConfig {
                 username: self.account_username.clone(),
                 password: self.account_password.clone(),
-                character,
             },
         );
 
