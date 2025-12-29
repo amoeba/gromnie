@@ -22,7 +22,9 @@ pub struct LoggingConsumer {
 
 impl LoggingConsumer {
     pub fn new(action_tx: UnboundedSender<ClientAction>) -> Self {
-        Self { _action_tx: action_tx }
+        Self {
+            _action_tx: action_tx,
+        }
     }
 }
 

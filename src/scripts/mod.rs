@@ -18,18 +18,14 @@ pub fn create_registry() -> ScriptRegistry {
     registry.register("hello_world", || {
         Box::new(hello_world::HelloWorldScript::default())
     });
-    registry.register("auto_greet", || {
-        Box::new(auto_greet::AutoGreetScript)
-    });
+    registry.register("auto_greet", || Box::new(auto_greet::AutoGreetScript));
     registry.register("auto_login", || {
         Box::new(auto_login::AutoLoginScript::default())
     });
     registry.register("auto_create_char", || {
         Box::new(auto_create_char::AutoCreateCharScript::default())
     });
-    registry.register("debug_logger", || {
-        Box::new(debug_logger::DebugLoggerScript)
-    });
+    registry.register("debug_logger", || Box::new(debug_logger::DebugLoggerScript));
 
     registry
 }

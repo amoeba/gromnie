@@ -101,22 +101,14 @@ async fn main() -> Result<(), Box<dyn Error>> {
                         // Add logging consumer
                         Box::new(LoggingConsumer::new(action_tx.clone())),
                         // Add script runner (handles auto-login via scripts)
-                        Box::new(create_script_consumer(
-                            action_tx,
-                            &scripting_config,
-                        )),
+                        Box::new(create_script_consumer(action_tx, &scripting_config)),
                     ]
                 },
                 None,
             )
             .await;
         } else {
-            gromnie::runner::run_client(
-                client_config,
-                LoggingConsumer::new,
-                None,
-            )
-            .await;
+            gromnie::runner::run_client(client_config, LoggingConsumer::new, None).await;
         }
     }
 
