@@ -1,11 +1,10 @@
 use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, Ordering};
 use tokio::sync::mpsc::UnboundedSender;
 use tracing::{debug, error, info};
 
-use crate::client::OutgoingMessageContent;
-use crate::client::events::{CharacterInfo, ClientAction, GameEvent};
-use crate::runner::CharacterBuilder;
+use crate::client::events::{ClientAction, GameEvent};
+use crate::config::ScriptingConfig;
+use crate::scripting::ScriptRunner;
 use serenity::http::Http;
 use serenity::model::id::ChannelId;
 use std::time::Instant;
@@ -18,15 +17,13 @@ pub trait EventConsumer: Send + 'static {
 
 /// Event consumer that logs events to the console (for CLI version)
 pub struct LoggingConsumer {
-    action_tx: UnboundedSender<ClientAction>,
-    character_created: Arc<AtomicBool>,
+    _action_tx: UnboundedSender<ClientAction>,
 }
 
 impl LoggingConsumer {
     pub fn new(action_tx: UnboundedSender<ClientAction>) -> Self {
         Self {
-            action_tx,
-            character_created: Arc::new(AtomicBool::new(false)),
+            _action_tx: action_tx,
         }
     }
 }
@@ -39,13 +36,12 @@ impl EventConsumer for LoggingConsumer {
                 characters,
                 num_slots,
             } => {
-                handle_character_list(
-                    &account,
-                    &characters,
-                    num_slots,
-                    &self.action_tx,
-                    &self.character_created,
-                );
+                let names = characters
+                    .iter()
+                    .map(|c| format!("{} ({})", c.name, c.id))
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                info!(target: "events", "CharacterList -- Account: {}, Slots: {}, Number of Chars: {}, Chars: {}", account, num_slots, characters.len(), names);
             }
             GameEvent::DDDInterrogation { language, region } => {
                 info!(target: "events", "DDD Interrogation: lang={} region={}", language, region);
@@ -55,14 +51,6 @@ impl EventConsumer for LoggingConsumer {
                 character_name,
             } => {
                 info!(target: "events", "LoginSucceeded -- Character: {} (ID: {})", character_name, character_id);
-
-                // Testing: Send a chat message after successful login
-                info!(target: "events", "Sending chat message...");
-                if let Err(e) = self.action_tx.send(ClientAction::SendChatMessage {
-                    message: "Hello from gromnie!".to_string(),
-                }) {
-                    error!(target: "events", "Failed to send chat message: {}", e);
-                }
             }
             GameEvent::LoginFailed { reason } => {
                 error!(target: "events", "LoginFailed -- Reason: {}", reason);
@@ -104,9 +92,8 @@ impl EventConsumer for LoggingConsumer {
 
 /// Event consumer that forwards events to TUI and logs to console
 pub struct TuiConsumer {
-    action_tx: UnboundedSender<ClientAction>,
+    _action_tx: UnboundedSender<ClientAction>,
     tui_event_tx: UnboundedSender<GameEvent>,
-    character_created: Arc<AtomicBool>,
 }
 
 impl TuiConsumer {
@@ -115,9 +102,8 @@ impl TuiConsumer {
         tui_event_tx: UnboundedSender<GameEvent>,
     ) -> Self {
         Self {
-            action_tx,
+            _action_tx: action_tx,
             tui_event_tx,
-            character_created: Arc::new(AtomicBool::new(false)),
         }
     }
 }
@@ -134,13 +120,12 @@ impl EventConsumer for TuiConsumer {
                 characters,
                 num_slots,
             } => {
-                handle_character_list(
-                    &account,
-                    &characters,
-                    num_slots,
-                    &self.action_tx,
-                    &self.character_created,
-                );
+                let names = characters
+                    .iter()
+                    .map(|c| format!("{} ({})", c.name, c.id))
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                info!(target: "events", "CharacterList -- Account: {}, Slots: {}, Number of Chars: {}, Chars: {}", account, num_slots, characters.len(), names);
             }
             GameEvent::DDDInterrogation { language, region } => {
                 info!(target: "events", "DDD Interrogation: lang={} region={}", language, region);
@@ -198,10 +183,9 @@ pub struct UptimeData {
 
 /// Event consumer that forwards chat messages to Discord
 pub struct DiscordConsumer {
-    action_tx: UnboundedSender<ClientAction>,
+    _action_tx: UnboundedSender<ClientAction>,
     http: Arc<Http>,
     channel_id: ChannelId,
-    character_created: Arc<AtomicBool>,
     bot_start_time: Instant,
     ingame_start_time: Option<Instant>,
     uptime_data: Option<Arc<tokio::sync::RwLock<UptimeData>>>,
@@ -214,10 +198,9 @@ impl DiscordConsumer {
         channel_id: ChannelId,
     ) -> Self {
         Self {
-            action_tx,
+            _action_tx: action_tx,
             http,
             channel_id,
-            character_created: Arc::new(AtomicBool::new(false)),
             bot_start_time: Instant::now(),
             ingame_start_time: None,
             uptime_data: None,
@@ -231,10 +214,9 @@ impl DiscordConsumer {
         uptime_data: Arc<tokio::sync::RwLock<UptimeData>>,
     ) -> Self {
         Self {
-            action_tx,
+            _action_tx: action_tx,
             http,
             channel_id,
-            character_created: Arc::new(AtomicBool::new(false)),
             bot_start_time: Instant::now(),
             ingame_start_time: None,
             uptime_data: Some(uptime_data),
@@ -250,13 +232,12 @@ impl EventConsumer for DiscordConsumer {
                 characters,
                 num_slots,
             } => {
-                handle_character_list(
-                    &account,
-                    &characters,
-                    num_slots,
-                    &self.action_tx,
-                    &self.character_created,
-                );
+                let names = characters
+                    .iter()
+                    .map(|c| format!("{} ({})", c.name, c.id))
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                info!(target: "events", "CharacterList -- Account: {}, Slots: {}, Number of Chars: {}, Chars: {}", account, num_slots, characters.len(), names);
             }
             GameEvent::ChatMessageReceived {
                 message,
@@ -347,90 +328,11 @@ impl EventConsumer for DiscordConsumer {
     }
 }
 
-/// Shared logic for handling character list received event
-///
-/// If character_name is provided, it will be used for character creation.
-/// Otherwise, a default test character name is generated.
-pub fn handle_character_list(
-    account: &str,
-    characters: &[CharacterInfo],
-    num_slots: u32,
-    action_tx: &UnboundedSender<ClientAction>,
-    character_created: &Arc<AtomicBool>,
-) {
-    handle_character_list_with_name(
-        account,
-        characters,
-        num_slots,
-        action_tx,
-        character_created,
-        None,
-    )
-}
-
-/// Shared logic for handling character list received event with custom character name
-pub fn handle_character_list_with_name(
-    account: &str,
-    characters: &[CharacterInfo],
-    num_slots: u32,
-    action_tx: &UnboundedSender<ClientAction>,
-    character_created: &Arc<AtomicBool>,
-    custom_char_name: Option<&str>,
-) {
-    let names = characters
-        .iter()
-        .map(|c| format!("{} ({})", c.name, c.id))
-        .collect::<Vec<_>>()
-        .join(", ");
-    info!(target: "events", "CharacterList -- Account: {}, Slots: {}, Number of Chars: {}, Chars: {}", account, num_slots, characters.len(), names);
-
-    // If we don't have any characters, create one
-    if characters.is_empty() && !character_created.load(Ordering::SeqCst) {
-        info!(target: "events", "No characters found - creating a new character...");
-
-        // Mark that we're creating a character
-        character_created.store(true, Ordering::SeqCst);
-
-        // Create character using builder with custom name or test default
-        let char_builder = if let Some(name) = custom_char_name {
-            CharacterBuilder::new(name.to_string())
-        } else {
-            CharacterBuilder::new_test_character()
-        };
-        let char_gen_result = char_builder.build();
-        let char_name = char_gen_result.name.clone();
-
-        info!(target: "events", "Creating character: {}", char_name);
-
-        let msg =
-            OutgoingMessageContent::CharacterCreationAce(account.to_string(), char_gen_result);
-        if let Err(e) = action_tx.send(ClientAction::SendMessage(Box::new(msg))) {
-            error!(target: "events", "Failed to send character creation action: {}", e);
-        } else {
-            info!(target: "events", "Character creation action sent - waiting for response...");
-        }
-    }
-    // If we have characters, log in as the first one
-    else if !characters.is_empty() {
-        info!(target: "events", "Found existing character(s):");
-        for char_info in characters {
-            info!(target: "events", "  Character: {} (ID: {})", char_info.name, char_info.id);
-        }
-
-        // Log in as the first character
-        let first_char = &characters[0];
-        info!(target: "events", "Attempting to log in as: {} (ID: {})", first_char.name, first_char.id);
-
-        // Send action to login
-        if let Err(e) = action_tx.send(ClientAction::LoginCharacter {
-            character_id: first_char.id,
-            character_name: first_char.name.clone(),
-            account: account.to_string(),
-        }) {
-            error!(target: "events", "Failed to send login action: {}", e);
-        } else {
-            // Mark that we've handled character login
-            character_created.store(true, Ordering::SeqCst);
-        }
-    }
+/// Create a script runner consumer with the specified configuration
+pub fn create_script_consumer(
+    action_tx: UnboundedSender<ClientAction>,
+    config: &ScriptingConfig,
+) -> ScriptRunner {
+    let registry = crate::scripts::create_registry();
+    registry.create_runner(action_tx, &config.enabled_scripts)
 }

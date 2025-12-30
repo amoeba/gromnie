@@ -14,6 +14,7 @@ pub enum ConfigWizardStage {
     EnteringServerPort,
     EnteringAccountUsername,
     EnteringAccountPassword,
+    EnteringCharacterName,
     Confirming,
     Complete,
 }
@@ -26,6 +27,7 @@ pub struct ConfigWizard {
     pub server_port: String,
     pub account_username: String,
     pub account_password: String,
+    pub character_name: String,
     pub current_input: String,
 }
 
@@ -44,6 +46,7 @@ impl ConfigWizard {
             server_port: String::new(),
             account_username: String::new(),
             account_password: String::new(),
+            character_name: String::new(),
             current_input: String::new(),
         }
     }
@@ -61,6 +64,8 @@ impl ConfigWizard {
         );
 
         let mut accounts = BTreeMap::new();
+        // Note: character_name is collected but no longer stored in AccountConfig
+        // Auto-login is now handled by the scripting system (auto_login script)
         accounts.insert(
             self.account_username.clone(),
             crate::config::AccountConfig {
@@ -69,7 +74,11 @@ impl ConfigWizard {
             },
         );
 
-        Config { servers, accounts }
+        Config {
+            servers,
+            accounts,
+            scripting: Default::default(),
+        }
     }
 }
 
@@ -178,7 +187,9 @@ impl Draw for ConfigWizard {
                 // Show completed password if we've moved past it
                 if matches!(
                     self.stage,
-                    ConfigWizardStage::Confirming | ConfigWizardStage::Complete
+                    ConfigWizardStage::EnteringCharacterName
+                        | ConfigWizardStage::Confirming
+                        | ConfigWizardStage::Complete
                 ) {
                     lines.push(Line::from("  Password"));
                     lines.push(Line::from(format!(
@@ -193,6 +204,30 @@ impl Draw for ConfigWizard {
                     lines.push(Line::from(format!(
                         "  Enter a password: {}█",
                         "*".repeat(self.current_input.len())
+                    )));
+                    lines.push(Line::from(""));
+                }
+
+                // Show completed character name if we've moved past it
+                if matches!(
+                    self.stage,
+                    ConfigWizardStage::Confirming | ConfigWizardStage::Complete
+                ) {
+                    let char_display = if self.character_name.is_empty() {
+                        "(not specified)".to_string()
+                    } else {
+                        self.character_name.clone()
+                    };
+                    lines.push(Line::from("  Character"));
+                    lines.push(Line::from(format!("  {}", char_display)));
+                    lines.push(Line::from(""));
+                }
+
+                // Show character name input if we're on that stage
+                if self.stage == ConfigWizardStage::EnteringCharacterName {
+                    lines.push(Line::from(format!(
+                        "  Enter character name (* for any, leave empty to skip): {}█",
+                        self.current_input
                     )));
                     lines.push(Line::from(""));
                 }
