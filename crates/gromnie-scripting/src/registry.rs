@@ -22,4 +22,3 @@ pub fn create_runner_from_config(
 
     runner
 }
-
