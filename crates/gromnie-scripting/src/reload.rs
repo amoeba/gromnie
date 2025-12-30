@@ -5,15 +5,15 @@ use tracing::info;
 /// Reload signal type
 #[derive(Debug, Clone)]
 pub struct ReloadSignal {
-    /// Path to the WASM directory to reload from
-    pub wasm_dir: PathBuf,
+    /// Path to the script directory to reload from
+    pub script_dir: PathBuf,
 }
 
 /// Create a reload signal channel and spawn SIGHUP handler
 ///
 /// Returns a receiver that will be notified when SIGHUP is received
 #[cfg(unix)]
-pub fn setup_reload_signal(wasm_dir: PathBuf) -> watch::Receiver<Option<ReloadSignal>> {
+pub fn setup_reload_signal(script_dir: PathBuf) -> watch::Receiver<Option<ReloadSignal>> {
     let (reload_tx, reload_rx) = watch::channel(None);
 
     tokio::spawn(async move {
@@ -35,11 +35,11 @@ pub fn setup_reload_signal(wasm_dir: PathBuf) -> watch::Receiver<Option<ReloadSi
             }
 
             sighup.recv().await;
-            info!(target: "scripting", "Received SIGHUP - triggering WASM script reload");
+            info!(target: "scripting", "Received SIGHUP - triggering script reload");
 
             // Send reload signal
             let signal = ReloadSignal {
-                wasm_dir: wasm_dir.clone(),
+                script_dir: script_dir.clone(),
             };
 
             if reload_tx.send(Some(signal)).is_err() {
@@ -58,7 +58,7 @@ pub fn setup_reload_signal(wasm_dir: PathBuf) -> watch::Receiver<Option<ReloadSi
 
 /// Create a reload signal channel (non-Unix platforms don't support SIGHUP)
 #[cfg(not(unix))]
-pub fn setup_reload_signal(_wasm_dir: PathBuf) -> watch::Receiver<Option<ReloadSignal>> {
+pub fn setup_reload_signal(_script_dir: PathBuf) -> watch::Receiver<Option<ReloadSignal>> {
     let (reload_tx, reload_rx) = watch::channel(None);
     tracing::warn!(target: "scripting", "SIGHUP reload not supported on this platform");
     // Keep the sender alive but never send signals

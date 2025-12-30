@@ -633,12 +633,12 @@ impl Client {
                     debug!(target: "events", "Action: Sending chat message: {}", message);
                     self.send_chat_message(message);
                 }
-                ClientAction::ReloadWasmScripts { wasm_dir } => {
-                    debug!(target: "events", "Action: Reloading WASM scripts from {:?}", wasm_dir);
+                ClientAction::ReloadScripts { script_dir } => {
+                    debug!(target: "events", "Action: Reloading scripts from {:?}", script_dir);
                     // Note: This action is handled by ScriptRunner, not here
                     // The client just forwards it via the event channel
                     // We shouldn't see this here, but handle it gracefully
-                    warn!(target: "events", "ReloadWasmScripts action received in Client - this should be handled by ScriptRunner");
+                    warn!(target: "events", "ReloadScripts action received in Client - this should be handled by ScriptRunner");
                 }
                 ClientAction::LogScriptMessage { script_id, message } => {
                     info!(target: "script", "[{}] {}", script_id, message);

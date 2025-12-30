@@ -128,34 +128,34 @@ impl ScriptRunner {
         }
     }
 
-    /// Load WASM scripts from a directory
-    pub fn load_wasm_scripts(&mut self, dir: &std::path::Path) {
+    /// Load scripts from a directory
+    pub fn load_scripts(&mut self, dir: &std::path::Path) {
         let Some(ref engine) = self.wasm_engine else {
-            debug!(target: "scripting", "WASM engine not available, skipping WASM script loading");
+            debug!(target: "scripting", "Script engine not available, skipping script loading");
             return;
         };
 
-        let wasm_scripts = super::wasm::load_wasm_scripts(engine, dir);
+        let scripts = super::wasm::load_wasm_scripts(engine, dir);
 
-        for script in wasm_scripts {
+        for script in scripts {
             self.register_script(Box::new(script));
         }
     }
 
-    /// Reload WASM scripts (for hot-reload)
-    /// This unloads all existing WASM scripts and loads new ones from the directory
-    pub fn reload_wasm_scripts(&mut self, dir: &std::path::Path) {
-        debug!(target: "scripting", "Reloading WASM scripts from {}", dir.display());
+    /// Reload scripts (for hot-reload)
+    /// This unloads all existing scripts and loads new ones from the directory
+    pub fn reload_scripts(&mut self, dir: &std::path::Path) {
+        debug!(target: "scripting", "Reloading scripts from {}", dir.display());
 
-        // Unload existing WASM scripts
-        self.unload_wasm_scripts();
+        // Unload existing scripts
+        self.unload_scripts();
 
         // Load new ones
-        self.load_wasm_scripts(dir);
+        self.load_scripts(dir);
     }
 
-    /// Unload all WASM scripts
-    fn unload_wasm_scripts(&mut self) {
+    /// Unload all scripts
+    fn unload_scripts(&mut self) {
         // Filter out WasmScript instances and call on_unload
         let mut to_remove = Vec::new();
 

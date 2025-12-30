@@ -1,3 +1,5 @@
+#![allow(unsafe_op_in_unsafe_fn)]
+
 // Generate bindings directly in this crate
 wit_bindgen::generate!({
     path: "../../crates/gromnie-scripting/src/wit",
