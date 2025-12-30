@@ -39,17 +39,9 @@ pub struct ScriptingConfig {
     #[serde(default = "default_true")]
     pub enabled: bool,
 
-    /// List of Rust script IDs to enable
+    /// Directory containing scripts (default: ~/.config/gromnie/scripts)
     #[serde(default)]
-    pub enabled_scripts: Vec<String>,
-
-    /// Enable WASM scripting
-    #[serde(default)]
-    pub wasm_enabled: bool,
-
-    /// Directory containing WASM scripts (default: ~/.config/gromnie/wasm)
-    #[serde(default)]
-    pub wasm_dir: Option<PathBuf>,
+    pub script_dir: Option<PathBuf>,
 
     /// Per-script configuration (script ID -> config values)
     #[serde(default)]
@@ -60,21 +52,19 @@ impl Default for ScriptingConfig {
     fn default() -> Self {
         Self {
             enabled: true,
-            enabled_scripts: Vec::new(),
-            wasm_enabled: false,
-            wasm_dir: None,
+            script_dir: None,
             config: HashMap::new(),
         }
     }
 }
 
 impl ScriptingConfig {
-    /// Get the WASM directory path (use provided or default)
-    pub fn wasm_dir(&self) -> PathBuf {
-        self.wasm_dir.clone().unwrap_or_else(|| {
+    /// Get the script directory path (use provided or default)
+    pub fn script_dir(&self) -> PathBuf {
+        self.script_dir.clone().unwrap_or_else(|| {
             directories::ProjectDirs::from("", "", "gromnie")
-                .map(|d| d.data_dir().join("wasm"))
-                .unwrap_or_else(|| PathBuf::from(".wasm"))
+                .map(|d| d.data_dir().join("scripts"))
+                .unwrap_or_else(|| PathBuf::from(".scripts"))
         })
     }
 }

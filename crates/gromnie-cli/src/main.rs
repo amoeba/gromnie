@@ -50,7 +50,6 @@ password = "pass"
 
 [scripting]
 enabled = true
-wasm_enabled = false
 "#;
 
     fs::write(&config_path, example_config)?;

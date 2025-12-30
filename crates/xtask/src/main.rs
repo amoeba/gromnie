@@ -13,18 +13,18 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Commands {
-    /// Build WASM scripts
-    Wasm {
+    /// Build scripts
+    Scripts {
         #[command(subcommand)]
-        command: WasmCommands,
+        command: ScriptCommands,
     },
 }
 
 #[derive(Subcommand)]
-enum WasmCommands {
-    /// Build all WASM scripts
+enum ScriptCommands {
+    /// Build all scripts
     Build,
-    /// Install built WASM scripts to ~/.config/gromnie/wasm
+    /// Install built scripts to ~/.config/gromnie/scripts
     Install,
 }
 
@@ -32,17 +32,17 @@ fn main() -> Result<()> {
     let cli = Cli::parse();
 
     match cli.command {
-        Commands::Wasm { command } => match command {
-            WasmCommands::Build => build_wasm()?,
-            WasmCommands::Install => install_wasm()?,
+        Commands::Scripts { command } => match command {
+            ScriptCommands::Build => build_scripts()?,
+            ScriptCommands::Install => install_scripts()?,
         },
     }
 
     Ok(())
 }
 
-fn build_wasm() -> Result<()> {
-    println!("Building WASM scripts...\n");
+fn build_scripts() -> Result<()> {
+    println!("Building scripts...\n");
 
     // Check if wasm32-wasip2 target is installed
     let output = Command::new("rustup").args(["target", "list"]).output()?;
@@ -158,7 +158,7 @@ fn build_wasm() -> Result<()> {
         }
     }
 
-    println!("\nWASM scripts built successfully!");
+    println!("\nScripts built successfully!");
     println!("Output directory: {}", output_dir.display());
 
     // List built files
@@ -189,8 +189,8 @@ fn build_wasm() -> Result<()> {
     Ok(())
 }
 
-fn install_wasm() -> Result<()> {
-    println!("Installing WASM scripts...\n");
+fn install_scripts() -> Result<()> {
+    println!("Installing scripts...\n");
 
     // Get the project root using CARGO_MANIFEST_DIR
     let project_root = match env::var("CARGO_MANIFEST_DIR") {
@@ -213,12 +213,12 @@ fn install_wasm() -> Result<()> {
     let dest_dir = dirs::config_dir()
         .ok_or_else(|| anyhow::anyhow!("Could not determine config directory"))?
         .join("gromnie")
-        .join("wasm");
+        .join("scripts");
 
     // Create destination directory
     fs::create_dir_all(&dest_dir)?;
 
-    // Discover all built WASM files
+    // Discover all built script files
     let scripts: Vec<_> = fs::read_dir(&src_dir)?
         .filter_map(|entry| {
             let entry = entry.ok()?;
@@ -242,8 +242,8 @@ fn install_wasm() -> Result<()> {
         .collect();
 
     if scripts.is_empty() {
-        println!("⚠ No WASM scripts found in {}", src_dir.display());
-        println!("  Run `cargo xtask wasm build` first");
+        println!("⚠ No scripts found in {}", src_dir.display());
+        println!("  Run `cargo xtask scripts build` first");
         return Ok(());
     }
 
@@ -253,7 +253,7 @@ fn install_wasm() -> Result<()> {
 
         if !src_file.exists() {
             println!("⚠ Source file not found: {}", src_file.display());
-            println!("  Run `cargo xtask wasm build` first");
+            println!("  Run `cargo xtask scripts build` first");
             continue;
         }
 
@@ -261,7 +261,7 @@ fn install_wasm() -> Result<()> {
         println!("✓ Installed {} to {}", script, dest_file.display());
     }
 
-    println!("\nWASM scripts installed successfully!");
+    println!("\nScripts installed successfully!");
     println!("Destination: {}", dest_dir.display());
 
     Ok(())
