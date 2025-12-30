@@ -1,66 +1,25 @@
-[package]
-name = "gromnie"
-description = "Asheron's Call client test"
+[workspace]
+members = [
+  "crates/gromnie-cli",
+  "crates/gromnie-client",
+  "crates/gromnie-runner",
+  "crates/gromnie-scripting",
+  "crates/gromnie-tui",
+  "crates/xtask"
+]
+resolver = "2"
+
+[workspace.package]
 version = "0.1.0-beta.1"
 authors = ["Bryce Mecum <petridish@gmail.com>"]
 license = "MIT"
 edition = "2024"
 repository = "https://github.com/amoeba/gromnie.git"
-readme = "README.md"
 
-[package.metadata.wix]
-upgrade-guid = "9BB5785A-15C5-42AC-80F2-8CE8C0319DE0"
-path-guid = "7ED6234A-E478-4CCB-A39C-FCEC36646EC5"
-license = false
-eula = false
-
-[lib]
-name = "gromnie"
-path = "src/lib.rs"
-
-[[bin]]
-name = "tui"
-path = "src/bin/tui.rs"
-
-[[bin]]
-name = "cli"
-path = "src/bin/cli.rs"
-
-[[bin]]
-name = "discord-bot"
-path = "src/bin/discord-bot.rs"
-
-[[bin]]
-name = "load-tester"
-path = "src/bin/load-tester.rs"
-
-[dependencies]
-acprotocol = { git = "https://github.com/amoeba/asheron-rs" , rev = "a165e6ca82dd913281cb6280538ee5ab3bd1ef4b"}
-anyhow = "1.0"
-bitflags = "2.6"
-byteorder = "1.5.0"
+[workspace.dependencies]
 chrono = "0.4"
-clap = { version = "4.5.2", features = ["derive"] }
-directories = "5.0"
-crossterm = "0.28"
-rand = "0.8"
-rand_isaac = "0.3"
-ratatui = { version = "0.29", features = ["serde"] }
-serde = { version = "1.0", features = ["derive"] }
-serenity = { version = "0.12", features = ["client", "gateway", "http", "utils"] }
-strum_macros = "0.26.1"
-tokio = { version = "1.36.0", features = ["full"] }
-toml = "0.8"
-tracing = "0.1"
-tracing-subscriber = { version = "0.3", features = ["env-filter"] }
-tracing-appender = "0.2"
-wasmtime = { version = "28.0", features = ["component-model"] }
-wasmtime-wasi = "28.0"
 wit-bindgen = "0.36"
 
-[dev-dependencies]
-
-# The profile that 'dist' will build with
 [profile.dist]
 inherits = "release"
 lto = "thin"

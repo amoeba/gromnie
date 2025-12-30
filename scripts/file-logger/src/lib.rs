@@ -1,10 +1,11 @@
 // Generate bindings directly in this crate
 wit_bindgen::generate!({
-    path: "../../wit",
+    path: "../../crates/gromnie-scripting/src/wit",
     world: "script",
 });
 
-use gromnie::scripting::host;
+use self::gromnie::scripting::host;
+use self::exports::gromnie::scripting::guest::Guest;
 use std::fs::OpenOptions;
 use std::io::Write;
 
@@ -20,7 +21,7 @@ static mut SCRIPT: FileLoggerScript = FileLoggerScript { log_file: None };
 
 struct MyGuest;
 
-impl exports::gromnie::scripting::guest::Guest for MyGuest {
+impl Guest for MyGuest {
     fn get_id() -> String {
         "file_logger_wasm".to_string()
     }

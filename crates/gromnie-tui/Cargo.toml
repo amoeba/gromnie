@@ -1,0 +1,28 @@
+[package]
+name = "gromnie-tui"
+description = "TUI client for Asheron's Call"
+version.workspace = true
+authors.workspace = true
+license.workspace = true
+edition.workspace = true
+repository.workspace = true
+
+[lib]
+name = "gromnie_tui"
+path = "src/lib.rs"
+
+[[bin]]
+name = "tui"
+path = "src/main.rs"
+
+[dependencies]
+gromnie-client = { path = "../gromnie-client" }
+gromnie-runner = { path = "../gromnie-runner" }
+gromnie-scripting = { path = "../gromnie-scripting" }
+clap = { version = "4.5.2", features = ["derive"] }
+chrono.workspace = true
+crossterm = "0.28"
+ratatui = { version = "0.29", features = ["serde"] }
+tokio = { version = "1.36.0", features = ["full"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }

@@ -1,19 +1,20 @@
 [workspace]
 resolver = "2"
 members = [
-    "bindings",
-    "hello-world",
-    "file-logger",
-    "auto-login",
-    "xtask",
+  "auto-login",
+  "file-logger",
+  "hello-world",
 ]
+
+[workspace.package]
+edition = "2024"
 
 [workspace.dependencies]
 wit-bindgen = "0.36"
 
 [profile.release]
-opt-level = "z"     # Optimize for size
-lto = true          # Link-time optimization
-strip = true        # Strip symbols
-codegen-units = 1   # Better optimization
-panic = "abort"     # Smaller binary
+opt-level = "z"  # Optimize for size
+strip = true  # Strip symbols
+lto = true  # Link-time optimization
+panic = "abort"  # Smaller binary
+codegen-units = 1  # Better optimization
