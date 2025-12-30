@@ -1,7 +1,9 @@
 use std::error::Error;
 
 use clap::Parser;
-use gromnie::runner::{ClientConfig, LoggingConsumer};
+use gromnie::runner::{
+    ClientConfig, LoggingConsumer, create_script_consumer, run_client_with_consumers,
+};
 use ratatui::{TerminalOptions, Viewport};
 use tracing::info;
 use tracing_subscriber::EnvFilter;
@@ -86,7 +88,28 @@ async fn main() -> Result<(), Box<dyn Error>> {
             account_name: account.username.clone(),
             password: account.password.clone(),
         };
-        gromnie::runner::run_client(client_config, LoggingConsumer::new, None).await;
+
+        // Use multi-consumer event bus when scripting is enabled
+        let config = &wizard.config;
+
+        if config.scripting.enabled {
+            let scripting_config = config.scripting.clone();
+            run_client_with_consumers(
+                client_config,
+                move |action_tx| {
+                    vec![
+                        // Add logging consumer
+                        Box::new(LoggingConsumer::new(action_tx.clone())),
+                        // Add script runner (handles auto-login via scripts)
+                        Box::new(create_script_consumer(action_tx, &scripting_config)),
+                    ]
+                },
+                None,
+            )
+            .await;
+        } else {
+            gromnie::runner::run_client(client_config, LoggingConsumer::new, None).await;
+        }
     }
 
     Ok(())

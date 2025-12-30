@@ -150,8 +150,14 @@ impl App {
                                         if !wizard.current_input.is_empty() {
                                             wizard.account_password = wizard.current_input.clone();
                                             wizard.current_input.clear();
-                                            wizard.stage = ConfigWizardStage::Confirming;
+                                            wizard.stage = ConfigWizardStage::EnteringCharacterName;
                                         }
+                                    }
+                                    ConfigWizardStage::EnteringCharacterName => {
+                                        // Allow empty input (skip character config)
+                                        wizard.character_name = wizard.current_input.clone();
+                                        wizard.current_input.clear();
+                                        wizard.stage = ConfigWizardStage::Confirming;
                                     }
                                     ConfigWizardStage::Confirming => {
                                         wizard.stage = ConfigWizardStage::Complete;

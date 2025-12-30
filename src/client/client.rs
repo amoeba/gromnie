@@ -1158,9 +1158,6 @@ impl Client {
 
         info!(target: "net", "Login completed successfully!");
 
-        // Send chat message with 5 second delay after login
-        self.send_delayed_chat_and_wave();
-
         // Emit event to broadcast channel
         let event = GameEvent::LoginSucceeded {
             character_id: 0,                       // TODO: Parse this from message if available
@@ -1169,61 +1166,6 @@ impl Client {
 
         // Send on channel (ignore error if no subscribers)
         let _ = self.event_tx.send(event);
-    }
-
-    /// Send a delayed chat message and wave animation after login
-    fn send_delayed_chat_and_wave(&mut self) {
-        info!(target: "net", "Scheduling delayed chat message and wave animation");
-
-        // Send chat message with 5 second delay
-        let mut message_data = Vec::new();
-        {
-            let mut cursor = Cursor::new(&mut message_data);
-            // Use CommunicationTalk for general chat messages (/say)
-            use acprotocol::gameactions::CommunicationTalk;
-            let action = GameActionMessage::CommunicationTalk(CommunicationTalk {
-                message: "Hello, world!".to_string(),
-            });
-            let msg = C2SMessage::OrderedGameAction {
-                sequence: self.next_game_action_sequence,
-                action,
-            };
-            self.next_game_action_sequence += 1;
-            msg.write(&mut cursor).expect("write failed");
-        }
-
-        // Queue chat message with 5 second delay
-        self.outgoing_message_queue.push_back(
-            OutgoingMessage::new(OutgoingMessageContent::GameAction(message_data)).with_delay(5),
-        );
-        info!(target: "net", "Delayed chat message queued for sending in 5 seconds");
-
-        // Send wave animation with 10 second delay (5 seconds after chat)
-        let mut animation_data = Vec::new();
-        {
-            let mut cursor = Cursor::new(&mut animation_data);
-            // Use Movement_DoMovementCommand for the visual animation
-            use acprotocol::enums::Command as MotionCommand;
-            use acprotocol::enums::HoldKey;
-            use acprotocol::gameactions::MovementDoMovementCommand;
-            let action = GameActionMessage::MovementDoMovementCommand(MovementDoMovementCommand {
-                motion: MotionCommand::Wave as u32, // Wave motion from Command enum
-                speed: 1.0,                         // Normal speed
-                hold_key: HoldKey::None,            // No hold key
-            });
-            let msg = C2SMessage::OrderedGameAction {
-                sequence: self.next_game_action_sequence,
-                action,
-            };
-            self.next_game_action_sequence += 1;
-            msg.write(&mut cursor).expect("write failed");
-        }
-
-        // Queue wave animation with 10 second delay
-        self.outgoing_message_queue.push_back(
-            OutgoingMessage::new(OutgoingMessageContent::GameAction(animation_data)).with_delay(10),
-        );
-        info!(target: "net", "Delayed wave animation queued for sending in 10 seconds");
     }
 
     /// Handle the character list message from the server
