@@ -4,6 +4,7 @@
 /// compiled directly into the binary. Scripts can register interest in events and
 /// reactively perform client actions through a well-defined lifecycle API.
 pub mod context;
+pub mod events;
 pub mod registry;
 pub mod reload;
 pub mod script;
