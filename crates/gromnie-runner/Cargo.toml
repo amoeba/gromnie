@@ -1,21 +1,21 @@
 [package]
 name = "gromnie-runner"
-description = "Client runner for Asheron's Call"
 version.workspace = true
 authors.workspace = true
-license.workspace = true
 edition.workspace = true
+description = "Client runner gromnie"
 repository.workspace = true
+license.workspace = true
 
 [lib]
 name = "gromnie_runner"
 path = "src/mod.rs"
 
 [dependencies]
-gromnie-client = { path = "../gromnie-client" }
-gromnie-scripting = { path = "../gromnie-scripting" }
 acprotocol = { git = "https://github.com/amoeba/asheron-rs", rev = "a165e6ca82dd913281cb6280538ee5ab3bd1ef4b" }
 chrono.workspace = true
-serenity = { version = "0.12", features = ["client", "gateway", "http", "utils"] }
+gromnie-client = { path = "../gromnie-client" }
+gromnie-scripting = { path = "../gromnie-scripting" }
+serenity.workspace = true
 tokio = { version = "1.36.0", features = ["full"] }
-tracing = "0.1"
+tracing.workspace = true

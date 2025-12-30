@@ -1,11 +1,11 @@
 [package]
 name = "gromnie-tui"
-description = "TUI client for Asheron's Call"
 version.workspace = true
 authors.workspace = true
-license.workspace = true
 edition.workspace = true
+description = "TUI game client for gromnie"
 repository.workspace = true
+license.workspace = true
 
 [lib]
 name = "gromnie_tui"
@@ -16,13 +16,13 @@ name = "tui"
 path = "src/main.rs"
 
 [dependencies]
+chrono.workspace = true
+clap.workspace = true
+crossterm.workspace = true
 gromnie-client = { path = "../gromnie-client" }
 gromnie-runner = { path = "../gromnie-runner" }
 gromnie-scripting = { path = "../gromnie-scripting" }
-clap = { version = "4.5.2", features = ["derive"] }
-chrono.workspace = true
-crossterm = "0.28"
-ratatui = { version = "0.29", features = ["serde"] }
+ratatui.workspace = true
 tokio = { version = "1.36.0", features = ["full"] }
-tracing = "0.1"
-tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+tracing.workspace = true
+tracing-subscriber.workspace = true
