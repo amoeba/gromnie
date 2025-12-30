@@ -1,10 +1,13 @@
 [package]
 name = "hello-world-script"
-version = "0.1.0"
+version.workspace = true
+authors.workspace = true
 edition.workspace = true
+license.workspace = true
+publish = false
 
 [dependencies]
-wit-bindgen = "0.36"
+wit-bindgen.workspace = true
 
 [lib]
 crate-type = ["cdylib"]

@@ -1,22 +1,22 @@
 [package]
 name = "gromnie-scripting"
-description = "WebAssembly scripting support for Asheron's Call"
 version.workspace = true
 authors.workspace = true
-license.workspace = true
 edition.workspace = true
+description = "Wasm-based scripting system for gromnie"
 repository.workspace = true
+license.workspace = true
 
 [lib]
 name = "gromnie_scripting"
 path = "src/mod.rs"
 
 [dependencies]
+anyhow.workspace = true
+directories.workspace = true
 gromnie-client = { path = "../gromnie-client" }
-directories = "5.0"
 tokio = { version = "1.36.0", features = ["full"] }
-wasmtime = { version = "28.0", features = ["component-model"] }
-wasmtime-wasi = "28.0"
-wit-bindgen = "0.36"
-anyhow = "1.0"
-tracing = "0.1"
+tracing.workspace = true
+wasmtime.workspace = true
+wasmtime-wasi.workspace = true
+wit-bindgen.workspace = true

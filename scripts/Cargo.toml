@@ -7,7 +7,10 @@ members = [
 ]
 
 [workspace.package]
+version = "0.1.0"
+authors = ["Bryce Mecum <petridish@gmail.com>"]
 edition = "2024"
+license = "MIT"
 
 [workspace.dependencies]
 wit-bindgen = "0.36"

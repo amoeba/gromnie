@@ -1,11 +1,11 @@
 [package]
 name = "gromnie-cli"
-description = "CLI tools for Asheron's Call"
 version.workspace = true
 authors.workspace = true
-license.workspace = true
 edition.workspace = true
+description = "CLIs for gromnie"
 repository.workspace = true
+license.workspace = true
 
 [lib]
 name = "gromnie_cli"
@@ -24,13 +24,13 @@ name = "load-tester"
 path = "src/bin/load-tester.rs"
 
 [dependencies]
+clap.workspace = true
+crossterm.workspace = true
 gromnie-client = { path = "../gromnie-client" }
 gromnie-runner = { path = "../gromnie-runner" }
-clap = { version = "4.5.2", features = ["derive"] }
-crossterm = "0.28"
-ratatui = { version = "0.29", features = ["serde"] }
-serenity = { version = "0.12", features = ["client", "gateway", "http", "utils"] }
+ratatui.workspace = true
+serenity.workspace = true
 tokio = { version = "1.36.0", features = ["full"] }
-tracing = "0.1"
-tracing-subscriber = { version = "0.3", features = ["env-filter"] }
-tracing-appender = "0.2"
+tracing.workspace = true
+tracing-appender.workspace = true
+tracing-subscriber.workspace = true
