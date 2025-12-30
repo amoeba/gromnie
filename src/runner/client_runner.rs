@@ -69,9 +69,10 @@ pub async fn run_client_with_consumers<F>(
     let mut consumers = consumers_factory(action_tx);
 
     // Spawn a task for each consumer with its own event receiver
+    let mut consumer_tasks = Vec::new();
     for (idx, mut consumer) in consumers.drain(..).enumerate() {
         let mut consumer_rx = client.subscribe_events();
-        tokio::spawn(async move {
+        let handle = tokio::spawn(async move {
             info!(target: "events", "Event consumer {} started", idx);
 
             loop {
@@ -91,6 +92,7 @@ pub async fn run_client_with_consumers<F>(
 
             info!(target: "events", "Event consumer {} stopped", idx);
         });
+        consumer_tasks.push(handle);
     }
 
     // Drop the original event_rx since we're not using it
@@ -98,6 +100,12 @@ pub async fn run_client_with_consumers<F>(
 
     // Run the main client loop without event handling (consumers handle events)
     run_client_loop(client, shutdown_rx).await;
+
+    // Wait for consumer tasks to finish
+    info!(target: "events", "Waiting for {} consumer tasks to finish", consumer_tasks.len());
+    for task in consumer_tasks {
+        let _ = task.await;
+    }
 }
 
 /// Run the client and also send the action_tx channel back to the caller
@@ -141,7 +149,7 @@ async fn run_client_internal<C: EventConsumer>(
     shutdown_rx: Option<tokio::sync::watch::Receiver<bool>>,
 ) {
     // Spawn event handler task
-    tokio::spawn(async move {
+    let event_task = tokio::spawn(async move {
         info!(target: "events", "Event handler task started");
 
         loop {
@@ -164,6 +172,10 @@ async fn run_client_internal<C: EventConsumer>(
 
     // Run the main client loop
     run_client_loop(client, shutdown_rx).await;
+
+    // Wait for event handler task to finish
+    info!(target: "events", "Waiting for event handler task to finish");
+    let _ = event_task.await;
 }
 
 /// Main client network loop
