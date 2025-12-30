@@ -13,8 +13,10 @@ pub mod wasm;
 
 // Re-export commonly used types
 pub use context::{ClientStateSnapshot, ScriptContext};
-pub use registry::{ScriptFactory, ScriptRegistry};
 pub use reload::{ReloadSignal, setup_reload_signal};
 pub use script::{EventFilter, Script};
 pub use script_runner::ScriptRunner;
 pub use timer::{TimerId, TimerManager};
+
+// Registry is now just a utility function
+pub use registry::create_runner_from_config;

@@ -350,8 +350,6 @@ pub fn create_script_consumer(
     action_tx: UnboundedSender<ClientAction>,
     config: &ScriptingConfig,
 ) -> ScriptConsumer {
-    // Create an empty script registry - built-in scripts should be registered separately
-    let registry = gromnie_scripting::ScriptRegistry::new();
-    let runner = registry.create_runner_from_config(action_tx, config);
+    let runner = gromnie_scripting::create_runner_from_config(action_tx, config);
     ScriptConsumer::new(runner)
 }
