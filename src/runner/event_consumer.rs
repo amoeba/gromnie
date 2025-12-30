@@ -334,5 +334,5 @@ pub fn create_script_consumer(
     config: &ScriptingConfig,
 ) -> ScriptRunner {
     let registry = crate::scripts::create_registry();
-    registry.create_runner(action_tx, &config.enabled_scripts)
+    registry.create_runner_from_config(action_tx, config)
 }

@@ -34,8 +34,8 @@ impl Script for HelloWorldScript {
     }
 
     fn subscribed_events(&self) -> &[EventFilter] {
-        // Only need to subscribe to LoginSucceeded - timer checks happen in on_tick
-        &[EventFilter::LoginSucceeded]
+        // Subscribe to all events and filter for LoginSucceeded in on_event
+        &[EventFilter::All]
     }
 
     fn on_event(&mut self, event: &GameEvent, ctx: &mut ScriptContext) {

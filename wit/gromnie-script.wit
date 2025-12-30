@@ -1,0 +1,138 @@
+package gromnie:scripting@0.1.0;
+
+/// Interface defining what the host (Gromnie) provides to WASM scripts
+interface host {
+    /// ===== Common Types =====
+
+    /// A game world object (character, NPC, item, etc.)
+    record world-object {
+        id: u32,
+        name: string,
+    }
+
+    /// ===== Client Information =====
+
+    /// Current client state snapshot
+    record client {
+        state: client-state,
+        account: option<account>,
+        character: option<world-object>,
+    }
+
+    /// Client connection/session state
+    enum client-state {
+        /// Connecting to server
+        connecting,
+        /// Downloading patches/updates
+        patching,
+        /// At character selection screen
+        charselect,
+        /// In game with character
+        ingame,
+    }
+
+    /// Account information with character list
+    record account {
+        name: string,
+        num-slots: u8,
+        character-list: list<character-list-entry>,
+    }
+
+    /// Character in the account's character list
+    record character-list-entry {
+        id: u32,
+        name: string,
+        delete-pending: bool,
+    }
+
+    /// ===== Game Events =====
+
+    /// Game events that scripts can handle
+    variant game-event {
+        /// Character list received from server
+        character-list-received(account),
+        /// Object created in game world
+        create-object(world-object),
+        /// Chat message received
+        chat-message-received(chat-message),
+    }
+
+    /// Chat message from the game
+    record chat-message {
+        channel: u8,
+        message: string,
+    }
+
+    /// ===== Action Methods =====
+
+    /// Send a chat message to the server
+    send-chat: func(message: string);
+
+    /// Login as a specific character
+    login-character: func(account-name: string, character-id: u32, character-name: string);
+
+    /// Log a message from the script (will be displayed with script name)
+    log: func(message: string);
+
+    /// ===== Timer Methods =====
+
+    /// Schedule a one-shot timer (returns timer ID)
+    schedule-timer: func(delay-secs: u64, name: string) -> u64;
+
+    /// Schedule a recurring timer (returns timer ID)
+    schedule-recurring: func(interval-secs: u64, name: string) -> u64;
+
+    /// Cancel a timer
+    cancel-timer: func(timer-id: u64) -> bool;
+
+    /// Check if a timer has fired (consumes the fired state)
+    check-timer: func(timer-id: u64) -> bool;
+
+    /// ===== State Access =====
+
+    /// Get current client state
+    get-client-state: func() -> client;
+
+    /// Get current event time in milliseconds since epoch
+    get-event-time-millis: func() -> u64;
+}
+
+/// Interface defining what WASM scripts must export to the host
+interface guest {
+    use host.{game-event};
+
+    /// Get the unique script ID
+    get-id: func() -> string;
+
+    /// Get the human-readable script name
+    get-name: func() -> string;
+
+    /// Get the script description
+    get-description: func() -> string;
+
+    /// Called when the script is first loaded
+    on-load: func();
+
+    /// Called when the script is being unloaded
+    on-unload: func();
+
+    /// Return list of event filter IDs this script subscribes to
+    /// Values correspond to EventFilter enum discriminants (see host interface)
+    subscribed-events: func() -> list<u32>;
+
+    /// Handle a game event
+    on-event: func(event: game-event);
+
+    /// Called periodically at fixed rate (default 20Hz)
+    /// delta-millis: milliseconds since last tick
+    on-tick: func(delta-millis: u64);
+}
+
+/// The script world combining host and guest interfaces
+world script {
+    /// Import host functions
+    import host;
+
+    /// Export guest functions
+    export guest;
+}
