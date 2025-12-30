@@ -813,6 +813,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "dirs"
+version = "5.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "44c45a9d03d6676652bcb5e724c7e988de1acad23a711b5217ab9cbecbec2225"
+dependencies = [
+ "dirs-sys 0.4.1",
+]
+
+[[package]]
 name = "dirs-sys"
 version = "0.3.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1157,7 +1166,23 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0cc23270f6e1808e30a928bdc84dea0b9b4136a8bc82338574f23baf47bbd280"
 
 [[package]]
-name = "gromnie"
+name = "gromnie-cli"
+version = "0.1.0-beta.1"
+dependencies = [
+ "clap",
+ "crossterm",
+ "gromnie-client",
+ "gromnie-runner",
+ "ratatui",
+ "serenity",
+ "tokio",
+ "tracing",
+ "tracing-appender",
+ "tracing-subscriber",
+]
+
+[[package]]
+name = "gromnie-client"
 version = "0.1.0-beta.1"
 dependencies = [
  "acprotocol",
@@ -1182,6 +1207,49 @@ dependencies = [
  "wasmtime",
  "wasmtime-wasi",
  "wit-bindgen 0.36.0",
+]
+
+[[package]]
+name = "gromnie-runner"
+version = "0.1.0-beta.1"
+dependencies = [
+ "acprotocol",
+ "chrono",
+ "gromnie-client",
+ "gromnie-scripting",
+ "serenity",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
+name = "gromnie-scripting"
+version = "0.1.0-beta.1"
+dependencies = [
+ "anyhow",
+ "directories",
+ "gromnie-client",
+ "tokio",
+ "tracing",
+ "wasmtime",
+ "wasmtime-wasi",
+ "wit-bindgen 0.36.0",
+]
+
+[[package]]
+name = "gromnie-tui"
+version = "0.1.0-beta.1"
+dependencies = [
+ "chrono",
+ "clap",
+ "crossterm",
+ "gromnie-client",
+ "gromnie-runner",
+ "gromnie-scripting",
+ "ratatui",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
 ]
 
 [[package]]
@@ -2678,7 +2746,7 @@ version = "2.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7ccc8076840c4da029af4f87e4e8daeb0fca6b87bbb02e10cb60b791450e11e4"
 dependencies = [
- "dirs",
+ "dirs 4.0.0",
 ]
 
 [[package]]
@@ -4575,6 +4643,15 @@ name = "writeable"
 version = "0.6.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9edde0db4769d2dc68579893f2306b26c6ecfbe0ef499b013d731b7b9247e0b9"
+
+[[package]]
+name = "xtask"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "clap",
+ "dirs 5.0.1",
+]
 
 [[package]]
 name = "yoke"

@@ -1,10 +1,11 @@
 // Generate bindings directly in this crate
 wit_bindgen::generate!({
-    path: "../../wit",
+    path: "../../crates/gromnie-scripting/src/wit",
     world: "script",
 });
 
-use gromnie::scripting::host;
+use self::gromnie::scripting::host;
+use self::exports::gromnie::scripting::guest::Guest;
 
 // Event filter constants
 const EVENT_CHARACTER_LIST_RECEIVED: u32 = 1;
@@ -18,7 +19,7 @@ static mut SCRIPT: AutoLoginScript = AutoLoginScript { handled: false };
 
 struct MyGuest;
 
-impl exports::gromnie::scripting::guest::Guest for MyGuest {
+impl Guest for MyGuest {
     fn get_id() -> String {
         "auto_login_wasm".to_string()
     }

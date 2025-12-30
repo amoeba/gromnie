@@ -1,10 +1,11 @@
 // Generate bindings directly in this crate
 wit_bindgen::generate!({
-    path: "../../wit",
+    path: "../../crates/gromnie-scripting/src/wit",
     world: "script",
 });
 
-use gromnie::scripting::host;
+use self::gromnie::scripting::host;
+use self::exports::gromnie::scripting::guest::Guest;
 
 // Event filter constants
 const EVENT_CREATE_OBJECT: u32 = 2;
@@ -18,7 +19,7 @@ static mut SCRIPT: HelloWorldScript = HelloWorldScript { timer_id: None };
 
 struct MyGuest;
 
-impl exports::gromnie::scripting::guest::Guest for MyGuest {
+impl Guest for MyGuest {
     fn get_id() -> String {
         "hello_world_wasm".to_string()
     }
