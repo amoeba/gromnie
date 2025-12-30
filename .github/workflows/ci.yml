@@ -45,7 +45,7 @@ jobs:
         run: cargo clippy --all-targets --all-features -- -D warnings
 
       - name: Build WASM scripts
-        run: cargo build --release --target wasm32-unknown-unknown -p hello-world-script -p auto-login-script -p file-logger-script
+        run: cargo xtask scripts build
 
       test:
     name: Test (${{ matrix.os }})
@@ -81,4 +81,4 @@ jobs:
         run: cargo test --all-features
 
       - name: Build WASM scripts
-        run: cargo build --release --target wasm32-unknown-unknown -p hello-world-script -p auto-login-script -p file-logger-script
+        run: cargo xtask scripts build
