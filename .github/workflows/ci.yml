@@ -21,6 +21,7 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt, clippy
+          targets: wasm32-unknown-unknown
 
       - name: Cache dependencies
         uses: actions/cache@v4
@@ -43,7 +44,10 @@ jobs:
       - name: Run cargo clippy
         run: cargo clippy --all-targets --all-features -- -D warnings
 
-  test:
+      - name: Build WASM scripts
+        run: cargo build --release --target wasm32-unknown-unknown -p hello-world-script -p auto-login-script -p file-logger-script
+
+      test:
     name: Test (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
     needs: check
@@ -58,6 +62,8 @@ jobs:
 
       - name: Install stable toolchain
         uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
 
       - name: Cache dependencies
         uses: actions/cache@v4
@@ -73,3 +79,6 @@ jobs:
 
       - name: Run tests
         run: cargo test --all-features
+
+      - name: Build WASM scripts
+        run: cargo build --release --target wasm32-unknown-unknown -p hello-world-script -p auto-login-script -p file-logger-script
