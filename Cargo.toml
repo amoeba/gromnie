@@ -3,7 +3,12 @@ resolver = "2"
 members = [
   "crates/gromnie-cli",
   "crates/gromnie-client",
+  "crates/gromnie-discord-bot",
+  "crates/gromnie-load-tester",
   "crates/gromnie-runner",
+  "crates/gromnie-script-auto-login",
+  "crates/gromnie-script-file-logger",
+  "crates/gromnie-script-hello-world",
   "crates/gromnie-scripting",
   "crates/gromnie-tui",
   "crates/xtask"

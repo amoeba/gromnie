@@ -23,8 +23,16 @@ github-build-setup = "build-setup.yml"
 include-artifacts = true
 
 [[bin]]
-name = "discord-bot"
+name = "cli"
 package = "gromnie-cli"
+
+[[bin]]
+name = "discord-bot"
+package = "gromnie-discord-bot"
+
+[[bin]]
+name = "load-tester"
+package = "gromnie-load-tester"
 
 [[artifact]]
 name = "gromnie-wasm-scripts"

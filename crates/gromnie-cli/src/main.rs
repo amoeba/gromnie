@@ -9,7 +9,7 @@ use ratatui::{TerminalOptions, Viewport};
 use tracing::info;
 use tracing_subscriber::EnvFilter;
 
-use gromnie_cli::{app::App, run as cli_run};
+use gromnie_cli::App;
 use gromnie_client::config::Config;
 
 #[derive(Parser)]
@@ -161,7 +161,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
     });
 
     let mut app = App::new_with_config(config);
-    let app_result = cli_run(&mut app, &mut terminal);
+    let app_result = gromnie_cli::run(&mut app, &mut terminal);
     ratatui::restore();
     app_result?;
 

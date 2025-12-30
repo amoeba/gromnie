@@ -86,13 +86,13 @@ fn build_scripts() -> Result<()> {
         }
     };
 
-    // Scripts are in ./scripts directory
-    let scripts_dir = project_root.join("scripts");
-    let output_dir = scripts_dir.join("target/wasm32-wasip2/release");
+    // Scripts are in ./crates directory with gromnie-script- prefix
+    let crates_dir = project_root.join("crates");
+    let output_dir = project_root.join("target/wasm32-wasip2/release");
 
-    // Discover all script directories in scripts/ (exclude special directories)
+    // Discover all script directories in crates/ (those starting with gromnie-script-)
     let exclude_dirs = ["target", "xtask", ".cargo"];
-    let scripts: Vec<_> = fs::read_dir(&scripts_dir)?
+    let scripts: Vec<_> = fs::read_dir(&crates_dir)?
         .filter_map(|entry| {
             let entry = entry.ok()?;
             let path = entry.path();
@@ -109,15 +109,21 @@ fn build_scripts() -> Result<()> {
                 return None;
             }
 
+            // Only process directories that start with gromnie-script-
+            if !dir_name.starts_with("gromnie-script-") {
+                return None;
+            }
+
             // Check if it has a Cargo.toml
             if !path.join("Cargo.toml").exists() {
                 return None;
             }
 
-            // Derive package name from directory name (replace - with _)
-            let pkg_name = format!("{}_script", dir_name.replace("-", "_"));
+            // Extract script name from directory (remove gromnie-script- prefix and replace - with _)
+            let script_name = dir_name.strip_prefix("gromnie-script-")?.replace("-", "_");
+            let pkg_name = format!("{}_script", script_name);
 
-            Some((dir_name.to_string(), pkg_name))
+            Some((script_name.to_string(), pkg_name))
         })
         .collect();
 
@@ -125,19 +131,19 @@ fn build_scripts() -> Result<()> {
         return Err(anyhow::anyhow!("No script packages found in workspace"));
     }
 
-    for (script_dir, script_pkg) in scripts {
-        let script_name = script_dir.replace("-", "_");
+    for (script_name, script_pkg) in scripts {
+        let dir_name = format!("gromnie-script-{}", script_name);
 
-        println!("Building {}...", script_dir);
+        println!("Building {}...", script_name);
 
         // Run cargo build for this script
         let status = Command::new("cargo")
             .args(["build", "--release", "--target", "wasm32-wasip2"])
-            .current_dir(scripts_dir.join(&script_dir))
+            .current_dir(crates_dir.join(&dir_name))
             .status()?;
 
         if !status.success() {
-            return Err(anyhow::anyhow!("Failed to build {}", script_dir));
+            return Err(anyhow::anyhow!("Failed to build {}", script_name));
         }
 
         // Ensure output directory exists
@@ -209,7 +215,7 @@ fn install_scripts() -> Result<()> {
         }
     };
 
-    let src_dir = project_root.join("scripts/target/wasm32-wasip2/release");
+    let src_dir = project_root.join("target/wasm32-wasip2/release");
     let dest_dir = dirs::config_dir()
         .ok_or_else(|| anyhow::anyhow!("Could not determine config directory"))?
         .join("gromnie")

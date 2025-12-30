@@ -6,8 +6,8 @@ wit_bindgen::generate!({
     world: "script",
 });
 
-use self::gromnie::scripting::host;
 use self::exports::gromnie::scripting::guest::Guest;
+use self::gromnie::scripting::host;
 
 // Event filter constants
 const EVENT_CHARACTER_LIST_RECEIVED: u32 = 1;
@@ -31,7 +31,8 @@ impl Guest for MyGuest {
     }
 
     fn get_description() -> String {
-        "Automatically logs in using the first available character. Errors if no characters exist.".to_string()
+        "Automatically logs in using the first available character. Errors if no characters exist."
+            .to_string()
     }
 
     fn on_load() {
@@ -74,11 +75,7 @@ impl Guest for MyGuest {
                     ));
 
                     // Send the login action
-                    host::login_character(
-                        &account.name,
-                        first_char.id,
-                        &first_char.name,
-                    );
+                    host::login_character(&account.name, first_char.id, &first_char.name);
                 }
                 _ => {}
             }

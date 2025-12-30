@@ -1,27 +1,21 @@
 [package]
-name = "gromnie-cli"
+name = "gromnie-load-tester"
 version.workspace = true
 authors.workspace = true
 edition.workspace = true
-description = "CLIs for gromnie"
+description = "Load testing tool for gromnie"
 repository.workspace = true
 license.workspace = true
 
-[lib]
-name = "gromnie_cli"
-path = "src/lib.rs"
-
 [[bin]]
-name = "cli"
+name = "load-tester"
 path = "src/main.rs"
 
 [dependencies]
 clap.workspace = true
-crossterm.workspace = true
+gromnie-cli = { path = "../gromnie-cli" }
 gromnie-client = { path = "../gromnie-client" }
 gromnie-runner = { path = "../gromnie-runner" }
-ratatui.workspace = true
-serenity.workspace = true
 tokio = { version = "1.36.0", features = ["full"] }
 tracing.workspace = true
 tracing-appender.workspace = true

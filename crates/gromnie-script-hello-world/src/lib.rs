@@ -6,8 +6,8 @@ wit_bindgen::generate!({
     world: "script",
 });
 
-use self::gromnie::scripting::host;
 use self::exports::gromnie::scripting::guest::Guest;
+use self::gromnie::scripting::host;
 
 // Event filter constants
 const EVENT_CREATE_OBJECT: u32 = 2;

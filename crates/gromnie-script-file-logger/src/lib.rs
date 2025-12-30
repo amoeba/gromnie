@@ -6,8 +6,8 @@ wit_bindgen::generate!({
     world: "script",
 });
 
-use self::gromnie::scripting::host;
 use self::exports::gromnie::scripting::guest::Guest;
+use self::gromnie::scripting::host;
 use std::fs::OpenOptions;
 use std::io::Write;
 
@@ -94,9 +94,7 @@ impl Guest for MyGuest {
                         // Log the chat message
                         let log_entry = format!(
                             "[{}] [channel:{}] {}\n",
-                            timestamp,
-                            chat_info.channel,
-                            chat_info.message
+                            timestamp, chat_info.channel, chat_info.message
                         );
 
                         if let Err(e) = file.write_all(log_entry.as_bytes()) {

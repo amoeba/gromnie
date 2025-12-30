@@ -176,6 +176,13 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1505bd5d3d116872e7271a6d4e16d81d0c8570876c8de68093a09ac269d8aac0"
 
 [[package]]
+name = "auto-login-script"
+version = "0.1.0"
+dependencies = [
+ "wit-bindgen 0.36.0",
+]
+
+[[package]]
 name = "autocfg"
 version = "1.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -965,6 +972,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "file-logger-script"
+version = "0.1.0"
+dependencies = [
+ "wit-bindgen 0.36.0",
+]
+
+[[package]]
 name = "find-msvc-tools"
 version = "0.1.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1210,6 +1224,33 @@ dependencies = [
 ]
 
 [[package]]
+name = "gromnie-discord-bot"
+version = "0.1.0"
+dependencies = [
+ "clap",
+ "gromnie-client",
+ "gromnie-runner",
+ "serenity",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
+]
+
+[[package]]
+name = "gromnie-load-tester"
+version = "0.1.0"
+dependencies = [
+ "clap",
+ "gromnie-cli",
+ "gromnie-client",
+ "gromnie-runner",
+ "tokio",
+ "tracing",
+ "tracing-appender",
+ "tracing-subscriber",
+]
+
+[[package]]
 name = "gromnie-runner"
 version = "0.1.0"
 dependencies = [
@@ -1284,6 +1325,13 @@ name = "heck"
 version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2304e00983f87ffb38b55b444b5e3b60a884b5d30c0fca7d82fe33449bbe55ea"
+
+[[package]]
+name = "hello-world-script"
+version = "0.1.0"
+dependencies = [
+ "wit-bindgen 0.36.0",
+]
 
 [[package]]
 name = "hex"
