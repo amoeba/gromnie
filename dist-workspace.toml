@@ -41,13 +41,6 @@ description = "WebAssembly scripts for Gromnie"
 build-command = ["cargo", "xtask", "scripts", "build"]
 
 [[artifact.include]]
-path = "target/wasm32-wasip2/release/hello_world_script.wasm"
+path = "target/wasm32-wasip2/release/*.wasm"
 dest = "scripts/"
-
-[[artifact.include]]
-path = "target/wasm32-wasip2/release/auto_login_script.wasm"
-dest = "scripts/"
-
-[[artifact.include]]
-path = "target/wasm32-wasip2/release/file_logger_script.wasm"
-dest = "scripts/"
+glob = true

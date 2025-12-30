@@ -119,9 +119,10 @@ fn build_scripts() -> Result<()> {
                 return None;
             }
 
-            // Extract script name from directory (remove gromnie-script- prefix and replace - with _)
-            let script_name = dir_name.strip_prefix("gromnie-script-")?.replace("-", "_");
-            let pkg_name = format!("{}_script", script_name);
+            // Extract script name from directory (remove gromnie-script- prefix)
+            let script_name = dir_name.strip_prefix("gromnie-script-")?.to_string();
+            // Package name is script-name + "-script" with dashes (as in Cargo.toml)
+            let pkg_name = format!("{}-script", script_name);
 
             Some((script_name.to_string(), pkg_name))
         })
@@ -149,8 +150,9 @@ fn build_scripts() -> Result<()> {
         // Ensure output directory exists
         fs::create_dir_all(&output_dir)?;
 
-        // Copy the compiled WASM binary
-        let src = output_dir.join(format!("{}.wasm", script_pkg));
+        // The compiled output uses underscores (cargo converts dashes to underscores in binary names)
+        let pkg_name_normalized = script_pkg.replace("-", "_");
+        let src = output_dir.join(format!("{}.wasm", pkg_name_normalized));
         let dest = output_dir.join(format!("{}.wasm", script_name));
 
         if src.exists() {
@@ -158,8 +160,9 @@ fn build_scripts() -> Result<()> {
             println!("  ✓ Created {}", dest.display());
         } else {
             return Err(anyhow::anyhow!(
-                "WASM binary not found at: {}",
-                src.display()
+                "WASM binary not found at: {}\nLooking for compiled package: {}",
+                src.display(),
+                pkg_name_normalized
             ));
         }
     }
