@@ -61,6 +61,51 @@ impl ScriptRegistry {
         runner
     }
 
+    /// Create a script runner from config (supports both Rust and WASM scripts)
+    pub fn create_runner_from_config(
+        &self,
+        action_tx: UnboundedSender<ClientAction>,
+        config: &crate::config::ScriptingConfig,
+    ) -> ScriptRunner {
+        // Create runner with WASM support if enabled
+        let mut runner = if config.wasm_enabled {
+            debug!(target: "scripting", "Creating script runner with WASM support");
+            ScriptRunner::new_with_wasm(action_tx)
+        } else {
+            ScriptRunner::new(action_tx)
+        };
+
+        // Load Rust scripts from registry
+        let mut loaded = HashSet::new();
+        for script_id in &config.enabled_scripts {
+            // Skip if already loaded
+            if !loaded.insert(script_id.clone()) {
+                warn!(target: "scripting", "Script '{}' listed multiple times in config, skipping duplicate", script_id);
+                continue;
+            }
+
+            match self.factories.get(script_id) {
+                Some(factory) => {
+                    let script = factory();
+                    debug!(target: "scripting", "Creating Rust script instance: {}", script_id);
+                    runner.register_script(script);
+                }
+                None => {
+                    warn!(target: "scripting", "Unknown Rust script ID in config: {}", script_id);
+                }
+            }
+        }
+
+        // Load WASM scripts if enabled
+        if config.wasm_enabled {
+            let wasm_dir = config.wasm_dir();
+            debug!(target: "scripting", "Loading WASM scripts from: {}", wasm_dir.display());
+            runner.load_wasm_scripts(&wasm_dir);
+        }
+
+        runner
+    }
+
     /// Get the list of all registered script IDs
     pub fn available_scripts(&self) -> Vec<String> {
         self.factories.keys().cloned().collect()

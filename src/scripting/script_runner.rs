@@ -13,8 +13,10 @@ const DEFAULT_TICK_INTERVAL: Duration = Duration::from_millis(50);
 
 /// Runs scripts and dispatches events to them
 pub struct ScriptRunner {
-    /// All registered scripts
+    /// All registered scripts (both Rust and WASM)
     scripts: Vec<Box<dyn Script>>,
+    /// WASM engine (if WASM support is enabled)
+    wasm_engine: Option<wasmtime::Engine>,
     /// Channel for sending client actions
     action_tx: UnboundedSender<ClientAction>,
     /// Timer manager shared across all scripts
@@ -40,11 +42,36 @@ impl ScriptRunner {
     ) -> Self {
         Self {
             scripts: Vec::new(),
+            wasm_engine: None,
             action_tx,
             timer_manager: TimerManager::new(),
             client_state: ClientStateSnapshot::new(),
             last_tick: Instant::now(),
             tick_interval,
+        }
+    }
+
+    /// Create a new script runner with WASM support enabled
+    pub fn new_with_wasm(action_tx: UnboundedSender<ClientAction>) -> Self {
+        let wasm_engine = match crate::scripting::wasm::create_engine() {
+            Ok(engine) => {
+                debug!(target: "scripting", "WASM engine initialized");
+                Some(engine)
+            }
+            Err(e) => {
+                error!(target: "scripting", "Failed to initialize WASM engine: {:#}", e);
+                None
+            }
+        };
+
+        Self {
+            scripts: Vec::new(),
+            wasm_engine,
+            action_tx,
+            timer_manager: TimerManager::new(),
+            client_state: ClientStateSnapshot::new(),
+            last_tick: Instant::now(),
+            tick_interval: DEFAULT_TICK_INTERVAL,
         }
     }
 
@@ -99,6 +126,67 @@ impl ScriptRunner {
                 self.client_state.is_ingame = false;
             }
             _ => {}
+        }
+    }
+
+    /// Load WASM scripts from a directory
+    pub fn load_wasm_scripts(&mut self, dir: &std::path::Path) {
+        let Some(ref engine) = self.wasm_engine else {
+            debug!(target: "scripting", "WASM engine not available, skipping WASM script loading");
+            return;
+        };
+
+        let wasm_scripts = crate::scripting::wasm::load_wasm_scripts(engine, dir);
+
+        for script in wasm_scripts {
+            self.register_script(Box::new(script));
+        }
+    }
+
+    /// Reload WASM scripts (for hot-reload)
+    /// This unloads all existing WASM scripts and loads new ones from the directory
+    pub fn reload_wasm_scripts(&mut self, dir: &std::path::Path) {
+        debug!(target: "scripting", "Reloading WASM scripts from {}", dir.display());
+
+        // Unload existing WASM scripts
+        self.unload_wasm_scripts();
+
+        // Load new ones
+        self.load_wasm_scripts(dir);
+    }
+
+    /// Unload all WASM scripts
+    fn unload_wasm_scripts(&mut self) {
+        // Filter out WasmScript instances and call on_unload
+        let mut to_remove = Vec::new();
+
+        for (idx, script) in self.scripts.iter_mut().enumerate() {
+            // Check if this is a WasmScript by attempting downcast
+            if script
+                .as_any_mut()
+                .downcast_ref::<crate::scripting::wasm::WasmScript>()
+                .is_some()
+            {
+                // Call on_unload before dropping
+                let mut ctx = unsafe {
+                    ScriptContext::new(
+                        self.action_tx.clone(),
+                        &mut self.timer_manager as *mut TimerManager,
+                        self.client_state.clone(),
+                        Instant::now(),
+                    )
+                };
+
+                debug!(target: "scripting", "Unloading WASM script: {} ({})", script.name(), script.id());
+                script.on_unload(&mut ctx);
+
+                to_remove.push(idx);
+            }
+        }
+
+        // Remove in reverse order to preserve indices
+        for idx in to_remove.into_iter().rev() {
+            self.scripts.remove(idx);
         }
     }
 

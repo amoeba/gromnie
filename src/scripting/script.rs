@@ -46,34 +46,10 @@ pub enum EventFilter {
     All,
     /// Character list received from server
     CharacterListReceived,
-    /// DDD interrogation message
-    DDDInterrogation,
-    /// Character login succeeded
-    LoginSucceeded,
-    /// Character login failed
-    LoginFailed,
     /// Object created in game world
     CreateObject,
     /// Chat message received
     ChatMessageReceived,
-    /// Network message sent/received
-    NetworkMessage,
-    /// Connecting progress update
-    ConnectingSetProgress,
-    /// Updating progress update
-    UpdatingSetProgress,
-    /// Connecting phase started
-    ConnectingStart,
-    /// Connecting phase done
-    ConnectingDone,
-    /// Authentication succeeded
-    AuthenticationSucceeded,
-    /// Authentication failed
-    AuthenticationFailed,
-    /// Updating phase started
-    UpdatingStart,
-    /// Updating phase done
-    UpdatingDone,
 }
 
 impl EventFilter {
@@ -84,47 +60,11 @@ impl EventFilter {
             EventFilter::CharacterListReceived => {
                 matches!(event, GameEvent::CharacterListReceived { .. })
             }
-            EventFilter::DDDInterrogation => {
-                matches!(event, GameEvent::DDDInterrogation { .. })
-            }
-            EventFilter::LoginSucceeded => {
-                matches!(event, GameEvent::LoginSucceeded { .. })
-            }
-            EventFilter::LoginFailed => {
-                matches!(event, GameEvent::LoginFailed { .. })
-            }
             EventFilter::CreateObject => {
                 matches!(event, GameEvent::CreateObject { .. })
             }
             EventFilter::ChatMessageReceived => {
                 matches!(event, GameEvent::ChatMessageReceived { .. })
-            }
-            EventFilter::NetworkMessage => {
-                matches!(event, GameEvent::NetworkMessage { .. })
-            }
-            EventFilter::ConnectingSetProgress => {
-                matches!(event, GameEvent::ConnectingSetProgress { .. })
-            }
-            EventFilter::UpdatingSetProgress => {
-                matches!(event, GameEvent::UpdatingSetProgress { .. })
-            }
-            EventFilter::ConnectingStart => {
-                matches!(event, GameEvent::ConnectingStart)
-            }
-            EventFilter::ConnectingDone => {
-                matches!(event, GameEvent::ConnectingDone)
-            }
-            EventFilter::AuthenticationSucceeded => {
-                matches!(event, GameEvent::AuthenticationSucceeded)
-            }
-            EventFilter::AuthenticationFailed => {
-                matches!(event, GameEvent::AuthenticationFailed { .. })
-            }
-            EventFilter::UpdatingStart => {
-                matches!(event, GameEvent::UpdatingStart)
-            }
-            EventFilter::UpdatingDone => {
-                matches!(event, GameEvent::UpdatingDone)
             }
         }
     }

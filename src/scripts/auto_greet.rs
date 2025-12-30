@@ -30,7 +30,7 @@ impl Script for AutoGreetScript {
     }
 
     fn subscribed_events(&self) -> &[EventFilter] {
-        &[EventFilter::LoginSucceeded]
+        &[EventFilter::All]
     }
 
     fn on_event(&mut self, event: &GameEvent, ctx: &mut ScriptContext) {

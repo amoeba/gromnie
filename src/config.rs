@@ -39,9 +39,17 @@ pub struct ScriptingConfig {
     #[serde(default = "default_true")]
     pub enabled: bool,
 
-    /// List of script IDs to enable
+    /// List of Rust script IDs to enable
     #[serde(default)]
     pub enabled_scripts: Vec<String>,
+
+    /// Enable WASM scripting
+    #[serde(default)]
+    pub wasm_enabled: bool,
+
+    /// Directory containing WASM scripts (default: ~/.config/gromnie/wasm)
+    #[serde(default)]
+    pub wasm_dir: Option<PathBuf>,
 
     /// Per-script configuration (script ID -> config values)
     #[serde(default)]
@@ -53,8 +61,19 @@ impl Default for ScriptingConfig {
         Self {
             enabled: true,
             enabled_scripts: Vec::new(),
+            wasm_enabled: false,
+            wasm_dir: None,
             config: HashMap::new(),
         }
+    }
+}
+
+impl ScriptingConfig {
+    /// Get the WASM directory path (use provided or default)
+    pub fn wasm_dir(&self) -> PathBuf {
+        self.wasm_dir
+            .clone()
+            .unwrap_or_else(crate::scripting::wasm::get_wasm_dir)
     }
 }
 
@@ -70,20 +89,10 @@ pub struct Config {
 
 impl Config {
     pub fn config_path() -> PathBuf {
-        #[cfg(target_os = "macos")]
-        {
-            let mut path = PathBuf::from(std::env::var("HOME").unwrap_or_else(|_| ".".to_string()));
-            path.push(".config/gromnie/config.toml");
-            path
-        }
-
-        #[cfg(not(target_os = "macos"))]
-        {
-            use directories::ProjectDirs;
-            let proj_dirs =
-                ProjectDirs::from("", "", "gromnie").expect("Failed to determine config directory");
-            proj_dirs.config_dir().join("config.toml")
-        }
+        use directories::ProjectDirs;
+        let proj_dirs =
+            ProjectDirs::from("", "", "gromnie").expect("Failed to determine config directory");
+        proj_dirs.config_dir().join("config.toml")
     }
 
     pub fn load() -> Result<Self, Box<dyn std::error::Error>> {
