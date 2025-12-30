@@ -1,7 +1,6 @@
 [workspace]
 members = ["cargo:."]
 
-# Config for 'dist'
 [dist]
 cargo-dist-version = "0.30.3"
 ci = "github"
@@ -20,18 +19,12 @@ install-path = "~/.local/bin"
 install-updater = false
 # Custom build setup for installing wasm32 target
 github-build-setup = "build-setup.yml"
-
-[[bin]]
-name = "tui"
-
-[[bin]]
-name = "cli"
+# Include custom artifacts in releases
+include-artifacts = true
 
 [[bin]]
 name = "discord-bot"
-
-[[bin]]
-name = "load-tester"
+package = "gromnie-cli"
 
 [[artifact]]
 name = "gromnie-wasm-scripts"
@@ -40,13 +33,13 @@ description = "WebAssembly scripts for Gromnie"
 build-command = ["cargo", "xtask", "scripts", "build"]
 
 [[artifact.include]]
-path = "target/wasm32-unknown-unknown/release/hello_world_script.wasm"
+path = "target/wasm32-wasip2/release/hello_world_script.wasm"
 dest = "scripts/"
 
 [[artifact.include]]
-path = "target/wasm32-unknown-unknown/release/auto_login_script.wasm"
+path = "target/wasm32-wasip2/release/auto_login_script.wasm"
 dest = "scripts/"
 
 [[artifact.include]]
-path = "target/wasm32-unknown-unknown/release/file_logger_script.wasm"
+path = "target/wasm32-wasip2/release/file_logger_script.wasm"
 dest = "scripts/"
