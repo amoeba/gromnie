@@ -5,13 +5,13 @@ use wasmtime::component::{Component, Linker, ResourceTable};
 use wasmtime::{Engine, Store};
 use wasmtime_wasi::{WasiCtx, WasiView};
 
-use crate::script::Script as ScriptTrait;
-use crate::{EventFilter, ScriptContext};
+use crate::Script as HostScript;
+use crate::{EventFilter, context::ScriptContext};
 use gromnie_client::client::events::GameEvent;
 
-// Generate bindings from WIT
+// Generate bindings from WIT (use the canonical definition from gromnie-scripting-api)
 wasmtime::component::bindgen!({
-    path: "src/wit",
+    path: "../gromnie-scripting-api/src/wit",
     world: "script",
     async: false,
 });
@@ -98,6 +98,11 @@ impl WasmScript {
         // Call metadata functions to cache values
         let guest = script.gromnie_scripting_guest();
 
+        // Initialize the script first
+        guest
+            .call_init(&mut store)
+            .context("Failed to initialize script")?;
+
         let id = guest
             .call_get_id(&mut store)
             .context("Failed to get script ID")?;
@@ -120,7 +125,7 @@ impl WasmScript {
         // Convert u32 discriminants to EventFilter enum
         let subscribed_events = subscribed_event_ids
             .into_iter()
-            .filter_map(discriminant_to_event_filter)
+            .filter_map(EventFilter::from_discriminant)
             .collect();
 
         Ok(Self {
@@ -162,48 +167,54 @@ impl WasmScript {
             f(self)
         }
     }
+
+    /// Execute a WASM lifecycle method with proper context management
+    fn with_context<F>(&mut self, ctx: &mut ScriptContext, f: F)
+    where
+        F: FnOnce(&mut Self) + Send,
+    {
+        self.set_context(ctx);
+        self.call_wasm(|this| f(this));
+        self.clear_context();
+    }
 }
 
-impl ScriptTrait for WasmScript {
+impl HostScript for WasmScript {
     fn id(&self) -> &'static str {
-        // SAFETY: WasmScript lives for 'static, ID doesn't change
-        // This is safe because scripts are loaded once and kept alive
+        // SAFETY: This is safe because:
+        // 1. The string data is stored in self.id (a String field)
+        // 2. WasmScript implements 'static (scripts are loaded once and kept alive)
+        // 3. The string content never changes after initialization
+        // 4. The WasmScript struct is not moved after creation
         unsafe { std::mem::transmute(self.id.as_str()) }
     }
 
     fn name(&self) -> &'static str {
+        // SAFETY: Same reasoning as id() - string is stored in struct and never changes
         unsafe { std::mem::transmute(self.name.as_str()) }
     }
 
     fn description(&self) -> &'static str {
+        // SAFETY: Same reasoning as id() - string is stored in struct and never changes
         unsafe { std::mem::transmute(self.description.as_str()) }
     }
 
     fn on_load(&mut self, ctx: &mut ScriptContext) {
-        self.set_context(ctx);
-
-        // Call WASM on_load outside the tokio runtime
-        self.call_wasm(|this| {
+        self.with_context(ctx, |this| {
             let guest = this.script.gromnie_scripting_guest();
             if let Err(e) = guest.call_on_load(&mut this.store) {
                 tracing::error!(target: "scripting", "Script {} on_load failed: {:#}", this.id, e);
             }
         });
-
-        self.clear_context();
     }
 
     fn on_unload(&mut self, ctx: &mut ScriptContext) {
-        self.set_context(ctx);
-
-        self.call_wasm(|this| {
+        self.with_context(ctx, |this| {
             let guest = this.script.gromnie_scripting_guest();
             if let Err(e) = guest.call_on_unload(&mut this.store) {
                 tracing::error!(target: "scripting", "Script {} on_unload failed: {:#}", this.id, e);
             }
         });
-
-        self.clear_context();
     }
 
     fn subscribed_events(&self) -> &[EventFilter] {
@@ -211,13 +222,10 @@ impl ScriptTrait for WasmScript {
     }
 
     fn on_event(&mut self, event: &GameEvent, ctx: &mut ScriptContext) {
-        self.set_context(ctx);
-
-        // Convert Rust GameEvent to WIT GameEvent
+        // Convert Rust GameEvent to WIT GameEvent (same structure, different module)
         let wasm_event = game_event_to_wasm(event);
 
-        // Call WASM on_event outside the tokio runtime
-        self.call_wasm(move |this| {
+        self.with_context(ctx, move |this| {
             let guest = this.script.gromnie_scripting_guest();
             if let Err(e) = guest.call_on_event(&mut this.store, &wasm_event) {
                 tracing::error!(
@@ -228,17 +236,12 @@ impl ScriptTrait for WasmScript {
                 );
             }
         });
-
-        self.clear_context();
     }
 
     fn on_tick(&mut self, ctx: &mut ScriptContext, delta: Duration) {
-        self.set_context(ctx);
-
         let delta_millis = delta.as_millis() as u64;
 
-        // Call WASM on_tick outside the tokio runtime
-        self.call_wasm(move |this| {
+        self.with_context(ctx, move |this| {
             let guest = this.script.gromnie_scripting_guest();
             if let Err(e) = guest.call_on_tick(&mut this.store, delta_millis) {
                 tracing::error!(
@@ -249,8 +252,6 @@ impl ScriptTrait for WasmScript {
                 );
             }
         });
-
-        self.clear_context();
     }
 
     fn as_any_mut(&mut self) -> &mut dyn Any {
@@ -258,21 +259,11 @@ impl ScriptTrait for WasmScript {
     }
 }
 
-/// Convert u32 discriminant to EventFilter
-fn discriminant_to_event_filter(id: u32) -> Option<EventFilter> {
-    match id {
-        0 => Some(EventFilter::All),
-        1 => Some(EventFilter::CharacterListReceived),
-        2 => Some(EventFilter::CreateObject),
-        3 => Some(EventFilter::ChatMessageReceived),
-        _ => None,
-    }
-}
-
 /// Convert Rust GameEvent to WIT GameEvent
-fn game_event_to_wasm(event: &GameEvent) -> self::gromnie::scripting::host::GameEvent {
-    use self::gromnie::scripting::host::GameEvent as WitGameEvent;
-    use self::gromnie::scripting::host::{Account, CharacterListEntry, ChatMessage, WorldObject};
+fn game_event_to_wasm(event: &GameEvent) -> gromnie::scripting::host::GameEvent {
+    use gromnie::scripting::host::{
+        Account, CharacterListEntry, ChatMessage, GameEvent as WitGameEvent, WorldObject,
+    };
 
     match event {
         GameEvent::CharacterListReceived {

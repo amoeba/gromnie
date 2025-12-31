@@ -2,9 +2,11 @@ use std::time::{Duration, Instant};
 use tokio::sync::mpsc::UnboundedSender;
 use tracing::{debug, error};
 
+use super::EventFilter;
+use super::Script;
 use super::context::{ClientStateSnapshot, ScriptContext};
-use super::script::Script;
 use super::timer::TimerManager;
+use super::wasm::WasmScript;
 use gromnie_client::client::events::{ClientAction, GameEvent};
 
 /// Default tick rate for scripts (50ms = 20Hz)
@@ -12,8 +14,8 @@ const DEFAULT_TICK_INTERVAL: Duration = Duration::from_millis(50);
 
 /// Runs scripts and dispatches events to them
 pub struct ScriptRunner {
-    /// All registered scripts (both Rust and WASM)
-    scripts: Vec<Box<dyn Script>>,
+    /// All registered WASM scripts
+    scripts: Vec<WasmScript>,
     /// WASM engine (if WASM support is enabled)
     wasm_engine: Option<wasmtime::Engine>,
     /// Channel for sending client actions
@@ -74,21 +76,20 @@ impl ScriptRunner {
         }
     }
 
-    /// Register a script
-    pub fn register_script(&mut self, mut script: Box<dyn Script>) {
+    /// Register a WASM script
+    pub fn register_script(&mut self, script: WasmScript) {
         debug!(target: "scripting", "Registering script: {} ({})", script.name(), script.id());
 
         // Create context for on_load
-        let mut ctx = unsafe {
-            ScriptContext::new(
-                self.action_tx.clone(),
-                &mut self.timer_manager as *mut TimerManager,
-                self.client_state.clone(),
-                Instant::now(),
-            )
-        };
+        let mut ctx = Self::create_script_context(
+            self.action_tx.clone(),
+            &mut self.timer_manager,
+            self.client_state.clone(),
+            Instant::now(),
+        );
 
         // Call on_load
+        let mut script = script; // Make mutable
         script.on_load(&mut ctx);
 
         self.scripts.push(script);
@@ -99,9 +100,31 @@ impl ScriptRunner {
         self.scripts.len()
     }
 
+    /// Check if WASM engine is available
+    pub fn has_wasm_engine(&self) -> bool {
+        self.wasm_engine.is_some()
+    }
+
     /// Get the IDs of all registered scripts
     pub fn script_ids(&self) -> Vec<&str> {
         self.scripts.iter().map(|s| s.id()).collect()
+    }
+
+    /// Create a script context for the current state
+    fn create_script_context(
+        action_tx: UnboundedSender<ClientAction>,
+        timer_manager: &mut TimerManager,
+        client_state: ClientStateSnapshot,
+        now: Instant,
+    ) -> ScriptContext {
+        unsafe {
+            ScriptContext::new(
+                action_tx,
+                timer_manager as *mut TimerManager,
+                client_state,
+                now,
+            )
+        }
     }
 
     /// Update client state based on events
@@ -138,7 +161,7 @@ impl ScriptRunner {
         let scripts = super::wasm::load_wasm_scripts(engine, dir);
 
         for script in scripts {
-            self.register_script(Box::new(script));
+            self.register_script(script);
         }
     }
 
@@ -155,35 +178,30 @@ impl ScriptRunner {
     }
 
     /// Unload all scripts
-    fn unload_scripts(&mut self) {
-        // Filter out WasmScript instances and call on_unload
+    ///
+    /// This method unloads all scripts by calling their on_unload methods.
+    /// The system only supports WASM scripts, so all scripts are WASM scripts.
+    pub fn unload_scripts(&mut self) {
+        // Create context once before the loop
+        let mut ctx = Self::create_script_context(
+            self.action_tx.clone(),
+            &mut self.timer_manager,
+            self.client_state.clone(),
+            Instant::now(),
+        );
+
+        // Identify WASM scripts and call on_unload
         let mut to_remove = Vec::new();
 
+        // Unload all scripts directly
         for (idx, script) in self.scripts.iter_mut().enumerate() {
-            // Check if this is a WasmScript by attempting downcast
-            if script
-                .as_any_mut()
-                .downcast_ref::<super::wasm::WasmScript>()
-                .is_some()
-            {
-                // Call on_unload before dropping
-                let mut ctx = unsafe {
-                    ScriptContext::new(
-                        self.action_tx.clone(),
-                        &mut self.timer_manager as *mut TimerManager,
-                        self.client_state.clone(),
-                        Instant::now(),
-                    )
-                };
+            debug!(target: "scripting", "Unloading script: {} ({})", script.name(), script.id());
+            script.on_unload(&mut ctx);
 
-                debug!(target: "scripting", "Unloading WASM script: {} ({})", script.name(), script.id());
-                script.on_unload(&mut ctx);
-
-                to_remove.push(idx);
-            }
+            to_remove.push(idx);
         }
 
-        // Remove in reverse order to preserve indices
+        // Remove scripts in reverse order to preserve indices during removal
         for idx in to_remove.into_iter().rev() {
             self.scripts.remove(idx);
         }
@@ -205,18 +223,16 @@ impl ScriptRunner {
         // Update last tick time
         self.last_tick = now;
 
+        // Create context once before the loop
+        let mut ctx = Self::create_script_context(
+            self.action_tx.clone(),
+            &mut self.timer_manager,
+            self.client_state.clone(),
+            now,
+        );
+
         // Call on_tick for each script
         for script in &mut self.scripts {
-            // Create context for this script
-            let mut ctx = unsafe {
-                ScriptContext::new(
-                    self.action_tx.clone(),
-                    &mut self.timer_manager as *mut TimerManager,
-                    self.client_state.clone(),
-                    now,
-                )
-            };
-
             // Call the script's tick handler
             match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
                 script.on_tick(&mut ctx, elapsed);
@@ -235,10 +251,8 @@ impl ScriptRunner {
     }
 }
 
-// EventConsumer trait is defined in gromnie_runner, but we implement it here for convenience
-// impl EventConsumer for ScriptRunner {
 impl ScriptRunner {
-    /// Handle a game event (similar to EventConsumer::handle_event)
+    /// Handle a game event
     pub fn handle_event(&mut self, event: GameEvent) {
         let now = Instant::now();
 
@@ -254,27 +268,25 @@ impl ScriptRunner {
         // THEN tick scripts so they can detect fired timers
         self.tick_scripts(now);
 
+        // Create context once before the loop
+        let mut ctx = Self::create_script_context(
+            self.action_tx.clone(),
+            &mut self.timer_manager,
+            self.client_state.clone(),
+            now,
+        );
+
         // Dispatch event to each script that's interested
         for script in &mut self.scripts {
             // Check if this script is subscribed to this event
             let subscribed = script
                 .subscribed_events()
                 .iter()
-                .any(|filter| filter.matches(&event));
+                .any(|filter: &EventFilter| filter.matches(&event));
 
             if !subscribed {
                 continue;
             }
-
-            // Create context for this script
-            let mut ctx = unsafe {
-                ScriptContext::new(
-                    self.action_tx.clone(),
-                    &mut self.timer_manager as *mut TimerManager,
-                    self.client_state.clone(),
-                    now,
-                )
-            };
 
             // Call the script's event handler
             match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
@@ -296,17 +308,17 @@ impl ScriptRunner {
 
 impl Drop for ScriptRunner {
     fn drop(&mut self) {
+        // Create context once before the loop
+        let mut ctx = Self::create_script_context(
+            self.action_tx.clone(),
+            &mut self.timer_manager,
+            self.client_state.clone(),
+            Instant::now(),
+        );
+
         // Call on_unload for all scripts
         for script in &mut self.scripts {
-            let mut ctx = unsafe {
-                ScriptContext::new(
-                    self.action_tx.clone(),
-                    &mut self.timer_manager as *mut TimerManager,
-                    self.client_state.clone(),
-                    Instant::now(),
-                )
-            };
-
+            let script: &mut WasmScript = script;
             script.on_unload(&mut ctx);
         }
     }

@@ -1,22 +1,22 @@
 [package]
-name = "gromnie-scripting"
+name = "gromnie-scripting-host"
 version.workspace = true
 authors.workspace = true
 edition.workspace = true
-description = "Wasm-based scripting system for gromnie"
+description = "Host runtime for loading and executing WASM scripts in gromnie"
 repository.workspace = true
 license.workspace = true
 
 [lib]
-name = "gromnie_scripting"
-path = "src/mod.rs"
+name = "gromnie_scripting_host"
+path = "src/lib.rs"
 
 [dependencies]
+gromnie-scripting-api = { path = "../gromnie-scripting-api" }
+gromnie-client = { path = "../gromnie-client" }
 anyhow.workspace = true
 directories.workspace = true
-gromnie-client = { path = "../gromnie-client" }
 tokio = { version = "1.36.0", features = ["full"] }
 tracing.workspace = true
 wasmtime.workspace = true
 wasmtime-wasi.workspace = true
-wit-bindgen.workspace = true
