@@ -4,7 +4,7 @@ use tracing::{debug, error, info};
 
 use gromnie_client::client::events::{ClientAction, GameEvent};
 use gromnie_client::config::ScriptingConfig;
-use gromnie_scripting::ScriptRunner;
+use gromnie_scripting_host::ScriptRunner;
 use serenity::http::Http;
 use serenity::model::id::ChannelId;
 use std::time::Instant;
@@ -350,6 +350,6 @@ pub fn create_script_consumer(
     action_tx: UnboundedSender<ClientAction>,
     config: &ScriptingConfig,
 ) -> ScriptConsumer {
-    let runner = gromnie_scripting::create_runner_from_config(action_tx, config);
+    let runner = gromnie_scripting_host::create_runner_from_config(action_tx, config);
     ScriptConsumer::new(runner)
 }
