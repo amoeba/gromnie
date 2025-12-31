@@ -1244,6 +1244,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "gromnie-test-script"
+version = "0.1.0"
+dependencies = [
+ "gromnie-scripting-api",
+]
+
+[[package]]
 name = "gromnie-tui"
 version = "0.1.0"
 dependencies = [

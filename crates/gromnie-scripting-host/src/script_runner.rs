@@ -99,6 +99,11 @@ impl ScriptRunner {
         self.scripts.len()
     }
 
+    /// Check if WASM engine is available
+    pub fn has_wasm_engine(&self) -> bool {
+        self.wasm_engine.is_some()
+    }
+
     /// Get the IDs of all registered scripts
     pub fn script_ids(&self) -> Vec<&str> {
         self.scripts.iter().map(|s| s.id()).collect()
@@ -155,7 +160,7 @@ impl ScriptRunner {
     }
 
     /// Unload all scripts
-    fn unload_scripts(&mut self) {
+    pub fn unload_scripts(&mut self) {
         // Filter out WasmScript instances and call on_unload
         let mut to_remove = Vec::new();
 
