@@ -1,0 +1,15 @@
+[package]
+name = "gromnie-scripting-api"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+description = "Script API for writing WASM scripts for gromnie"
+repository.workspace = true
+license.workspace = true
+
+[lib]
+name = "gromnie_scripting_api"
+path = "src/lib.rs"
+
+[dependencies]
+wit-bindgen.workspace = true

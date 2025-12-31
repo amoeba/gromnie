@@ -3,7 +3,7 @@ use tokio::sync::mpsc::UnboundedSender;
 use tracing::{debug, error};
 
 use super::context::{ClientStateSnapshot, ScriptContext};
-use super::script::Script;
+use super::Script;
 use super::timer::TimerManager;
 use gromnie_client::client::events::{ClientAction, GameEvent};
 
@@ -235,10 +235,8 @@ impl ScriptRunner {
     }
 }
 
-// EventConsumer trait is defined in gromnie_runner, but we implement it here for convenience
-// impl EventConsumer for ScriptRunner {
 impl ScriptRunner {
-    /// Handle a game event (similar to EventConsumer::handle_event)
+    /// Handle a game event
     pub fn handle_event(&mut self, event: GameEvent) {
         let now = Instant::now();
 

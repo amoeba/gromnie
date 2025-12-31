@@ -4,7 +4,8 @@ members = [
   "crates/gromnie-cli",
   "crates/gromnie-client",
   "crates/gromnie-runner",
-  "crates/gromnie-scripting",
+  "crates/gromnie-scripting-api",
+  "crates/gromnie-scripting-host",
   "crates/gromnie-tui",
   "crates/xtask"
 ]

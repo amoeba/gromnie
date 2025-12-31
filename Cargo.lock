@@ -1216,24 +1216,31 @@ dependencies = [
  "acprotocol",
  "chrono",
  "gromnie-client",
- "gromnie-scripting",
+ "gromnie-scripting-host",
  "serenity",
  "tokio",
  "tracing",
 ]
 
 [[package]]
-name = "gromnie-scripting"
+name = "gromnie-scripting-api"
+version = "0.1.0"
+dependencies = [
+ "wit-bindgen 0.36.0",
+]
+
+[[package]]
+name = "gromnie-scripting-host"
 version = "0.1.0"
 dependencies = [
  "anyhow",
  "directories",
  "gromnie-client",
+ "gromnie-scripting-api",
  "tokio",
  "tracing",
  "wasmtime",
  "wasmtime-wasi",
- "wit-bindgen 0.36.0",
 ]
 
 [[package]]
@@ -1245,7 +1252,7 @@ dependencies = [
  "crossterm",
  "gromnie-client",
  "gromnie-runner",
- "gromnie-scripting",
+ "gromnie-scripting-host",
  "ratatui",
  "tokio",
  "tracing",

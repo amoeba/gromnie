@@ -101,6 +101,9 @@ interface host {
 interface guest {
     use host.{game-event};
 
+    /// Initialize the script (MUST be called before other functions)
+    init: func();
+
     /// Get the unique script ID
     get-id: func() -> string;
 

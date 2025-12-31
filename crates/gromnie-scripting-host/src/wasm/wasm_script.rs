@@ -5,13 +5,13 @@ use wasmtime::component::{Component, Linker, ResourceTable};
 use wasmtime::{Engine, Store};
 use wasmtime_wasi::{WasiCtx, WasiView};
 
-use crate::script::Script as ScriptTrait;
-use crate::{EventFilter, ScriptContext};
+use crate::Script as HostScript;
+use crate::{EventFilter, context::ScriptContext};
 use gromnie_client::client::events::GameEvent;
 
-// Generate bindings from WIT
+// Generate bindings from WIT (use the canonical definition from gromnie-scripting-api)
 wasmtime::component::bindgen!({
-    path: "src/wit",
+    path: "../gromnie-scripting-api/src/wit",
     world: "script",
     async: false,
 });
@@ -98,6 +98,11 @@ impl WasmScript {
         // Call metadata functions to cache values
         let guest = script.gromnie_scripting_guest();
 
+        // Initialize the script first
+        guest
+            .call_init(&mut store)
+            .context("Failed to initialize script")?;
+
         let id = guest
             .call_get_id(&mut store)
             .context("Failed to get script ID")?;
@@ -164,7 +169,7 @@ impl WasmScript {
     }
 }
 
-impl ScriptTrait for WasmScript {
+impl HostScript for WasmScript {
     fn id(&self) -> &'static str {
         // SAFETY: WasmScript lives for 'static, ID doesn't change
         // This is safe because scripts are loaded once and kept alive
@@ -213,7 +218,7 @@ impl ScriptTrait for WasmScript {
     fn on_event(&mut self, event: &GameEvent, ctx: &mut ScriptContext) {
         self.set_context(ctx);
 
-        // Convert Rust GameEvent to WIT GameEvent
+        // Convert Rust GameEvent to WIT GameEvent (same structure, different module)
         let wasm_event = game_event_to_wasm(event);
 
         // Call WASM on_event outside the tokio runtime
@@ -270,9 +275,10 @@ fn discriminant_to_event_filter(id: u32) -> Option<EventFilter> {
 }
 
 /// Convert Rust GameEvent to WIT GameEvent
-fn game_event_to_wasm(event: &GameEvent) -> self::gromnie::scripting::host::GameEvent {
-    use self::gromnie::scripting::host::GameEvent as WitGameEvent;
-    use self::gromnie::scripting::host::{Account, CharacterListEntry, ChatMessage, WorldObject};
+fn game_event_to_wasm(event: &GameEvent) -> gromnie::scripting::host::GameEvent {
+    use gromnie::scripting::host::{
+        Account, CharacterListEntry, ChatMessage, GameEvent as WitGameEvent, WorldObject,
+    };
 
     match event {
         GameEvent::CharacterListReceived {

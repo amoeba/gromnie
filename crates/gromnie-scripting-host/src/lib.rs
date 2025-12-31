@@ -1,10 +1,31 @@
+/// Host runtime for loading and executing WASM scripts
+///
+/// This crate provides the runtime for the game client to load and run WASM scripts.
+/// Scripts should depend on gromnie-scripting-api, not this crate.
+
+use gromnie_scripting_api as api;
 use std::any::Any;
 use std::time::Duration;
 
-use super::context::ScriptContext;
-use gromnie_client::client::events::GameEvent;
+pub mod context;
+pub mod registry;
+pub mod reload;
+pub mod script_runner;
+pub mod timer;
+pub mod wasm;
 
-/// Trait that all scripts must implement
+// Re-export commonly used types for host-side scripting
+pub use api::Script as ApiScript;
+pub use context::{ClientStateSnapshot, ScriptContext};
+pub use reload::{ReloadSignal, setup_reload_signal};
+pub use script_runner::ScriptRunner;
+pub use timer::{TimerId, TimerManager};
+
+// Registry is now just a utility function
+pub use registry::create_runner_from_config;
+
+// Host-friendly trait wrapper
+/// Trait that scripts must implement (combines API and host requirements)
 pub trait Script: Send + 'static {
     /// Unique identifier for this script (e.g., "hello_world")
     fn id(&self) -> &'static str;
@@ -25,7 +46,7 @@ pub trait Script: Send + 'static {
     fn subscribed_events(&self) -> &[EventFilter];
 
     /// Handle an event that matches one of the subscribed filters
-    fn on_event(&mut self, event: &GameEvent, ctx: &mut ScriptContext);
+    fn on_event(&mut self, event: &gromnie_client::client::events::GameEvent, ctx: &mut ScriptContext);
 
     /// Called periodically at a fixed rate (configurable, default ~20Hz)
     /// Use this for timer checks, periodic updates, and time-based logic
@@ -54,7 +75,9 @@ pub enum EventFilter {
 
 impl EventFilter {
     /// Check if this filter matches the given event
-    pub fn matches(&self, event: &GameEvent) -> bool {
+    pub fn matches(&self, event: &gromnie_client::client::events::GameEvent) -> bool {
+        use gromnie_client::client::events::GameEvent;
+
         match self {
             EventFilter::All => true,
             EventFilter::CharacterListReceived => {
