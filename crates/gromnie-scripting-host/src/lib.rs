@@ -94,4 +94,26 @@ impl EventFilter {
             }
         }
     }
+
+    /// Convert a u32 discriminant to an EventFilter
+    /// These discriminants correspond to the WIT interface event IDs
+    pub fn from_discriminant(id: u32) -> Option<Self> {
+        match id {
+            0 => Some(EventFilter::All),
+            1 => Some(EventFilter::CharacterListReceived),
+            2 => Some(EventFilter::CreateObject),
+            3 => Some(EventFilter::ChatMessageReceived),
+            _ => None,
+        }
+    }
+
+    /// Get the discriminant value for this event filter
+    pub fn to_discriminant(&self) -> u32 {
+        match self {
+            EventFilter::All => 0,
+            EventFilter::CharacterListReceived => 1,
+            EventFilter::CreateObject => 2,
+            EventFilter::ChatMessageReceived => 3,
+        }
+    }
 }

@@ -125,7 +125,7 @@ impl WasmScript {
         // Convert u32 discriminants to EventFilter enum
         let subscribed_events = subscribed_event_ids
             .into_iter()
-            .filter_map(discriminant_to_event_filter)
+            .filter_map(EventFilter::from_discriminant)
             .collect();
 
         Ok(Self {
@@ -181,16 +181,21 @@ impl WasmScript {
 
 impl HostScript for WasmScript {
     fn id(&self) -> &'static str {
-        // SAFETY: WasmScript lives for 'static, ID doesn't change
-        // This is safe because scripts are loaded once and kept alive
+        // SAFETY: This is safe because:
+        // 1. The string data is stored in self.id (a String field)
+        // 2. WasmScript implements 'static (scripts are loaded once and kept alive)
+        // 3. The string content never changes after initialization
+        // 4. The WasmScript struct is not moved after creation
         unsafe { std::mem::transmute(self.id.as_str()) }
     }
 
     fn name(&self) -> &'static str {
+        // SAFETY: Same reasoning as id() - string is stored in struct and never changes
         unsafe { std::mem::transmute(self.name.as_str()) }
     }
 
     fn description(&self) -> &'static str {
+        // SAFETY: Same reasoning as id() - string is stored in struct and never changes
         unsafe { std::mem::transmute(self.description.as_str()) }
     }
 
@@ -254,16 +259,7 @@ impl HostScript for WasmScript {
     }
 }
 
-/// Convert u32 discriminant to EventFilter
-fn discriminant_to_event_filter(id: u32) -> Option<EventFilter> {
-    match id {
-        0 => Some(EventFilter::All),
-        1 => Some(EventFilter::CharacterListReceived),
-        2 => Some(EventFilter::CreateObject),
-        3 => Some(EventFilter::ChatMessageReceived),
-        _ => None,
-    }
-}
+
 
 /// Convert Rust GameEvent to WIT GameEvent
 fn game_event_to_wasm(event: &GameEvent) -> gromnie::scripting::host::GameEvent {
