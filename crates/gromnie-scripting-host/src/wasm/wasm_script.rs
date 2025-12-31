@@ -167,6 +167,16 @@ impl WasmScript {
             f(self)
         }
     }
+
+    /// Execute a WASM lifecycle method with proper context management
+    fn with_context<F>(&mut self, ctx: &mut ScriptContext, f: F)
+    where
+        F: FnOnce(&mut Self) + Send,
+    {
+        self.set_context(ctx);
+        self.call_wasm(|this| f(this));
+        self.clear_context();
+    }
 }
 
 impl HostScript for WasmScript {
@@ -185,30 +195,21 @@ impl HostScript for WasmScript {
     }
 
     fn on_load(&mut self, ctx: &mut ScriptContext) {
-        self.set_context(ctx);
-
-        // Call WASM on_load outside the tokio runtime
-        self.call_wasm(|this| {
+        self.with_context(ctx, |this| {
             let guest = this.script.gromnie_scripting_guest();
             if let Err(e) = guest.call_on_load(&mut this.store) {
                 tracing::error!(target: "scripting", "Script {} on_load failed: {:#}", this.id, e);
             }
         });
-
-        self.clear_context();
     }
 
     fn on_unload(&mut self, ctx: &mut ScriptContext) {
-        self.set_context(ctx);
-
-        self.call_wasm(|this| {
+        self.with_context(ctx, |this| {
             let guest = this.script.gromnie_scripting_guest();
             if let Err(e) = guest.call_on_unload(&mut this.store) {
                 tracing::error!(target: "scripting", "Script {} on_unload failed: {:#}", this.id, e);
             }
         });
-
-        self.clear_context();
     }
 
     fn subscribed_events(&self) -> &[EventFilter] {
@@ -216,13 +217,10 @@ impl HostScript for WasmScript {
     }
 
     fn on_event(&mut self, event: &GameEvent, ctx: &mut ScriptContext) {
-        self.set_context(ctx);
-
         // Convert Rust GameEvent to WIT GameEvent (same structure, different module)
         let wasm_event = game_event_to_wasm(event);
 
-        // Call WASM on_event outside the tokio runtime
-        self.call_wasm(move |this| {
+        self.with_context(ctx, move |this| {
             let guest = this.script.gromnie_scripting_guest();
             if let Err(e) = guest.call_on_event(&mut this.store, &wasm_event) {
                 tracing::error!(
@@ -233,17 +231,12 @@ impl HostScript for WasmScript {
                 );
             }
         });
-
-        self.clear_context();
     }
 
     fn on_tick(&mut self, ctx: &mut ScriptContext, delta: Duration) {
-        self.set_context(ctx);
-
         let delta_millis = delta.as_millis() as u64;
 
-        // Call WASM on_tick outside the tokio runtime
-        self.call_wasm(move |this| {
+        self.with_context(ctx, move |this| {
             let guest = this.script.gromnie_scripting_guest();
             if let Err(e) = guest.call_on_tick(&mut this.store, delta_millis) {
                 tracing::error!(
@@ -254,8 +247,6 @@ impl HostScript for WasmScript {
                 );
             }
         });
-
-        self.clear_context();
     }
 
     fn as_any_mut(&mut self) -> &mut dyn Any {
