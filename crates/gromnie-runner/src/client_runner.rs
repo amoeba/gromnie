@@ -2,7 +2,7 @@ use tokio::sync::{broadcast, mpsc};
 use tracing::{debug, error, info};
 
 use crate::event_consumer::EventConsumer;
-use gromnie_client::client::refactored_event_bus::EventEnvelope;
+use gromnie_client::client::event_bus::EventEnvelope;
 use gromnie_client::client::Client;
 
 /// Configuration for running a client
@@ -31,7 +31,7 @@ pub async fn run_client<C, F>(
     F: FnOnce(mpsc::UnboundedSender<gromnie_client::client::events::ClientAction>) -> C,
 {
     // Create event bus for this client
-    let (event_bus, event_rx) = gromnie_client::client::refactored_event_bus::EventBus::new(100);
+    let (event_bus, event_rx) = gromnie_client::client::event_bus::EventBus::new(100);
     let event_sender = event_bus.create_sender(config.id);
     
     let (client, action_tx) = Client::new(
@@ -64,7 +64,7 @@ pub async fn run_client_with_consumers<F>(
     ) -> Vec<Box<dyn EventConsumer>>,
 {
     // Create event bus for this client
-    let (event_bus, event_rx) = gromnie_client::client::refactored_event_bus::EventBus::new(100);
+    let (event_bus, event_rx) = gromnie_client::client::event_bus::EventBus::new(100);
     let event_sender = event_bus.create_sender(config.id);
     
     let (client, action_tx) = Client::new(
@@ -135,7 +135,7 @@ pub async fn run_client_with_action_channel<C, F>(
     F: FnOnce(mpsc::UnboundedSender<gromnie_client::client::events::ClientAction>) -> C,
 {
     // Create event bus for this client
-    let (event_bus, event_rx) = gromnie_client::client::refactored_event_bus::EventBus::new(100);
+    let (event_bus, event_rx) = gromnie_client::client::event_bus::EventBus::new(100);
     let event_sender = event_bus.create_sender(config.id);
     
     let (client, action_tx) = Client::new(

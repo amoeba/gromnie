@@ -29,7 +29,7 @@ use tokio::net::UdpSocket;
 use tracing::{debug, error, info, warn};
 
 use crate::client::constants::*;
-use crate::client::refactored_event_bus::{EventSender, EventEnvelope, EventSource, SystemEvent};
+use crate::client::event_bus::{EventSender, EventEnvelope, EventSource, SystemEvent};
 use crate::client::events::{ClientAction, GameEvent};
 use crate::crypto::crypto_system::CryptoSystem;
 use crate::crypto::magic_number::get_magic_number;
@@ -607,7 +607,7 @@ impl Client {
 
     /// Emit a state transition event
     fn emit_state_transition(&mut self, from: ClientState, to: ClientState) {
-        use crate::client::refactored_event_bus::ClientStateEvent;
+        use crate::client::event_bus::ClientStateEvent;
         
         let state_event = ClientStateEvent::StateTransition {
             from: from.clone(),

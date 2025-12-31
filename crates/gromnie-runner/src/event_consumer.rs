@@ -3,7 +3,7 @@ use tokio::sync::mpsc::UnboundedSender;
 use tracing::{debug, error, info};
 
 use gromnie_client::client::events::{ClientAction, GameEvent};
-use gromnie_client::client::refactored_event_bus::{ClientEvent, EventEnvelope, ClientStateEvent, SystemEvent, ScriptEventType};
+use gromnie_client::client::event_bus::{ClientEvent, EventEnvelope, ClientStateEvent, SystemEvent, ScriptEventType};
 use gromnie_client::config::ScriptingConfig;
 use gromnie_scripting_host::ScriptRunner;
 use serenity::http::Http;
@@ -180,10 +180,10 @@ impl EventConsumer for TuiConsumer {
             ClientEvent::Game(game_event) => game_event,
             ClientEvent::State(state_event) => {
                 match state_event {
-                    gromnie_client::client::refactored_event_bus::ClientStateEvent::StateTransition { from, to, .. } => {
+                    gromnie_client::client::event_bus::ClientStateEvent::StateTransition { from, to, .. } => {
                         info!(target: "events", "STATE TRANSITION: {:?} -> {:?}", from, to);
                     }
-                    gromnie_client::client::refactored_event_bus::ClientStateEvent::ClientFailed { reason, .. } => {
+                    gromnie_client::client::event_bus::ClientStateEvent::ClientFailed { reason, .. } => {
                         error!(target: "events", "CLIENT FAILED: {}", reason);
                     }
                 }
@@ -191,13 +191,13 @@ impl EventConsumer for TuiConsumer {
             }
             ClientEvent::System(system_event) => {
                 match system_event {
-                    gromnie_client::client::refactored_event_bus::SystemEvent::AuthenticationSucceeded { .. } => {
+                    gromnie_client::client::event_bus::SystemEvent::AuthenticationSucceeded { .. } => {
                         info!(target: "events", "Authentication succeeded - connected to server");
                     }
-                    gromnie_client::client::refactored_event_bus::SystemEvent::AuthenticationFailed { reason, .. } => {
+                    gromnie_client::client::event_bus::SystemEvent::AuthenticationFailed { reason, .. } => {
                         error!(target: "events", "Authentication failed: {}", reason);
                     }
-                    gromnie_client::client::refactored_event_bus::SystemEvent::LoginSucceeded { character_id, character_name } => {
+                    gromnie_client::client::event_bus::SystemEvent::LoginSucceeded { character_id, character_name } => {
                         info!(target: "events", "LoginSucceeded -- Character: {} (ID: {})", character_name, character_id);
                     }
                     _ => {

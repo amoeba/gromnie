@@ -13,7 +13,7 @@ use gromnie_cli::load_tester::ClientNaming;
 use gromnie_client::client::{
     OutgoingMessageContent,
     events::{ClientAction, GameEvent},
-    refactored_event_bus::EventEnvelope,
+    event_bus::EventEnvelope,
 };
 use gromnie_runner::{CharacterBuilder, ClientConfig, EventConsumer};
 

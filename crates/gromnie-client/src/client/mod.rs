@@ -10,7 +10,6 @@ pub use self::session::{Account, SessionState};
 
 pub mod ace_protocol;
 pub mod event_bus;
-pub mod refactored_event_bus;
 #[allow(clippy::module_inception)]
 mod client;
 mod connection;

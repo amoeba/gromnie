@@ -8,7 +8,7 @@ use super::context::{ClientStateSnapshot, ScriptContext};
 use super::timer::TimerManager;
 use super::wasm::WasmScript;
 use gromnie_client::client::events::{ClientAction, GameEvent};
-use gromnie_client::client::refactored_event_bus::{ClientEvent, EventEnvelope, ClientStateEvent, SystemEvent};
+use gromnie_client::client::event_bus::{ClientEvent, EventEnvelope, ClientStateEvent, SystemEvent};
 
 /// Default tick rate for scripts (50ms = 20Hz)
 const DEFAULT_TICK_INTERVAL: Duration = Duration::from_millis(50);
