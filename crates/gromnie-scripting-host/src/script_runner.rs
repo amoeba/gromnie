@@ -8,6 +8,7 @@ use super::context::{ClientStateSnapshot, ScriptContext};
 use super::timer::TimerManager;
 use super::wasm::WasmScript;
 use gromnie_client::client::events::{ClientAction, GameEvent};
+use gromnie_client::client::event_bus::{ClientEvent, EventEnvelope};
 
 /// Default tick rate for scripts (50ms = 20Hz)
 const DEFAULT_TICK_INTERVAL: Duration = Duration::from_millis(50);
@@ -22,8 +23,6 @@ pub struct ScriptRunner {
     action_tx: UnboundedSender<ClientAction>,
     /// Timer manager shared across all scripts
     timer_manager: TimerManager,
-    /// Current client state snapshot
-    client_state: ClientStateSnapshot,
     /// Last time scripts were ticked
     last_tick: Instant,
     /// Interval between ticks (default 50ms for 20Hz)
@@ -46,7 +45,6 @@ impl ScriptRunner {
             wasm_engine: None,
             action_tx,
             timer_manager: TimerManager::new(),
-            client_state: ClientStateSnapshot::new(),
             last_tick: Instant::now(),
             tick_interval,
         }
@@ -70,7 +68,6 @@ impl ScriptRunner {
             wasm_engine,
             action_tx,
             timer_manager: TimerManager::new(),
-            client_state: ClientStateSnapshot::new(),
             last_tick: Instant::now(),
             tick_interval: DEFAULT_TICK_INTERVAL,
         }
@@ -84,7 +81,6 @@ impl ScriptRunner {
         let mut ctx = Self::create_script_context(
             self.action_tx.clone(),
             &mut self.timer_manager,
-            self.client_state.clone(),
             Instant::now(),
         );
 
@@ -114,42 +110,18 @@ impl ScriptRunner {
     fn create_script_context(
         action_tx: UnboundedSender<ClientAction>,
         timer_manager: &mut TimerManager,
-        client_state: ClientStateSnapshot,
         now: Instant,
     ) -> ScriptContext {
         unsafe {
             ScriptContext::new(
                 action_tx,
                 timer_manager as *mut TimerManager,
-                client_state,
                 now,
             )
         }
     }
 
-    /// Update client state based on events
-    fn update_client_state(&mut self, event: &GameEvent) {
-        match event {
-            GameEvent::AuthenticationSucceeded => {
-                self.client_state.is_authenticated = true;
-            }
-            GameEvent::AuthenticationFailed { .. } => {
-                self.client_state.is_authenticated = false;
-            }
-            GameEvent::LoginSucceeded {
-                character_id,
-                character_name,
-            } => {
-                self.client_state.character_id = Some(*character_id);
-                self.client_state.character_name = Some(character_name.clone());
-                self.client_state.is_ingame = true;
-            }
-            GameEvent::LoginFailed { .. } => {
-                self.client_state.is_ingame = false;
-            }
-            _ => {}
-        }
-    }
+    /// Update client state based on events (removed - scripts handle their own state)
 
     /// Load scripts from a directory
     pub fn load_scripts(&mut self, dir: &std::path::Path) {
@@ -186,7 +158,6 @@ impl ScriptRunner {
         let mut ctx = Self::create_script_context(
             self.action_tx.clone(),
             &mut self.timer_manager,
-            self.client_state.clone(),
             Instant::now(),
         );
 
@@ -227,7 +198,6 @@ impl ScriptRunner {
         let mut ctx = Self::create_script_context(
             self.action_tx.clone(),
             &mut self.timer_manager,
-            self.client_state.clone(),
             now,
         );
 
@@ -253,11 +223,23 @@ impl ScriptRunner {
 
 impl ScriptRunner {
     /// Handle a game event
-    pub fn handle_event(&mut self, event: GameEvent) {
+    pub fn handle_event(&mut self, envelope: EventEnvelope) {
         let now = Instant::now();
 
-        // Update client state
-        self.update_client_state(&event);
+        // Extract GameEvent if this is a game event
+        let game_event = match envelope.event {
+            ClientEvent::Game(game_event) => game_event,
+            ClientEvent::State(state_event) => {
+                // Handle state events
+                self.handle_state_event(state_event);
+                return;
+            }
+            ClientEvent::System(system_event) => {
+                // Handle system events  
+                self.handle_system_event(system_event);
+                return;
+            }
+        };
 
         // Tick timers FIRST so they're marked as fired
         let fired_timers = self.tick_timers(now);
@@ -272,7 +254,6 @@ impl ScriptRunner {
         let mut ctx = Self::create_script_context(
             self.action_tx.clone(),
             &mut self.timer_manager,
-            self.client_state.clone(),
             now,
         );
 
@@ -312,7 +293,6 @@ impl Drop for ScriptRunner {
         let mut ctx = Self::create_script_context(
             self.action_tx.clone(),
             &mut self.timer_manager,
-            self.client_state.clone(),
             Instant::now(),
         );
 
@@ -320,6 +300,46 @@ impl Drop for ScriptRunner {
         for script in &mut self.scripts {
             let script: &mut WasmScript = script;
             script.on_unload(&mut ctx);
+        }
+    }
+
+    /// Handle state transition events
+    fn handle_state_event(&mut self, event: crate::client::event_bus::ClientStateEvent) {
+        match event {
+            crate::client::event_bus::ClientStateEvent::StateTransition { from, to, .. } => {
+                debug!(target: "scripting", "Client state transition: {:?} -> {:?}", from, to);
+                // State events are sent to scripts directly - they can maintain their own state
+            }
+            crate::client::event_bus::ClientStateEvent::ClientFailed { .. } => {
+                debug!(target: "scripting", "Client failed event received");
+            }
+        }
+    }
+
+    /// Handle system events
+    fn handle_system_event(&mut self, event: crate::client::event_bus::SystemEvent) {
+        match event {
+            crate::client::event_bus::SystemEvent::AuthenticationSucceeded { .. } => {
+                debug!(target: "scripting", "Authentication succeeded");
+            }
+            crate::client::event_bus::SystemEvent::AuthenticationFailed { .. } => {
+                debug!(target: "scripting", "Authentication failed");
+            }
+            crate::client::event_bus::SystemEvent::ConnectingStarted { .. } => {
+                debug!(target: "scripting", "Connecting started");
+            }
+            crate::client::event_bus::SystemEvent::ConnectingDone { .. } => {
+                debug!(target: "scripting", "Connecting done");
+            }
+            crate::client::event_bus::SystemEvent::UpdatingStarted { .. } => {
+                debug!(target: "scripting", "Updating started");
+            }
+            crate::client::event_bus::SystemEvent::UpdatingDone { .. } => {
+                debug!(target: "scripting", "Updating done");
+            }
+            crate::client::event_bus::SystemEvent::ScriptEvent { .. } => {
+                // Script events could be handled here if needed
+            }
         }
     }
 }

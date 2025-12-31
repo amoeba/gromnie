@@ -1,7 +1,8 @@
 use tokio::sync::mpsc;
-use tracing::{error, info};
+use tracing::{debug, error, info};
 
 use crate::event_consumer::EventConsumer;
+use gromnie_client::client::event_bus::{EventBus, EventEnvelope};
 use gromnie_client::client::Client;
 
 /// Configuration for running a client
@@ -29,11 +30,15 @@ pub async fn run_client<C, F>(
     C: EventConsumer,
     F: FnOnce(mpsc::UnboundedSender<gromnie_client::client::events::ClientAction>) -> C,
 {
-    let (client, event_rx, action_tx) = Client::new(
+    // Create event bus for this client
+    let (event_bus, event_rx) = gromnie_client::client::event_bus::EventBus::new(100);
+    
+    let (client, _, action_tx) = Client::new(
         config.id,
         config.address.clone(),
         config.account_name.clone(),
         config.password.clone(),
+        event_bus,
     )
     .await;
 
@@ -57,11 +62,15 @@ pub async fn run_client_with_consumers<F>(
         mpsc::UnboundedSender<gromnie_client::client::events::ClientAction>,
     ) -> Vec<Box<dyn EventConsumer>>,
 {
-    let (client, event_rx, action_tx) = Client::new(
+    // Create event bus for this client
+    let (event_bus, _) = gromnie_client::client::event_bus::EventBus::new(100);
+    
+    let (client, _, action_tx) = Client::new(
         config.id,
         config.address.clone(),
         config.account_name.clone(),
         config.password.clone(),
+        event_bus,
     )
     .await;
 
@@ -123,11 +132,15 @@ pub async fn run_client_with_action_channel<C, F>(
     C: EventConsumer,
     F: FnOnce(mpsc::UnboundedSender<gromnie_client::client::events::ClientAction>) -> C,
 {
-    let (client, event_rx, action_tx) = Client::new(
+    // Create event bus for this client
+    let (event_bus, event_rx) = gromnie_client::client::event_bus::EventBus::new(100);
+    
+    let (client, _, action_tx) = Client::new(
         config.id,
         config.address.clone(),
         config.account_name.clone(),
         config.password.clone(),
+        event_bus,
     )
     .await;
 
@@ -144,7 +157,7 @@ pub async fn run_client_with_action_channel<C, F>(
 /// Internal client runner implementation
 async fn run_client_internal<C: EventConsumer>(
     client: Client,
-    mut event_rx: tokio::sync::broadcast::Receiver<gromnie_client::client::events::GameEvent>,
+    mut event_rx: broadcast::Receiver<EventEnvelope>,
     mut event_consumer: C,
     shutdown_rx: Option<tokio::sync::watch::Receiver<bool>>,
 ) {
@@ -154,8 +167,14 @@ async fn run_client_internal<C: EventConsumer>(
 
         loop {
             match event_rx.recv().await {
-                Ok(event) => {
-                    event_consumer.handle_event(event);
+                Ok(envelope) => {
+                    // Extract the GameEvent from the envelope for backward compatibility
+                    if let Some(game_event) = envelope.extract_game_event() {
+                        event_consumer.handle_event(game_event);
+                    } else {
+                        // For non-game events, we could add logging or other handling
+                        debug!(target: "events", "Received non-game event: {:?}", envelope.event);
+                    }
                 }
                 Err(tokio::sync::broadcast::error::RecvError::Lagged(skipped)) => {
                     error!(target: "events", "Event receiver lagged, {} messages were skipped", skipped);

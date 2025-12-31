@@ -3,6 +3,7 @@ use tokio::sync::mpsc::UnboundedSender;
 use tracing::{debug, error, info};
 
 use gromnie_client::client::events::{ClientAction, GameEvent};
+use gromnie_client::client::event_bus::{ClientEvent, EventEnvelope};
 use gromnie_client::config::ScriptingConfig;
 use gromnie_scripting_host::ScriptRunner;
 use serenity::http::Http;
@@ -11,8 +12,8 @@ use std::time::Instant;
 
 /// Trait for consuming game events - allows different implementations for CLI vs TUI
 pub trait EventConsumer: Send + 'static {
-    /// Handle a game event
-    fn handle_event(&mut self, event: GameEvent);
+    /// Handle an event envelope
+    fn handle_event(&mut self, envelope: EventEnvelope);
 }
 
 /// Event consumer that logs events to the console (for CLI version)
@@ -29,8 +30,63 @@ impl LoggingConsumer {
 }
 
 impl EventConsumer for LoggingConsumer {
-    fn handle_event(&mut self, event: GameEvent) {
-        match event {
+    fn handle_event(&mut self, envelope: EventEnvelope) {
+        // Extract GameEvent for backward compatibility
+        let game_event = match envelope.event {
+            ClientEvent::Game(game_event) => game_event,
+            ClientEvent::State(state_event) => {
+                match state_event {
+                    crate::client::event_bus::ClientStateEvent::StateTransition { from, to, .. } => {
+                        info!(target: "events", "STATE TRANSITION: {:?} -> {:?}", from, to);
+                    }
+                    crate::client::event_bus::ClientStateEvent::ClientFailed { reason, .. } => {
+                        error!(target: "events", "CLIENT FAILED: {}", reason);
+                    }
+                }
+                return;
+            }
+            ClientEvent::System(system_event) => {
+                match system_event {
+                    crate::client::event_bus::SystemEvent::AuthenticationSucceeded { .. } => {
+                        info!(target: "events", "Authentication succeeded - connected to server");
+                    }
+                    crate::client::event_bus::SystemEvent::AuthenticationFailed { reason, .. } => {
+                        error!(target: "events", "Authentication failed: {}", reason);
+                    }
+                    crate::client::event_bus::SystemEvent::ConnectingStarted { .. } => {
+                        info!(target: "events", "Connecting started");
+                    }
+                    crate::client::event_bus::SystemEvent::ConnectingDone { .. } => {
+                        info!(target: "events", "Connecting done");
+                    }
+                    crate::client::event_bus::SystemEvent::UpdatingStarted { .. } => {
+                        info!(target: "events", "Updating started");
+                    }
+                    crate::client::event_bus::SystemEvent::UpdatingDone { .. } => {
+                        info!(target: "events", "Updating done");
+                    }
+                    crate::client::event_bus::SystemEvent::ScriptEvent { script_id, event_type } => {
+                        match event_type {
+                            crate::client::event_bus::ScriptEventType::Loaded => {
+                                info!(target: "events", "Script loaded: {}", script_id);
+                            }
+                            crate::client::event_bus::ScriptEventType::Unloaded => {
+                                info!(target: "events", "Script unloaded: {}", script_id);
+                            }
+                            crate::client::event_bus::ScriptEventType::Error { message } => {
+                                error!(target: "events", "Script error {}: {}", script_id, message);
+                            }
+                            crate::client::event_bus::ScriptEventType::Log { message } => {
+                                info!(target: "events", "Script log {}: {}", script_id, message);
+                            }
+                        }
+                    }
+                }
+                return;
+            }
+        };
+
+        match game_event {
             GameEvent::CharacterListReceived {
                 account,
                 characters,
@@ -109,9 +165,15 @@ impl TuiConsumer {
 }
 
 impl EventConsumer for TuiConsumer {
-    fn handle_event(&mut self, event: GameEvent) {
-        // Forward all events to TUI
-        let _ = self.tui_event_tx.send(event.clone());
+    fn handle_event(&mut self, envelope: EventEnvelope) {
+        // Extract GameEvent for backward compatibility with TUI
+        if let Some(game_event) = envelope.extract_game_event() {
+            // Forward game events to TUI
+            let _ = self.tui_event_tx.send(game_event.clone());
+        }
+
+        // Handle specific events with logging
+        match envelope.event {
 
         // Handle specific events with logging
         match event {
@@ -225,8 +287,63 @@ impl DiscordConsumer {
 }
 
 impl EventConsumer for DiscordConsumer {
-    fn handle_event(&mut self, event: GameEvent) {
-        match event {
+    fn handle_event(&mut self, envelope: EventEnvelope) {
+        // Extract GameEvent for backward compatibility
+        let game_event = match envelope.event {
+            ClientEvent::Game(game_event) => game_event,
+            ClientEvent::State(state_event) => {
+                match state_event {
+                    crate::client::event_bus::ClientStateEvent::StateTransition { from, to, .. } => {
+                        info!(target: "events", "STATE TRANSITION: {:?} -> {:?}", from, to);
+                    }
+                    crate::client::event_bus::ClientStateEvent::ClientFailed { reason, .. } => {
+                        error!(target: "events", "CLIENT FAILED: {}", reason);
+                    }
+                }
+                return;
+            }
+            ClientEvent::System(system_event) => {
+                match system_event {
+                    crate::client::event_bus::SystemEvent::AuthenticationSucceeded { .. } => {
+                        info!(target: "events", "Authentication succeeded - connected to server");
+                    }
+                    crate::client::event_bus::SystemEvent::AuthenticationFailed { reason, .. } => {
+                        error!(target: "events", "Authentication failed: {}", reason);
+                    }
+                    crate::client::event_bus::SystemEvent::LoginSucceeded { character_id, character_name } => {
+                        // Record in-game start time
+                        let now = Instant::now();
+                        self.ingame_start_time = Some(now);
+
+                        // Update shared uptime data if available
+                        if let Some(ref uptime_data) = self.uptime_data {
+                            let uptime_data_clone = uptime_data.clone();
+                            tokio::spawn(async move {
+                                let mut data = uptime_data_clone.write().await;
+                                data.ingame_start = Some(now);
+                            });
+                        }
+
+                        // Calculate total uptime
+                        let total_uptime = self.bot_start_time.elapsed();
+                        let total_secs = total_uptime.as_secs();
+                        let total_hours = total_secs / 3600;
+                        let total_mins = (total_secs % 3600) / 60;
+                        let total_secs_remainder = total_secs % 60;
+
+                        info!(target: "events", "LoginSucceeded -- Character: {} (ID: {})", character_name, character_id);
+                        info!(target: "events", "Bot uptime: {:02}:{:02}:{:02} | Now tracking in-game time", total_hours, total_mins, total_secs_remainder);
+                        return;
+                    }
+                    _ => {
+                        // Handle other system events if needed
+                    }
+                }
+                return;
+            }
+        };
+
+        match game_event {
             GameEvent::CharacterListReceived {
                 account,
                 characters,
@@ -340,8 +457,8 @@ impl ScriptConsumer {
 }
 
 impl EventConsumer for ScriptConsumer {
-    fn handle_event(&mut self, event: GameEvent) {
-        self.runner.handle_event(event);
+    fn handle_event(&mut self, envelope: EventEnvelope) {
+        self.runner.handle_event(envelope);
     }
 }
 
