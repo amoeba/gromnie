@@ -111,6 +111,20 @@ pub fn register_script_impl(build_script: fn() -> Box<dyn WasmScript>) {
 #[doc(hidden)]
 pub static mut SCRIPT_INIT_FN: Option<fn() -> Box<dyn WasmScript>> = None;
 
+/// Initialize the script if not already initialized
+#[doc(hidden)]
+pub fn init_script() {
+    #[expect(static_mut_refs)]
+    unsafe {
+        // Initialize lazily if needed - SCRIPT_INIT_FN is set by register_script! at compile time
+        if SCRIPT_IMPL.is_none() {
+            if let Some(init_fn) = SCRIPT_INIT_FN {
+                SCRIPT_IMPL = Some((init_fn)());
+            }
+        }
+    }
+}
+
 fn script() -> &'static mut dyn WasmScript {
     #[expect(static_mut_refs)]
     unsafe {
@@ -134,26 +148,20 @@ struct ScriptComponent;
 impl Guest for ScriptComponent {
     fn init() {
         // Initialize script on first call
-        #[expect(unsafe_op_in_unsafe_fn, static_mut_refs)]
+        // Call the macro-generated init function if it exists
+        unsafe extern "C" {
+            #[link_name = "init-script"]
+            fn __call_init_script();
+        }
+        
         unsafe {
-            if SCRIPT_IMPL.is_none() {
-                if let Some(init_fn) = SCRIPT_INIT_FN {
-                    SCRIPT_IMPL = Some((init_fn)());
-                }
-            }
+            __call_init_script();
         }
     }
 
     fn get_id() -> String {
         // Initialize script if needed (lazy initialization)
-        #[expect(unsafe_op_in_unsafe_fn, static_mut_refs)]
-        unsafe {
-            if SCRIPT_IMPL.is_none() && SCRIPT_INIT_FN.is_some() {
-                if let Some(init_fn) = SCRIPT_INIT_FN {
-                    SCRIPT_IMPL = Some((init_fn)());
-                }
-            }
-        }
+        init_script();
         script().id().to_string()
     }
 
@@ -213,22 +221,24 @@ impl Guest for ScriptComponent {
 #[macro_export]
 macro_rules! register_script {
     ($script_type:ty) => {
+        // Store the constructor function in a module-level function
+        #[doc(hidden)]
+        pub fn __gromnie_script_constructor() -> ::std::boxed::Box<dyn $crate::bindings::WasmScript> {
+            ::std::boxed::Box::new(<$script_type as $crate::bindings::WasmScript>::new())
+        }
+
+        // Export a function the host can call to set up initialization
         #[doc(hidden)]
         #[unsafe(export_name = "init-script")]
         pub extern "C" fn __init_script() {
             #[expect(unsafe_op_in_unsafe_fn)]
             unsafe {
+                // Set up the init function on first call
                 if $crate::bindings::SCRIPT_INIT_FN.is_none() {
-                    $crate::bindings::SCRIPT_INIT_FN = Some(|| {
-                        ::std::boxed::Box::new(<$script_type as $crate::WasmScript>::new())
-                    });
+                    $crate::bindings::SCRIPT_INIT_FN = Some(__gromnie_script_constructor);
                 }
-                // Now initialize if not already done
-                if $crate::bindings::SCRIPT_IMPL.is_none() {
-                    if let Some(init_fn) = $crate::bindings::SCRIPT_INIT_FN {
-                        $crate::bindings::SCRIPT_IMPL = Some((init_fn)());
-                    }
-                }
+                // Perform initialization
+                $crate::bindings::init_script();
             }
         }
     };
