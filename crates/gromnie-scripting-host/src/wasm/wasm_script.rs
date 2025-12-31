@@ -259,8 +259,6 @@ impl HostScript for WasmScript {
     }
 }
 
-
-
 /// Convert Rust GameEvent to WIT GameEvent
 fn game_event_to_wasm(event: &GameEvent) -> gromnie::scripting::host::GameEvent {
     use gromnie::scripting::host::{

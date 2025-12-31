@@ -1,8 +1,8 @@
 // Test script that exercises all major scripting functionality
 // This will be compiled to WASM for testing the scripting host
 
-use gromnie_scripting_api as gromnie;
 use gromnie::*;
+use gromnie_scripting_api as gromnie;
 
 pub struct TestScript {
     load_called: bool,
@@ -44,7 +44,7 @@ impl Script for TestScript {
     fn on_load(&mut self) {
         self.load_called = true;
         log("Test script loaded successfully");
-        
+
         // Test basic host functions
         log("Test script loaded successfully");
         send_chat("Hello from test script!");
@@ -62,15 +62,24 @@ impl Script for TestScript {
 
     fn on_event(&mut self, event: GameEvent) {
         self.event_count += 1;
-        
+
         match event {
             GameEvent::CharacterListReceived(account_data) => {
-                self.last_event = Some(format!("CharacterList: {} chars", account_data.character_list.len()));
-                log(&format!("Received character list for account: {}", account_data.name));
+                self.last_event = Some(format!(
+                    "CharacterList: {} chars",
+                    account_data.character_list.len()
+                ));
+                log(&format!(
+                    "Received character list for account: {}",
+                    account_data.name
+                ));
             }
             GameEvent::CreateObject(object_data) => {
                 self.last_event = Some(format!("CreateObject: {}", object_data.name));
-                log(&format!("Object created: {} (ID: {})", object_data.name, object_data.id));
+                log(&format!(
+                    "Object created: {} (ID: {})",
+                    object_data.name, object_data.id
+                ));
             }
             GameEvent::ChatMessageReceived(chat_data) => {
                 self.last_event = Some(format!("Chat: {}", chat_data.message));
@@ -87,13 +96,16 @@ impl Script for TestScript {
 
     fn on_tick(&mut self, _delta_millis: u64) {
         self.tick_count += 1;
-        
+
         // Every 10 ticks, test some functionality
         if self.tick_count % 10 == 0 {
             // Test client state access
             let state = get_client_state();
-            log(&format!("Tick {} - Client state: {:?}", self.tick_count, state));
-            
+            log(&format!(
+                "Tick {} - Client state: {:?}",
+                self.tick_count, state
+            ));
+
             // Simple test every 10 ticks
             if self.tick_count % 10 == 0 {
                 log(&format!("Tick count: {}", self.tick_count));

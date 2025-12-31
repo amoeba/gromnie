@@ -2,11 +2,11 @@ use std::time::{Duration, Instant};
 use tokio::sync::mpsc::UnboundedSender;
 use tracing::{debug, error};
 
+use super::EventFilter;
 use super::Script;
 use super::context::{ClientStateSnapshot, ScriptContext};
 use super::timer::TimerManager;
 use super::wasm::WasmScript;
-use super::EventFilter;
 use gromnie_client::client::events::{ClientAction, GameEvent};
 
 /// Default tick rate for scripts (50ms = 20Hz)
@@ -85,7 +85,7 @@ impl ScriptRunner {
             self.action_tx.clone(),
             &mut self.timer_manager,
             self.client_state.clone(),
-            Instant::now()
+            Instant::now(),
         );
 
         // Call on_load
@@ -115,7 +115,7 @@ impl ScriptRunner {
         action_tx: UnboundedSender<ClientAction>,
         timer_manager: &mut TimerManager,
         client_state: ClientStateSnapshot,
-        now: Instant
+        now: Instant,
     ) -> ScriptContext {
         unsafe {
             ScriptContext::new(
@@ -187,9 +187,9 @@ impl ScriptRunner {
             self.action_tx.clone(),
             &mut self.timer_manager,
             self.client_state.clone(),
-            Instant::now()
+            Instant::now(),
         );
-        
+
         // Identify WASM scripts and call on_unload
         let mut to_remove = Vec::new();
 
@@ -228,9 +228,9 @@ impl ScriptRunner {
             self.action_tx.clone(),
             &mut self.timer_manager,
             self.client_state.clone(),
-            now
+            now,
         );
-        
+
         // Call on_tick for each script
         for script in &mut self.scripts {
             // Call the script's tick handler
@@ -273,9 +273,9 @@ impl ScriptRunner {
             self.action_tx.clone(),
             &mut self.timer_manager,
             self.client_state.clone(),
-            now
+            now,
         );
-        
+
         // Dispatch event to each script that's interested
         for script in &mut self.scripts {
             // Check if this script is subscribed to this event
@@ -313,9 +313,9 @@ impl Drop for ScriptRunner {
             self.action_tx.clone(),
             &mut self.timer_manager,
             self.client_state.clone(),
-            Instant::now()
+            Instant::now(),
         );
-        
+
         // Call on_unload for all scripts
         for script in &mut self.scripts {
             let script: &mut WasmScript = script;
