@@ -5,8 +5,8 @@ use std::sync::Arc;
 use std::time::Instant;
 use tokio::sync::{broadcast, Mutex};
 
-use crate::client::events::GameEvent;
-use crate::client::ClientState;
+use gromnie_client::client::events::GameEvent;
+use gromnie_client::client::ClientState;
 
 /// Source of the event
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -76,9 +76,9 @@ pub enum ScriptEventType {
     Log { message: String },
 }
 
-/// Unified event enum
+/// Unified event type (enriched event from the runner's perspective)
 #[derive(Debug, Clone)]
-pub enum ClientEvent {
+pub enum EventType {
     Game(GameEvent),
     State(ClientStateEvent),
     System(SystemEvent),
@@ -87,35 +87,35 @@ pub enum ClientEvent {
 /// Complete event envelope
 #[derive(Debug, Clone)]
 pub struct EventEnvelope {
-    pub event: ClientEvent,
+    pub event: EventType,
     pub context: EventContext,
     pub timestamp: Instant,
     pub source: EventSource,
 }
 
 impl EventEnvelope {
-    pub fn new(event: ClientEvent, context: EventContext, source: EventSource) -> Self {
+    pub fn new(event: EventType, context: EventContext, source: EventSource) -> Self {
         Self { event, context, timestamp: Instant::now(), source }
     }
 
     pub fn game_event(game_event: GameEvent, client_id: u32, client_sequence: u64, source: EventSource) -> Self {
         let context = EventContext::new(client_id, client_sequence);
-        Self::new(ClientEvent::Game(game_event), context, source)
+        Self::new(EventType::Game(game_event), context, source)
     }
 
     pub fn state_event(state_event: ClientStateEvent, client_id: u32, client_sequence: u64, source: EventSource) -> Self {
         let context = EventContext::new(client_id, client_sequence);
-        Self::new(ClientEvent::State(state_event), context, source)
+        Self::new(EventType::State(state_event), context, source)
     }
 
     pub fn system_event(system_event: SystemEvent, client_id: u32, client_sequence: u64, source: EventSource) -> Self {
         let context = EventContext::new(client_id, client_sequence);
-        Self::new(ClientEvent::System(system_event), context, source)
+        Self::new(EventType::System(system_event), context, source)
     }
 
     pub fn extract_game_event(&self) -> Option<GameEvent> {
         match &self.event {
-            ClientEvent::Game(game_event) => Some(game_event.clone()),
+            EventType::Game(game_event) => Some(game_event.clone()),
             _ => None,
         }
     }
@@ -183,13 +183,13 @@ pub struct LoggingEventHandler;
 impl EventHandler for LoggingEventHandler {
     fn handle_event(&mut self, envelope: EventEnvelope) {
         match envelope.event {
-            ClientEvent::Game(game_event) => {
+            EventType::Game(game_event) => {
                 tracing::debug!(target: "events", "Game Event: {:?}", game_event);
             }
-            ClientEvent::State(state_event) => {
+            EventType::State(state_event) => {
                 tracing::info!(target: "events", "State Event: {:?}", state_event);
             }
-            ClientEvent::System(system_event) => {
+            EventType::System(system_event) => {
                 tracing::info!(target: "events", "System Event: {:?}", system_event);
             }
         }

@@ -29,8 +29,7 @@ use tokio::net::UdpSocket;
 use tracing::{debug, error, info, warn};
 
 use crate::client::constants::*;
-use crate::client::event_bus::{EventSender, EventEnvelope, EventSource, SystemEvent};
-use crate::client::events::{ClientAction, GameEvent};
+use crate::client::events::{ClientAction, GameEvent, ClientEvent, ClientSystemEvent};
 use crate::crypto::crypto_system::CryptoSystem;
 use crate::crypto::magic_number::get_magic_number;
 
@@ -137,7 +136,7 @@ pub struct Client {
     pending_fragments: HashMap<u32, Fragment>,   // Track incomplete fragment sequences
     message_queue: VecDeque<RawMessage>,         // Queue of parsed messages to process
     outgoing_message_queue: VecDeque<OutgoingMessage>, // Queue of messages to send with optional delays
-    event_sender: EventSender,                         // Event sender provided by the runner
+    raw_event_tx: mpsc::Sender<ClientEvent>,        // Raw event sender to runner
     action_rx: mpsc::UnboundedReceiver<ClientAction>,  // Receive actions from handlers
     ddd_response: Option<OutgoingMessageContent>,      // Cached DDD response for retries
     known_characters: Vec<crate::client::events::CharacterInfo>, // Track characters from list and creation
@@ -153,7 +152,7 @@ impl Client {
         address: String,
         name: String,
         password: String,
-        event_sender: EventSender, // Event sender provided by the runner
+        raw_event_tx: mpsc::Sender<ClientEvent>, // Raw event sender to runner
     ) -> (
         Client,
         mpsc::UnboundedSender<ClientAction>,
@@ -190,7 +189,7 @@ impl Client {
             pending_fragments: HashMap::new(),
             message_queue: VecDeque::new(),
             outgoing_message_queue: VecDeque::new(),
-            event_sender, // Event sender provided by runner
+            raw_event_tx, // Raw event sender to runner
             action_rx,
             ddd_response: None,
             known_characters: Vec::new(),
@@ -410,14 +409,8 @@ impl Client {
             character_id,
             character_name,
         };
-        
-        let envelope = EventEnvelope::game_event(
-            game_event,
-            self.id,
-            self.next_event_sequence(),
-            EventSource::ClientInternal,
-        );
-        self.event_sender.publish(envelope);
+
+        let _ = self.raw_event_tx.send(ClientEvent::Game(game_event));
 
         // Update state to succeeded
         self.character_login_state = CharacterLoginState::Succeeded;
@@ -528,18 +521,10 @@ impl Client {
                         reason: ClientFailureReason::LoginTimeout,
                     };
                     // Emit authentication failed system event
-                    let system_event = SystemEvent::AuthenticationFailed {
-                        client_id: self.id,
-                        reason: "Connection timeout - server not responding".to_string(),
-                    };
+                    let _ = self.raw_event_tx.send(ClientEvent::System(ClientSystemEvent::AuthenticationFailed { reason: "Connection timeout - server not responding".to_string(),
+                     }));
                     
-                    let envelope = EventEnvelope::system_event(
-                        system_event,
-                        self.id,
-                        self.next_event_sequence(),
-                        EventSource::ClientInternal,
-                    );
-                    self.event_sender.publish(envelope);
+                    
                     return true;
                 }
             }
@@ -607,23 +592,6 @@ impl Client {
 
     /// Emit a state transition event
     fn emit_state_transition(&mut self, from: ClientState, to: ClientState) {
-        use crate::client::event_bus::ClientStateEvent;
-        
-        let state_event = ClientStateEvent::StateTransition {
-            from: from.clone(),
-            to: to.clone(),
-            client_id: self.id,
-        };
-
-        let envelope = EventEnvelope::state_event(
-            state_event,
-            self.id,
-            self.next_event_sequence(),
-            EventSource::ClientInternal,
-        );
-        
-        self.event_sender.publish(envelope);
-        
         // Log the transition for debugging
         info!(target: "events", "State transition: {:?} -> {:?}", from, to);
     }
@@ -884,13 +852,7 @@ impl Client {
         {
             *progress = PatchingProgress::DDDResponseSent;
             let game_event = GameEvent::UpdatingSetProgress { progress: 0.66 };
-            let envelope = EventEnvelope::game_event(
-                game_event,
-                self.id,
-                self.next_event_sequence(),
-                EventSource::ClientInternal,
-            );
-            self.event_sender.publish(envelope);
+            let _ = self.raw_event_tx.send(ClientEvent::Game(game_event));
             info!(target: "net", "Progress: DDDResponse sent (66%)");
         }
 
@@ -1011,7 +973,6 @@ impl Client {
                 self.next_event_sequence(),
                 EventSource::Network,
             );
-            self.event_sender.publish(envelope);
 
             debug!(target: "net", "Parsed as GameAction: {:?}", game_action);
             self.handle_game_action(game_action, message);
@@ -1052,7 +1013,6 @@ impl Client {
                     self.next_event_sequence(),
                     EventSource::Network,
                 );
-                self.event_sender.publish(envelope);
 
                 info!(target: "net", "Parsed as S2CMessage: {:?} (0x{:04X})", msg_type, message.opcode);
 
@@ -1103,7 +1063,6 @@ impl Client {
                     self.next_event_sequence(),
                     EventSource::Network,
                 );
-                self.event_sender.publish(envelope);
 
                 info!(target: "net", "Unknown message opcode: 0x{:08X}", message.opcode);
             }
@@ -1198,7 +1157,6 @@ impl Client {
                             self.next_event_sequence(),
                             EventSource::Network,
                         );
-                        self.event_sender.publish(envelope);
                     }
                     Err(e) => {
                         error!(target: "net", "Failed to parse sender name: {}", e);
@@ -1231,7 +1189,6 @@ impl Client {
                     self.next_event_sequence(),
                     EventSource::Network,
                 );
-                self.event_sender.publish(envelope);
             }
             Err(e) => {
                 error!(target: "net", "Failed to parse transient string: {}", e);
@@ -1264,7 +1221,6 @@ impl Client {
             self.next_event_sequence(),
             EventSource::ClientInternal,
         );
-        self.event_sender.publish(envelope);
     }
 
     /// Handle the character list message from the server
@@ -1320,13 +1276,7 @@ impl Client {
                 if matches!(self.state, ClientState::Patching { .. }) {
                     // Update progress to 100% before transitioning
                     let game_event = GameEvent::UpdatingSetProgress { progress: 1.0 };
-                    let envelope = EventEnvelope::game_event(
-                        game_event,
-                        self.id,
-                        self.next_event_sequence(),
-                        EventSource::ClientInternal,
-                    );
-                    self.event_sender.publish(envelope);
+            let _ = self.raw_event_tx.send(ClientEvent::Game(game_event));
                     info!(target: "net", "Progress: CharacterList received (100%)");
 
                     let old_state = std::mem::replace(
@@ -1348,18 +1298,10 @@ impl Client {
                     characters,
                     num_slots: char_list.num_allowed_characters,
                 };
-                let event_sender = self.event_sender.clone();
-                let client_id = self.id;
-                let sequence = self.next_event_sequence();
+                let raw_tx = self.raw_event_tx.clone();
                 tokio::spawn(async move {
                     tokio::time::sleep(tokio::time::Duration::from_millis(UI_DELAY_MS)).await;
-                    let envelope = EventEnvelope::game_event(
-                        game_event,
-                        client_id,
-                        sequence,
-                        EventSource::ClientInternal,
-                    );
-                    event_sender.publish(envelope);
+                    let _ = raw_tx.send(ClientEvent::Game(game_event));
                 });
                 info!(target: "net", "CharacterListReceived event scheduled with {}ms delay", UI_DELAY_MS);
             }
@@ -1402,18 +1344,10 @@ impl Client {
                         characters,
                         num_slots: 0, // We don't track slots, but this shouldn't matter for login
                     };
-                    let event_sender = self.event_sender.clone();
-                    let client_id = self.id;
-                    let sequence = self.next_event_sequence();
+                    let raw_tx = self.raw_event_tx.clone();
                     tokio::spawn(async move {
                         tokio::time::sleep(tokio::time::Duration::from_millis(UI_DELAY_MS)).await;
-                        let envelope = EventEnvelope::game_event(
-                            game_event,
-                            client_id,
-                            sequence,
-                            EventSource::ClientInternal,
-                        );
-                        event_sender.publish(envelope);
+                        let _ = raw_tx.send(ClientEvent::Game(game_event));
                     });
                 }
             },
@@ -1480,13 +1414,7 @@ impl Client {
                 {
                     *progress = PatchingProgress::DDDInterrogationReceived;
                     let game_event = GameEvent::UpdatingSetProgress { progress: 0.33 };
-                    let envelope = EventEnvelope::game_event(
-                        game_event,
-                        self.id,
-                        self.next_event_sequence(),
-                        EventSource::ClientInternal,
-                    );
-                    self.event_sender.publish(envelope);
+            let _ = self.raw_event_tx.send(ClientEvent::Game(game_event));
                     info!(target: "net", "Progress: DDDInterrogation received (33%)");
                 }
 
@@ -1543,7 +1471,6 @@ impl Client {
                     self.next_event_sequence(),
                     EventSource::Network,
                 );
-                self.event_sender.publish(envelope);
             }
             Err(e) => {
                 error!(target: "net", "Failed to parse create object message: {}", e);
@@ -1584,7 +1511,6 @@ impl Client {
                             self.next_event_sequence(),
                             EventSource::Network,
                         );
-                        self.event_sender.publish(envelope);
                     }
                     Err(e) => {
                         error!(target: "net", "Failed to parse chat message type: {}", e);
@@ -1625,7 +1551,6 @@ impl Client {
                     self.next_event_sequence(),
                     EventSource::Network,
                 );
-                self.event_sender.publish(envelope);
             }
             Err(e) => {
                 error!(target: "net", "Failed to parse hear speech message: {}", e);
@@ -1661,7 +1586,6 @@ impl Client {
                     self.next_event_sequence(),
                     EventSource::Network,
                 );
-                self.event_sender.publish(envelope);
             }
             Err(e) => {
                 error!(target: "net", "Failed to parse hear ranged speech message: {}", e);
@@ -1764,13 +1688,7 @@ impl Client {
                 client_id: self.id,
             };
             
-            let envelope = EventEnvelope::system_event(
-                system_event,
-                self.id,
-                self.next_event_sequence(),
-                EventSource::ClientInternal,
-            );
-            self.event_sender.publish(envelope);
+            
             
             info!(target: "net", "Authentication succeeded - received ConnectRequest from server");
 
@@ -1783,13 +1701,7 @@ impl Client {
             {
                 *progress = ConnectingProgress::ConnectRequestReceived;
                 let game_event = GameEvent::ConnectingSetProgress { progress: 0.66 };
-                let envelope = EventEnvelope::game_event(
-                    game_event,
-                    self.id,
-                    self.next_event_sequence(),
-                    EventSource::ClientInternal,
-                );
-                self.event_sender.publish(envelope);
+            let _ = self.raw_event_tx.send(ClientEvent::Game(game_event));
                 info!(target: "net", "Progress: ConnectRequest received (66%)");
             }
 
@@ -1808,13 +1720,7 @@ impl Client {
                     progress: PatchingProgress::Initial,
                 };
                 let game_event = GameEvent::ConnectingSetProgress { progress: 1.0 };
-                let envelope = EventEnvelope::game_event(
-                    game_event,
-                    self.id,
-                    self.next_event_sequence(),
-                    EventSource::ClientInternal,
-                );
-                self.event_sender.publish(envelope);
+            let _ = self.raw_event_tx.send(ClientEvent::Game(game_event));
                 info!(target: "net", "Progress: ConnectResponse sent (100%)");
                 info!(target: "net", "State transition: Connecting -> Patching");
             }
@@ -1978,13 +1884,7 @@ impl Client {
         {
             *progress = ConnectingProgress::LoginRequestSent;
             let game_event = GameEvent::ConnectingSetProgress { progress: 0.33 };
-            let envelope = EventEnvelope::game_event(
-                game_event,
-                self.id,
-                self.next_event_sequence(),
-                EventSource::ClientInternal,
-            );
-            self.event_sender.publish(envelope);
+            let _ = self.raw_event_tx.send(ClientEvent::Game(game_event));
             info!(target: "net", "Progress: LoginRequest sent (33%)");
         }
 

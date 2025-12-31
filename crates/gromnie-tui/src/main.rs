@@ -1,4 +1,5 @@
 use clap::Parser;
+use std::sync::Arc;
 use tracing::{error, info};
 use tracing_subscriber::EnvFilter;
 
@@ -69,7 +70,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Spawn client task using the runner module
     let mut client_handle = tokio::spawn(gromnie_runner::run_client_with_action_channel(
         config,
-        &event_bus_manager,
+        event_bus_manager,
         |action_tx| TuiConsumer::new(action_tx.clone(), client_event_tx),
         action_tx_channel,
         shutdown_rx,

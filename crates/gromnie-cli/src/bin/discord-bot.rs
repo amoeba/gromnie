@@ -7,7 +7,6 @@ use serenity::all::{
 use serenity::client::Context;
 use serenity::model::gateway::Ready;
 use serenity::prelude::{EventHandler, GatewayIntents};
-use std::sync::Arc;
 use std::time::Instant;
 use tokio::sync::RwLock;
 use tracing::{error, info};
@@ -212,7 +211,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let uptime_data_clone = uptime_data.clone();
     let _client_handle = tokio::spawn(gromnie_runner::run_client_with_action_channel(
         config,
-        &event_bus_manager,
+        event_bus_manager,
         move |action_tx| {
             DiscordConsumer::new_with_uptime(
                 action_tx.clone(),

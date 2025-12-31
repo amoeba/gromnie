@@ -14,6 +14,7 @@ path = "src/lib.rs"
 [dependencies]
 gromnie-scripting-api = { path = "../gromnie-scripting-api" }
 gromnie-client = { path = "../gromnie-client" }
+gromnie-runner = { path = "../gromnie-runner" }
 anyhow.workspace = true
 directories.workspace = true
 tokio = { version = "1.36.0", features = ["full"] }

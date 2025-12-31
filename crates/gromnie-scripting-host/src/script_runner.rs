@@ -7,8 +7,9 @@ use super::Script;
 use super::context::{ClientStateSnapshot, ScriptContext};
 use super::timer::TimerManager;
 use super::wasm::WasmScript;
-use gromnie_client::client::events::{ClientAction, GameEvent};
-use gromnie_client::client::event_bus::{ClientEvent, EventEnvelope, ClientStateEvent, SystemEvent};
+use gromnie_client::client::events::{ClientAction, GameEvent, ClientStateEvent, ClientEvent, ClientSystemEvent};
+use gromnie_runner::EventConsumer;
+use gromnie_runner::event_bus::EventEnvelope;
 
 /// Default tick rate for scripts (50ms = 20Hz)
 const DEFAULT_TICK_INTERVAL: Duration = Duration::from_millis(50);
@@ -222,12 +223,12 @@ impl ScriptRunner {
 }
 
 impl ScriptRunner {
-    /// Handle a game event
-    pub fn handle_event(&mut self, envelope: EventEnvelope) {
+    /// Handle a raw event
+    pub fn handle_event(&mut self, raw_event: ClientEvent) {
         let now = Instant::now();
 
         // Extract GameEvent if this is a game event
-        let game_event = match envelope.event {
+        let game_event = match raw_event {
             ClientEvent::Game(game_event) => game_event,
             ClientEvent::State(state_event) => {
                 // State events are sent to scripts directly - they can maintain their own state
@@ -304,4 +305,75 @@ impl Drop for ScriptRunner {
     }
 
 
+}
+
+/// Wrapper around ScriptRunner that implements EventConsumer trait
+pub struct ScriptConsumer {
+    runner: ScriptRunner,
+}
+
+impl ScriptConsumer {
+    pub fn new(runner: ScriptRunner) -> Self {
+        Self { runner }
+    }
+}
+
+impl EventConsumer for ScriptConsumer {
+    fn handle_event(&mut self, envelope: EventEnvelope) {
+        // Extract ClientEvent from EventEnvelope
+        let client_event = match envelope.event {
+            gromnie_runner::event_bus::EventType::Game(game_event) => {
+                ClientEvent::Game(game_event)
+            }
+            gromnie_runner::event_bus::EventType::State(state_event) => {
+                // Convert ClientState-based event to string-based
+                ClientEvent::State(gromnie_client::client::events::ClientStateEvent::StateTransition {
+                    from: format!("{:?}", state_event.from),
+                    to: format!("{:?}", state_event.to),
+                    client_id: state_event.client_id,
+                })
+            }
+            gromnie_runner::event_bus::EventType::System(system_event) => {
+                // Convert SystemEvent to ClientSystemEvent
+                match system_event {
+                    gromnie_runner::event_bus::SystemEvent::AuthenticationSucceeded { .. } => {
+                        ClientEvent::System(ClientSystemEvent::AuthenticationSucceeded)
+                    }
+                    gromnie_runner::event_bus::SystemEvent::AuthenticationFailed { reason, .. } => {
+                        ClientEvent::System(ClientSystemEvent::AuthenticationFailed { reason })
+                    }
+                    gromnie_runner::event_bus::SystemEvent::ConnectingStarted { .. } => {
+                        ClientEvent::System(ClientSystemEvent::ConnectingStarted)
+                    }
+                    gromnie_runner::event_bus::SystemEvent::ConnectingDone { .. } => {
+                        ClientEvent::System(ClientSystemEvent::ConnectingDone)
+                    }
+                    gromnie_runner::event_bus::SystemEvent::UpdatingStarted { .. } => {
+                        ClientEvent::System(ClientSystemEvent::UpdatingStarted)
+                    }
+                    gromnie_runner::event_bus::SystemEvent::UpdatingDone { .. } => {
+                        ClientEvent::System(ClientSystemEvent::UpdatingDone)
+                    }
+                    gromnie_runner::event_bus::SystemEvent::LoginSucceeded { character_id, character_name } => {
+                        ClientEvent::System(ClientSystemEvent::LoginSucceeded { character_id, character_name })
+                    }
+                    _ => {
+                        // Ignore other system events
+                        return;
+                    }
+                }
+            }
+        };
+
+        self.runner.handle_event(client_event);
+    }
+}
+
+/// Create a script runner consumer with the specified configuration
+pub fn create_script_consumer(
+    action_tx: UnboundedSender<ClientAction>,
+    config: &gromnie_client::config::ScriptingConfig,
+) -> ScriptConsumer {
+    let runner = create_runner_from_config(action_tx, config);
+    ScriptConsumer::new(runner)
 }

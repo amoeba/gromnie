@@ -353,7 +353,7 @@ async fn main() {
 
             let event_bus_manager = Arc::new(EventBusManager::new(100));
             // Run the client
-            gromnie_runner::run_client(client_config, &event_bus_manager, consumer_factory, Some(shutdown_rx)).await;
+            gromnie_runner::run_client(client_config, event_bus_manager, consumer_factory, Some(shutdown_rx)).await;
         });
 
         join_handles.push(handle);

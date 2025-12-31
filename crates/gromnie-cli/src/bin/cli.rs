@@ -4,8 +4,9 @@ use std::sync::Arc;
 
 use clap::Parser;
 use gromnie_runner::{
-    ClientConfig, EventBusManager, LoggingConsumer, create_script_consumer, run_client_with_consumers,
+    ClientConfig, EventBusManager, LoggingConsumer, run_client_with_consumers,
 };
+use gromnie_scripting_host::create_script_consumer;
 use ratatui::{TerminalOptions, Viewport};
 use tracing::info;
 use tracing_subscriber::EnvFilter;
@@ -134,7 +135,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
                 let scripting_config = config.scripting.clone();
                 run_client_with_consumers(
                     client_config,
-                    &event_bus_manager,
+                    event_bus_manager,
                     move |action_tx| {
                         vec![
                             Box::new(LoggingConsumer::new(action_tx.clone())),
@@ -145,7 +146,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
                 )
                 .await;
             } else {
-                gromnie_runner::run_client(client_config, &event_bus_manager, LoggingConsumer::new, None).await;
+                gromnie_runner::run_client(client_config, event_bus_manager, LoggingConsumer::new, None).await;
             }
 
             return Ok(());
@@ -192,7 +193,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
             let scripting_config = config.scripting.clone();
             run_client_with_consumers(
                 client_config,
-                &event_bus_manager,
+                event_bus_manager,
                 move |action_tx| {
                     vec![
                         // Add logging consumer
@@ -205,7 +206,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
             )
             .await;
         } else {
-            gromnie_runner::run_client(client_config, &event_bus_manager, LoggingConsumer::new, None).await;
+            gromnie_runner::run_client(client_config, event_bus_manager, LoggingConsumer::new, None).await;
         }
     }
 

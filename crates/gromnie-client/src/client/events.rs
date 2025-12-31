@@ -74,6 +74,34 @@ pub struct CharacterInfo {
     pub delete_pending: bool,
 }
 
+/// Client state transition events
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub enum ClientStateEvent {
+    StateTransition { from: String, to: String, client_id: u32 },
+    ClientFailed { reason: String, client_id: u32 },
+}
+
+/// System events that originate from the client (before enrichment by runner)
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub enum ClientSystemEvent {
+    AuthenticationSucceeded,
+    AuthenticationFailed { reason: String },
+    ConnectingStarted,
+    ConnectingDone,
+    UpdatingStarted,
+    UpdatingDone,
+    LoginSucceeded { character_id: u32, character_name: String },
+}
+
+/// Events emitted by the client without context/metadata
+/// These will be wrapped and enriched by the runner's EventWrapper
+#[derive(Debug, Clone)]
+pub enum ClientEvent {
+    Game(GameEvent),
+    State(ClientStateEvent),
+    System(ClientSystemEvent),
+}
+
 /// Actions that event handlers can request the client to perform
 #[derive(Debug)]
 pub enum ClientAction {

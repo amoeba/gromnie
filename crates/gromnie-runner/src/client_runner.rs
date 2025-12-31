@@ -3,7 +3,7 @@ use tokio::sync::{broadcast, mpsc};
 use tracing::{debug, error, info};
 
 use crate::event_consumer::EventConsumer;
-use gromnie_client::client::event_bus::{EventBus, EventEnvelope};
+use crate::event_bus::{EventBus, EventEnvelope};
 use gromnie_client::client::Client;
 
 /// Configuration for running a client
@@ -28,7 +28,7 @@ impl EventBusManager {
     }
 
     /// Create an event sender for a specific client
-    pub fn create_sender(&self, client_id: u32) -> gromnie_client::client::event_bus::EventSender {
+    pub fn create_sender(&self, client_id: u32) -> crate::event_bus::EventSender {
         self.event_bus.create_sender(client_id)
     }
 

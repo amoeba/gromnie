@@ -3,9 +3,8 @@ use tokio::sync::mpsc::UnboundedSender;
 use tracing::{debug, error, info};
 
 use gromnie_client::client::events::{ClientAction, GameEvent};
-use gromnie_client::client::event_bus::{ClientEvent, EventEnvelope, ClientStateEvent, SystemEvent, ScriptEventType};
+use crate::event_bus::{EventType, EventEnvelope, ClientStateEvent, SystemEvent, ScriptEventType};
 use gromnie_client::config::ScriptingConfig;
-use gromnie_scripting_host::ScriptRunner;
 use serenity::http::Http;
 use serenity::model::id::ChannelId;
 use std::time::Instant;
@@ -33,8 +32,8 @@ impl EventConsumer for LoggingConsumer {
     fn handle_event(&mut self, envelope: EventEnvelope) {
         // Extract GameEvent for backward compatibility
         let game_event = match envelope.event {
-            ClientEvent::Game(game_event) => game_event,
-            ClientEvent::State(state_event) => {
+            EventType::Game(game_event) => game_event,
+            EventType::State(state_event) => {
                 match state_event {
                     ClientStateEvent::StateTransition { from, to, .. } => {
                         info!(target: "events", "STATE TRANSITION: {:?} -> {:?}", from, to);
@@ -45,7 +44,7 @@ impl EventConsumer for LoggingConsumer {
                 }
                 return;
             }
-            ClientEvent::System(system_event) => {
+            EventType::System(system_event) => {
                 match system_event {
                     SystemEvent::AuthenticationSucceeded { .. } => {
                         info!(target: "events", "Authentication succeeded - connected to server");
@@ -177,27 +176,27 @@ impl EventConsumer for TuiConsumer {
 
         // Extract GameEvent for backward compatibility
         let game_event = match envelope.event {
-            ClientEvent::Game(game_event) => game_event,
-            ClientEvent::State(state_event) => {
+            EventType::Game(game_event) => game_event,
+            EventType::State(state_event) => {
                 match state_event {
-                    gromnie_client::client::event_bus::ClientStateEvent::StateTransition { from, to, .. } => {
+                    crate::event_bus::ClientStateEvent::StateTransition { from, to, .. } => {
                         info!(target: "events", "STATE TRANSITION: {:?} -> {:?}", from, to);
                     }
-                    gromnie_client::client::event_bus::ClientStateEvent::ClientFailed { reason, .. } => {
+                    crate::event_bus::ClientStateEvent::ClientFailed { reason, .. } => {
                         error!(target: "events", "CLIENT FAILED: {}", reason);
                     }
                 }
                 return;
             }
-            ClientEvent::System(system_event) => {
+            EventType::System(system_event) => {
                 match system_event {
-                    gromnie_client::client::event_bus::SystemEvent::AuthenticationSucceeded { .. } => {
+                    crate::event_bus::SystemEvent::AuthenticationSucceeded { .. } => {
                         info!(target: "events", "Authentication succeeded - connected to server");
                     }
-                    gromnie_client::client::event_bus::SystemEvent::AuthenticationFailed { reason, .. } => {
+                    crate::event_bus::SystemEvent::AuthenticationFailed { reason, .. } => {
                         error!(target: "events", "Authentication failed: {}", reason);
                     }
-                    gromnie_client::client::event_bus::SystemEvent::LoginSucceeded { character_id, character_name } => {
+                    crate::event_bus::SystemEvent::LoginSucceeded { character_id, character_name } => {
                         info!(target: "events", "LoginSucceeded -- Character: {} (ID: {})", character_name, character_id);
                     }
                     _ => {
@@ -322,8 +321,8 @@ impl EventConsumer for DiscordConsumer {
     fn handle_event(&mut self, envelope: EventEnvelope) {
         // Extract GameEvent for backward compatibility
         let game_event = match envelope.event {
-            ClientEvent::Game(game_event) => game_event,
-            ClientEvent::State(state_event) => {
+            EventType::Game(game_event) => game_event,
+            EventType::State(state_event) => {
                 match state_event {
                     ClientStateEvent::StateTransition { from, to, .. } => {
                         info!(target: "events", "STATE TRANSITION: {:?} -> {:?}", from, to);
@@ -334,7 +333,7 @@ impl EventConsumer for DiscordConsumer {
                 }
                 return;
             }
-            ClientEvent::System(system_event) => {
+            EventType::System(system_event) => {
                 match system_event {
                     SystemEvent::AuthenticationSucceeded { .. } => {
                         info!(target: "events", "Authentication succeeded - connected to server");
@@ -475,30 +474,4 @@ impl EventConsumer for DiscordConsumer {
             GameEvent::UpdatingDone => {}
         }
     }
-}
-
-/// Wrapper around ScriptRunner that implements EventConsumer trait
-pub struct ScriptConsumer {
-    runner: ScriptRunner,
-}
-
-impl ScriptConsumer {
-    pub fn new(runner: ScriptRunner) -> Self {
-        Self { runner }
-    }
-}
-
-impl EventConsumer for ScriptConsumer {
-    fn handle_event(&mut self, envelope: EventEnvelope) {
-        self.runner.handle_event(envelope);
-    }
-}
-
-/// Create a script runner consumer with the specified configuration
-pub fn create_script_consumer(
-    action_tx: UnboundedSender<ClientAction>,
-    config: &ScriptingConfig,
-) -> ScriptConsumer {
-    let runner = gromnie_scripting_host::create_runner_from_config(action_tx, config);
-    ScriptConsumer::new(runner)
 }
