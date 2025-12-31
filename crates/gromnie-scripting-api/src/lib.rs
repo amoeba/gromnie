@@ -20,10 +20,8 @@ pub use bindings::WasmScript;
 pub use bindings::WasmScript as Script;
 pub use bindings::host::GameEvent;
 
-
-
 // Re-export host functions for WASM scripts
 pub use bindings::host::{
-    check_timer, cancel_timer, get_client_state, get_event_time_millis,
-    log, login_character, schedule_recurring, schedule_timer, send_chat,
+    cancel_timer, check_timer, get_client_state, get_event_time_millis, log, login_character,
+    schedule_recurring, schedule_timer, send_chat,
 };

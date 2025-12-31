@@ -2,7 +2,6 @@
 ///
 /// This crate provides the runtime for the game client to load and run WASM scripts.
 /// Scripts should depend on gromnie-scripting-api, not this crate.
-
 use gromnie_scripting_api as api;
 use std::any::Any;
 use std::time::Duration;
@@ -46,7 +45,11 @@ pub trait Script: Send + 'static {
     fn subscribed_events(&self) -> &[EventFilter];
 
     /// Handle an event that matches one of the subscribed filters
-    fn on_event(&mut self, event: &gromnie_client::client::events::GameEvent, ctx: &mut ScriptContext);
+    fn on_event(
+        &mut self,
+        event: &gromnie_client::client::events::GameEvent,
+        ctx: &mut ScriptContext,
+    );
 
     /// Called periodically at a fixed rate (configurable, default ~20Hz)
     /// Use this for timer checks, periodic updates, and time-based logic

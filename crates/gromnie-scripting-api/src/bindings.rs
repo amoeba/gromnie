@@ -13,8 +13,8 @@ wit_bindgen::generate!({
 });
 
 // Re-export the main types that scripts will use
-pub use self::gromnie::scripting::host as host_interface;
 pub use self::exports::gromnie::scripting::guest::Guest;
+pub use self::gromnie::scripting::host as host_interface;
 
 // Expose the raw generated module structure for direct imports
 pub use self::gromnie::scripting::host;
@@ -136,7 +136,9 @@ fn script() -> &'static mut dyn WasmScript {
                 panic!("Script not initialized. Did you call register_script! macro?");
             }
         }
-        SCRIPT_IMPL.as_deref_mut().expect("Script implementation is missing")
+        SCRIPT_IMPL
+            .as_deref_mut()
+            .expect("Script implementation is missing")
     }
 }
 
@@ -153,7 +155,7 @@ impl Guest for ScriptComponent {
             #[link_name = "init-script"]
             fn __call_init_script();
         }
-        
+
         unsafe {
             __call_init_script();
         }
@@ -223,7 +225,8 @@ macro_rules! register_script {
     ($script_type:ty) => {
         // Store the constructor function in a module-level function
         #[doc(hidden)]
-        pub fn __gromnie_script_constructor() -> ::std::boxed::Box<dyn $crate::bindings::WasmScript> {
+        pub fn __gromnie_script_constructor() -> ::std::boxed::Box<dyn $crate::bindings::WasmScript>
+        {
             ::std::boxed::Box::new(<$script_type as $crate::bindings::WasmScript>::new())
         }
 

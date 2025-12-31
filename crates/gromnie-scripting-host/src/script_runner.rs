@@ -2,8 +2,8 @@ use std::time::{Duration, Instant};
 use tokio::sync::mpsc::UnboundedSender;
 use tracing::{debug, error};
 
-use super::context::{ClientStateSnapshot, ScriptContext};
 use super::Script;
+use super::context::{ClientStateSnapshot, ScriptContext};
 use super::timer::TimerManager;
 use gromnie_client::client::events::{ClientAction, GameEvent};
 
