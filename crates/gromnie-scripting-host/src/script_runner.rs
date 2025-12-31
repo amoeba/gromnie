@@ -5,6 +5,8 @@ use tracing::{debug, error};
 use super::Script;
 use super::context::{ClientStateSnapshot, ScriptContext};
 use super::timer::TimerManager;
+use super::wasm::WasmScript;
+use super::EventFilter;
 use gromnie_client::client::events::{ClientAction, GameEvent};
 
 /// Default tick rate for scripts (50ms = 20Hz)
@@ -12,8 +14,8 @@ const DEFAULT_TICK_INTERVAL: Duration = Duration::from_millis(50);
 
 /// Runs scripts and dispatches events to them
 pub struct ScriptRunner {
-    /// All registered scripts (both Rust and WASM)
-    scripts: Vec<Box<dyn Script>>,
+    /// All registered WASM scripts
+    scripts: Vec<WasmScript>,
     /// WASM engine (if WASM support is enabled)
     wasm_engine: Option<wasmtime::Engine>,
     /// Channel for sending client actions
@@ -74,8 +76,8 @@ impl ScriptRunner {
         }
     }
 
-    /// Register a script
-    pub fn register_script(&mut self, mut script: Box<dyn Script>) {
+    /// Register a WASM script
+    pub fn register_script(&mut self, script: WasmScript) {
         debug!(target: "scripting", "Registering script: {} ({})", script.name(), script.id());
 
         // Create context for on_load
@@ -87,6 +89,7 @@ impl ScriptRunner {
         );
 
         // Call on_load
+        let mut script = script; // Make mutable
         script.on_load(&mut ctx);
 
         self.scripts.push(script);
@@ -158,7 +161,7 @@ impl ScriptRunner {
         let scripts = super::wasm::load_wasm_scripts(engine, dir);
 
         for script in scripts {
-            self.register_script(Box::new(script));
+            self.register_script(script);
         }
     }
 
@@ -175,6 +178,9 @@ impl ScriptRunner {
     }
 
     /// Unload all scripts
+    ///
+    /// This method unloads all scripts by calling their on_unload methods.
+    /// The system only supports WASM scripts, so all scripts are WASM scripts.
     pub fn unload_scripts(&mut self) {
         // Create context once before the loop
         let mut ctx = Self::create_script_context(
@@ -184,24 +190,18 @@ impl ScriptRunner {
             Instant::now()
         );
         
-        // Filter out WasmScript instances and call on_unload
+        // Identify WASM scripts and call on_unload
         let mut to_remove = Vec::new();
 
+        // Unload all scripts directly
         for (idx, script) in self.scripts.iter_mut().enumerate() {
-            // Check if this is a WasmScript by attempting downcast
-            if script
-                .as_any_mut()
-                .downcast_ref::<super::wasm::WasmScript>()
-                .is_some()
-            {
-                debug!(target: "scripting", "Unloading WASM script: {} ({})", script.name(), script.id());
-                script.on_unload(&mut ctx);
+            debug!(target: "scripting", "Unloading script: {} ({})", script.name(), script.id());
+            script.on_unload(&mut ctx);
 
-                to_remove.push(idx);
-            }
+            to_remove.push(idx);
         }
 
-        // Remove in reverse order to preserve indices
+        // Remove scripts in reverse order to preserve indices during removal
         for idx in to_remove.into_iter().rev() {
             self.scripts.remove(idx);
         }
@@ -282,7 +282,7 @@ impl ScriptRunner {
             let subscribed = script
                 .subscribed_events()
                 .iter()
-                .any(|filter| filter.matches(&event));
+                .any(|filter: &EventFilter| filter.matches(&event));
 
             if !subscribed {
                 continue;
@@ -318,6 +318,7 @@ impl Drop for ScriptRunner {
         
         // Call on_unload for all scripts
         for script in &mut self.scripts {
+            let script: &mut WasmScript = script;
             script.on_unload(&mut ctx);
         }
     }
