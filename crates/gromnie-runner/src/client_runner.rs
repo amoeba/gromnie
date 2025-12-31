@@ -1,8 +1,8 @@
-use tokio::sync::mpsc;
+use tokio::sync::{broadcast, mpsc};
 use tracing::{debug, error, info};
 
 use crate::event_consumer::EventConsumer;
-use gromnie_client::client::event_bus::{EventBus, EventEnvelope};
+use gromnie_client::client::refactored_event_bus::EventEnvelope;
 use gromnie_client::client::Client;
 
 /// Configuration for running a client
@@ -31,14 +31,15 @@ pub async fn run_client<C, F>(
     F: FnOnce(mpsc::UnboundedSender<gromnie_client::client::events::ClientAction>) -> C,
 {
     // Create event bus for this client
-    let (event_bus, event_rx) = gromnie_client::client::event_bus::EventBus::new(100);
+    let (event_bus, event_rx) = gromnie_client::client::refactored_event_bus::EventBus::new(100);
+    let event_sender = event_bus.create_sender(config.id);
     
-    let (client, _, action_tx) = Client::new(
+    let (client, action_tx) = Client::new(
         config.id,
         config.address.clone(),
         config.account_name.clone(),
         config.password.clone(),
-        event_bus,
+        event_sender,
     )
     .await;
 
@@ -63,14 +64,15 @@ pub async fn run_client_with_consumers<F>(
     ) -> Vec<Box<dyn EventConsumer>>,
 {
     // Create event bus for this client
-    let (event_bus, _) = gromnie_client::client::event_bus::EventBus::new(100);
+    let (event_bus, event_rx) = gromnie_client::client::refactored_event_bus::EventBus::new(100);
+    let event_sender = event_bus.create_sender(config.id);
     
-    let (client, _, action_tx) = Client::new(
+    let (client, action_tx) = Client::new(
         config.id,
         config.address.clone(),
         config.account_name.clone(),
         config.password.clone(),
-        event_bus,
+        event_sender,
     )
     .await;
 
@@ -80,7 +82,7 @@ pub async fn run_client_with_consumers<F>(
     // Spawn a task for each consumer with its own event receiver
     let mut consumer_tasks = Vec::new();
     for (idx, mut consumer) in consumers.drain(..).enumerate() {
-        let mut consumer_rx = client.subscribe_events();
+        let mut consumer_rx = event_bus.subscribe();
         let handle = tokio::spawn(async move {
             info!(target: "events", "Event consumer {} started", idx);
 
@@ -133,14 +135,15 @@ pub async fn run_client_with_action_channel<C, F>(
     F: FnOnce(mpsc::UnboundedSender<gromnie_client::client::events::ClientAction>) -> C,
 {
     // Create event bus for this client
-    let (event_bus, event_rx) = gromnie_client::client::event_bus::EventBus::new(100);
+    let (event_bus, event_rx) = gromnie_client::client::refactored_event_bus::EventBus::new(100);
+    let event_sender = event_bus.create_sender(config.id);
     
-    let (client, _, action_tx) = Client::new(
+    let (client, action_tx) = Client::new(
         config.id,
         config.address.clone(),
         config.account_name.clone(),
         config.password.clone(),
-        event_bus,
+        event_sender,
     )
     .await;
 
@@ -170,7 +173,7 @@ async fn run_client_internal<C: EventConsumer>(
                 Ok(envelope) => {
                     // Extract the GameEvent from the envelope for backward compatibility
                     if let Some(game_event) = envelope.extract_game_event() {
-                        event_consumer.handle_event(game_event);
+                        event_consumer.handle_event(envelope);
                     } else {
                         // For non-game events, we could add logging or other handling
                         debug!(target: "events", "Received non-game event: {:?}", envelope.event);

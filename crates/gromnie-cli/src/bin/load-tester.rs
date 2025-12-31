@@ -13,6 +13,7 @@ use gromnie_cli::load_tester::ClientNaming;
 use gromnie_client::client::{
     OutgoingMessageContent,
     events::{ClientAction, GameEvent},
+    refactored_event_bus::EventEnvelope,
 };
 use gromnie_runner::{CharacterBuilder, ClientConfig, EventConsumer};
 
@@ -118,8 +119,9 @@ impl LoadTesterConsumer {
 }
 
 impl EventConsumer for LoadTesterConsumer {
-    fn handle_event(&mut self, event: GameEvent) {
-        match event {
+    fn handle_event(&mut self, envelope: EventEnvelope) {
+        if let Some(event) = envelope.extract_game_event() {
+            match event {
             GameEvent::AuthenticationSucceeded => {
                 self.event_counts
                     .authenticated
@@ -232,6 +234,7 @@ impl EventConsumer for LoadTesterConsumer {
             }
             _ => {}
         }
+        } // Close the if let block
     }
 }
 

@@ -1,7 +1,6 @@
 mod character_gen;
 mod client_runner;
 mod event_consumer;
-mod event_bus;
 
 pub use character_gen::CharacterBuilder;
 pub use client_runner::{

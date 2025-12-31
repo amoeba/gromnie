@@ -3,7 +3,7 @@ use tokio::sync::mpsc::UnboundedSender;
 use tracing::{debug, error, info};
 
 use gromnie_client::client::events::{ClientAction, GameEvent};
-use gromnie_client::client::event_bus::{ClientEvent, EventEnvelope};
+use gromnie_client::client::refactored_event_bus::{ClientEvent, EventEnvelope, ClientStateEvent, SystemEvent, ScriptEventType};
 use gromnie_client::config::ScriptingConfig;
 use gromnie_scripting_host::ScriptRunner;
 use serenity::http::Http;
@@ -36,10 +36,10 @@ impl EventConsumer for LoggingConsumer {
             ClientEvent::Game(game_event) => game_event,
             ClientEvent::State(state_event) => {
                 match state_event {
-                    crate::client::event_bus::ClientStateEvent::StateTransition { from, to, .. } => {
+                    ClientStateEvent::StateTransition { from, to, .. } => {
                         info!(target: "events", "STATE TRANSITION: {:?} -> {:?}", from, to);
                     }
-                    crate::client::event_bus::ClientStateEvent::ClientFailed { reason, .. } => {
+                    ClientStateEvent::ClientFailed { reason, .. } => {
                         error!(target: "events", "CLIENT FAILED: {}", reason);
                     }
                 }
@@ -47,36 +47,39 @@ impl EventConsumer for LoggingConsumer {
             }
             ClientEvent::System(system_event) => {
                 match system_event {
-                    crate::client::event_bus::SystemEvent::AuthenticationSucceeded { .. } => {
+                    SystemEvent::AuthenticationSucceeded { .. } => {
                         info!(target: "events", "Authentication succeeded - connected to server");
                     }
-                    crate::client::event_bus::SystemEvent::AuthenticationFailed { reason, .. } => {
+                    SystemEvent::AuthenticationFailed { reason, .. } => {
                         error!(target: "events", "Authentication failed: {}", reason);
                     }
-                    crate::client::event_bus::SystemEvent::ConnectingStarted { .. } => {
+                    SystemEvent::ConnectingStarted { .. } => {
                         info!(target: "events", "Connecting started");
                     }
-                    crate::client::event_bus::SystemEvent::ConnectingDone { .. } => {
+                    SystemEvent::ConnectingDone { .. } => {
                         info!(target: "events", "Connecting done");
                     }
-                    crate::client::event_bus::SystemEvent::UpdatingStarted { .. } => {
+                    SystemEvent::UpdatingStarted { .. } => {
                         info!(target: "events", "Updating started");
                     }
-                    crate::client::event_bus::SystemEvent::UpdatingDone { .. } => {
+                    SystemEvent::UpdatingDone { .. } => {
                         info!(target: "events", "Updating done");
                     }
-                    crate::client::event_bus::SystemEvent::ScriptEvent { script_id, event_type } => {
+                    SystemEvent::LoginSucceeded { character_id, character_name } => {
+                        info!(target: "events", "LoginSucceeded -- Character: {} (ID: {})", character_name, character_id);
+                    }
+                    SystemEvent::ScriptEvent { script_id, event_type } => {
                         match event_type {
-                            crate::client::event_bus::ScriptEventType::Loaded => {
+                            ScriptEventType::Loaded => {
                                 info!(target: "events", "Script loaded: {}", script_id);
                             }
-                            crate::client::event_bus::ScriptEventType::Unloaded => {
+                            ScriptEventType::Unloaded => {
                                 info!(target: "events", "Script unloaded: {}", script_id);
                             }
-                            crate::client::event_bus::ScriptEventType::Error { message } => {
+                            ScriptEventType::Error { message } => {
                                 error!(target: "events", "Script error {}: {}", script_id, message);
                             }
-                            crate::client::event_bus::ScriptEventType::Log { message } => {
+                            ScriptEventType::Log { message } => {
                                 info!(target: "events", "Script log {}: {}", script_id, message);
                             }
                         }
@@ -136,12 +139,12 @@ impl EventConsumer for LoggingConsumer {
                 error!(target: "events", "Authentication failed: {}", reason);
             }
             // Ignore progress events in the CLI version
-            GameEvent::ConnectingSetProgress { .. }
-            | GameEvent::UpdatingSetProgress { .. }
-            | GameEvent::ConnectingStart
-            | GameEvent::ConnectingDone
-            | GameEvent::UpdatingStart
-            | GameEvent::UpdatingDone => {}
+            GameEvent::ConnectingSetProgress { .. } => {}
+            GameEvent::UpdatingSetProgress { .. } => {}
+            GameEvent::ConnectingStart => {}
+            GameEvent::ConnectingDone => {}
+            GameEvent::UpdatingStart => {}
+            GameEvent::UpdatingDone => {}
         }
     }
 }
@@ -172,11 +175,40 @@ impl EventConsumer for TuiConsumer {
             let _ = self.tui_event_tx.send(game_event.clone());
         }
 
-        // Handle specific events with logging
-        match envelope.event {
+        // Extract GameEvent for backward compatibility
+        let game_event = match envelope.event {
+            ClientEvent::Game(game_event) => game_event,
+            ClientEvent::State(state_event) => {
+                match state_event {
+                    gromnie_client::client::refactored_event_bus::ClientStateEvent::StateTransition { from, to, .. } => {
+                        info!(target: "events", "STATE TRANSITION: {:?} -> {:?}", from, to);
+                    }
+                    gromnie_client::client::refactored_event_bus::ClientStateEvent::ClientFailed { reason, .. } => {
+                        error!(target: "events", "CLIENT FAILED: {}", reason);
+                    }
+                }
+                return;
+            }
+            ClientEvent::System(system_event) => {
+                match system_event {
+                    gromnie_client::client::refactored_event_bus::SystemEvent::AuthenticationSucceeded { .. } => {
+                        info!(target: "events", "Authentication succeeded - connected to server");
+                    }
+                    gromnie_client::client::refactored_event_bus::SystemEvent::AuthenticationFailed { reason, .. } => {
+                        error!(target: "events", "Authentication failed: {}", reason);
+                    }
+                    gromnie_client::client::refactored_event_bus::SystemEvent::LoginSucceeded { character_id, character_name } => {
+                        info!(target: "events", "LoginSucceeded -- Character: {} (ID: {})", character_name, character_id);
+                    }
+                    _ => {
+                        // Handle other system events if needed
+                    }
+                }
+                return;
+            }
+        };
 
-        // Handle specific events with logging
-        match event {
+        match game_event {
             GameEvent::CharacterListReceived {
                 account,
                 characters,
@@ -226,12 +258,12 @@ impl EventConsumer for TuiConsumer {
                 error!(target: "events", "Authentication failed: {}", reason);
             }
             // Progress events are handled by TUI directly
-            GameEvent::ConnectingSetProgress { .. }
-            | GameEvent::UpdatingSetProgress { .. }
-            | GameEvent::ConnectingStart
-            | GameEvent::ConnectingDone
-            | GameEvent::UpdatingStart
-            | GameEvent::UpdatingDone => {}
+            GameEvent::ConnectingSetProgress { .. } => {}
+            GameEvent::UpdatingSetProgress { .. } => {}
+            GameEvent::ConnectingStart => {}
+            GameEvent::ConnectingDone => {}
+            GameEvent::UpdatingStart => {}
+            GameEvent::UpdatingDone => {}
         }
     }
 }
@@ -293,10 +325,10 @@ impl EventConsumer for DiscordConsumer {
             ClientEvent::Game(game_event) => game_event,
             ClientEvent::State(state_event) => {
                 match state_event {
-                    crate::client::event_bus::ClientStateEvent::StateTransition { from, to, .. } => {
+                    ClientStateEvent::StateTransition { from, to, .. } => {
                         info!(target: "events", "STATE TRANSITION: {:?} -> {:?}", from, to);
                     }
-                    crate::client::event_bus::ClientStateEvent::ClientFailed { reason, .. } => {
+                    ClientStateEvent::ClientFailed { reason, .. } => {
                         error!(target: "events", "CLIENT FAILED: {}", reason);
                     }
                 }
@@ -304,13 +336,13 @@ impl EventConsumer for DiscordConsumer {
             }
             ClientEvent::System(system_event) => {
                 match system_event {
-                    crate::client::event_bus::SystemEvent::AuthenticationSucceeded { .. } => {
+                    SystemEvent::AuthenticationSucceeded { .. } => {
                         info!(target: "events", "Authentication succeeded - connected to server");
                     }
-                    crate::client::event_bus::SystemEvent::AuthenticationFailed { reason, .. } => {
+                    SystemEvent::AuthenticationFailed { reason, .. } => {
                         error!(target: "events", "Authentication failed: {}", reason);
                     }
-                    crate::client::event_bus::SystemEvent::LoginSucceeded { character_id, character_name } => {
+                    SystemEvent::LoginSucceeded { character_id, character_name } => {
                         // Record in-game start time
                         let now = Instant::now();
                         self.ingame_start_time = Some(now);
@@ -435,12 +467,12 @@ impl EventConsumer for DiscordConsumer {
                 error!(target: "events", "Authentication failed: {}", reason);
             }
             // Ignore progress events
-            GameEvent::ConnectingSetProgress { .. }
-            | GameEvent::UpdatingSetProgress { .. }
-            | GameEvent::ConnectingStart
-            | GameEvent::ConnectingDone
-            | GameEvent::UpdatingStart
-            | GameEvent::UpdatingDone => {}
+            GameEvent::ConnectingSetProgress { .. } => {}
+            GameEvent::UpdatingSetProgress { .. } => {}
+            GameEvent::ConnectingStart => {}
+            GameEvent::ConnectingDone => {}
+            GameEvent::UpdatingStart => {}
+            GameEvent::UpdatingDone => {}
         }
     }
 }

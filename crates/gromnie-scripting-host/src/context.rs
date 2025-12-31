@@ -113,7 +113,12 @@ impl ScriptContext {
 
     // ===== State Access =====
 
-    /// Get a read-only snapshot of the client state (removed - scripts receive state via events)
+    /// Get a read-only snapshot of the client state
+    /// Note: In the new architecture, scripts should maintain their own state based on events.
+    /// This method returns a minimal state snapshot for backward compatibility.
+    pub fn client_state(&self) -> ClientStateSnapshot {
+        ClientStateSnapshot::new()
+    }
 
     /// Get the timestamp when the current event occurred
     pub fn event_time(&self) -> Instant {

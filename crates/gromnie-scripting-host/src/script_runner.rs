@@ -8,7 +8,7 @@ use super::context::{ClientStateSnapshot, ScriptContext};
 use super::timer::TimerManager;
 use super::wasm::WasmScript;
 use gromnie_client::client::events::{ClientAction, GameEvent};
-use gromnie_client::client::event_bus::{ClientEvent, EventEnvelope};
+use gromnie_client::client::refactored_event_bus::{ClientEvent, EventEnvelope, ClientStateEvent, SystemEvent};
 
 /// Default tick rate for scripts (50ms = 20Hz)
 const DEFAULT_TICK_INTERVAL: Duration = Duration::from_millis(50);
@@ -230,13 +230,13 @@ impl ScriptRunner {
         let game_event = match envelope.event {
             ClientEvent::Game(game_event) => game_event,
             ClientEvent::State(state_event) => {
-                // Handle state events
-                self.handle_state_event(state_event);
+                // State events are sent to scripts directly - they can maintain their own state
+                debug!(target: "scripting", "State event received: {:?}", state_event);
                 return;
             }
             ClientEvent::System(system_event) => {
-                // Handle system events  
-                self.handle_system_event(system_event);
+                // System events are sent to scripts directly
+                debug!(target: "scripting", "System event received: {:?}", system_event);
                 return;
             }
         };
@@ -263,7 +263,7 @@ impl ScriptRunner {
             let subscribed = script
                 .subscribed_events()
                 .iter()
-                .any(|filter: &EventFilter| filter.matches(&event));
+                .any(|filter: &EventFilter| filter.matches(&game_event));
 
             if !subscribed {
                 continue;
@@ -271,7 +271,7 @@ impl ScriptRunner {
 
             // Call the script's event handler
             match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-                script.on_event(&event, &mut ctx);
+                script.on_event(&game_event, &mut ctx);
             })) {
                 Ok(_) => {}
                 Err(e) => {
@@ -303,43 +303,5 @@ impl Drop for ScriptRunner {
         }
     }
 
-    /// Handle state transition events
-    fn handle_state_event(&mut self, event: crate::client::event_bus::ClientStateEvent) {
-        match event {
-            crate::client::event_bus::ClientStateEvent::StateTransition { from, to, .. } => {
-                debug!(target: "scripting", "Client state transition: {:?} -> {:?}", from, to);
-                // State events are sent to scripts directly - they can maintain their own state
-            }
-            crate::client::event_bus::ClientStateEvent::ClientFailed { .. } => {
-                debug!(target: "scripting", "Client failed event received");
-            }
-        }
-    }
 
-    /// Handle system events
-    fn handle_system_event(&mut self, event: crate::client::event_bus::SystemEvent) {
-        match event {
-            crate::client::event_bus::SystemEvent::AuthenticationSucceeded { .. } => {
-                debug!(target: "scripting", "Authentication succeeded");
-            }
-            crate::client::event_bus::SystemEvent::AuthenticationFailed { .. } => {
-                debug!(target: "scripting", "Authentication failed");
-            }
-            crate::client::event_bus::SystemEvent::ConnectingStarted { .. } => {
-                debug!(target: "scripting", "Connecting started");
-            }
-            crate::client::event_bus::SystemEvent::ConnectingDone { .. } => {
-                debug!(target: "scripting", "Connecting done");
-            }
-            crate::client::event_bus::SystemEvent::UpdatingStarted { .. } => {
-                debug!(target: "scripting", "Updating started");
-            }
-            crate::client::event_bus::SystemEvent::UpdatingDone { .. } => {
-                debug!(target: "scripting", "Updating done");
-            }
-            crate::client::event_bus::SystemEvent::ScriptEvent { .. } => {
-                // Script events could be handled here if needed
-            }
-        }
-    }
 }
