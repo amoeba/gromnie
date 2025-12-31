@@ -1,9 +1,10 @@
 use std::error::Error;
 use std::fs;
+use std::sync::Arc;
 
 use clap::Parser;
 use gromnie_runner::{
-    ClientConfig, LoggingConsumer, create_script_consumer, run_client_with_consumers,
+    ClientConfig, EventBusManager, LoggingConsumer, create_script_consumer, run_client_with_consumers,
 };
 use ratatui::{TerminalOptions, Viewport};
 use tracing::info;
@@ -127,10 +128,13 @@ async fn main() -> Result<(), Box<dyn Error>> {
                 server_name, account_name
             );
 
+            let event_bus_manager = Arc::new(EventBusManager::new(100));
+            
             if config.scripting.enabled {
                 let scripting_config = config.scripting.clone();
                 run_client_with_consumers(
                     client_config,
+                    &event_bus_manager,
                     move |action_tx| {
                         vec![
                             Box::new(LoggingConsumer::new(action_tx.clone())),
@@ -141,7 +145,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
                 )
                 .await;
             } else {
-                gromnie_runner::run_client(client_config, LoggingConsumer::new, None).await;
+                gromnie_runner::run_client(client_config, &event_bus_manager, LoggingConsumer::new, None).await;
             }
 
             return Ok(());
@@ -179,6 +183,8 @@ async fn main() -> Result<(), Box<dyn Error>> {
             password: account.password.clone(),
         };
 
+        let event_bus_manager = Arc::new(EventBusManager::new(100));
+        
         // Use multi-consumer event bus when scripting is enabled
         let config = &wizard.config;
 
@@ -186,6 +192,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
             let scripting_config = config.scripting.clone();
             run_client_with_consumers(
                 client_config,
+                &event_bus_manager,
                 move |action_tx| {
                     vec![
                         // Add logging consumer
@@ -198,7 +205,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
             )
             .await;
         } else {
-            gromnie_runner::run_client(client_config, LoggingConsumer::new, None).await;
+            gromnie_runner::run_client(client_config, &event_bus_manager, LoggingConsumer::new, None).await;
         }
     }
 
