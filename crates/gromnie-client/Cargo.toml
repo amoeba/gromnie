@@ -12,7 +12,7 @@ name = "gromnie_client"
 path = "src/lib.rs"
 
 [dependencies]
-acprotocol = { git = "https://github.com/amoeba/asheron-rs", rev = "a165e6ca82dd913281cb6280538ee5ab3bd1ef4b" }
+acprotocol.workspace = true
 anyhow.workspace = true
 bitflags = "2.6"
 byteorder = "1.5.0"

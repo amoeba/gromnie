@@ -1,13 +1,16 @@
+use std::collections::HashMap;
 use std::time::{Duration, Instant};
 use tokio::sync::mpsc::UnboundedSender;
 use tracing::{debug, error};
 
 use super::EventFilter;
 use super::Script;
-use super::context::{ClientStateSnapshot, ScriptContext};
+use super::context::ScriptContext;
 use super::timer::TimerManager;
 use super::wasm::WasmScript;
-use gromnie_client::client::events::{ClientAction, GameEvent};
+use crate::create_runner_from_config;
+use gromnie_client::client::events::{ClientAction, ClientEvent, ClientSystemEvent};
+use gromnie_runner::{EventConsumer, EventEnvelope};
 
 /// Default tick rate for scripts (50ms = 20Hz)
 const DEFAULT_TICK_INTERVAL: Duration = Duration::from_millis(50);
@@ -22,8 +25,6 @@ pub struct ScriptRunner {
     action_tx: UnboundedSender<ClientAction>,
     /// Timer manager shared across all scripts
     timer_manager: TimerManager,
-    /// Current client state snapshot
-    client_state: ClientStateSnapshot,
     /// Last time scripts were ticked
     last_tick: Instant,
     /// Interval between ticks (default 50ms for 20Hz)
@@ -46,7 +47,6 @@ impl ScriptRunner {
             wasm_engine: None,
             action_tx,
             timer_manager: TimerManager::new(),
-            client_state: ClientStateSnapshot::new(),
             last_tick: Instant::now(),
             tick_interval,
         }
@@ -70,7 +70,6 @@ impl ScriptRunner {
             wasm_engine,
             action_tx,
             timer_manager: TimerManager::new(),
-            client_state: ClientStateSnapshot::new(),
             last_tick: Instant::now(),
             tick_interval: DEFAULT_TICK_INTERVAL,
         }
@@ -84,7 +83,6 @@ impl ScriptRunner {
         let mut ctx = Self::create_script_context(
             self.action_tx.clone(),
             &mut self.timer_manager,
-            self.client_state.clone(),
             Instant::now(),
         );
 
@@ -114,51 +112,23 @@ impl ScriptRunner {
     fn create_script_context(
         action_tx: UnboundedSender<ClientAction>,
         timer_manager: &mut TimerManager,
-        client_state: ClientStateSnapshot,
         now: Instant,
     ) -> ScriptContext {
-        unsafe {
-            ScriptContext::new(
-                action_tx,
-                timer_manager as *mut TimerManager,
-                client_state,
-                now,
-            )
-        }
-    }
-
-    /// Update client state based on events
-    fn update_client_state(&mut self, event: &GameEvent) {
-        match event {
-            GameEvent::AuthenticationSucceeded => {
-                self.client_state.is_authenticated = true;
-            }
-            GameEvent::AuthenticationFailed { .. } => {
-                self.client_state.is_authenticated = false;
-            }
-            GameEvent::LoginSucceeded {
-                character_id,
-                character_name,
-            } => {
-                self.client_state.character_id = Some(*character_id);
-                self.client_state.character_name = Some(character_name.clone());
-                self.client_state.is_ingame = true;
-            }
-            GameEvent::LoginFailed { .. } => {
-                self.client_state.is_ingame = false;
-            }
-            _ => {}
-        }
+        unsafe { ScriptContext::new(action_tx, timer_manager as *mut TimerManager, now) }
     }
 
     /// Load scripts from a directory
-    pub fn load_scripts(&mut self, dir: &std::path::Path) {
+    pub fn load_scripts(
+        &mut self,
+        dir: &std::path::Path,
+        script_config: &HashMap<String, toml::Value>,
+    ) {
         let Some(ref engine) = self.wasm_engine else {
             debug!(target: "scripting", "Script engine not available, skipping script loading");
             return;
         };
 
-        let scripts = super::wasm::load_wasm_scripts(engine, dir);
+        let scripts = super::wasm::load_wasm_scripts(engine, dir, script_config);
 
         for script in scripts {
             self.register_script(script);
@@ -167,14 +137,18 @@ impl ScriptRunner {
 
     /// Reload scripts (for hot-reload)
     /// This unloads all existing scripts and loads new ones from the directory
-    pub fn reload_scripts(&mut self, dir: &std::path::Path) {
+    pub fn reload_scripts(
+        &mut self,
+        dir: &std::path::Path,
+        script_config: &HashMap<String, toml::Value>,
+    ) {
         debug!(target: "scripting", "Reloading scripts from {}", dir.display());
 
         // Unload existing scripts
         self.unload_scripts();
 
         // Load new ones
-        self.load_scripts(dir);
+        self.load_scripts(dir, script_config);
     }
 
     /// Unload all scripts
@@ -186,7 +160,6 @@ impl ScriptRunner {
         let mut ctx = Self::create_script_context(
             self.action_tx.clone(),
             &mut self.timer_manager,
-            self.client_state.clone(),
             Instant::now(),
         );
 
@@ -224,12 +197,8 @@ impl ScriptRunner {
         self.last_tick = now;
 
         // Create context once before the loop
-        let mut ctx = Self::create_script_context(
-            self.action_tx.clone(),
-            &mut self.timer_manager,
-            self.client_state.clone(),
-            now,
-        );
+        let mut ctx =
+            Self::create_script_context(self.action_tx.clone(), &mut self.timer_manager, now);
 
         // Call on_tick for each script
         for script in &mut self.scripts {
@@ -252,12 +221,27 @@ impl ScriptRunner {
 }
 
 impl ScriptRunner {
-    /// Handle a game event
-    pub fn handle_event(&mut self, event: GameEvent) {
+    /// Handle a raw event
+    pub fn handle_event(&mut self, raw_event: ClientEvent) {
         let now = Instant::now();
 
-        // Update client state
-        self.update_client_state(&event);
+        // Extract GameEvent if this is a game event
+        let game_event = match raw_event {
+            ClientEvent::Game(game_event) => {
+                debug!(target: "scripting", "Game event received: {:?}", std::mem::discriminant(&game_event));
+                game_event
+            }
+            ClientEvent::State(state_event) => {
+                // State events are sent to scripts directly - they can maintain their own state
+                debug!(target: "scripting", "State event received: {:?}", state_event);
+                return;
+            }
+            ClientEvent::System(system_event) => {
+                // System events are sent to scripts directly
+                debug!(target: "scripting", "System event received: {:?}", system_event);
+                return;
+            }
+        };
 
         // Tick timers FIRST so they're marked as fired
         let fired_timers = self.tick_timers(now);
@@ -269,12 +253,8 @@ impl ScriptRunner {
         self.tick_scripts(now);
 
         // Create context once before the loop
-        let mut ctx = Self::create_script_context(
-            self.action_tx.clone(),
-            &mut self.timer_manager,
-            self.client_state.clone(),
-            now,
-        );
+        let mut ctx =
+            Self::create_script_context(self.action_tx.clone(), &mut self.timer_manager, now);
 
         // Dispatch event to each script that's interested
         for script in &mut self.scripts {
@@ -282,7 +262,16 @@ impl ScriptRunner {
             let subscribed = script
                 .subscribed_events()
                 .iter()
-                .any(|filter: &EventFilter| filter.matches(&event));
+                .any(|filter: &EventFilter| filter.matches(&game_event));
+
+            debug!(
+                target: "scripting",
+                "Script {} ({}) subscribed to {:?}, event matches: {}",
+                script.name(),
+                script.id(),
+                script.subscribed_events(),
+                subscribed
+            );
 
             if !subscribed {
                 continue;
@@ -290,7 +279,7 @@ impl ScriptRunner {
 
             // Call the script's event handler
             match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-                script.on_event(&event, &mut ctx);
+                script.on_event(&game_event, &mut ctx);
             })) {
                 Ok(_) => {}
                 Err(e) => {
@@ -312,7 +301,6 @@ impl Drop for ScriptRunner {
         let mut ctx = Self::create_script_context(
             self.action_tx.clone(),
             &mut self.timer_manager,
-            self.client_state.clone(),
             Instant::now(),
         );
 
@@ -322,4 +310,95 @@ impl Drop for ScriptRunner {
             script.on_unload(&mut ctx);
         }
     }
+}
+
+/// Wrapper around ScriptRunner that implements EventConsumer trait
+pub struct ScriptConsumer {
+    runner: ScriptRunner,
+}
+
+impl ScriptConsumer {
+    pub fn new(runner: ScriptRunner) -> Self {
+        Self { runner }
+    }
+}
+
+impl EventConsumer for ScriptConsumer {
+    fn handle_event(&mut self, envelope: EventEnvelope) {
+        debug!(target: "scripting", "ScriptConsumer::handle_event called with event type: {:?}", std::mem::discriminant(&envelope.event));
+
+        // Extract ClientEvent from EventEnvelope
+        let client_event = match envelope.event {
+            gromnie_runner::EventType::Game(game_event) => ClientEvent::Game(game_event),
+            gromnie_runner::EventType::State(state_event) => {
+                // Convert ClientState-based event to string-based
+                match state_event {
+                    gromnie_runner::ClientStateEvent::StateTransition {
+                        from,
+                        to,
+                        client_id,
+                    } => ClientEvent::State(
+                        gromnie_client::client::events::ClientStateEvent::StateTransition {
+                            from,
+                            to,
+                            client_id,
+                        },
+                    ),
+                    gromnie_runner::ClientStateEvent::ClientFailed { reason, client_id } => {
+                        ClientEvent::State(
+                            gromnie_client::client::events::ClientStateEvent::ClientFailed {
+                                reason,
+                                client_id,
+                            },
+                        )
+                    }
+                }
+            }
+            gromnie_runner::EventType::System(system_event) => {
+                // Convert SystemEvent to ClientSystemEvent
+                match system_event {
+                    gromnie_runner::SystemEvent::AuthenticationSucceeded { .. } => {
+                        ClientEvent::System(ClientSystemEvent::AuthenticationSucceeded)
+                    }
+                    gromnie_runner::SystemEvent::AuthenticationFailed { reason, .. } => {
+                        ClientEvent::System(ClientSystemEvent::AuthenticationFailed { reason })
+                    }
+                    gromnie_runner::SystemEvent::ConnectingStarted { .. } => {
+                        ClientEvent::System(ClientSystemEvent::ConnectingStarted)
+                    }
+                    gromnie_runner::SystemEvent::ConnectingDone { .. } => {
+                        ClientEvent::System(ClientSystemEvent::ConnectingDone)
+                    }
+                    gromnie_runner::SystemEvent::UpdatingStarted { .. } => {
+                        ClientEvent::System(ClientSystemEvent::UpdatingStarted)
+                    }
+                    gromnie_runner::SystemEvent::UpdatingDone { .. } => {
+                        ClientEvent::System(ClientSystemEvent::UpdatingDone)
+                    }
+                    gromnie_runner::SystemEvent::LoginSucceeded {
+                        character_id,
+                        character_name,
+                    } => ClientEvent::System(ClientSystemEvent::LoginSucceeded {
+                        character_id,
+                        character_name,
+                    }),
+                    _ => {
+                        // Ignore other system events
+                        return;
+                    }
+                }
+            }
+        };
+
+        self.runner.handle_event(client_event);
+    }
+}
+
+/// Create a script runner consumer with the specified configuration
+pub fn create_script_consumer(
+    action_tx: UnboundedSender<ClientAction>,
+    config: &gromnie_client::config::ScriptingConfig,
+) -> ScriptConsumer {
+    let runner = create_runner_from_config(action_tx, config);
+    ScriptConsumer::new(runner)
 }

@@ -4,6 +4,7 @@
 use gromnie::*;
 use gromnie_scripting_api as gromnie;
 
+#[derive(Default)]
 pub struct TestScript {
     load_called: bool,
     unload_called: bool,
@@ -14,13 +15,7 @@ pub struct TestScript {
 
 impl TestScript {
     pub fn new() -> Self {
-        Self {
-            load_called: false,
-            unload_called: false,
-            event_count: 0,
-            tick_count: 0,
-            last_event: None,
-        }
+        Self::default()
     }
 }
 
@@ -85,12 +80,6 @@ impl Script for TestScript {
                 self.last_event = Some(format!("Chat: {}", chat_data.message));
                 log(&format!("Chat message: {}", chat_data.message));
             }
-            // All event variants are handled above, so this should never be reached
-            // Keep for future-proofing if new event types are added
-            _ => {
-                self.last_event = Some("Unknown event".to_string());
-                log("Received unknown event type");
-            }
         }
     }
 
@@ -98,7 +87,7 @@ impl Script for TestScript {
         self.tick_count += 1;
 
         // Every 10 ticks, test some functionality
-        if self.tick_count % 10 == 0 {
+        if self.tick_count.is_multiple_of(10) {
             // Test client state access
             let state = get_client_state();
             log(&format!(
@@ -107,9 +96,7 @@ impl Script for TestScript {
             ));
 
             // Simple test every 10 ticks
-            if self.tick_count % 10 == 0 {
-                log(&format!("Tick count: {}", self.tick_count));
-            }
+            log(&format!("Tick count: {}", self.tick_count));
         }
     }
 }

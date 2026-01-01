@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use tracing::{info, warn};
 use wasmtime::Engine;
@@ -5,17 +6,23 @@ use wasmtime::Engine;
 use super::WasmScript;
 use crate::Script;
 
-/// Load all scripts from a directory
+/// Load all scripts from a directory, filtering by config
 ///
 /// This function must run outside of an async runtime context because wasmtime-wasi
 /// tries to set up its own runtime. We spawn a separate thread to avoid conflicts.
-pub fn load_wasm_scripts(engine: &Engine, dir: &Path) -> Vec<WasmScript> {
+pub fn load_wasm_scripts(
+    engine: &Engine,
+    dir: &Path,
+    script_config: &HashMap<String, toml::Value>,
+) -> Vec<WasmScript> {
     // Clone the engine for the thread (Engine is cheaply cloneable)
     let engine = engine.clone();
     let dir = dir.to_path_buf();
+    let script_config = script_config.clone();
 
     // Spawn a thread to load scripts outside the async runtime
-    let handle = std::thread::spawn(move || load_wasm_scripts_blocking(&engine, &dir));
+    let handle =
+        std::thread::spawn(move || load_wasm_scripts_blocking(&engine, &dir, &script_config));
 
     // Wait for the thread to complete and return the result
     handle.join().unwrap_or_else(|_| {
@@ -25,8 +32,13 @@ pub fn load_wasm_scripts(engine: &Engine, dir: &Path) -> Vec<WasmScript> {
 }
 
 /// Internal blocking implementation of script loading
-fn load_wasm_scripts_blocking(engine: &Engine, dir: &Path) -> Vec<WasmScript> {
+fn load_wasm_scripts_blocking(
+    engine: &Engine,
+    dir: &Path,
+    script_config: &HashMap<String, toml::Value>,
+) -> Vec<WasmScript> {
     let mut scripts = Vec::new();
+    let mut seen_ids = std::collections::HashSet::new();
 
     // Check if directory exists
     if !dir.exists() {
@@ -59,17 +71,11 @@ fn load_wasm_scripts_blocking(engine: &Engine, dir: &Path) -> Vec<WasmScript> {
             continue;
         }
 
-        match WasmScript::from_file(engine, &path) {
-            Ok(script) => {
-                info!(
-                    target: "scripting",
-                    "Loaded script: {} ({}) from {}",
-                    script.name(),
-                    script.id(),
-                    path.display()
-                );
-                scripts.push(script);
-            }
+        // Try to load the script to get its ID
+        let script_result = WasmScript::from_file(engine, &path);
+
+        let script = match script_result {
+            Ok(s) => s,
             Err(e) => {
                 warn!(
                     target: "scripting",
@@ -77,8 +83,50 @@ fn load_wasm_scripts_blocking(engine: &Engine, dir: &Path) -> Vec<WasmScript> {
                     path.display(),
                     e
                 );
+                continue;
             }
+        };
+
+        let script_id = script.id();
+
+        // Skip if we've already loaded a script with this ID (handles duplicate .wasm files)
+        if !seen_ids.insert(script_id.to_string()) {
+            warn!(
+                target: "scripting",
+                "Duplicate script ID '{}' found in {}, skipping",
+                script_id,
+                path.display()
+            );
+            continue;
         }
+
+        // Check if this script is enabled in config
+        // Default to enabled if not specified in config
+        let is_enabled = script_config
+            .get(script_id)
+            .and_then(|config: &toml::Value| config.get("enabled"))
+            .and_then(|v: &toml::Value| v.as_bool())
+            .unwrap_or(true); // Default to true
+
+        if !is_enabled {
+            info!(
+                target: "scripting",
+                "Skipping disabled script: {} ({}) from {}",
+                script.name(),
+                script_id,
+                path.display()
+            );
+            continue;
+        }
+
+        info!(
+            target: "scripting",
+            "Loaded script: {} ({}) from {}",
+            script.name(),
+            script_id,
+            path.display()
+        );
+        scripts.push(script);
     }
 
     if scripts.is_empty() {

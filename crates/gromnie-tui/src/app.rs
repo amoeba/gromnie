@@ -154,6 +154,58 @@ impl App {
         }
     }
 
+    pub fn update_from_system_event(&mut self, event: gromnie_runner::SystemEvent) {
+        match event {
+            gromnie_runner::SystemEvent::AuthenticationSucceeded { .. } => {
+                // Mark that authentication succeeded (received ConnectRequest)
+                if let GameScene::Logging { ddd_received, .. } = self.game_scene {
+                    self.game_scene = GameScene::Logging {
+                        authenticated: true,
+                        ddd_received,
+                    };
+                }
+                self.client_status.connected = true;
+
+                self.add_network_message(NetworkMessage::Received {
+                    opcode: "CONNECT".to_string(),
+                    description: "Authentication succeeded - ConnectRequest received".to_string(),
+                    timestamp: chrono::Utc::now(),
+                });
+            }
+            gromnie_runner::SystemEvent::AuthenticationFailed { reason, .. } => {
+                self.add_network_message(NetworkMessage::Received {
+                    opcode: "ERROR".to_string(),
+                    description: format!("Authentication failed: {}", reason),
+                    timestamp: chrono::Utc::now(),
+                });
+            }
+            gromnie_runner::SystemEvent::LoginSucceeded {
+                character_id,
+                character_name,
+            } => {
+                self.client_status.logged_in = true;
+                self.client_status.current_character = Some(character_name.clone());
+
+                // Transition from LoggingIn to LoggedIn
+                if let GameScene::GameWorld { ref mut state, .. } = self.game_scene {
+                    *state = GameWorldState::LoggedIn;
+                }
+
+                self.add_network_message(NetworkMessage::Received {
+                    opcode: "0xF656".to_string(),
+                    description: format!(
+                        "Login succeeded: {} (ID: {})",
+                        character_name, character_id
+                    ),
+                    timestamp: chrono::Utc::now(),
+                });
+            }
+            _ => {
+                // Other system events don't need special handling in the TUI
+            }
+        }
+    }
+
     pub fn update_from_event(&mut self, event: GameEvent) {
         match event {
             GameEvent::CharacterListReceived {
@@ -219,6 +271,16 @@ impl App {
                 self.add_network_message(NetworkMessage::Received {
                     opcode: "0xF656".to_string(),
                     description: format!("Login failed: {}", reason),
+                    timestamp: chrono::Utc::now(),
+                });
+            }
+            GameEvent::CharacterError {
+                error_code,
+                error_message,
+            } => {
+                self.add_network_message(NetworkMessage::Received {
+                    opcode: format!("0x{:04X}", error_code),
+                    description: format!("Character error: {}", error_message),
                     timestamp: chrono::Utc::now(),
                 });
             }
