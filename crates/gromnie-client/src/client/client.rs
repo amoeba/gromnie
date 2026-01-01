@@ -11,7 +11,9 @@ use acprotocol::messages::c2s::{
     CharacterSendCharGenResult, DDDInterrogationResponseMessage, LoginSendEnterWorld,
     LoginSendEnterWorldRequest,
 };
-use acprotocol::messages::s2c::{CharacterCharacterError, DDDInterrogationMessage, LoginLoginCharacterSet};
+use acprotocol::messages::s2c::{
+    CharacterCharacterError, DDDInterrogationMessage, LoginLoginCharacterSet,
+};
 use tokio::sync::mpsc;
 
 // Import from our new modules
@@ -1018,9 +1020,7 @@ impl Client {
                             self.handle_hear_ranged_speech(message)
                         }
                         S2CMessage::OrderedGameEvent => self.handle_game_event(message),
-                        S2CMessage::CharacterCharacterError => {
-                            self.handle_character_error(message)
-                        }
+                        S2CMessage::CharacterCharacterError => self.handle_character_error(message),
                         // Add more handlers as needed
                         _ => {
                             info!(target: "net", "Unhandled S2CMessage: {:?} (0x{:04X})", msg_type, message.opcode);
@@ -1658,9 +1658,12 @@ impl Client {
             });
 
             // Emit authentication success system event
-            let _ = self.raw_event_tx.send(ClientEvent::System(
-                ClientSystemEvent::AuthenticationSucceeded,
-            )).await;
+            let _ = self
+                .raw_event_tx
+                .send(ClientEvent::System(
+                    ClientSystemEvent::AuthenticationSucceeded,
+                ))
+                .await;
 
             info!(target: "net", "Authentication succeeded - received ConnectRequest from server");
 
@@ -1855,7 +1858,7 @@ impl Client {
             && *progress == ConnectingProgress::Initial
         {
             *progress = ConnectingProgress::LoginRequestSent;
-                    let game_event = GameEvent::ConnectingSetProgress { progress: 0.33 };
+            let game_event = GameEvent::ConnectingSetProgress { progress: 0.33 };
             let _ = self.raw_event_tx.send(ClientEvent::Game(game_event)).await;
             info!(target: "net", "Progress: LoginRequest sent (33%)");
         }
