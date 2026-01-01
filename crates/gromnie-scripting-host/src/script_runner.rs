@@ -8,9 +8,9 @@ use super::Script;
 use super::context::ScriptContext;
 use super::timer::TimerManager;
 use super::wasm::WasmScript;
+use crate::create_runner_from_config;
 use gromnie_client::client::events::{ClientAction, ClientEvent, ClientSystemEvent};
 use gromnie_runner::{EventConsumer, EventEnvelope};
-use crate::create_runner_from_config;
 
 /// Default tick rate for scripts (50ms = 20Hz)
 const DEFAULT_TICK_INTERVAL: Duration = Duration::from_millis(50);
@@ -114,19 +114,15 @@ impl ScriptRunner {
         timer_manager: &mut TimerManager,
         now: Instant,
     ) -> ScriptContext {
-        unsafe {
-            ScriptContext::new(
-                action_tx,
-                timer_manager as *mut TimerManager,
-                now,
-            )
-        }
+        unsafe { ScriptContext::new(action_tx, timer_manager as *mut TimerManager, now) }
     }
 
-    /// Update client state based on events (removed - scripts handle their own state)
-
     /// Load scripts from a directory
-    pub fn load_scripts(&mut self, dir: &std::path::Path, script_config: &HashMap<String, toml::Value>) {
+    pub fn load_scripts(
+        &mut self,
+        dir: &std::path::Path,
+        script_config: &HashMap<String, toml::Value>,
+    ) {
         let Some(ref engine) = self.wasm_engine else {
             debug!(target: "scripting", "Script engine not available, skipping script loading");
             return;
@@ -141,7 +137,11 @@ impl ScriptRunner {
 
     /// Reload scripts (for hot-reload)
     /// This unloads all existing scripts and loads new ones from the directory
-    pub fn reload_scripts(&mut self, dir: &std::path::Path, script_config: &HashMap<String, toml::Value>) {
+    pub fn reload_scripts(
+        &mut self,
+        dir: &std::path::Path,
+        script_config: &HashMap<String, toml::Value>,
+    ) {
         debug!(target: "scripting", "Reloading scripts from {}", dir.display());
 
         // Unload existing scripts
@@ -197,11 +197,8 @@ impl ScriptRunner {
         self.last_tick = now;
 
         // Create context once before the loop
-        let mut ctx = Self::create_script_context(
-            self.action_tx.clone(),
-            &mut self.timer_manager,
-            now,
-        );
+        let mut ctx =
+            Self::create_script_context(self.action_tx.clone(), &mut self.timer_manager, now);
 
         // Call on_tick for each script
         for script in &mut self.scripts {
@@ -256,11 +253,8 @@ impl ScriptRunner {
         self.tick_scripts(now);
 
         // Create context once before the loop
-        let mut ctx = Self::create_script_context(
-            self.action_tx.clone(),
-            &mut self.timer_manager,
-            now,
-        );
+        let mut ctx =
+            Self::create_script_context(self.action_tx.clone(), &mut self.timer_manager, now);
 
         // Dispatch event to each script that's interested
         for script in &mut self.scripts {
@@ -316,8 +310,6 @@ impl Drop for ScriptRunner {
             script.on_unload(&mut ctx);
         }
     }
-
-
 }
 
 /// Wrapper around ScriptRunner that implements EventConsumer trait
@@ -337,24 +329,28 @@ impl EventConsumer for ScriptConsumer {
 
         // Extract ClientEvent from EventEnvelope
         let client_event = match envelope.event {
-            gromnie_runner::EventType::Game(game_event) => {
-                ClientEvent::Game(game_event)
-            }
+            gromnie_runner::EventType::Game(game_event) => ClientEvent::Game(game_event),
             gromnie_runner::EventType::State(state_event) => {
                 // Convert ClientState-based event to string-based
                 match state_event {
-                    gromnie_runner::ClientStateEvent::StateTransition { from, to, client_id } => {
-                        ClientEvent::State(gromnie_client::client::events::ClientStateEvent::StateTransition {
+                    gromnie_runner::ClientStateEvent::StateTransition {
+                        from,
+                        to,
+                        client_id,
+                    } => ClientEvent::State(
+                        gromnie_client::client::events::ClientStateEvent::StateTransition {
                             from,
                             to,
                             client_id,
-                        })
-                    }
+                        },
+                    ),
                     gromnie_runner::ClientStateEvent::ClientFailed { reason, client_id } => {
-                        ClientEvent::State(gromnie_client::client::events::ClientStateEvent::ClientFailed {
-                            reason,
-                            client_id,
-                        })
+                        ClientEvent::State(
+                            gromnie_client::client::events::ClientStateEvent::ClientFailed {
+                                reason,
+                                client_id,
+                            },
+                        )
                     }
                 }
             }
@@ -379,9 +375,13 @@ impl EventConsumer for ScriptConsumer {
                     gromnie_runner::SystemEvent::UpdatingDone { .. } => {
                         ClientEvent::System(ClientSystemEvent::UpdatingDone)
                     }
-                    gromnie_runner::SystemEvent::LoginSucceeded { character_id, character_name } => {
-                        ClientEvent::System(ClientSystemEvent::LoginSucceeded { character_id, character_name })
-                    }
+                    gromnie_runner::SystemEvent::LoginSucceeded {
+                        character_id,
+                        character_name,
+                    } => ClientEvent::System(ClientSystemEvent::LoginSucceeded {
+                        character_id,
+                        character_name,
+                    }),
                     _ => {
                         // Ignore other system events
                         return;

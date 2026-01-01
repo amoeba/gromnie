@@ -2,9 +2,8 @@ use std::sync::Arc;
 use tokio::sync::mpsc::UnboundedSender;
 use tracing::{debug, error, info};
 
+use crate::event_bus::{ClientStateEvent, EventEnvelope, EventType, ScriptEventType, SystemEvent};
 use gromnie_client::client::events::{ClientAction, GameEvent};
-use crate::event_bus::{EventType, EventEnvelope, ClientStateEvent, SystemEvent, ScriptEventType};
-use gromnie_client::config::ScriptingConfig;
 use serenity::http::Http;
 use serenity::model::id::ChannelId;
 use std::time::Instant;
@@ -64,25 +63,29 @@ impl EventConsumer for LoggingConsumer {
                     SystemEvent::UpdatingDone { .. } => {
                         info!(target: "events", "Updating done");
                     }
-                    SystemEvent::LoginSucceeded { character_id, character_name } => {
+                    SystemEvent::LoginSucceeded {
+                        character_id,
+                        character_name,
+                    } => {
                         info!(target: "events", "LoginSucceeded -- Character: {} (ID: {})", character_name, character_id);
                     }
-                    SystemEvent::ScriptEvent { script_id, event_type } => {
-                        match event_type {
-                            ScriptEventType::Loaded => {
-                                info!(target: "events", "Script loaded: {}", script_id);
-                            }
-                            ScriptEventType::Unloaded => {
-                                info!(target: "events", "Script unloaded: {}", script_id);
-                            }
-                            ScriptEventType::Error { message } => {
-                                error!(target: "events", "Script error {}: {}", script_id, message);
-                            }
-                            ScriptEventType::Log { message } => {
-                                info!(target: "events", "Script log {}: {}", script_id, message);
-                            }
+                    SystemEvent::ScriptEvent {
+                        script_id,
+                        event_type,
+                    } => match event_type {
+                        ScriptEventType::Loaded => {
+                            info!(target: "events", "Script loaded: {}", script_id);
                         }
-                    }
+                        ScriptEventType::Unloaded => {
+                            info!(target: "events", "Script unloaded: {}", script_id);
+                        }
+                        ScriptEventType::Error { message } => {
+                            error!(target: "events", "Script error {}: {}", script_id, message);
+                        }
+                        ScriptEventType::Log { message } => {
+                            info!(target: "events", "Script log {}: {}", script_id, message);
+                        }
+                    },
                     _ => {
                         // Handle other system events (e.g., Shutdown)
                     }
@@ -147,7 +150,10 @@ impl EventConsumer for LoggingConsumer {
             GameEvent::ConnectingDone => {}
             GameEvent::UpdatingStart => {}
             GameEvent::UpdatingDone => {}
-            GameEvent::CharacterError { error_code, error_message } => {
+            GameEvent::CharacterError {
+                error_code,
+                error_message,
+            } => {
                 error!(target: "events", "Character error (code {}): {}", error_code, error_message);
             }
         }
@@ -202,7 +208,10 @@ impl EventConsumer for TuiConsumer {
                     crate::event_bus::SystemEvent::AuthenticationFailed { reason, .. } => {
                         error!(target: "events", "Authentication failed: {}", reason);
                     }
-                    crate::event_bus::SystemEvent::LoginSucceeded { character_id, character_name } => {
+                    crate::event_bus::SystemEvent::LoginSucceeded {
+                        character_id,
+                        character_name,
+                    } => {
                         info!(target: "events", "LoginSucceeded -- Character: {} (ID: {})", character_name, character_id);
                     }
                     _ => {
@@ -269,7 +278,10 @@ impl EventConsumer for TuiConsumer {
             GameEvent::ConnectingDone => {}
             GameEvent::UpdatingStart => {}
             GameEvent::UpdatingDone => {}
-            GameEvent::CharacterError { error_code, error_message } => {
+            GameEvent::CharacterError {
+                error_code,
+                error_message,
+            } => {
                 error!(target: "events", "Character error (code {}): {}", error_code, error_message);
             }
         }
@@ -350,7 +362,10 @@ impl EventConsumer for DiscordConsumer {
                     SystemEvent::AuthenticationFailed { reason, .. } => {
                         error!(target: "events", "Authentication failed: {}", reason);
                     }
-                    SystemEvent::LoginSucceeded { character_id, character_name } => {
+                    SystemEvent::LoginSucceeded {
+                        character_id,
+                        character_name,
+                    } => {
                         // Record in-game start time
                         let now = Instant::now();
                         self.ingame_start_time = Some(now);
@@ -481,7 +496,10 @@ impl EventConsumer for DiscordConsumer {
             GameEvent::ConnectingDone => {}
             GameEvent::UpdatingStart => {}
             GameEvent::UpdatingDone => {}
-            GameEvent::CharacterError { error_code, error_message } => {
+            GameEvent::CharacterError {
+                error_code,
+                error_message,
+            } => {
                 error!(target: "events", "Character error (code {}): {}", error_code, error_message);
             }
         }

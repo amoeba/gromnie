@@ -82,20 +82,32 @@ pub struct CharacterInfo {
 /// Client state transition events
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub enum ClientStateEvent {
-    StateTransition { from: String, to: String, client_id: u32 },
-    ClientFailed { reason: String, client_id: u32 },
+    StateTransition {
+        from: String,
+        to: String,
+        client_id: u32,
+    },
+    ClientFailed {
+        reason: String,
+        client_id: u32,
+    },
 }
 
 /// System events that originate from the client (before enrichment by runner)
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub enum ClientSystemEvent {
     AuthenticationSucceeded,
-    AuthenticationFailed { reason: String },
+    AuthenticationFailed {
+        reason: String,
+    },
     ConnectingStarted,
     ConnectingDone,
     UpdatingStarted,
     UpdatingDone,
-    LoginSucceeded { character_id: u32, character_name: String },
+    LoginSucceeded {
+        character_id: u32,
+        character_name: String,
+    },
 }
 
 /// Events emitted by the client without context/metadata

@@ -1,5 +1,4 @@
 use clap::Parser;
-use std::sync::Arc;
 use serenity::all::{
     CommandInteraction, CreateCommand, CreateInteractionResponse, CreateInteractionResponseMessage,
     Interaction,
@@ -7,13 +6,14 @@ use serenity::all::{
 use serenity::client::Context;
 use serenity::model::gateway::Ready;
 use serenity::prelude::{EventHandler, GatewayIntents};
+use std::sync::Arc;
 use std::time::Instant;
 use tokio::sync::RwLock;
 use tracing::{error, info};
 use tracing_subscriber::EnvFilter;
 
 use gromnie_client::client::events::{ClientAction, GameEvent};
-use gromnie_runner::{ClientConfig, EventBusManager, DiscordConsumer, UptimeData};
+use gromnie_runner::{ClientConfig, DiscordConsumer, EventBusManager, UptimeData};
 
 #[derive(Parser)]
 #[command(version, about, long_about = None)]
@@ -205,7 +205,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     };
 
     let event_bus_manager = Arc::new(EventBusManager::new(100));
-    
+
     // Spawn client task
     let http_clone = http.clone();
     let uptime_data_clone = uptime_data.clone();

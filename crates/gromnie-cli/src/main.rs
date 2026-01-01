@@ -3,9 +3,7 @@ use std::fs;
 use std::sync::Arc;
 
 use clap::Parser;
-use gromnie_runner::{
-    ClientConfig, EventBusManager, LoggingConsumer, run_client_with_consumers,
-};
+use gromnie_runner::{ClientConfig, EventBusManager, LoggingConsumer, run_client_with_consumers};
 use gromnie_scripting_host::create_script_consumer;
 use ratatui::{TerminalOptions, Viewport};
 use tracing::info;
@@ -130,7 +128,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
             );
 
             let event_bus_manager = Arc::new(EventBusManager::new(100));
-            
+
             if config.scripting.enabled {
                 let scripting_config = config.scripting.clone();
                 run_client_with_consumers(
@@ -146,7 +144,13 @@ async fn main() -> Result<(), Box<dyn Error>> {
                 )
                 .await;
             } else {
-                gromnie_runner::run_client(client_config, event_bus_manager, LoggingConsumer::new, None).await;
+                gromnie_runner::run_client(
+                    client_config,
+                    event_bus_manager,
+                    LoggingConsumer::new,
+                    None,
+                )
+                .await;
             }
 
             return Ok(());
@@ -185,7 +189,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
         };
 
         let event_bus_manager = Arc::new(EventBusManager::new(100));
-        
+
         // Use multi-consumer event bus when scripting is enabled
         let config = &wizard.config;
 
@@ -206,7 +210,13 @@ async fn main() -> Result<(), Box<dyn Error>> {
             )
             .await;
         } else {
-            gromnie_runner::run_client(client_config, event_bus_manager, LoggingConsumer::new, None).await;
+            gromnie_runner::run_client(
+                client_config,
+                event_bus_manager,
+                LoggingConsumer::new,
+                None,
+            )
+            .await;
         }
     }
 

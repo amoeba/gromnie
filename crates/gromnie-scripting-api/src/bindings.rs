@@ -117,10 +117,8 @@ pub fn init_script() {
     #[expect(static_mut_refs)]
     unsafe {
         // Initialize lazily if needed - SCRIPT_INIT_FN is set by register_script! at compile time
-        if SCRIPT_IMPL.is_none() {
-            if let Some(init_fn) = SCRIPT_INIT_FN {
-                SCRIPT_IMPL = Some((init_fn)());
-            }
+        if SCRIPT_IMPL.is_none() && let Some(init_fn) = SCRIPT_INIT_FN {
+            SCRIPT_IMPL = Some((init_fn)());
         }
     }
 }

@@ -406,7 +406,7 @@ impl Client {
             character_name,
         };
 
-        let _ = self.raw_event_tx.send(ClientEvent::Game(game_event));
+        std::mem::drop(self.raw_event_tx.send(ClientEvent::Game(game_event)));
 
         // Update state to succeeded
         self.character_login_state = CharacterLoginState::Succeeded;
@@ -517,11 +517,11 @@ impl Client {
                         reason: ClientFailureReason::LoginTimeout,
                     };
                     // Emit authentication failed system event
-                    let _ = self.raw_event_tx.send(ClientEvent::System(
+                    std::mem::drop(self.raw_event_tx.send(ClientEvent::System(
                         ClientSystemEvent::AuthenticationFailed {
                             reason: "Connection timeout - server not responding".to_string(),
                         },
-                    ));
+                    )));
 
                     return true;
                 }
@@ -838,7 +838,7 @@ impl Client {
         {
             *progress = PatchingProgress::DDDResponseSent;
             let game_event = GameEvent::UpdatingSetProgress { progress: 0.66 };
-            let _ = self.raw_event_tx.send(ClientEvent::Game(game_event));
+            std::mem::drop(self.raw_event_tx.send(ClientEvent::Game(game_event)));
             info!(target: "net", "Progress: DDDResponse sent (66%)");
         }
 
@@ -953,7 +953,7 @@ impl Client {
                 message_type: message_name.clone(),
             };
             info!(target: "net", "Emitting NetworkMessage event: {}", message_name);
-            let _ = self.raw_event_tx.send(ClientEvent::Game(game_event));
+            std::mem::drop(self.raw_event_tx.send(ClientEvent::Game(game_event)));
 
             debug!(target: "net", "Parsed as GameAction: {:?}", game_action);
             self.handle_game_action(game_action, message);
@@ -989,7 +989,7 @@ impl Client {
                     message_type: display_name.clone(),
                 };
                 info!(target: "net", "Emitting NetworkMessage event: {}", display_name);
-                let _ = self.raw_event_tx.send(ClientEvent::Game(game_event));
+                std::mem::drop(self.raw_event_tx.send(ClientEvent::Game(game_event)));
 
                 info!(target: "net", "Parsed as S2CMessage: {:?} (0x{:04X})", msg_type, message.opcode);
 
@@ -1037,7 +1037,7 @@ impl Client {
                     direction: crate::client::events::MessageDirection::Received,
                     message_type: message_name.clone(),
                 };
-                let _ = self.raw_event_tx.send(ClientEvent::Game(game_event));
+                std::mem::drop(self.raw_event_tx.send(ClientEvent::Game(game_event)));
 
                 info!(target: "net", "Unknown message opcode: 0x{:08X}", message.opcode);
             }
@@ -1126,7 +1126,7 @@ impl Client {
                             message_type,
                         };
 
-                        let _ = self.raw_event_tx.send(ClientEvent::Game(game_event));
+                        std::mem::drop(self.raw_event_tx.send(ClientEvent::Game(game_event)));
                     }
                     Err(e) => {
                         error!(target: "net", "Failed to parse sender name: {}", e);
@@ -1153,7 +1153,7 @@ impl Client {
                     message_type: 0x05, // System message type
                 };
 
-                let _ = self.raw_event_tx.send(ClientEvent::Game(game_event));
+                std::mem::drop(self.raw_event_tx.send(ClientEvent::Game(game_event)));
             }
             Err(e) => {
                 error!(target: "net", "Failed to parse transient string: {}", e);
@@ -1180,7 +1180,7 @@ impl Client {
         };
 
         // Send on channel (ignore error if no subscribers)
-        let _ = self.raw_event_tx.send(ClientEvent::Game(game_event));
+        std::mem::drop(self.raw_event_tx.send(ClientEvent::Game(game_event)));
     }
 
     /// Handle the character list message from the server
@@ -1236,7 +1236,7 @@ impl Client {
                 if matches!(self.state, ClientState::Patching { .. }) {
                     // Update progress to 100% before transitioning
                     let game_event = GameEvent::UpdatingSetProgress { progress: 1.0 };
-                    let _ = self.raw_event_tx.send(ClientEvent::Game(game_event));
+                    std::mem::drop(self.raw_event_tx.send(ClientEvent::Game(game_event)));
                     info!(target: "net", "Progress: CharacterList received (100%)");
 
                     let _old_state = std::mem::replace(&mut self.state, ClientState::CharSelect);
@@ -1256,7 +1256,7 @@ impl Client {
                 tokio::spawn(async move {
                     tokio::time::sleep(tokio::time::Duration::from_millis(UI_DELAY_MS)).await;
                     info!(target: "net", "Sending CharacterListReceived event after delay");
-                    if let Err(_) = raw_tx.send(ClientEvent::Game(game_event)).await {
+                    if raw_tx.send(ClientEvent::Game(game_event)).await.is_err() {
                         error!(target: "net", "Failed to send CharacterListReceived event");
                     } else {
                         info!(target: "net", "CharacterListReceived event sent successfully");
@@ -1306,7 +1306,7 @@ impl Client {
                     let raw_tx = self.raw_event_tx.clone();
                     tokio::spawn(async move {
                         tokio::time::sleep(tokio::time::Duration::from_millis(UI_DELAY_MS)).await;
-                        let _ = raw_tx.send(ClientEvent::Game(game_event));
+                        std::mem::drop(raw_tx.send(ClientEvent::Game(game_event)));
                     });
                 }
             },
@@ -1373,7 +1373,7 @@ impl Client {
                 {
                     *progress = PatchingProgress::DDDInterrogationReceived;
                     let game_event = GameEvent::UpdatingSetProgress { progress: 0.33 };
-                    let _ = self.raw_event_tx.send(ClientEvent::Game(game_event));
+                    std::mem::drop(self.raw_event_tx.send(ClientEvent::Game(game_event)));
                     info!(target: "net", "Progress: DDDInterrogation received (33%)");
                 }
 
@@ -1424,7 +1424,7 @@ impl Client {
                 };
 
                 // Create event envelope and publish via event bus
-                let _ = self.raw_event_tx.send(ClientEvent::Game(game_event));
+                std::mem::drop(self.raw_event_tx.send(ClientEvent::Game(game_event)));
             }
             Err(e) => {
                 error!(target: "net", "Failed to parse create object message: {}", e);
@@ -1459,7 +1459,7 @@ impl Client {
                         };
 
                         // Send on channel (ignore error if no subscribers)
-                        let _ = self.raw_event_tx.send(ClientEvent::Game(game_event));
+                        std::mem::drop(self.raw_event_tx.send(ClientEvent::Game(game_event)));
                     }
                     Err(e) => {
                         error!(target: "net", "Failed to parse chat message type: {}", e);
@@ -1494,7 +1494,7 @@ impl Client {
                     message_type,
                 };
 
-                let _ = self.raw_event_tx.send(ClientEvent::Game(game_event));
+                std::mem::drop(self.raw_event_tx.send(ClientEvent::Game(game_event)));
             }
             Err(e) => {
                 error!(target: "net", "Failed to parse hear speech message: {}", e);
@@ -1524,7 +1524,7 @@ impl Client {
                     message_type,
                 };
 
-                let _ = self.raw_event_tx.send(ClientEvent::Game(game_event));
+                std::mem::drop(self.raw_event_tx.send(ClientEvent::Game(game_event)));
             }
             Err(e) => {
                 error!(target: "net", "Failed to parse hear ranged speech message: {}", e);
@@ -1559,7 +1559,7 @@ impl Client {
                     error_message,
                 };
 
-                let _ = self.raw_event_tx.send(ClientEvent::Game(game_event));
+                std::mem::drop(self.raw_event_tx.send(ClientEvent::Game(game_event)));
             }
             Err(e) => {
                 error!(target: "net", "Failed to parse character error message: {}", e);
@@ -1658,9 +1658,9 @@ impl Client {
             });
 
             // Emit authentication success system event
-            let _ = self.raw_event_tx.send(ClientEvent::System(
+            std::mem::drop(self.raw_event_tx.send(ClientEvent::System(
                 ClientSystemEvent::AuthenticationSucceeded,
-            ));
+            )));
 
             info!(target: "net", "Authentication succeeded - received ConnectRequest from server");
 
@@ -1673,7 +1673,7 @@ impl Client {
             {
                 *progress = ConnectingProgress::ConnectRequestReceived;
                 let game_event = GameEvent::ConnectingSetProgress { progress: 0.66 };
-                let _ = self.raw_event_tx.send(ClientEvent::Game(game_event));
+                std::mem::drop(self.raw_event_tx.send(ClientEvent::Game(game_event)));
                 info!(target: "net", "Progress: ConnectRequest received (66%)");
             }
 
@@ -1692,7 +1692,7 @@ impl Client {
                     progress: PatchingProgress::Initial,
                 };
                 let game_event = GameEvent::ConnectingSetProgress { progress: 1.0 };
-                let _ = self.raw_event_tx.send(ClientEvent::Game(game_event));
+                std::mem::drop(self.raw_event_tx.send(ClientEvent::Game(game_event)));
                 info!(target: "net", "Progress: ConnectResponse sent (100%)");
                 info!(target: "net", "State transition: Connecting -> Patching");
             }
@@ -1856,7 +1856,7 @@ impl Client {
         {
             *progress = ConnectingProgress::LoginRequestSent;
             let game_event = GameEvent::ConnectingSetProgress { progress: 0.33 };
-            let _ = self.raw_event_tx.send(ClientEvent::Game(game_event));
+            std::mem::drop(self.raw_event_tx.send(ClientEvent::Game(game_event)));
             info!(target: "net", "Progress: LoginRequest sent (33%)");
         }
 

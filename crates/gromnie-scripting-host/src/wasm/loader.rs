@@ -21,9 +21,8 @@ pub fn load_wasm_scripts(
     let script_config = script_config.clone();
 
     // Spawn a thread to load scripts outside the async runtime
-    let handle = std::thread::spawn(move || {
-        load_wasm_scripts_blocking(&engine, &dir, &script_config)
-    });
+    let handle =
+        std::thread::spawn(move || load_wasm_scripts_blocking(&engine, &dir, &script_config));
 
     // Wait for the thread to complete and return the result
     handle.join().unwrap_or_else(|_| {

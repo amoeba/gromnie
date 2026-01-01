@@ -2,8 +2,8 @@ use std::sync::Arc;
 use tokio::sync::{broadcast, mpsc};
 use tracing::{error, info};
 
-use crate::event_consumer::EventConsumer;
 use crate::event_bus::{EventBus, EventEnvelope};
+use crate::event_consumer::EventConsumer;
 use crate::event_wrapper::EventWrapper;
 use gromnie_client::client::Client;
 
@@ -25,7 +25,9 @@ impl EventBusManager {
     /// Create a new event bus manager
     pub fn new(capacity: usize) -> Self {
         let (event_bus, _) = EventBus::new(capacity);
-        Self { event_bus: Arc::new(event_bus) }
+        Self {
+            event_bus: Arc::new(event_bus),
+        }
     }
 
     /// Create an event sender for a specific client
@@ -63,7 +65,8 @@ pub async fn run_client<C, F>(
     F: FnOnce(mpsc::UnboundedSender<gromnie_client::client::events::ClientAction>) -> C,
 {
     // Create a channel for raw events from client to EventWrapper
-    let (raw_event_tx, raw_event_rx) = mpsc::channel::<gromnie_client::client::events::ClientEvent>(256);
+    let (raw_event_tx, raw_event_rx) =
+        mpsc::channel::<gromnie_client::client::events::ClientEvent>(256);
 
     // Spawn EventWrapper to bridge client events to event bus
     let event_wrapper = EventWrapper::new(config.id, event_bus_manager.event_bus.clone());
@@ -104,10 +107,11 @@ pub async fn run_client_with_consumers<F>(
         mpsc::UnboundedSender<gromnie_client::client::events::ClientAction>,
     ) -> Vec<Box<dyn EventConsumer>>,
 {
-    use crate::event_bus::{EventEnvelope, EventType, SystemEvent, EventSource};
+    use crate::event_bus::{EventEnvelope, EventSource, EventType, SystemEvent};
 
     // Create a channel for raw events from client to EventWrapper
-    let (raw_event_tx, raw_event_rx) = mpsc::channel::<gromnie_client::client::events::ClientEvent>(256);
+    let (raw_event_tx, raw_event_rx) =
+        mpsc::channel::<gromnie_client::client::events::ClientEvent>(256);
 
     // Spawn EventWrapper to bridge client events to event bus
     let event_wrapper = EventWrapper::new(config.id, event_bus_manager.event_bus.clone());
@@ -141,7 +145,10 @@ pub async fn run_client_with_consumers<F>(
                 match consumer_rx.recv().await {
                     Ok(envelope) => {
                         // Check if this is a shutdown event
-                        if matches!(&envelope.event, EventType::System(SystemEvent::Shutdown { .. })) {
+                        if matches!(
+                            &envelope.event,
+                            EventType::System(SystemEvent::Shutdown { .. })
+                        ) {
                             info!(target: "events", "Event consumer {} received shutdown signal", idx);
                             break;
                         }
@@ -168,7 +175,9 @@ pub async fn run_client_with_consumers<F>(
     // Send shutdown event to all consumers
     info!(target: "events", "Sending shutdown signal to consumers");
     let shutdown_event = EventEnvelope::system_event(
-        SystemEvent::Shutdown { client_id: config.id },
+        SystemEvent::Shutdown {
+            client_id: config.id,
+        },
         config.id,
         0,
         EventSource::System,
@@ -202,7 +211,8 @@ pub async fn run_client_with_action_channel<C, F>(
     F: FnOnce(mpsc::UnboundedSender<gromnie_client::client::events::ClientAction>) -> C,
 {
     // Create a channel for raw events from client to EventWrapper
-    let (raw_event_tx, raw_event_rx) = mpsc::channel::<gromnie_client::client::events::ClientEvent>(256);
+    let (raw_event_tx, raw_event_rx) =
+        mpsc::channel::<gromnie_client::client::events::ClientEvent>(256);
 
     // Spawn EventWrapper to bridge client events to event bus
     let event_wrapper = EventWrapper::new(config.id, event_bus_manager.event_bus.clone());

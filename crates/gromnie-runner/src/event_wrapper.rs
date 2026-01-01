@@ -1,8 +1,11 @@
 use std::sync::Arc;
 use tokio::sync::mpsc;
 
-use gromnie_client::client::events::{ClientSystemEvent, ClientEvent};
-use crate::event_bus::{EventType, EventContext, EventEnvelope, EventSource, SystemEvent, ClientStateEvent as RunnerClientStateEvent};
+use crate::event_bus::{
+    ClientStateEvent as RunnerClientStateEvent, EventContext, EventEnvelope, EventSource,
+    EventType, SystemEvent,
+};
+use gromnie_client::client::events::{ClientEvent, ClientSystemEvent};
 
 /// Wraps raw events from client and enriches them with context
 pub struct EventWrapper {
@@ -41,10 +44,19 @@ impl EventWrapper {
             ClientEvent::State(state) => {
                 // Convert client state event to runner state event
                 match state {
-                    gromnie_client::client::events::ClientStateEvent::StateTransition { from, to, client_id } => {
-                        EventType::State(RunnerClientStateEvent::StateTransition { from, to, client_id })
-                    }
-                    gromnie_client::client::events::ClientStateEvent::ClientFailed { reason, client_id } => {
+                    gromnie_client::client::events::ClientStateEvent::StateTransition {
+                        from,
+                        to,
+                        client_id,
+                    } => EventType::State(RunnerClientStateEvent::StateTransition {
+                        from,
+                        to,
+                        client_id,
+                    }),
+                    gromnie_client::client::events::ClientStateEvent::ClientFailed {
+                        reason,
+                        client_id,
+                    } => {
                         EventType::State(RunnerClientStateEvent::ClientFailed { reason, client_id })
                     }
                 }
@@ -65,27 +77,34 @@ impl EventWrapper {
 
     fn convert_system_event(&self, sys: ClientSystemEvent) -> SystemEvent {
         match sys {
-            ClientSystemEvent::AuthenticationSucceeded => {
-                SystemEvent::AuthenticationSucceeded { client_id: self.client_id }
-            }
+            ClientSystemEvent::AuthenticationSucceeded => SystemEvent::AuthenticationSucceeded {
+                client_id: self.client_id,
+            },
             ClientSystemEvent::AuthenticationFailed { reason } => {
-                SystemEvent::AuthenticationFailed { client_id: self.client_id, reason }
+                SystemEvent::AuthenticationFailed {
+                    client_id: self.client_id,
+                    reason,
+                }
             }
-            ClientSystemEvent::ConnectingStarted => {
-                SystemEvent::ConnectingStarted { client_id: self.client_id }
-            }
-            ClientSystemEvent::ConnectingDone => {
-                SystemEvent::ConnectingDone { client_id: self.client_id }
-            }
-            ClientSystemEvent::UpdatingStarted => {
-                SystemEvent::UpdatingStarted { client_id: self.client_id }
-            }
-            ClientSystemEvent::UpdatingDone => {
-                SystemEvent::UpdatingDone { client_id: self.client_id }
-            }
-            ClientSystemEvent::LoginSucceeded { character_id, character_name } => {
-                SystemEvent::LoginSucceeded { character_id, character_name }
-            }
+            ClientSystemEvent::ConnectingStarted => SystemEvent::ConnectingStarted {
+                client_id: self.client_id,
+            },
+            ClientSystemEvent::ConnectingDone => SystemEvent::ConnectingDone {
+                client_id: self.client_id,
+            },
+            ClientSystemEvent::UpdatingStarted => SystemEvent::UpdatingStarted {
+                client_id: self.client_id,
+            },
+            ClientSystemEvent::UpdatingDone => SystemEvent::UpdatingDone {
+                client_id: self.client_id,
+            },
+            ClientSystemEvent::LoginSucceeded {
+                character_id,
+                character_name,
+            } => SystemEvent::LoginSucceeded {
+                character_id,
+                character_name,
+            },
         }
     }
 }

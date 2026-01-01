@@ -66,7 +66,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     };
 
     let event_bus_manager = Arc::new(EventBusManager::new(100));
-    
+
     // Spawn client task using the runner module
     let mut client_handle = tokio::spawn(gromnie_runner::run_client_with_action_channel(
         config,

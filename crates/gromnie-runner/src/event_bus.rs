@@ -3,10 +3,9 @@
 
 use std::sync::Arc;
 use std::time::Instant;
-use tokio::sync::{broadcast, Mutex};
+use tokio::sync::{Mutex, broadcast};
 
 use gromnie_client::client::events::GameEvent;
-use gromnie_client::client::ClientState;
 
 /// Source of the event
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -50,22 +49,50 @@ impl EventContext {
 /// Client state transition events
 #[derive(Debug, Clone)]
 pub enum ClientStateEvent {
-    StateTransition { from: String, to: String, client_id: u32 },
-    ClientFailed { reason: String, client_id: u32 },
+    StateTransition {
+        from: String,
+        to: String,
+        client_id: u32,
+    },
+    ClientFailed {
+        reason: String,
+        client_id: u32,
+    },
 }
 
 /// System and lifecycle events
 #[derive(Debug, Clone)]
 pub enum SystemEvent {
-    AuthenticationSucceeded { client_id: u32 },
-    AuthenticationFailed { client_id: u32, reason: String },
-    ConnectingStarted { client_id: u32 },
-    ConnectingDone { client_id: u32 },
-    UpdatingStarted { client_id: u32 },
-    UpdatingDone { client_id: u32 },
-    LoginSucceeded { character_id: u32, character_name: String },
-    ScriptEvent { script_id: String, event_type: ScriptEventType },
-    Shutdown { client_id: u32 },
+    AuthenticationSucceeded {
+        client_id: u32,
+    },
+    AuthenticationFailed {
+        client_id: u32,
+        reason: String,
+    },
+    ConnectingStarted {
+        client_id: u32,
+    },
+    ConnectingDone {
+        client_id: u32,
+    },
+    UpdatingStarted {
+        client_id: u32,
+    },
+    UpdatingDone {
+        client_id: u32,
+    },
+    LoginSucceeded {
+        character_id: u32,
+        character_name: String,
+    },
+    ScriptEvent {
+        script_id: String,
+        event_type: ScriptEventType,
+    },
+    Shutdown {
+        client_id: u32,
+    },
 }
 
 /// Types of script-related events
@@ -96,20 +123,40 @@ pub struct EventEnvelope {
 
 impl EventEnvelope {
     pub fn new(event: EventType, context: EventContext, source: EventSource) -> Self {
-        Self { event, context, timestamp: Instant::now(), source }
+        Self {
+            event,
+            context,
+            timestamp: Instant::now(),
+            source,
+        }
     }
 
-    pub fn game_event(game_event: GameEvent, client_id: u32, client_sequence: u64, source: EventSource) -> Self {
+    pub fn game_event(
+        game_event: GameEvent,
+        client_id: u32,
+        client_sequence: u64,
+        source: EventSource,
+    ) -> Self {
         let context = EventContext::new(client_id, client_sequence);
         Self::new(EventType::Game(game_event), context, source)
     }
 
-    pub fn state_event(state_event: ClientStateEvent, client_id: u32, client_sequence: u64, source: EventSource) -> Self {
+    pub fn state_event(
+        state_event: ClientStateEvent,
+        client_id: u32,
+        client_sequence: u64,
+        source: EventSource,
+    ) -> Self {
         let context = EventContext::new(client_id, client_sequence);
         Self::new(EventType::State(state_event), context, source)
     }
 
-    pub fn system_event(system_event: SystemEvent, client_id: u32, client_sequence: u64, source: EventSource) -> Self {
+    pub fn system_event(
+        system_event: SystemEvent,
+        client_id: u32,
+        client_sequence: u64,
+        source: EventSource,
+    ) -> Self {
         let context = EventContext::new(client_id, client_sequence);
         Self::new(EventType::System(system_event), context, source)
     }
@@ -147,6 +194,7 @@ impl EventSender {
 #[derive(Debug, Clone)]
 pub struct EventBus {
     sender: broadcast::Sender<EventEnvelope>,
+    #[allow(dead_code)]
     global_sequence_counter: Arc<Mutex<u64>>,
 }
 
