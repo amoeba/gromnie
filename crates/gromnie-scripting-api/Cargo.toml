@@ -13,3 +13,6 @@ path = "src/lib.rs"
 
 [dependencies]
 wit-bindgen.workspace = true
+
+[package.metadata.docs.rs]
+targets = ["wasm32-unknown-unknown"]

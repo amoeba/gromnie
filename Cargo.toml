@@ -16,7 +16,6 @@ default-members = [
   "crates/gromnie-client",
   "crates/gromnie-events",
   "crates/gromnie-runner",
-  "crates/gromnie-scripting-api",
   "crates/gromnie-scripting-host",
   "crates/gromnie-tui",
   "crates/xtask"
