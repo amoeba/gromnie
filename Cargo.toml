@@ -16,10 +16,14 @@ default-members = [
   "crates/gromnie-client",
   "crates/gromnie-events",
   "crates/gromnie-runner",
+  "crates/gromnie-scripting-api",
   "crates/gromnie-scripting-host",
   "crates/gromnie-tui",
   "crates/xtask"
 ]
+
+[workspace.features]
+scripting = ["gromnie-scripting-api/wasm"]
 
 [workspace.package]
 version = "0.1.0"

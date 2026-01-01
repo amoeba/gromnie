@@ -16,8 +16,12 @@ acprotocol.workspace = true
 chrono.workspace = true
 gromnie-client = { path = "../gromnie-client" }
 gromnie-events = { path = "../gromnie-events" }
-gromnie-scripting-host = { path = "../gromnie-scripting-host" }
+gromnie-scripting-host = { path = "../gromnie-scripting-host", optional = true }
 serenity.workspace = true
 thiserror = "2.0"
 tokio = { version = "1.36.0", features = ["full"] }
 tracing.workspace = true
+
+[features]
+default = ["scripting"]
+scripting = ["gromnie-scripting-host"]

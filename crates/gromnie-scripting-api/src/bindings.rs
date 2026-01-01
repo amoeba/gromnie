@@ -6,6 +6,7 @@
 
 #![allow(unsafe_op_in_unsafe_fn)]
 
+#[cfg(feature = "wasm")]
 // Generate bindings from WIT at compile time for script use
 wit_bindgen::generate!({
     path: "src/wit",

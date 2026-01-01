@@ -12,7 +12,8 @@ name = "gromnie_scripting_api"
 path = "src/lib.rs"
 
 [dependencies]
-wit-bindgen.workspace = true
+wit-bindgen = { workspace = true, optional = true }
 
-[package.metadata.docs.rs]
-targets = ["wasm32-unknown-unknown"]
+[features]
+default = []
+wasm = ["wit-bindgen"]
