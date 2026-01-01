@@ -23,7 +23,7 @@ default-members = [
 ]
 
 [workspace.features]
-scripting = ["gromnie-scripting-api/wasm"]
+scripting = []
 
 [workspace.package]
 version = "0.1.0"

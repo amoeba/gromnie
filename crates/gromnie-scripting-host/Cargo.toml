@@ -12,7 +12,7 @@ name = "gromnie_scripting_host"
 path = "src/lib.rs"
 
 [dependencies]
-gromnie-scripting-api = { path = "../gromnie-scripting-api", features = ["wasm"] }
+gromnie-scripting-api = { path = "../gromnie-scripting-api" }
 gromnie-client = { path = "../gromnie-client" }
 gromnie-events = { path = "../gromnie-events" }
 anyhow.workspace = true
