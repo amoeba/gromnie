@@ -274,9 +274,20 @@ async fn run_client_internal<C: EventConsumer>(
     // Run the main client loop
     run_client_loop(client, shutdown_rx).await;
 
-    // Wait for event handler task to finish
+    // Wait for event handler task to finish with a timeout
     info!(target: "events", "Waiting for event handler task to finish");
-    let _ = event_task.await;
+    let timeout = tokio::time::Duration::from_millis(100);
+    match tokio::time::timeout(timeout, event_task).await {
+        Ok(Ok(())) => {
+            info!(target: "events", "Event handler task finished gracefully");
+        }
+        Ok(Err(e)) => {
+            error!(target: "events", "Event handler task panicked: {}", e);
+        }
+        Err(_) => {
+            info!(target: "events", "Event handler task did not finish within timeout, continuing shutdown");
+        }
+    }
 }
 
 /// Run the main client network loop
@@ -312,14 +323,15 @@ async fn run_client_loop(
     let keepalive_interval = tokio::time::Duration::from_secs(5);
 
     // Tick interval for checking retries and timeouts
-    let tick_interval = tokio::time::Duration::from_millis(16); // Check every 16ms (~60 FPS)
+    let tick_interval = tokio::time::Duration::from_millis(100); // Check every 100ms
     let mut last_tick = tokio::time::Instant::now();
 
     loop {
         tokio::select! {
-            recv_result = client.socket.recv_from(&mut buf) => {
+            // Add a timeout to recv_from so we can respond to shutdown signals
+            recv_result = tokio::time::timeout(tokio::time::Duration::from_millis(100), client.socket.recv_from(&mut buf)) => {
                 match recv_result {
-                    Ok((size, peer)) => {
+                    Ok(Ok((size, peer))) => {
                         client.process_packet(&buf[..size], size, &peer).await;
 
                         if client.has_messages() {
@@ -333,9 +345,12 @@ async fn run_client_loop(
                             error!("Failed to send pending messages: {}", e);
                         }
                     }
-                    Err(e) => {
+                    Ok(Err(e)) => {
                         error!("Error in receive loop: {}", e);
                         break;
+                    }
+                    Err(_) => {
+                        // Timeout - this is normal, just continue to check other branches
                     }
                 }
             }

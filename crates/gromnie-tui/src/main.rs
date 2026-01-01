@@ -153,14 +153,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     info!("TUI shutting down - waiting for client task to finish...");
 
     // Give client task a moment to clean up gracefully
-    let timeout = tokio::time::Duration::from_secs(2);
+    let timeout = tokio::time::Duration::from_millis(250);
     match tokio::time::timeout(timeout, client_handle).await {
         Ok(result) => match result {
             Ok(_) => info!("Client task shut down gracefully"),
             Err(e) => error!("Client task panicked: {}", e),
         },
         Err(_) => {
-            error!("Client task did not shut down within timeout, proceeding anyway");
+            info!("Client task did not shut down within timeout, proceeding anyway");
         }
     }
 
