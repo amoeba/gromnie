@@ -17,7 +17,7 @@ pub mod wasm;
 pub use api::Script as ApiScript;
 pub use context::{ClientStateSnapshot, ScriptContext};
 pub use reload::{ReloadSignal, setup_reload_signal};
-pub use script_runner::ScriptRunner;
+pub use script_runner::{ScriptConsumer, ScriptRunner, create_script_consumer};
 pub use timer::{TimerId, TimerManager};
 
 // Registry is now just a utility function

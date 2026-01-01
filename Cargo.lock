@@ -5,7 +5,7 @@ version = 4
 [[package]]
 name = "acprotocol"
 version = "0.1.0"
-source = "git+https://github.com/amoeba/asheron-rs?rev=a165e6ca82dd913281cb6280538ee5ab3bd1ef4b#a165e6ca82dd913281cb6280538ee5ab3bd1ef4b"
+source = "git+https://github.com/amoeba/asheron-rs?rev=ddbffb90f44ab2c8899d70f29d723025082815ad#ddbffb90f44ab2c8899d70f29d723025082815ad"
 dependencies = [
  "anyhow",
  "bitflags",
@@ -452,7 +452,7 @@ dependencies = [
 [[package]]
 name = "codegen"
 version = "0.1.0"
-source = "git+https://github.com/amoeba/asheron-rs?rev=a165e6ca82dd913281cb6280538ee5ab3bd1ef4b#a165e6ca82dd913281cb6280538ee5ab3bd1ef4b"
+source = "git+https://github.com/amoeba/asheron-rs?rev=ddbffb90f44ab2c8899d70f29d723025082815ad#ddbffb90f44ab2c8899d70f29d723025082815ad"
 dependencies = [
  "env_logger",
  "log",
@@ -1173,6 +1173,7 @@ dependencies = [
  "crossterm",
  "gromnie-client",
  "gromnie-runner",
+ "gromnie-scripting-host",
  "ratatui",
  "serenity",
  "tokio",
@@ -1216,7 +1217,6 @@ dependencies = [
  "acprotocol",
  "chrono",
  "gromnie-client",
- "gromnie-scripting-host",
  "serenity",
  "tokio",
  "tracing",
@@ -1236,8 +1236,10 @@ dependencies = [
  "anyhow",
  "directories",
  "gromnie-client",
+ "gromnie-runner",
  "gromnie-scripting-api",
  "tokio",
+ "toml",
  "tracing",
  "wasmtime",
  "wasmtime-wasi",

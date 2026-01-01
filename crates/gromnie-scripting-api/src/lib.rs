@@ -2,7 +2,6 @@
 ///
 /// This crate provides the minimal API needed to write WASM scripts.
 /// Scripts should depend on this crate, not on gromnie-scripting-host.
-
 // Embedded WIT content for script binding generation
 #[doc(hidden)]
 pub const WIT_CONTENT: &str = include_str!("wit/gromnie-script.wit");

@@ -1,7 +1,10 @@
-use tokio::sync::mpsc;
+use std::sync::Arc;
+use tokio::sync::{broadcast, mpsc};
 use tracing::{error, info};
 
+use crate::event_bus::{EventBus, EventEnvelope};
 use crate::event_consumer::EventConsumer;
+use crate::event_wrapper::EventWrapper;
 use gromnie_client::client::Client;
 
 /// Configuration for running a client
@@ -10,6 +13,37 @@ pub struct ClientConfig {
     pub address: String,
     pub account_name: String,
     pub password: String,
+}
+
+/// Shared event bus manager that owns the central event bus
+#[derive(Clone)]
+pub struct EventBusManager {
+    pub(crate) event_bus: Arc<EventBus>,
+}
+
+impl EventBusManager {
+    /// Create a new event bus manager
+    pub fn new(capacity: usize) -> Self {
+        let (event_bus, _) = EventBus::new(capacity);
+        Self {
+            event_bus: Arc::new(event_bus),
+        }
+    }
+
+    /// Create an event sender for a specific client
+    pub fn create_sender(&self, client_id: u32) -> crate::event_bus::EventSender {
+        self.event_bus.create_sender(client_id)
+    }
+
+    /// Create a new event subscriber
+    pub fn subscribe(&self) -> broadcast::Receiver<EventEnvelope> {
+        self.event_bus.subscribe()
+    }
+
+    /// Get the number of subscribers
+    pub fn subscriber_count(&self) -> usize {
+        self.event_bus.subscriber_count()
+    }
 }
 
 /// Run the client with the provided configuration and event consumer factory
@@ -23,17 +57,32 @@ pub struct ClientConfig {
 /// The event_consumer_factory is called with the action_tx channel after the client is created.
 pub async fn run_client<C, F>(
     config: ClientConfig,
+    event_bus_manager: Arc<EventBusManager>,
     event_consumer_factory: F,
     shutdown_rx: Option<tokio::sync::watch::Receiver<bool>>,
 ) where
     C: EventConsumer,
     F: FnOnce(mpsc::UnboundedSender<gromnie_client::client::events::ClientAction>) -> C,
 {
-    let (client, event_rx, action_tx) = Client::new(
+    // Create a channel for raw events from client to EventWrapper
+    let (raw_event_tx, raw_event_rx) =
+        mpsc::channel::<gromnie_client::client::events::ClientEvent>(256);
+
+    // Spawn EventWrapper to bridge client events to event bus
+    let event_wrapper = EventWrapper::new(config.id, event_bus_manager.event_bus.clone());
+    tokio::spawn(async move {
+        event_wrapper.run(raw_event_rx).await;
+    });
+
+    // Subscribe to the event bus for the consumer
+    let event_rx = event_bus_manager.subscribe();
+
+    let (client, action_tx) = Client::new(
         config.id,
         config.address.clone(),
         config.account_name.clone(),
         config.password.clone(),
+        raw_event_tx,
     )
     .await;
 
@@ -50,6 +99,7 @@ pub async fn run_client<C, F>(
 /// all events from the client's event broadcast channel.
 pub async fn run_client_with_consumers<F>(
     config: ClientConfig,
+    event_bus_manager: Arc<EventBusManager>,
     consumers_factory: F,
     shutdown_rx: Option<tokio::sync::watch::Receiver<bool>>,
 ) where
@@ -57,28 +107,52 @@ pub async fn run_client_with_consumers<F>(
         mpsc::UnboundedSender<gromnie_client::client::events::ClientAction>,
     ) -> Vec<Box<dyn EventConsumer>>,
 {
-    let (client, event_rx, action_tx) = Client::new(
+    use crate::event_bus::{EventEnvelope, EventSource, EventType, SystemEvent};
+
+    // Create a channel for raw events from client to EventWrapper
+    let (raw_event_tx, raw_event_rx) =
+        mpsc::channel::<gromnie_client::client::events::ClientEvent>(256);
+
+    // Spawn EventWrapper to bridge client events to event bus
+    let event_wrapper = EventWrapper::new(config.id, event_bus_manager.event_bus.clone());
+    tokio::spawn(async move {
+        event_wrapper.run(raw_event_rx).await;
+    });
+
+    let (client, action_tx) = Client::new(
         config.id,
         config.address.clone(),
         config.account_name.clone(),
         config.password.clone(),
+        raw_event_tx,
     )
     .await;
 
     // Create all event consumers
     let mut consumers = consumers_factory(action_tx);
 
+    // Create a shutdown sender that will be used to signal consumers to stop
+    let shutdown_sender = event_bus_manager.create_sender(config.id);
+
     // Spawn a task for each consumer with its own event receiver
     let mut consumer_tasks = Vec::new();
     for (idx, mut consumer) in consumers.drain(..).enumerate() {
-        let mut consumer_rx = client.subscribe_events();
+        let mut consumer_rx = event_bus_manager.subscribe();
         let handle = tokio::spawn(async move {
             info!(target: "events", "Event consumer {} started", idx);
 
             loop {
                 match consumer_rx.recv().await {
-                    Ok(event) => {
-                        consumer.handle_event(event);
+                    Ok(envelope) => {
+                        // Check if this is a shutdown event
+                        if matches!(
+                            &envelope.event,
+                            EventType::System(SystemEvent::Shutdown { .. })
+                        ) {
+                            info!(target: "events", "Event consumer {} received shutdown signal", idx);
+                            break;
+                        }
+                        consumer.handle_event(envelope);
                     }
                     Err(tokio::sync::broadcast::error::RecvError::Lagged(skipped)) => {
                         error!(target: "events", "Consumer {} lagged, {} messages were skipped", idx, skipped);
@@ -95,11 +169,23 @@ pub async fn run_client_with_consumers<F>(
         consumer_tasks.push(handle);
     }
 
-    // Drop the original event_rx since we're not using it
-    drop(event_rx);
-
     // Run the main client loop without event handling (consumers handle events)
     run_client_loop(client, shutdown_rx).await;
+
+    // Send shutdown event to all consumers
+    info!(target: "events", "Sending shutdown signal to consumers");
+    let shutdown_event = EventEnvelope::system_event(
+        SystemEvent::Shutdown {
+            client_id: config.id,
+        },
+        config.id,
+        0,
+        EventSource::System,
+    );
+    shutdown_sender.publish(shutdown_event);
+
+    // Give consumers a moment to receive and process the shutdown event
+    tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
 
     // Wait for consumer tasks to finish
     info!(target: "events", "Waiting for {} consumer tasks to finish", consumer_tasks.len());
@@ -114,6 +200,7 @@ pub async fn run_client_with_consumers<F>(
 /// to send commands to the client.
 pub async fn run_client_with_action_channel<C, F>(
     config: ClientConfig,
+    event_bus_manager: Arc<EventBusManager>,
     event_consumer_factory: F,
     action_tx_sender: mpsc::UnboundedSender<
         mpsc::UnboundedSender<gromnie_client::client::events::ClientAction>,
@@ -123,11 +210,25 @@ pub async fn run_client_with_action_channel<C, F>(
     C: EventConsumer,
     F: FnOnce(mpsc::UnboundedSender<gromnie_client::client::events::ClientAction>) -> C,
 {
-    let (client, event_rx, action_tx) = Client::new(
+    // Create a channel for raw events from client to EventWrapper
+    let (raw_event_tx, raw_event_rx) =
+        mpsc::channel::<gromnie_client::client::events::ClientEvent>(256);
+
+    // Spawn EventWrapper to bridge client events to event bus
+    let event_wrapper = EventWrapper::new(config.id, event_bus_manager.event_bus.clone());
+    tokio::spawn(async move {
+        event_wrapper.run(raw_event_rx).await;
+    });
+
+    // Subscribe to the event bus for the consumer
+    let event_rx = event_bus_manager.subscribe();
+
+    let (client, action_tx) = Client::new(
         config.id,
         config.address.clone(),
         config.account_name.clone(),
         config.password.clone(),
+        raw_event_tx,
     )
     .await;
 
@@ -144,7 +245,7 @@ pub async fn run_client_with_action_channel<C, F>(
 /// Internal client runner implementation
 async fn run_client_internal<C: EventConsumer>(
     client: Client,
-    mut event_rx: tokio::sync::broadcast::Receiver<gromnie_client::client::events::GameEvent>,
+    mut event_rx: broadcast::Receiver<EventEnvelope>,
     mut event_consumer: C,
     shutdown_rx: Option<tokio::sync::watch::Receiver<bool>>,
 ) {
@@ -154,8 +255,8 @@ async fn run_client_internal<C: EventConsumer>(
 
         loop {
             match event_rx.recv().await {
-                Ok(event) => {
-                    event_consumer.handle_event(event);
+                Ok(envelope) => {
+                    event_consumer.handle_event(envelope);
                 }
                 Err(tokio::sync::broadcast::error::RecvError::Lagged(skipped)) => {
                     error!(target: "events", "Event receiver lagged, {} messages were skipped", skipped);
@@ -173,16 +274,31 @@ async fn run_client_internal<C: EventConsumer>(
     // Run the main client loop
     run_client_loop(client, shutdown_rx).await;
 
-    // Wait for event handler task to finish
+    // Wait for event handler task to finish with a timeout
     info!(target: "events", "Waiting for event handler task to finish");
-    let _ = event_task.await;
+    let timeout = tokio::time::Duration::from_millis(100);
+    match tokio::time::timeout(timeout, event_task).await {
+        Ok(Ok(())) => {
+            info!(target: "events", "Event handler task finished gracefully");
+        }
+        Ok(Err(e)) => {
+            error!(target: "events", "Event handler task panicked: {}", e);
+        }
+        Err(_) => {
+            info!(target: "events", "Event handler task did not finish within timeout, continuing shutdown");
+        }
+    }
 }
 
-/// Main client network loop
+/// Run the main client network loop
 async fn run_client_loop(
     mut client: Client,
     mut shutdown_rx: Option<tokio::sync::watch::Receiver<bool>>,
 ) {
+    use tracing::error;
+
+    info!(target: "net", "Client {} network loop started", client.client_id());
+
     // Note: We don't call client.connect() here anymore - the client starts in Connecting state
     // and we handle retries in the main loop below
 
@@ -207,14 +323,15 @@ async fn run_client_loop(
     let keepalive_interval = tokio::time::Duration::from_secs(5);
 
     // Tick interval for checking retries and timeouts
-    let tick_interval = tokio::time::Duration::from_millis(16); // Check every 16ms (~60 FPS)
+    let tick_interval = tokio::time::Duration::from_millis(100); // Check every 100ms
     let mut last_tick = tokio::time::Instant::now();
 
     loop {
         tokio::select! {
-            recv_result = client.socket.recv_from(&mut buf) => {
+            // Add a timeout to recv_from so we can respond to shutdown signals
+            recv_result = tokio::time::timeout(tokio::time::Duration::from_millis(100), client.socket.recv_from(&mut buf)) => {
                 match recv_result {
-                    Ok((size, peer)) => {
+                    Ok(Ok((size, peer))) => {
                         client.process_packet(&buf[..size], size, &peer).await;
 
                         if client.has_messages() {
@@ -228,9 +345,12 @@ async fn run_client_loop(
                             error!("Failed to send pending messages: {}", e);
                         }
                     }
-                    Err(e) => {
+                    Ok(Err(e)) => {
                         error!("Error in receive loop: {}", e);
                         break;
+                    }
+                    Err(_) => {
+                        // Timeout - this is normal, just continue to check other branches
                     }
                 }
             }
@@ -297,5 +417,11 @@ async fn run_client_loop(
         }
     }
 
+    info!("Client {} network loop stopped", client.client_id());
     info!("Client task shutting down - cleaning up network connections...");
+}
+
+/// Create a new EventBusManager for managing a shared event bus
+pub fn create_event_bus_manager() -> EventBusManager {
+    EventBusManager::new(100)
 }

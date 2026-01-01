@@ -17,7 +17,7 @@ pub fn create_runner_from_config(
     if config.enabled {
         let script_dir = config.script_dir();
         debug!(target: "scripting", "Loading scripts from: {}", script_dir.display());
-        runner.load_scripts(&script_dir);
+        runner.load_scripts(&script_dir, &config.config);
     }
 
     runner

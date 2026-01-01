@@ -13,7 +13,7 @@ use tracing::{error, info};
 use tracing_subscriber::EnvFilter;
 
 use gromnie_client::client::events::{ClientAction, GameEvent};
-use gromnie_runner::{ClientConfig, DiscordConsumer, UptimeData};
+use gromnie_runner::{ClientConfig, DiscordConsumer, EventBusManager, UptimeData};
 
 #[derive(Parser)]
 #[command(version, about, long_about = None)]
@@ -204,11 +204,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         password: game_password,
     };
 
+    let event_bus_manager = Arc::new(EventBusManager::new(100));
+
     // Spawn client task
     let http_clone = http.clone();
     let uptime_data_clone = uptime_data.clone();
     let _client_handle = tokio::spawn(gromnie_runner::run_client_with_action_channel(
         config,
+        event_bus_manager,
         move |action_tx| {
             DiscordConsumer::new_with_uptime(
                 action_tx.clone(),

@@ -7,10 +7,6 @@ description = "CLIs for gromnie"
 repository.workspace = true
 license.workspace = true
 
-[lib]
-name = "gromnie_cli"
-path = "src/lib.rs"
-
 [[bin]]
 name = "cli"
 path = "src/bin/cli.rs"
@@ -28,6 +24,7 @@ clap.workspace = true
 crossterm.workspace = true
 gromnie-client = { path = "../gromnie-client" }
 gromnie-runner = { path = "../gromnie-runner" }
+gromnie-scripting-host = { path = "../gromnie-scripting-host" }
 ratatui.workspace = true
 serenity.workspace = true
 tokio = { version = "1.36.0", features = ["full"] }

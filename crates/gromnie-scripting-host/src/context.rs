@@ -42,8 +42,6 @@ pub struct ScriptContext {
     action_tx: UnboundedSender<ClientAction>,
     /// Reference to the timer manager (will be updated by ScriptRunner)
     timer_manager: *mut super::timer::TimerManager,
-    /// Snapshot of client state at event time
-    client_state: ClientStateSnapshot,
     /// Timestamp when the current event occurred
     event_time: Instant,
 }
@@ -56,13 +54,11 @@ impl ScriptContext {
     pub(crate) unsafe fn new(
         action_tx: UnboundedSender<ClientAction>,
         timer_manager: *mut super::timer::TimerManager,
-        client_state: ClientStateSnapshot,
         event_time: Instant,
     ) -> Self {
         Self {
             action_tx,
             timer_manager,
-            client_state,
             event_time,
         }
     }
@@ -118,8 +114,10 @@ impl ScriptContext {
     // ===== State Access =====
 
     /// Get a read-only snapshot of the client state
-    pub fn client_state(&self) -> &ClientStateSnapshot {
-        &self.client_state
+    /// Note: In the new architecture, scripts should maintain their own state based on events.
+    /// This method returns a minimal state snapshot for backward compatibility.
+    pub fn client_state(&self) -> ClientStateSnapshot {
+        ClientStateSnapshot::new()
     }
 
     /// Get the timestamp when the current event occurred
