@@ -967,12 +967,7 @@ impl Client {
                 message_type: message_name.clone(),
             };
             info!(target: "net", "Emitting NetworkMessage event: {}", message_name);
-            let envelope = EventEnvelope::game_event(
-                game_event,
-                self.id,
-                self.next_event_sequence(),
-                EventSource::Network,
-            );
+            let _ = self.raw_event_tx.send(ClientEvent::Game(game_event));
 
             debug!(target: "net", "Parsed as GameAction: {:?}", game_action);
             self.handle_game_action(game_action, message);
@@ -1007,12 +1002,7 @@ impl Client {
                     message_type: display_name.clone(),
                 };
                 info!(target: "net", "Emitting NetworkMessage event: {}", display_name);
-                let envelope = EventEnvelope::game_event(
-                    game_event,
-                    self.id,
-                    self.next_event_sequence(),
-                    EventSource::Network,
-                );
+                let _ = self.raw_event_tx.send(ClientEvent::Game(game_event));
 
                 info!(target: "net", "Parsed as S2CMessage: {:?} (0x{:04X})", msg_type, message.opcode);
 
@@ -1057,12 +1047,7 @@ impl Client {
                     direction: crate::client::events::MessageDirection::Received,
                     message_type: message_name.clone(),
                 };
-                let envelope = EventEnvelope::game_event(
-                    game_event,
-                    self.id,
-                    self.next_event_sequence(),
-                    EventSource::Network,
-                );
+                let _ = self.raw_event_tx.send(ClientEvent::Game(game_event));
 
                 info!(target: "net", "Unknown message opcode: 0x{:08X}", message.opcode);
             }
@@ -1151,12 +1136,7 @@ impl Client {
                             message_type,
                         };
 
-                        let envelope = EventEnvelope::game_event(
-                            game_event,
-                            self.id,
-                            self.next_event_sequence(),
-                            EventSource::Network,
-                        );
+                        let _ = self.raw_event_tx.send(ClientEvent::Game(game_event));
                     }
                     Err(e) => {
                         error!(target: "net", "Failed to parse sender name: {}", e);
@@ -1183,12 +1163,7 @@ impl Client {
                     message_type: 0x05, // System message type
                 };
 
-                let envelope = EventEnvelope::game_event(
-                    game_event,
-                    self.id,
-                    self.next_event_sequence(),
-                    EventSource::Network,
-                );
+                let _ = self.raw_event_tx.send(ClientEvent::Game(game_event));
             }
             Err(e) => {
                 error!(target: "net", "Failed to parse transient string: {}", e);
@@ -1215,12 +1190,7 @@ impl Client {
         };
 
         // Send on channel (ignore error if no subscribers)
-        let envelope = EventEnvelope::game_event(
-            game_event,
-            self.id,
-            self.next_event_sequence(),
-            EventSource::ClientInternal,
-        );
+        let _ = self.raw_event_tx.send(ClientEvent::Game(game_event));
     }
 
     /// Handle the character list message from the server
@@ -1465,12 +1435,7 @@ impl Client {
                 };
 
                 // Create event envelope and publish via event bus
-                let envelope = EventEnvelope::game_event(
-                    game_event,
-                    self.id,
-                    self.next_event_sequence(),
-                    EventSource::Network,
-                );
+                let _ = self.raw_event_tx.send(ClientEvent::Game(game_event));
             }
             Err(e) => {
                 error!(target: "net", "Failed to parse create object message: {}", e);
@@ -1505,12 +1470,7 @@ impl Client {
                         };
 
                         // Send on channel (ignore error if no subscribers)
-                        let envelope = EventEnvelope::game_event(
-                            game_event,
-                            self.id,
-                            self.next_event_sequence(),
-                            EventSource::Network,
-                        );
+                        let _ = self.raw_event_tx.send(ClientEvent::Game(game_event));
                     }
                     Err(e) => {
                         error!(target: "net", "Failed to parse chat message type: {}", e);
@@ -1545,12 +1505,7 @@ impl Client {
                     message_type,
                 };
 
-                let envelope = EventEnvelope::game_event(
-                    game_event,
-                    self.id,
-                    self.next_event_sequence(),
-                    EventSource::Network,
-                );
+                let _ = self.raw_event_tx.send(ClientEvent::Game(game_event));
             }
             Err(e) => {
                 error!(target: "net", "Failed to parse hear speech message: {}", e);
@@ -1580,12 +1535,7 @@ impl Client {
                     message_type,
                 };
 
-                let envelope = EventEnvelope::game_event(
-                    game_event,
-                    self.id,
-                    self.next_event_sequence(),
-                    EventSource::Network,
-                );
+                let _ = self.raw_event_tx.send(ClientEvent::Game(game_event));
             }
             Err(e) => {
                 error!(target: "net", "Failed to parse hear ranged speech message: {}", e);
@@ -1684,9 +1634,7 @@ impl Client {
             });
 
             // Emit authentication success system event
-            let system_event = SystemEvent::AuthenticationSucceeded {
-                client_id: self.id,
-            };
+            let _ = self.raw_event_tx.send(ClientEvent::System(ClientSystemEvent::AuthenticationSucceeded));
             
             
             

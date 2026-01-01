@@ -2,7 +2,6 @@ use std::sync::Arc;
 use tokio::sync::mpsc;
 
 use gromnie_client::client::events::{ClientSystemEvent, ClientEvent};
-use gromnie_client::client::ClientState;
 use crate::event_bus::{EventType, EventContext, EventEnvelope, EventSource, SystemEvent, ClientStateEvent as RunnerClientStateEvent};
 
 /// Wraps raw events from client and enriches them with context
@@ -24,9 +23,10 @@ impl EventWrapper {
     /// Run the event wrapper task
     /// Receives raw events and publishes enriched envelopes to the event bus
     pub async fn run(mut self, mut raw_rx: mpsc::Receiver<ClientEvent>) {
+        let sender = self.event_bus.create_sender(self.client_id);
         while let Some(raw_event) = raw_rx.recv().await {
             let envelope = self.wrap_event(raw_event);
-            self.event_bus.publish(envelope);
+            sender.publish(envelope);
             self.sequence_counter += 1;
         }
     }
@@ -38,12 +38,15 @@ impl EventWrapper {
         let event = match raw {
             ClientEvent::Game(game) => EventType::Game(game),
             ClientEvent::State(state) => {
-                // Convert string-based state event to ClientState-based state event
-                EventType::State(RunnerClientStateEvent::StateTransition {
-                    from: state.from,
-                    to: state.to,
-                    client_id: state.client_id,
-                })
+                // Convert client state event to runner state event
+                match state {
+                    gromnie_client::client::events::ClientStateEvent::StateTransition { from, to, client_id } => {
+                        EventType::State(RunnerClientStateEvent::StateTransition { from, to, client_id })
+                    }
+                    gromnie_client::client::events::ClientStateEvent::ClientFailed { reason, client_id } => {
+                        EventType::State(RunnerClientStateEvent::ClientFailed { reason, client_id })
+                    }
+                }
             }
             ClientEvent::System(sys) => EventType::System(self.convert_system_event(sys)),
         };

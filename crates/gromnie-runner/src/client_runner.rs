@@ -1,9 +1,10 @@
 use std::sync::Arc;
 use tokio::sync::{broadcast, mpsc};
-use tracing::{debug, error, info};
+use tracing::{error, info};
 
 use crate::event_consumer::EventConsumer;
 use crate::event_bus::{EventBus, EventEnvelope};
+use crate::event_wrapper::EventWrapper;
 use gromnie_client::client::Client;
 
 /// Configuration for running a client
@@ -17,7 +18,7 @@ pub struct ClientConfig {
 /// Shared event bus manager that owns the central event bus
 #[derive(Clone)]
 pub struct EventBusManager {
-    event_bus: Arc<EventBus>,
+    pub(crate) event_bus: Arc<EventBus>,
 }
 
 impl EventBusManager {
@@ -61,16 +62,24 @@ pub async fn run_client<C, F>(
     C: EventConsumer,
     F: FnOnce(mpsc::UnboundedSender<gromnie_client::client::events::ClientAction>) -> C,
 {
-    // Get event sender for this client from the shared event bus
-    let event_sender = event_bus_manager.create_sender(config.id);
+    // Create a channel for raw events from client to EventWrapper
+    let (raw_event_tx, raw_event_rx) = mpsc::channel::<gromnie_client::client::events::ClientEvent>(256);
+
+    // Spawn EventWrapper to bridge client events to event bus
+    let event_wrapper = EventWrapper::new(config.id, event_bus_manager.event_bus.clone());
+    tokio::spawn(async move {
+        event_wrapper.run(raw_event_rx).await;
+    });
+
+    // Subscribe to the event bus for the consumer
     let event_rx = event_bus_manager.subscribe();
-    
+
     let (client, action_tx) = Client::new(
         config.id,
         config.address.clone(),
         config.account_name.clone(),
         config.password.clone(),
-        event_sender,
+        raw_event_tx,
     )
     .await;
 
@@ -95,16 +104,21 @@ pub async fn run_client_with_consumers<F>(
         mpsc::UnboundedSender<gromnie_client::client::events::ClientAction>,
     ) -> Vec<Box<dyn EventConsumer>>,
 {
-    // Get event sender for this client from the shared event bus
-    let event_sender = event_bus_manager.create_sender(config.id);
-    let event_rx = event_bus_manager.subscribe();
-    
+    // Create a channel for raw events from client to EventWrapper
+    let (raw_event_tx, raw_event_rx) = mpsc::channel::<gromnie_client::client::events::ClientEvent>(256);
+
+    // Spawn EventWrapper to bridge client events to event bus
+    let event_wrapper = EventWrapper::new(config.id, event_bus_manager.event_bus.clone());
+    tokio::spawn(async move {
+        event_wrapper.run(raw_event_rx).await;
+    });
+
     let (client, action_tx) = Client::new(
         config.id,
         config.address.clone(),
         config.account_name.clone(),
         config.password.clone(),
-        event_sender,
+        raw_event_tx,
     )
     .await;
 
@@ -138,9 +152,6 @@ pub async fn run_client_with_consumers<F>(
         consumer_tasks.push(handle);
     }
 
-    // Drop the original event_rx since we're not using it
-    drop(event_rx);
-
     // Run the main client loop without event handling (consumers handle events)
     run_client_loop(client, shutdown_rx).await;
 
@@ -167,16 +178,24 @@ pub async fn run_client_with_action_channel<C, F>(
     C: EventConsumer,
     F: FnOnce(mpsc::UnboundedSender<gromnie_client::client::events::ClientAction>) -> C,
 {
-    // Get event sender for this client from the shared event bus
-    let event_sender = event_bus_manager.create_sender(config.id);
+    // Create a channel for raw events from client to EventWrapper
+    let (raw_event_tx, raw_event_rx) = mpsc::channel::<gromnie_client::client::events::ClientEvent>(256);
+
+    // Spawn EventWrapper to bridge client events to event bus
+    let event_wrapper = EventWrapper::new(config.id, event_bus_manager.event_bus.clone());
+    tokio::spawn(async move {
+        event_wrapper.run(raw_event_rx).await;
+    });
+
+    // Subscribe to the event bus for the consumer
     let event_rx = event_bus_manager.subscribe();
-    
+
     let (client, action_tx) = Client::new(
         config.id,
         config.address.clone(),
         config.account_name.clone(),
         config.password.clone(),
-        event_sender,
+        raw_event_tx,
     )
     .await;
 

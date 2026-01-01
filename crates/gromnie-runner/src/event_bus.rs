@@ -50,7 +50,7 @@ impl EventContext {
 /// Client state transition events
 #[derive(Debug, Clone)]
 pub enum ClientStateEvent {
-    StateTransition { from: ClientState, to: ClientState, client_id: u32 },
+    StateTransition { from: String, to: String, client_id: u32 },
     ClientFailed { reason: String, client_id: u32 },
 }
 

@@ -28,6 +28,7 @@ clap.workspace = true
 crossterm.workspace = true
 gromnie-client = { path = "../gromnie-client" }
 gromnie-runner = { path = "../gromnie-runner" }
+gromnie-scripting-host = { path = "../gromnie-scripting-host" }
 ratatui.workspace = true
 serenity.workspace = true
 tokio = { version = "1.36.0", features = ["full"] }

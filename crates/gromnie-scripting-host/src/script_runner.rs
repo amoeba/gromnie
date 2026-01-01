@@ -4,12 +4,12 @@ use tracing::{debug, error};
 
 use super::EventFilter;
 use super::Script;
-use super::context::{ClientStateSnapshot, ScriptContext};
+use super::context::ScriptContext;
 use super::timer::TimerManager;
 use super::wasm::WasmScript;
-use gromnie_client::client::events::{ClientAction, GameEvent, ClientStateEvent, ClientEvent, ClientSystemEvent};
-use gromnie_runner::EventConsumer;
-use gromnie_runner::event_bus::EventEnvelope;
+use gromnie_client::client::events::{ClientAction, ClientEvent, ClientSystemEvent};
+use gromnie_runner::{EventConsumer, EventEnvelope};
+use crate::create_runner_from_config;
 
 /// Default tick rate for scripts (50ms = 20Hz)
 const DEFAULT_TICK_INTERVAL: Duration = Duration::from_millis(50);
@@ -322,39 +322,49 @@ impl EventConsumer for ScriptConsumer {
     fn handle_event(&mut self, envelope: EventEnvelope) {
         // Extract ClientEvent from EventEnvelope
         let client_event = match envelope.event {
-            gromnie_runner::event_bus::EventType::Game(game_event) => {
+            gromnie_runner::EventType::Game(game_event) => {
                 ClientEvent::Game(game_event)
             }
-            gromnie_runner::event_bus::EventType::State(state_event) => {
+            gromnie_runner::EventType::State(state_event) => {
                 // Convert ClientState-based event to string-based
-                ClientEvent::State(gromnie_client::client::events::ClientStateEvent::StateTransition {
-                    from: format!("{:?}", state_event.from),
-                    to: format!("{:?}", state_event.to),
-                    client_id: state_event.client_id,
-                })
+                match state_event {
+                    gromnie_runner::ClientStateEvent::StateTransition { from, to, client_id } => {
+                        ClientEvent::State(gromnie_client::client::events::ClientStateEvent::StateTransition {
+                            from,
+                            to,
+                            client_id,
+                        })
+                    }
+                    gromnie_runner::ClientStateEvent::ClientFailed { reason, client_id } => {
+                        ClientEvent::State(gromnie_client::client::events::ClientStateEvent::ClientFailed {
+                            reason,
+                            client_id,
+                        })
+                    }
+                }
             }
-            gromnie_runner::event_bus::EventType::System(system_event) => {
+            gromnie_runner::EventType::System(system_event) => {
                 // Convert SystemEvent to ClientSystemEvent
                 match system_event {
-                    gromnie_runner::event_bus::SystemEvent::AuthenticationSucceeded { .. } => {
+                    gromnie_runner::SystemEvent::AuthenticationSucceeded { .. } => {
                         ClientEvent::System(ClientSystemEvent::AuthenticationSucceeded)
                     }
-                    gromnie_runner::event_bus::SystemEvent::AuthenticationFailed { reason, .. } => {
+                    gromnie_runner::SystemEvent::AuthenticationFailed { reason, .. } => {
                         ClientEvent::System(ClientSystemEvent::AuthenticationFailed { reason })
                     }
-                    gromnie_runner::event_bus::SystemEvent::ConnectingStarted { .. } => {
+                    gromnie_runner::SystemEvent::ConnectingStarted { .. } => {
                         ClientEvent::System(ClientSystemEvent::ConnectingStarted)
                     }
-                    gromnie_runner::event_bus::SystemEvent::ConnectingDone { .. } => {
+                    gromnie_runner::SystemEvent::ConnectingDone { .. } => {
                         ClientEvent::System(ClientSystemEvent::ConnectingDone)
                     }
-                    gromnie_runner::event_bus::SystemEvent::UpdatingStarted { .. } => {
+                    gromnie_runner::SystemEvent::UpdatingStarted { .. } => {
                         ClientEvent::System(ClientSystemEvent::UpdatingStarted)
                     }
-                    gromnie_runner::event_bus::SystemEvent::UpdatingDone { .. } => {
+                    gromnie_runner::SystemEvent::UpdatingDone { .. } => {
                         ClientEvent::System(ClientSystemEvent::UpdatingDone)
                     }
-                    gromnie_runner::event_bus::SystemEvent::LoginSucceeded { character_id, character_name } => {
+                    gromnie_runner::SystemEvent::LoginSucceeded { character_id, character_name } => {
                         ClientEvent::System(ClientSystemEvent::LoginSucceeded { character_id, character_name })
                     }
                     _ => {

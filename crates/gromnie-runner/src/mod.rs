@@ -1,7 +1,7 @@
 mod character_gen;
 mod client_runner;
 mod event_consumer;
-mod event_bus;
+pub mod event_bus;
 mod event_wrapper;
 
 pub use character_gen::CharacterBuilder;
@@ -15,3 +15,4 @@ pub use event_bus::{
     EventType, ClientStateEvent, EventBus, EventContext, EventEnvelope, EventSource,
     ScriptEventType, SystemEvent,
 };
+pub use event_wrapper::EventWrapper;
