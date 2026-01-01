@@ -12,7 +12,7 @@ name = "gromnie_runner"
 path = "src/mod.rs"
 
 [dependencies]
-acprotocol = { git = "https://github.com/amoeba/asheron-rs", rev = "a165e6ca82dd913281cb6280538ee5ab3bd1ef4b" }
+acprotocol.workspace = true
 chrono.workspace = true
 gromnie-client = { path = "../gromnie-client" }
 serenity.workspace = true
