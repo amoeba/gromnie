@@ -77,7 +77,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Spawn client task using the runner module
     let runner = ClientRunner::builder()
-        .single_client(config)
+        .with_clients(config)
         .with_consumer(TuiConsumer::from_factory(client_event_tx))
         .with_action_channel(action_tx_channel)
         .with_shutdown(shutdown_rx)

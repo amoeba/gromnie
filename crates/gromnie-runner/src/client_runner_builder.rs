@@ -5,43 +5,15 @@
 use std::sync::Arc;
 use tokio::sync::{mpsc, watch};
 
-use crate::client_runner::ClientConfig;
 use crate::event_consumer::EventConsumer;
 use gromnie_client::client::events::ClientAction;
 
-/// Context provided to consumer factories when creating consumers
-pub struct ConsumerContext<'a> {
-    /// The client ID
-    pub client_id: u32,
-    /// The client configuration
-    pub client_config: &'a ClientConfig,
-    /// Channel to send actions back to the client
-    pub action_tx: mpsc::UnboundedSender<ClientAction>,
-}
-
-/// Factory trait for creating event consumers
-///
-/// This trait allows consumers to be created lazily when the client is ready,
-/// providing access to the client's action channel and configuration.
-pub trait ConsumerFactory: Send + Sync + 'static {
-    /// Create a consumer for the given client context
-    fn create(&self, ctx: &ConsumerContext) -> Box<dyn EventConsumer>;
-}
-
-// Allow closures to be used as consumer factories
-impl<F> ConsumerFactory for F
-where
-    F: Fn(&ConsumerContext) -> Box<dyn EventConsumer> + Send + Sync + 'static,
-{
-    fn create(&self, ctx: &ConsumerContext) -> Box<dyn EventConsumer> {
-        (self)(ctx)
-    }
-}
+// Re-export types from gromnie-events
+pub use gromnie_events::{ClientConfig, ConsumerContext, ConsumerFactory};
 
 /// Client mode - either static configs or dynamic generation
 pub enum ClientMode {
     /// Run with static client configuration(s)
-    /// Can be a single client (vec of 1) or multiple clients
     Static {
         /// Static list of client configurations
         configs: Vec<ClientConfig>,
@@ -68,8 +40,27 @@ pub enum ClientMode {
 /// Error during builder configuration
 #[derive(Debug, thiserror::Error)]
 pub enum BuildError {
-    #[error("Client mode not specified - use .single_client() or .multi_client()")]
+    #[error("Client mode not specified - use .with_clients() or .with_client_generator()")]
     MissingClientMode,
+}
+
+/// Trait for types that can be converted into a vector of client configs
+///
+/// This allows the API to accept either a single ClientConfig or Vec<ClientConfig>
+pub trait IntoClientConfigs {
+    fn into_configs(self) -> Vec<ClientConfig>;
+}
+
+impl IntoClientConfigs for ClientConfig {
+    fn into_configs(self) -> Vec<ClientConfig> {
+        vec![self]
+    }
+}
+
+impl IntoClientConfigs for Vec<ClientConfig> {
+    fn into_configs(self) -> Vec<ClientConfig> {
+        self
+    }
 }
 
 /// Builder for ClientRunner
@@ -79,6 +70,7 @@ pub struct ClientRunnerBuilder {
     action_channel: Option<mpsc::UnboundedSender<mpsc::UnboundedSender<ClientAction>>>,
     shutdown_rx: Option<watch::Receiver<bool>>,
     event_bus_capacity: usize,
+    app_config: Option<gromnie_client::config::Config>,
 }
 
 impl ClientRunnerBuilder {
@@ -90,36 +82,69 @@ impl ClientRunnerBuilder {
             action_channel: None,
             shutdown_rx: None,
             event_bus_capacity: 100,
+            app_config: None,
         }
     }
 
-    /// Configure for single client mode
-    pub fn single_client(mut self, config: ClientConfig) -> Self {
-        self.mode = Some(ClientMode::Static {
-            configs: vec![config],
-            spawn_interval_ms: 0,
-            shared_event_bus: false,
-        });
-        self
-    }
+    /// Configure with one or more client configs
+    ///
+    /// Accepts either a single `ClientConfig` or a `Vec<ClientConfig>`.
+    ///
+    /// # Examples
+    ///
+    /// Single client:
+    /// ```no_run
+    /// # use gromnie_runner::{ClientRunner, ClientConfig};
+    /// ClientRunner::builder()
+    ///     .with_clients(ClientConfig::new(0, "localhost:9000".into(), "user".into(), "pass".into()));
+    /// ```
+    ///
+    /// Multiple clients:
+    /// ```no_run
+    /// # use gromnie_runner::{ClientRunner, ClientConfig};
+    /// let configs = vec![
+    ///     ClientConfig::new(0, "localhost:9000".into(), "user1".into(), "pass1".into()),
+    ///     ClientConfig::new(1, "localhost:9000".into(), "user2".into(), "pass2".into()),
+    /// ];
+    /// ClientRunner::builder()
+    ///     .with_clients(configs);
+    /// ```
+    pub fn with_clients(mut self, configs: impl IntoClientConfigs) -> Self {
+        let configs = configs.into_configs();
+        let spawn_interval_ms = if configs.len() == 1 { 0 } else { 1000 };
 
-    /// Configure for static multi-client mode
-    pub fn static_clients(mut self, configs: Vec<ClientConfig>) -> Self {
         self.mode = Some(ClientMode::Static {
             configs,
-            spawn_interval_ms: 1000,
+            spawn_interval_ms,
             shared_event_bus: false,
         });
         self
     }
 
-    /// Configure for dynamic multi-client mode with client generation
+    /// Configure with a client generator for dynamic multi-client mode
     ///
     /// # Arguments
     /// * `num_clients` - Number of clients to spawn
     /// * `server_address` - Server address (e.g., "localhost:9000")
     /// * `generator` - Function to generate ClientConfig for each client ID
-    pub fn dynamic_clients<F>(
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// # use gromnie_runner::{ClientRunner, ClientConfig};
+    /// ClientRunner::builder()
+    ///     .with_client_generator(
+    ///         100,
+    ///         "localhost:9000".into(),
+    ///         |client_id| ClientConfig::new(
+    ///             client_id,
+    ///             "localhost:9000".into(),
+    ///             format!("bot_{}", client_id),
+    ///             format!("pass_{}", client_id)
+    ///         )
+    ///     );
+    /// ```
+    pub fn with_client_generator<F>(
         mut self,
         num_clients: u32,
         server_address: String,
@@ -201,29 +226,87 @@ impl ClientRunnerBuilder {
         self
     }
 
-    /// Set scripting configuration
-    /// The factory function will be called to create a scripting consumer if scripting is enabled
-    pub fn with_scripting<F>(
-        mut self,
-        config: gromnie_client::config::ScriptingConfig,
-        factory: F,
-    ) -> Self
-    where
-        F: Fn(mpsc::UnboundedSender<ClientAction>, &gromnie_client::config::ScriptingConfig) -> Box<dyn EventConsumer> + Send + Sync + 'static,
-    {
-        if config.enabled {
-            // Wrap the factory to match our ConsumerFactory trait
-            let config_clone = config.clone();
-            self.consumers.push(Box::new(move |ctx: &ConsumerContext| {
-                factory(ctx.action_tx.clone(), &config_clone)
-            }));
-        }
+    /// Set application config (optional - will load from default location if not specified)
+    pub fn with_config(mut self, config: gromnie_client::config::Config) -> Self {
+        self.app_config = Some(config);
         self
     }
 
     /// Build the ClientRunner
-    pub fn build(self) -> Result<ClientRunner, BuildError> {
+    ///
+    /// If config was not provided via `with_config()`, it will be loaded
+    /// from the default location. Scripting will be automatically configured based
+    /// on the config settings.
+    ///
+    /// # Examples
+    ///
+    /// Single client (config loaded automatically):
+    /// ```no_run
+    /// # use gromnie_runner::{ClientRunner, ClientConfig, LoggingConsumer};
+    /// # async fn example() {
+    /// ClientRunner::builder()
+    ///     .with_clients(ClientConfig::new(0, "localhost:9000".into(), "user".into(), "pass".into()))
+    ///     .with_consumer(LoggingConsumer::from_factory())
+    ///     .build()
+    ///     .unwrap()
+    ///     .run()
+    ///     .await;
+    /// # }
+    /// ```
+    ///
+    /// Multiple clients with custom config:
+    /// ```no_run
+    /// # use gromnie_runner::{ClientRunner, ClientConfig, LoggingConsumer};
+    /// # use gromnie_client::config::Config;
+    /// # async fn example(custom_config: Config) {
+    /// let configs = vec![
+    ///     ClientConfig::new(0, "localhost:9000".into(), "user1".into(), "pass1".into()),
+    ///     ClientConfig::new(1, "localhost:9000".into(), "user2".into(), "pass2".into()),
+    /// ];
+    /// ClientRunner::builder()
+    ///     .with_clients(configs)
+    ///     .with_consumer(LoggingConsumer::from_factory())
+    ///     .with_config(custom_config)
+    ///     .build()
+    ///     .unwrap()
+    ///     .run()
+    ///     .await;
+    /// # }
+    /// ```
+    pub fn build(mut self) -> Result<ClientRunner, BuildError> {
         let mode = self.mode.ok_or(BuildError::MissingClientMode)?;
+
+        // Load config from default location if not provided
+        let config = match self.app_config {
+            Some(cfg) => cfg,
+            None => {
+                // Try to load from default location, or create minimal config if not found
+                gromnie_client::config::Config::load().unwrap_or_else(|_| {
+                    // Create minimal default config with scripting disabled
+                    gromnie_client::config::Config {
+                        servers: std::collections::BTreeMap::new(),
+                        accounts: std::collections::BTreeMap::new(),
+                        scripting: gromnie_client::config::ScriptingConfig {
+                            enabled: false,
+                            script_dir: None,
+                            config: std::collections::HashMap::new(),
+                        },
+                    }
+                })
+            }
+        };
+
+        // Setup scripting if enabled in config
+        if config.scripting.enabled {
+            let scripting_config = config.scripting.clone();
+            self.consumers.push(Box::new(move |ctx: &ConsumerContext| {
+                let consumer = gromnie_scripting_host::create_script_consumer(
+                    ctx.action_tx.clone(),
+                    &scripting_config,
+                );
+                Box::new(consumer) as Box<dyn EventConsumer>
+            }));
+        }
 
         Ok(ClientRunner {
             mode,

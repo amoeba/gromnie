@@ -3,7 +3,6 @@ use std::fs;
 
 use clap::Parser;
 use gromnie_runner::{ClientConfig, ClientRunner, LoggingConsumer};
-use gromnie_scripting_host::create_script_consumer;
 use ratatui::{TerminalOptions, Viewport};
 use tracing::info;
 use tracing_subscriber::EnvFilter;
@@ -128,11 +127,9 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
             // Build and run the client using the new builder API
             ClientRunner::builder()
-                .single_client(client_config)
+                .with_clients(client_config)
                 .with_consumer(LoggingConsumer::from_factory())
-                .with_scripting(config.scripting.clone(), |action_tx, scripting_config| {
-                    Box::new(create_script_consumer(action_tx, scripting_config))
-                })
+                .with_config(config.clone())
                 .build()?
                 .run()
                 .await;
@@ -174,11 +171,9 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
         // Build and run the client using the new builder API
         ClientRunner::builder()
-            .single_client(client_config)
+            .with_clients(client_config)
             .with_consumer(LoggingConsumer::from_factory())
-            .with_scripting(wizard.config.scripting.clone(), |action_tx, scripting_config| {
-                Box::new(create_script_consumer(action_tx, scripting_config))
-            })
+            .with_config(wizard.config.clone())
             .build()?
             .run()
             .await;

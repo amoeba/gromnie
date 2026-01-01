@@ -9,26 +9,8 @@ use crate::event_consumer::EventConsumer;
 use crate::event_wrapper::EventWrapper;
 use gromnie_client::client::Client;
 
-/// Configuration for running a client
-#[derive(Clone, Debug)]
-pub struct ClientConfig {
-    pub id: u32,
-    pub address: String,
-    pub account_name: String,
-    pub password: String,
-}
-
-impl ClientConfig {
-    /// Create a new client config
-    pub fn new(id: u32, address: String, account_name: String, password: String) -> Self {
-        Self {
-            id,
-            address,
-            account_name,
-            password,
-        }
-    }
-}
+// Re-export ClientConfig from gromnie-events
+pub use gromnie_events::ClientConfig;
 
 /// Configuration for running clients - either single or multi-client
 #[derive(Clone, Debug)]

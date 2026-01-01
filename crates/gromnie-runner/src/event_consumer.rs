@@ -13,11 +13,8 @@ use serenity::http::Http;
 use serenity::model::id::ChannelId;
 use std::time::Instant;
 
-/// Trait for consuming game events - allows different implementations for CLI vs TUI
-pub trait EventConsumer: Send + 'static {
-    /// Handle an event envelope
-    fn handle_event(&mut self, envelope: EventEnvelope);
-}
+// Re-export EventConsumer from gromnie-events
+pub use gromnie_events::EventConsumer;
 
 /// Event consumer that logs events to the console (for CLI version)
 pub struct LoggingConsumer {
