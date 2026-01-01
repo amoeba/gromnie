@@ -70,7 +70,7 @@ pub struct ClientRunnerBuilder {
     action_channel: Option<mpsc::UnboundedSender<mpsc::UnboundedSender<ClientAction>>>,
     shutdown_rx: Option<watch::Receiver<bool>>,
     event_bus_capacity: usize,
-    app_config: Option<gromnie_client::config::Config>,
+    app_config: Option<gromnie_client::config::GromnieConfig>,
 }
 
 impl ClientRunnerBuilder {
@@ -227,7 +227,7 @@ impl ClientRunnerBuilder {
     }
 
     /// Set application config (optional - will load from default location if not specified)
-    pub fn with_config(mut self, config: gromnie_client::config::Config) -> Self {
+    pub fn with_config(mut self, config: gromnie_client::config::GromnieConfig) -> Self {
         self.app_config = Some(config);
         self
     }
@@ -281,9 +281,9 @@ impl ClientRunnerBuilder {
             Some(cfg) => cfg,
             None => {
                 // Try to load from default location, or create minimal config if not found
-                gromnie_client::config::Config::load().unwrap_or_else(|_| {
+                gromnie_client::config::GromnieConfig::load().unwrap_or_else(|_| {
                     // Create minimal default config with scripting disabled
-                    gromnie_client::config::Config {
+                    gromnie_client::config::GromnieConfig {
                         servers: std::collections::BTreeMap::new(),
                         accounts: std::collections::BTreeMap::new(),
                         scripting: ScriptingConfig {

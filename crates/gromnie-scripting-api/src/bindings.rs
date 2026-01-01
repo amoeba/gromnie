@@ -273,7 +273,10 @@ mod tests {
         ScriptComponent::init();
         assert_eq!(ScriptComponent::get_id(), "test_script");
         assert_eq!(ScriptComponent::get_name(), "Test Script");
-        assert_eq!(ScriptComponent::get_description(), "A test script for unit testing");
+        assert_eq!(
+            ScriptComponent::get_description(),
+            "A test script for unit testing"
+        );
         assert_eq!(ScriptComponent::subscribed_events(), vec![1, 2, 3]);
     }
 }

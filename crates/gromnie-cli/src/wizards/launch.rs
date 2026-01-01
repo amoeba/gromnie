@@ -1,7 +1,7 @@
 use ratatui::Frame;
 use std::error::Error;
 
-use gromnie_client::config::Config;
+use gromnie_client::config::GromnieConfig;
 
 use crate::app::App;
 use crate::draw::Draw;
@@ -18,7 +18,7 @@ pub enum WizardStage {
 #[derive(Clone)]
 pub struct LaunchWizard {
     #[allow(dead_code)]
-    pub config: Config,
+    pub config: GromnieConfig,
     pub stage: WizardStage,
     pub selected_server_idx: usize,
     pub selected_account_idx: usize,
@@ -27,7 +27,7 @@ pub struct LaunchWizard {
 }
 
 impl LaunchWizard {
-    pub fn new(config: Config) -> Self {
+    pub fn new(config: GromnieConfig) -> Self {
         // Guard: require at least one server and one account
         assert!(
             !config.servers.is_empty(),
@@ -79,7 +79,7 @@ impl Draw for LaunchWizard {
         // Always show welcome and config path
         lines.push(Line::from("Welcome to Gromnie!"));
         lines.push(Line::from(Span::styled(
-            format!("Config: {}", Config::config_path().display()),
+            format!("Config: {}", GromnieConfig::config_path().display()),
             Style::default().fg(Color::DarkGray),
         )));
         lines.push(Line::from(""));

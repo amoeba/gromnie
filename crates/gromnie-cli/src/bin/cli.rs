@@ -8,7 +8,7 @@ use tracing::info;
 use tracing_subscriber::EnvFilter;
 
 use gromnie_cli::App;
-use gromnie_client::config::Config;
+use gromnie_client::config::GromnieConfig;
 
 #[derive(Parser)]
 #[command(version, about, long_about = None)]
@@ -27,7 +27,7 @@ pub struct Cli {
 }
 
 fn create_example_config() -> Result<(), Box<dyn Error>> {
-    let config_path = Config::config_path();
+    let config_path = GromnieConfig::config_path();
 
     // Create parent directories if they don't exist
     if let Some(parent) = config_path.parent() {
@@ -71,7 +71,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
     info!("Starting gromnie client...");
 
     // Load or create config
-    let config = match Config::load() {
+    let config = match GromnieConfig::load() {
         Ok(cfg) => {
             info!("Loaded existing config");
             cfg

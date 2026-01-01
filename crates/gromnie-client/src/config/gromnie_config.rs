@@ -8,7 +8,7 @@ use crate::config::{
 };
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Config {
+pub struct GromnieConfig {
     pub servers: BTreeMap<String, ServerConfig>,
     pub accounts: BTreeMap<String, AccountConfig>,
 
@@ -17,7 +17,7 @@ pub struct Config {
     pub scripting: ScriptingConfig,
 }
 
-impl Config {
+impl GromnieConfig {
     pub fn config_path() -> PathBuf {
         use directories::ProjectDirs;
         let proj_dirs =
