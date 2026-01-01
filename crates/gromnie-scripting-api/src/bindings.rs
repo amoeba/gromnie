@@ -12,11 +12,8 @@ wit_bindgen::generate!({
     world: "script",
 });
 
-// Re-export the main types that scripts will use
 pub use self::exports::gromnie::scripting::guest::Guest;
 pub use self::gromnie::scripting::host as host_interface;
-
-// Expose the raw generated module structure for direct imports
 pub use self::gromnie::scripting::host;
 
 /// Trait for WASM script implementations
@@ -99,46 +96,33 @@ pub trait WasmScript: Send + 'static {
 
 // Storage for script implementation (WASM is single-threaded)
 #[doc(hidden)]
-pub static mut SCRIPT_IMPL: Option<Box<dyn WasmScript>> = None;
+static mut SCRIPT_IMPL: Option<Box<dyn WasmScript>> = None;
 
-#[doc(hidden)]
-pub fn register_script_impl(build_script: fn() -> Box<dyn WasmScript>) {
-    unsafe {
-        SCRIPT_IMPL = Some((build_script)());
-    }
+// This function is defined by the register_script! macro
+// It will be defined in user code and linked into the WASM module
+unsafe extern "Rust" {
+    fn __gromnie_script_constructor() -> Box<dyn WasmScript>;
 }
 
 #[doc(hidden)]
-pub static mut SCRIPT_INIT_FN: Option<fn() -> Box<dyn WasmScript>> = None;
-
-/// Initialize the script if not already initialized
-#[doc(hidden)]
-pub fn init_script() {
+fn ensure_initialized() {
     #[expect(static_mut_refs)]
     unsafe {
-        // Initialize lazily if needed - SCRIPT_INIT_FN is set by register_script! at compile time
-        if SCRIPT_IMPL.is_none()
-            && let Some(init_fn) = SCRIPT_INIT_FN
-        {
-            SCRIPT_IMPL = Some((init_fn)());
-        }
-    }
-}
-
-fn script() -> &'static mut dyn WasmScript {
-    #[expect(static_mut_refs)]
-    unsafe {
-        // Initialize lazily if needed - SCRIPT_INIT_FN is set by register_script! at compile time
         if SCRIPT_IMPL.is_none() {
-            if let Some(init_fn) = SCRIPT_INIT_FN {
-                SCRIPT_IMPL = Some((init_fn)());
-            } else {
-                panic!("Script not initialized. Did you call register_script! macro?");
-            }
+            SCRIPT_IMPL = Some(__gromnie_script_constructor());
         }
+    }
+}
+
+#[doc(hidden)]
+fn script() -> &'static mut dyn WasmScript {
+    ensure_initialized();
+
+    #[expect(static_mut_refs)]
+    unsafe {
         SCRIPT_IMPL
             .as_deref_mut()
-            .expect("Script implementation is missing")
+            .expect("Script implementation missing")
     }
 }
 
@@ -149,21 +133,10 @@ struct ScriptComponent;
 
 impl Guest for ScriptComponent {
     fn init() {
-        // Initialize script on first call
-        // Call the macro-generated init function if it exists
-        unsafe extern "C" {
-            #[link_name = "init_script"]
-            fn __call_init_script();
-        }
-
-        unsafe {
-            __call_init_script();
-        }
+        ensure_initialized();
     }
 
     fn get_id() -> String {
-        // Initialize script if needed (lazy initialization)
-        init_script();
         script().id().to_string()
     }
 
@@ -223,26 +196,10 @@ impl Guest for ScriptComponent {
 #[macro_export]
 macro_rules! register_script {
     ($script_type:ty) => {
-        // Store the constructor function in a module-level function
         #[doc(hidden)]
-        pub fn __gromnie_script_constructor() -> ::std::boxed::Box<dyn $crate::bindings::WasmScript>
-        {
+        #[no_mangle]
+        fn __gromnie_script_constructor() -> ::std::boxed::Box<dyn $crate::bindings::WasmScript> {
             ::std::boxed::Box::new(<$script_type as $crate::bindings::WasmScript>::new())
-        }
-
-        // Export a function the host can call to set up initialization
-        #[doc(hidden)]
-        #[unsafe(export_name = "init_script")]
-        pub extern "C" fn __init_script() {
-            #[expect(unsafe_op_in_unsafe_fn)]
-            unsafe {
-                // Set up the init function on first call
-                if $crate::bindings::SCRIPT_INIT_FN.is_none() {
-                    $crate::bindings::SCRIPT_INIT_FN = Some(__gromnie_script_constructor);
-                }
-                // Perform initialization
-                $crate::bindings::init_script();
-            }
         }
     };
 }
