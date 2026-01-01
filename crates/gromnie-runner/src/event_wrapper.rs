@@ -27,12 +27,15 @@ impl EventWrapper {
     /// Receives raw events and publishes enriched envelopes to the event bus
     pub async fn run(mut self, mut raw_rx: mpsc::Receiver<ClientEvent>) {
         let sender = self.event_bus.create_sender(self.client_id);
+        tracing::info!(target: "event_wrapper", "EventWrapper started for client {}", self.client_id);
         while let Some(raw_event) = raw_rx.recv().await {
-            tracing::debug!(target: "events", "EventWrapper received event: {:?}", std::mem::discriminant(&raw_event));
+            tracing::info!(target: "event_wrapper", "EventWrapper received event: {:?}", std::mem::discriminant(&raw_event));
             let envelope = self.wrap_event(raw_event);
+            tracing::info!(target: "event_wrapper", "EventWrapper publishing envelope: {:?}", std::mem::discriminant(&envelope.event));
             sender.publish(envelope);
             self.sequence_counter += 1;
         }
+        tracing::warn!(target: "event_wrapper", "EventWrapper stopped - no more events");
     }
 
     fn wrap_event(&mut self, raw: ClientEvent) -> EventEnvelope {

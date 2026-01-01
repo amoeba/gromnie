@@ -1856,7 +1856,11 @@ impl Client {
         {
             *progress = ConnectingProgress::LoginRequestSent;
             let game_event = GameEvent::ConnectingSetProgress { progress: 0.33 };
-            std::mem::drop(self.raw_event_tx.send(ClientEvent::Game(game_event)));
+            eprintln!("CLIENT: Sending ConnectingSetProgress 0.33");
+            match self.raw_event_tx.send(ClientEvent::Game(game_event)).await {
+                Ok(_) => eprintln!("CLIENT: Successfully sent ConnectingSetProgress event"),
+                Err(e) => eprintln!("CLIENT: Failed to send ConnectingSetProgress event: {}", e),
+            }
             info!(target: "net", "Progress: LoginRequest sent (33%)");
         }
 

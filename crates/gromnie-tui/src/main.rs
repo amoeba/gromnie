@@ -115,6 +115,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
             Some(game_event) = client_event_rx.recv() => {
                 // Handle game events through centralized message passing
+                tracing::info!(target: "tui_main", "Received game event in main loop: {:?}", std::mem::discriminant(&game_event));
                 app.update_from_event(game_event);
             }
             // Check if client task exited
