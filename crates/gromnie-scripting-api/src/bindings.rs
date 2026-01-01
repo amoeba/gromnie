@@ -152,7 +152,7 @@ impl Guest for ScriptComponent {
         // Initialize script on first call
         // Call the macro-generated init function if it exists
         unsafe extern "C" {
-            #[link_name = "init-script"]
+            #[link_name = "init_script"]
             fn __call_init_script();
         }
 
@@ -232,7 +232,7 @@ macro_rules! register_script {
 
         // Export a function the host can call to set up initialization
         #[doc(hidden)]
-        #[unsafe(export_name = "init-script")]
+        #[unsafe(export_name = "init_script")]
         pub extern "C" fn __init_script() {
             #[expect(unsafe_op_in_unsafe_fn)]
             unsafe {
