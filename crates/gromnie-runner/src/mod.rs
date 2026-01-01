@@ -1,6 +1,7 @@
 mod character_gen;
 mod client_naming;
 mod client_runner;
+pub mod client_runner_builder;
 pub mod event_bus;
 mod event_consumer;
 mod event_wrapper;
@@ -12,6 +13,10 @@ pub use client_runner::{
     MultiClientConfig, MultiClientConsumerFactory, MultiClientStats, RunConfig, RunResult,
     create_event_bus_manager, run, run_client, run_client_with_action_channel,
     run_client_with_consumers, run_multi_client,
+};
+pub use client_runner_builder::{
+    BuildError, ClientMode, ClientRunner, ClientRunnerBuilder, ConsumerContext, ConsumerFactory,
+    RunResult as BuilderRunResult,
 };
 pub use event_bus::{
     ClientStateEvent, EventBus, EventContext, EventEnvelope, EventSource, EventType,

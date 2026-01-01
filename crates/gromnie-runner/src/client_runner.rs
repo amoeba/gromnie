@@ -496,7 +496,7 @@ pub async fn run_client_with_action_channel<C, F>(
 }
 
 /// Internal client runner implementation
-async fn run_client_internal(
+pub(crate) async fn run_client_internal(
     client: Client,
     mut event_rx: broadcast::Receiver<EventEnvelope>,
     mut event_consumer: Box<dyn EventConsumer>,

@@ -2,9 +2,7 @@ use std::error::Error;
 use std::fs;
 
 use clap::Parser;
-use gromnie_runner::{
-    ClientConfig, CompositeConsumer, FnConsumerBuilder, LoggingConsumer, RunConfig,
-};
+use gromnie_runner::{ClientConfig, ClientRunner, LoggingConsumer};
 use gromnie_scripting_host::create_script_consumer;
 use ratatui::{TerminalOptions, Viewport};
 use tracing::info;
@@ -128,30 +126,16 @@ async fn main() -> Result<(), Box<dyn Error>> {
                 server_name, account_name
             );
 
-            let run_config = RunConfig::single(client_config);
-
-            // Always use CompositeConsumer - just add scripting consumer if enabled
-            let scripting_config = config.scripting.clone();
-            let consumer_builder = FnConsumerBuilder::new(
-                move |_, _, action_tx| {
-                    let mut consumers =
-                        vec![Box::new(LoggingConsumer::new(action_tx.clone()))];
-
-                    if let Some(scripting_config) = scripting_config.as_ref() {
-                        consumers.push(Box::new(create_script_consumer(action_tx, scripting_config)));
-                    }
-
-                    Box::new(CompositeConsumer::new(consumers))
-                },
-            );
-
-            gromnie_runner::run(
-                run_config,
-                consumer_builder,
-                None::<fn(u32) -> ClientConfig>,
-                None,
-            )
-            .await;
+            // Build and run the client using the new builder API
+            ClientRunner::builder()
+                .single_client(client_config)
+                .with_consumer(LoggingConsumer::from_factory())
+                .with_scripting(config.scripting.clone(), |action_tx, scripting_config| {
+                    Box::new(create_script_consumer(action_tx, scripting_config))
+                })
+                .build()?
+                .run()
+                .await;
 
             return Ok(());
         }
@@ -188,30 +172,16 @@ async fn main() -> Result<(), Box<dyn Error>> {
             password: account.password.clone(),
         };
 
-        let run_config = RunConfig::single(client_config);
-
-        // Always use CompositeConsumer - just add scripting consumer if enabled
-        let scripting_config = wizard.config.scripting.clone();
-        let consumer_builder = FnConsumerBuilder::new(
-            move |_, _, action_tx| {
-                let mut consumers =
-                    vec![Box::new(LoggingConsumer::new(action_tx.clone()))];
-
-                if let Some(scripting_config) = scripting_config.as_ref() {
-                    consumers.push(Box::new(create_script_consumer(action_tx, scripting_config)));
-                }
-
-                Box::new(CompositeConsumer::new(consumers))
-            },
-        );
-
-        gromnie_runner::run(
-            run_config,
-            consumer_builder,
-            None::<fn(u32) -> ClientConfig>,
-            None,
-        )
-        .await;
+        // Build and run the client using the new builder API
+        ClientRunner::builder()
+            .single_client(client_config)
+            .with_consumer(LoggingConsumer::from_factory())
+            .with_scripting(wizard.config.scripting.clone(), |action_tx, scripting_config| {
+                Box::new(create_script_consumer(action_tx, scripting_config))
+            })
+            .build()?
+            .run()
+            .await;
     }
 
     Ok(())

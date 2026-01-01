@@ -30,6 +30,19 @@ impl LoggingConsumer {
             _action_tx: action_tx,
         }
     }
+
+    /// Create a factory for this consumer
+    pub fn from_factory() -> impl crate::client_runner_builder::ConsumerFactory {
+        LoggingConsumerFactory
+    }
+}
+
+struct LoggingConsumerFactory;
+
+impl crate::client_runner_builder::ConsumerFactory for LoggingConsumerFactory {
+    fn create(&self, ctx: &crate::client_runner_builder::ConsumerContext) -> Box<dyn EventConsumer> {
+        Box::new(LoggingConsumer::new(ctx.action_tx.clone()))
+    }
 }
 
 impl EventConsumer for LoggingConsumer {
@@ -181,6 +194,23 @@ impl TuiConsumer {
             tui_event_tx,
         }
     }
+
+    /// Create a factory for this consumer
+    pub fn from_factory(
+        tui_event_tx: UnboundedSender<crate::event_bus::TuiEvent>,
+    ) -> impl crate::client_runner_builder::ConsumerFactory {
+        TuiConsumerFactory { tui_event_tx }
+    }
+}
+
+struct TuiConsumerFactory {
+    tui_event_tx: UnboundedSender<crate::event_bus::TuiEvent>,
+}
+
+impl crate::client_runner_builder::ConsumerFactory for TuiConsumerFactory {
+    fn create(&self, ctx: &crate::client_runner_builder::ConsumerContext) -> Box<dyn EventConsumer> {
+        Box::new(TuiConsumer::new(ctx.action_tx.clone(), self.tui_event_tx.clone()))
+    }
 }
 
 impl EventConsumer for TuiConsumer {
@@ -247,6 +277,56 @@ impl DiscordConsumer {
             bot_start_time: Instant::now(),
             ingame_start_time: None,
             uptime_data: Some(uptime_data),
+        }
+    }
+
+    /// Create a factory for this consumer
+    pub fn from_factory(
+        http: Arc<Http>,
+        channel_id: ChannelId,
+    ) -> impl crate::client_runner_builder::ConsumerFactory {
+        DiscordConsumerFactory {
+            http,
+            channel_id,
+            uptime_data: None,
+        }
+    }
+
+    /// Create a factory for this consumer with uptime tracking
+    pub fn from_factory_with_uptime(
+        http: Arc<Http>,
+        channel_id: ChannelId,
+        uptime_data: Arc<tokio::sync::RwLock<UptimeData>>,
+    ) -> impl crate::client_runner_builder::ConsumerFactory {
+        DiscordConsumerFactory {
+            http,
+            channel_id,
+            uptime_data: Some(uptime_data),
+        }
+    }
+}
+
+struct DiscordConsumerFactory {
+    http: Arc<Http>,
+    channel_id: ChannelId,
+    uptime_data: Option<Arc<tokio::sync::RwLock<UptimeData>>>,
+}
+
+impl crate::client_runner_builder::ConsumerFactory for DiscordConsumerFactory {
+    fn create(&self, ctx: &crate::client_runner_builder::ConsumerContext) -> Box<dyn EventConsumer> {
+        if let Some(ref uptime_data) = self.uptime_data {
+            Box::new(DiscordConsumer::new_with_uptime(
+                ctx.action_tx.clone(),
+                self.http.clone(),
+                self.channel_id,
+                uptime_data.clone(),
+            ))
+        } else {
+            Box::new(DiscordConsumer::new(
+                ctx.action_tx.clone(),
+                self.http.clone(),
+                self.channel_id,
+            ))
         }
     }
 }
@@ -442,6 +522,25 @@ impl StatsConsumer {
         self.verbose = verbose;
         self
     }
+
+    /// Create a factory for this consumer
+    pub fn from_factory(
+        stats: Arc<MultiClientStats>,
+        verbose: bool,
+    ) -> impl crate::client_runner_builder::ConsumerFactory {
+        StatsConsumerFactory { stats, verbose }
+    }
+}
+
+struct StatsConsumerFactory {
+    stats: Arc<MultiClientStats>,
+    verbose: bool,
+}
+
+impl crate::client_runner_builder::ConsumerFactory for StatsConsumerFactory {
+    fn create(&self, ctx: &crate::client_runner_builder::ConsumerContext) -> Box<dyn EventConsumer> {
+        Box::new(StatsConsumer::new(ctx.client_id, self.stats.clone()).with_verbose(self.verbose))
+    }
 }
 
 impl EventConsumer for StatsConsumer {
@@ -533,6 +632,31 @@ impl AutoLoginConsumer {
     /// Get the current state
     pub fn state(&self) -> &AutoLoginState {
         &self.state
+    }
+
+    /// Create a factory for this consumer
+    pub fn from_factory(
+        character_name: String,
+        verbose: bool,
+    ) -> impl crate::client_runner_builder::ConsumerFactory {
+        AutoLoginConsumerFactory {
+            character_name,
+            verbose,
+        }
+    }
+}
+
+struct AutoLoginConsumerFactory {
+    character_name: String,
+    verbose: bool,
+}
+
+impl crate::client_runner_builder::ConsumerFactory for AutoLoginConsumerFactory {
+    fn create(&self, ctx: &crate::client_runner_builder::ConsumerContext) -> Box<dyn EventConsumer> {
+        Box::new(
+            AutoLoginConsumer::new(ctx.client_id, self.character_name.clone(), ctx.action_tx.clone())
+                .with_verbose(self.verbose),
+        )
     }
 }
 
