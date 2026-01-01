@@ -1239,6 +1239,7 @@ dependencies = [
  "gromnie-runner",
  "gromnie-scripting-api",
  "tokio",
+ "toml",
  "tracing",
  "wasmtime",
  "wasmtime-wasi",

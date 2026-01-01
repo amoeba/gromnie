@@ -18,6 +18,7 @@ gromnie-runner = { path = "../gromnie-runner" }
 anyhow.workspace = true
 directories.workspace = true
 tokio = { version = "1.36.0", features = ["full"] }
+toml.workspace = true
 tracing.workspace = true
 wasmtime.workspace = true
 wasmtime-wasi.workspace = true

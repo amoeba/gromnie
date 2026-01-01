@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::time::{Duration, Instant};
 use tokio::sync::mpsc::UnboundedSender;
 use tracing::{debug, error};
@@ -125,13 +126,13 @@ impl ScriptRunner {
     /// Update client state based on events (removed - scripts handle their own state)
 
     /// Load scripts from a directory
-    pub fn load_scripts(&mut self, dir: &std::path::Path) {
+    pub fn load_scripts(&mut self, dir: &std::path::Path, script_config: &HashMap<String, toml::Value>) {
         let Some(ref engine) = self.wasm_engine else {
             debug!(target: "scripting", "Script engine not available, skipping script loading");
             return;
         };
 
-        let scripts = super::wasm::load_wasm_scripts(engine, dir);
+        let scripts = super::wasm::load_wasm_scripts(engine, dir, script_config);
 
         for script in scripts {
             self.register_script(script);
@@ -140,14 +141,14 @@ impl ScriptRunner {
 
     /// Reload scripts (for hot-reload)
     /// This unloads all existing scripts and loads new ones from the directory
-    pub fn reload_scripts(&mut self, dir: &std::path::Path) {
+    pub fn reload_scripts(&mut self, dir: &std::path::Path, script_config: &HashMap<String, toml::Value>) {
         debug!(target: "scripting", "Reloading scripts from {}", dir.display());
 
         // Unload existing scripts
         self.unload_scripts();
 
         // Load new ones
-        self.load_scripts(dir);
+        self.load_scripts(dir, script_config);
     }
 
     /// Unload all scripts

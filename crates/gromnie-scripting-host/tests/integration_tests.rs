@@ -2,6 +2,7 @@
 
 use gromnie_client::client::events::GameEvent;
 use gromnie_scripting_host::ScriptRunner;
+use std::collections::HashMap;
 use std::path::Path;
 use std::time::{Duration, Instant};
 use tokio::sync::mpsc;
@@ -60,7 +61,7 @@ async fn test_event_handling() {
 
     // Load test scripts
     let test_scripts_dir = Path::new("../../../tests/scripting");
-    runner.load_scripts(test_scripts_dir);
+    runner.load_scripts(test_scripts_dir, &HashMap::new());
 
     if runner.script_count() == 0 {
         println!("Warning: No scripts loaded for event test");
@@ -81,7 +82,7 @@ async fn test_event_handling() {
 
     // Process events
     for event in test_events {
-        runner.handle_event(event);
+        runner.handle_event(gromnie_client::client::events::ClientEvent::Game(event));
     }
 
     // Give scripts time to process (in real scenario, we'd check actions)
@@ -95,7 +96,7 @@ async fn test_timer_functionality() {
 
     // Load test scripts
     let test_scripts_dir = Path::new("../../../tests/scripting");
-    runner.load_scripts(test_scripts_dir);
+    runner.load_scripts(test_scripts_dir, &HashMap::new());
 
     if runner.script_count() == 0 {
         println!("Warning: No scripts loaded for timer test");
@@ -112,7 +113,7 @@ async fn test_timer_functionality() {
             message_type: 1,
         };
 
-        runner.handle_event(event);
+        runner.handle_event(gromnie_client::client::events::ClientEvent::Game(event));
 
         // Small delay to allow timers to progress
         tokio::time::sleep(Duration::from_millis(50)).await;
@@ -127,11 +128,11 @@ async fn test_script_reload() {
     let test_scripts_dir = Path::new("../../../tests/scripting");
 
     // First load
-    runner.load_scripts(test_scripts_dir);
+    runner.load_scripts(test_scripts_dir, &HashMap::new());
     let first_count = runner.script_count();
 
     // Reload
-    runner.reload_scripts(test_scripts_dir);
+    runner.reload_scripts(test_scripts_dir, &HashMap::new());
     let second_count = runner.script_count();
 
     // Should have same number of scripts after reload
@@ -148,7 +149,7 @@ async fn test_host_function_calls() {
 
     // Load test scripts
     let test_scripts_dir = Path::new("../../../tests/scripting");
-    runner.load_scripts(test_scripts_dir);
+    runner.load_scripts(test_scripts_dir, &HashMap::new());
 
     if runner.script_count() == 0 {
         println!("Warning: No scripts loaded for host function test");
@@ -161,7 +162,7 @@ async fn test_host_function_calls() {
         message_type: 1,
     };
 
-    runner.handle_event(event);
+    runner.handle_event(gromnie_client::client::events::ClientEvent::Game(event));
 
     // Check if scripts generated any actions
     let mut action_count = 0;
