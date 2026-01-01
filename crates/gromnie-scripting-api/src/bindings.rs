@@ -197,8 +197,9 @@ impl Guest for ScriptComponent {
 macro_rules! register_script {
     ($script_type:ty) => {
         #[doc(hidden)]
-        #[no_mangle]
-        fn __gromnie_script_constructor() -> ::std::boxed::Box<dyn $crate::bindings::WasmScript> {
+        #[unsafe(no_mangle)]
+        pub fn __gromnie_script_constructor() -> ::std::boxed::Box<dyn $crate::bindings::WasmScript>
+        {
             ::std::boxed::Box::new(<$script_type as $crate::bindings::WasmScript>::new())
         }
     };
