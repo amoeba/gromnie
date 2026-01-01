@@ -249,16 +249,128 @@ async fn run_client_internal<C: EventConsumer>(
 /// Run the main client network loop
 async fn run_client_loop(
     mut client: Client,
-    shutdown_rx: Option<tokio::sync::watch::Receiver<bool>>,
+    mut shutdown_rx: Option<tokio::sync::watch::Receiver<bool>>,
 ) {
-    // Main client loop implementation
-    // ... (existing implementation)
+    use tracing::error;
+
     info!(target: "net", "Client {} network loop started", client.client_id());
 
-    // Shutdown handling would go here
-    // ...
+    // Note: We don't call client.connect() here anymore - the client starts in Connecting state
+    // and we handle retries in the main loop below
 
-    info!(target: "net", "Client {} network loop stopped", client.client_id());
+    // Wait before sending initial LoginRequest (to make UI progress visible)
+    tokio::time::sleep(tokio::time::Duration::from_millis(
+        gromnie_client::client::UI_DELAY_MS,
+    ))
+    .await;
+
+    // Send initial LoginRequest
+    if let Err(e) = client.do_login().await {
+        error!("Failed to send initial LoginRequest: {}", e);
+        panic!("Failed to send initial LoginRequest");
+    }
+    info!("Initial LoginRequest sent - entering state machine loop");
+
+    // Main network loop
+    let mut buf = [0u8; 1024];
+    let mut last_keepalive = tokio::time::Instant::now();
+    // Send keepalive every 5 seconds to stay well within the server's timeout window
+    // (Server timeout is configurable but defaults to 60s for gameplay, could be as low as 10s)
+    let keepalive_interval = tokio::time::Duration::from_secs(5);
+
+    // Tick interval for checking retries and timeouts
+    let tick_interval = tokio::time::Duration::from_millis(16); // Check every 16ms (~60 FPS)
+    let mut last_tick = tokio::time::Instant::now();
+
+    loop {
+        tokio::select! {
+            recv_result = client.socket.recv_from(&mut buf) => {
+                match recv_result {
+                    Ok((size, peer)) => {
+                        client.process_packet(&buf[..size], size, &peer).await;
+
+                        if client.has_messages() {
+                            client.process_messages();
+                        }
+
+                        client.process_actions();
+
+                        if client.has_pending_outgoing_messages()
+                            && let Err(e) = client.send_pending_messages().await {
+                            error!("Failed to send pending messages: {}", e);
+                        }
+                    }
+                    Err(e) => {
+                        error!("Error in receive loop: {}", e);
+                        break;
+                    }
+                }
+            }
+            _ = tokio::time::sleep_until(last_tick + tick_interval) => {
+                last_tick = tokio::time::Instant::now();
+
+                // Check for state timeouts
+                if client.check_state_timeout() {
+                    error!("Client entered Failed state - shutting down");
+                    break;
+                }
+
+                // Check if we should retry in current state
+                if client.should_retry() {
+                    use gromnie_client::client::ClientState;
+                    match client.get_state() {
+                        ClientState::Connecting { .. } => {
+                            info!("Retrying LoginRequest...");
+                            if let Err(e) = client.do_login().await {
+                                error!("Failed to send LoginRequest retry: {}", e);
+                            }
+                            client.update_retry_time();
+                        }
+                        ClientState::Patching { progress, .. } => {
+                            // Only retry if we've already sent the DDD response and are waiting for character list
+                            // (i.e., we're in DDDResponseSent state)
+                            if matches!(progress, gromnie_client::client::PatchingProgress::DDDResponseSent)
+                                && client.get_ddd_response().is_some()
+                            {
+                                info!("Retrying DDDInterrogationResponse...");
+                                if let Err(e) = client.retry_ddd_response().await {
+                                    error!("Failed to retry DDDInterrogationResponse: {}", e);
+                                }
+                            }
+                            // If we're still waiting for DDDInterrogation, just wait (no retry)
+                            client.update_retry_time();
+                        }
+                        _ => {}
+                    }
+                }
+
+                // Send keepalive if needed
+                if last_keepalive.elapsed() >= keepalive_interval {
+                    if let Err(e) = client.send_keepalive().await {
+                        error!("Failed to send keep-alive: {}", e);
+                    }
+                    last_keepalive = tokio::time::Instant::now();
+                }
+            }
+            _ = async {
+                if let Some(ref mut rx) = shutdown_rx {
+                    rx.changed().await
+                } else {
+                    std::future::pending().await
+                }
+            } => {
+                info!("Client task received shutdown signal");
+                break;
+            }
+            _ = tokio::signal::ctrl_c(), if shutdown_rx.is_none() => {
+                info!("Received Ctrl+C, shutting down gracefully...");
+                break;
+            }
+        }
+    }
+
+    info!("Client {} network loop stopped", client.client_id());
+    info!("Client task shutting down - cleaning up network connections...");
 }
 
 /// Create a new EventBusManager for managing a shared event bus
