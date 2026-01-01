@@ -39,6 +39,7 @@ fn load_wasm_scripts_blocking(
     script_config: &HashMap<String, toml::Value>,
 ) -> Vec<WasmScript> {
     let mut scripts = Vec::new();
+    let mut seen_ids = std::collections::HashSet::new();
 
     // Check if directory exists
     if !dir.exists() {
@@ -88,6 +89,17 @@ fn load_wasm_scripts_blocking(
         };
 
         let script_id = script.id();
+
+        // Skip if we've already loaded a script with this ID (handles duplicate .wasm files)
+        if !seen_ids.insert(script_id.to_string()) {
+            warn!(
+                target: "scripting",
+                "Duplicate script ID '{}' found in {}, skipping",
+                script_id,
+                path.display()
+            );
+            continue;
+        }
 
         // Check if this script is enabled in config
         // Default to enabled if not specified in config

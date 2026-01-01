@@ -230,7 +230,10 @@ impl ScriptRunner {
 
         // Extract GameEvent if this is a game event
         let game_event = match raw_event {
-            ClientEvent::Game(game_event) => game_event,
+            ClientEvent::Game(game_event) => {
+                debug!(target: "scripting", "Game event received: {:?}", std::mem::discriminant(&game_event));
+                game_event
+            }
             ClientEvent::State(state_event) => {
                 // State events are sent to scripts directly - they can maintain their own state
                 debug!(target: "scripting", "State event received: {:?}", state_event);
@@ -266,6 +269,15 @@ impl ScriptRunner {
                 .subscribed_events()
                 .iter()
                 .any(|filter: &EventFilter| filter.matches(&game_event));
+
+            debug!(
+                target: "scripting",
+                "Script {} ({}) subscribed to {:?}, event matches: {}",
+                script.name(),
+                script.id(),
+                script.subscribed_events(),
+                subscribed
+            );
 
             if !subscribed {
                 continue;
@@ -321,6 +333,8 @@ impl ScriptConsumer {
 
 impl EventConsumer for ScriptConsumer {
     fn handle_event(&mut self, envelope: EventEnvelope) {
+        debug!(target: "scripting", "ScriptConsumer::handle_event called with event type: {:?}", std::mem::discriminant(&envelope.event));
+
         // Extract ClientEvent from EventEnvelope
         let client_event = match envelope.event {
             gromnie_runner::EventType::Game(game_event) => {

@@ -1255,7 +1255,12 @@ impl Client {
                 let raw_tx = self.raw_event_tx.clone();
                 tokio::spawn(async move {
                     tokio::time::sleep(tokio::time::Duration::from_millis(UI_DELAY_MS)).await;
-                    let _ = raw_tx.send(ClientEvent::Game(game_event));
+                    info!(target: "net", "Sending CharacterListReceived event after delay");
+                    if let Err(_) = raw_tx.send(ClientEvent::Game(game_event)).await {
+                        error!(target: "net", "Failed to send CharacterListReceived event");
+                    } else {
+                        info!(target: "net", "CharacterListReceived event sent successfully");
+                    }
                 });
                 info!(target: "net", "CharacterListReceived event scheduled with {}ms delay", UI_DELAY_MS);
             }

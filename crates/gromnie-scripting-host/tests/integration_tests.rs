@@ -13,7 +13,7 @@ async fn test_script_lifecycle() {
     let (action_tx, _action_rx) = mpsc::unbounded_channel();
 
     // Create script runner with WASM support
-    let mut runner = ScriptRunner::new_with_wasm(action_tx);
+    let runner = ScriptRunner::new_with_wasm(action_tx);
 
     // Check if WASM engine was initialized
     if !runner.has_wasm_engine() {

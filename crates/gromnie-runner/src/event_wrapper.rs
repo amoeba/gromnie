@@ -25,6 +25,7 @@ impl EventWrapper {
     pub async fn run(mut self, mut raw_rx: mpsc::Receiver<ClientEvent>) {
         let sender = self.event_bus.create_sender(self.client_id);
         while let Some(raw_event) = raw_rx.recv().await {
+            tracing::debug!(target: "events", "EventWrapper received event: {:?}", std::mem::discriminant(&raw_event));
             let envelope = self.wrap_event(raw_event);
             sender.publish(envelope);
             self.sequence_counter += 1;
