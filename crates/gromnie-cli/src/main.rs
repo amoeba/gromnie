@@ -1,9 +1,10 @@
 use std::error::Error;
 use std::fs;
-use std::sync::Arc;
 
 use clap::Parser;
-use gromnie_runner::{ClientConfig, EventBusManager, LoggingConsumer, run_client_with_consumers};
+use gromnie_runner::{
+    ClientConfig, CompositeConsumer, FnConsumerBuilder, LoggingConsumer, RunConfig,
+};
 use gromnie_scripting_host::create_script_consumer;
 use ratatui::{TerminalOptions, Viewport};
 use tracing::info;
@@ -127,31 +128,30 @@ async fn main() -> Result<(), Box<dyn Error>> {
                 server_name, account_name
             );
 
-            let event_bus_manager = Arc::new(EventBusManager::new(100));
+            let run_config = RunConfig::single(client_config);
 
-            if config.scripting.enabled {
-                let scripting_config = config.scripting.clone();
-                run_client_with_consumers(
-                    client_config,
-                    event_bus_manager,
-                    move |action_tx| {
-                        vec![
-                            Box::new(LoggingConsumer::new(action_tx.clone())),
-                            Box::new(create_script_consumer(action_tx, &scripting_config)),
-                        ]
-                    },
-                    None,
-                )
-                .await;
-            } else {
-                gromnie_runner::run_client(
-                    client_config,
-                    event_bus_manager,
-                    LoggingConsumer::new,
-                    None,
-                )
-                .await;
-            }
+            // Always use CompositeConsumer - just add scripting consumer if enabled
+            let scripting_config = config.scripting.clone();
+            let consumer_builder = FnConsumerBuilder::new(
+                move |_, _, action_tx| {
+                    let mut consumers =
+                        vec![Box::new(LoggingConsumer::new(action_tx.clone()))];
+
+                    if let Some(scripting_config) = scripting_config.as_ref() {
+                        consumers.push(Box::new(create_script_consumer(action_tx, scripting_config)));
+                    }
+
+                    Box::new(CompositeConsumer::new(consumers))
+                },
+            );
+
+            gromnie_runner::run(
+                run_config,
+                consumer_builder,
+                None::<fn(u32) -> ClientConfig>,
+                None,
+            )
+            .await;
 
             return Ok(());
         }
@@ -188,36 +188,30 @@ async fn main() -> Result<(), Box<dyn Error>> {
             password: account.password.clone(),
         };
 
-        let event_bus_manager = Arc::new(EventBusManager::new(100));
+        let run_config = RunConfig::single(client_config);
 
-        // Use multi-consumer event bus when scripting is enabled
-        let config = &wizard.config;
+        // Always use CompositeConsumer - just add scripting consumer if enabled
+        let scripting_config = wizard.config.scripting.clone();
+        let consumer_builder = FnConsumerBuilder::new(
+            move |_, _, action_tx| {
+                let mut consumers =
+                    vec![Box::new(LoggingConsumer::new(action_tx.clone()))];
 
-        if config.scripting.enabled {
-            let scripting_config = config.scripting.clone();
-            run_client_with_consumers(
-                client_config,
-                event_bus_manager,
-                move |action_tx| {
-                    vec![
-                        // Add logging consumer
-                        Box::new(LoggingConsumer::new(action_tx.clone())),
-                        // Add script runner (handles auto-login via scripts)
-                        Box::new(create_script_consumer(action_tx, &scripting_config)),
-                    ]
-                },
-                None,
-            )
-            .await;
-        } else {
-            gromnie_runner::run_client(
-                client_config,
-                event_bus_manager,
-                LoggingConsumer::new,
-                None,
-            )
-            .await;
-        }
+                if let Some(scripting_config) = scripting_config.as_ref() {
+                    consumers.push(Box::new(create_script_consumer(action_tx, scripting_config)));
+                }
+
+                Box::new(CompositeConsumer::new(consumers))
+            },
+        );
+
+        gromnie_runner::run(
+            run_config,
+            consumer_builder,
+            None::<fn(u32) -> ClientConfig>,
+            None,
+        )
+        .await;
     }
 
     Ok(())
