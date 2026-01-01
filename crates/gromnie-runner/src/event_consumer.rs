@@ -83,6 +83,9 @@ impl EventConsumer for LoggingConsumer {
                             }
                         }
                     }
+                    _ => {
+                        // Handle other system events (e.g., Shutdown)
+                    }
                 }
                 return;
             }

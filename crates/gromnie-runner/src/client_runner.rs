@@ -104,6 +104,8 @@ pub async fn run_client_with_consumers<F>(
         mpsc::UnboundedSender<gromnie_client::client::events::ClientAction>,
     ) -> Vec<Box<dyn EventConsumer>>,
 {
+    use crate::event_bus::{EventEnvelope, EventType, SystemEvent, EventSource};
+
     // Create a channel for raw events from client to EventWrapper
     let (raw_event_tx, raw_event_rx) = mpsc::channel::<gromnie_client::client::events::ClientEvent>(256);
 
@@ -125,6 +127,9 @@ pub async fn run_client_with_consumers<F>(
     // Create all event consumers
     let mut consumers = consumers_factory(action_tx);
 
+    // Create a shutdown sender that will be used to signal consumers to stop
+    let shutdown_sender = event_bus_manager.create_sender(config.id);
+
     // Spawn a task for each consumer with its own event receiver
     let mut consumer_tasks = Vec::new();
     for (idx, mut consumer) in consumers.drain(..).enumerate() {
@@ -135,6 +140,11 @@ pub async fn run_client_with_consumers<F>(
             loop {
                 match consumer_rx.recv().await {
                     Ok(envelope) => {
+                        // Check if this is a shutdown event
+                        if matches!(&envelope.event, EventType::System(SystemEvent::Shutdown { .. })) {
+                            info!(target: "events", "Event consumer {} received shutdown signal", idx);
+                            break;
+                        }
                         consumer.handle_event(envelope);
                     }
                     Err(tokio::sync::broadcast::error::RecvError::Lagged(skipped)) => {
@@ -154,6 +164,19 @@ pub async fn run_client_with_consumers<F>(
 
     // Run the main client loop without event handling (consumers handle events)
     run_client_loop(client, shutdown_rx).await;
+
+    // Send shutdown event to all consumers
+    info!(target: "events", "Sending shutdown signal to consumers");
+    let shutdown_event = EventEnvelope::system_event(
+        SystemEvent::Shutdown { client_id: config.id },
+        config.id,
+        0,
+        EventSource::System,
+    );
+    shutdown_sender.publish(shutdown_event);
+
+    // Give consumers a moment to receive and process the shutdown event
+    tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
 
     // Wait for consumer tasks to finish
     info!(target: "events", "Waiting for {} consumer tasks to finish", consumer_tasks.len());

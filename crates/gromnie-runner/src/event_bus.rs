@@ -65,6 +65,7 @@ pub enum SystemEvent {
     UpdatingDone { client_id: u32 },
     LoginSucceeded { character_id: u32, character_name: String },
     ScriptEvent { script_id: String, event_type: ScriptEventType },
+    Shutdown { client_id: u32 },
 }
 
 /// Types of script-related events
