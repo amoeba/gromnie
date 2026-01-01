@@ -204,3 +204,76 @@ macro_rules! register_script {
         }
     };
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    struct TestScript {
+        load_count: usize,
+    }
+
+    impl WasmScript for TestScript {
+        fn new() -> Self {
+            TestScript { load_count: 0 }
+        }
+
+        fn id(&self) -> &str {
+            "test_script"
+        }
+
+        fn name(&self) -> &str {
+            "Test Script"
+        }
+
+        fn description(&self) -> &str {
+            "A test script for unit testing"
+        }
+
+        fn on_load(&mut self) {
+            self.load_count += 1;
+        }
+
+        fn on_unload(&mut self) {}
+
+        fn subscribed_events(&self) -> Vec<u32> {
+            vec![1, 2, 3]
+        }
+
+        fn on_event(&mut self, _event: host::GameEvent) {}
+
+        fn on_tick(&mut self, _delta_millis: u64) {}
+    }
+
+    // Register the test script to provide __gromnie_script_constructor during tests
+    register_script!(TestScript);
+
+    #[test]
+    fn test_script_initialization() {
+        // Call ensure_initialized to trigger script creation
+        ensure_initialized();
+
+        // Verify the script was created and can be accessed
+        let s = script();
+        assert_eq!(s.id(), "test_script");
+        assert_eq!(s.name(), "Test Script");
+        assert_eq!(s.description(), "A test script for unit testing");
+    }
+
+    #[test]
+    fn test_script_subscribed_events() {
+        let s = script();
+        let events = s.subscribed_events();
+        assert_eq!(events, vec![1, 2, 3]);
+    }
+
+    #[test]
+    fn test_guest_implementation() {
+        // Test the Guest trait implementation
+        ScriptComponent::init();
+        assert_eq!(ScriptComponent::get_id(), "test_script");
+        assert_eq!(ScriptComponent::get_name(), "Test Script");
+        assert_eq!(ScriptComponent::get_description(), "A test script for unit testing");
+        assert_eq!(ScriptComponent::subscribed_events(), vec![1, 2, 3]);
+    }
+}
