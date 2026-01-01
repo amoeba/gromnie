@@ -850,10 +850,10 @@ pub trait ConsumerBuilder: Send + Sync {
 
 /// Type alias for consumer factory closure
 type ConsumerFactoryFn = dyn Fn(
-    u32,
-    &ClientConfig,
-    mpsc::UnboundedSender<gromnie_client::client::events::ClientAction>,
-) -> Box<dyn EventConsumer>
+        u32,
+        &ClientConfig,
+        mpsc::UnboundedSender<gromnie_client::client::events::ClientAction>,
+    ) -> Box<dyn EventConsumer>
     + Send
     + Sync;
 
