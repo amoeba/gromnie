@@ -6,8 +6,8 @@ use tokio::sync::{Mutex, broadcast};
 
 // Re-export types from gromnie-events for convenience
 pub use gromnie_events::{
-    EventSource, EventContext, ClientStateEvent, SystemEvent, ScriptEventType,
-    EventType, EventEnvelope,
+    ClientStateEvent, EventContext, EventEnvelope, EventSource, EventType, ScriptEventType,
+    SystemEvent,
 };
 
 /// Event sender that clients use to publish events

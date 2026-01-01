@@ -10,6 +10,15 @@ members = [
   "crates/xtask",
   "tests/scripting"
 ]
+default-members = [
+  "crates/gromnie-cli",
+  "crates/gromnie-client",
+  "crates/gromnie-runner",
+  "crates/gromnie-scripting-api",
+  "crates/gromnie-scripting-host",
+  "crates/gromnie-tui",
+  "crates/xtask"
+]
 
 [workspace.package]
 version = "0.1.0"

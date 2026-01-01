@@ -37,7 +37,10 @@ impl LoggingConsumer {
 struct LoggingConsumerFactory;
 
 impl crate::client_runner_builder::ConsumerFactory for LoggingConsumerFactory {
-    fn create(&self, ctx: &crate::client_runner_builder::ConsumerContext) -> Box<dyn EventConsumer> {
+    fn create(
+        &self,
+        ctx: &crate::client_runner_builder::ConsumerContext,
+    ) -> Box<dyn EventConsumer> {
         Box::new(LoggingConsumer::new(ctx.action_tx.clone()))
     }
 }
@@ -205,8 +208,14 @@ struct TuiConsumerFactory {
 }
 
 impl crate::client_runner_builder::ConsumerFactory for TuiConsumerFactory {
-    fn create(&self, ctx: &crate::client_runner_builder::ConsumerContext) -> Box<dyn EventConsumer> {
-        Box::new(TuiConsumer::new(ctx.action_tx.clone(), self.tui_event_tx.clone()))
+    fn create(
+        &self,
+        ctx: &crate::client_runner_builder::ConsumerContext,
+    ) -> Box<dyn EventConsumer> {
+        Box::new(TuiConsumer::new(
+            ctx.action_tx.clone(),
+            self.tui_event_tx.clone(),
+        ))
     }
 }
 
@@ -310,7 +319,10 @@ struct DiscordConsumerFactory {
 }
 
 impl crate::client_runner_builder::ConsumerFactory for DiscordConsumerFactory {
-    fn create(&self, ctx: &crate::client_runner_builder::ConsumerContext) -> Box<dyn EventConsumer> {
+    fn create(
+        &self,
+        ctx: &crate::client_runner_builder::ConsumerContext,
+    ) -> Box<dyn EventConsumer> {
         if let Some(ref uptime_data) = self.uptime_data {
             Box::new(DiscordConsumer::new_with_uptime(
                 ctx.action_tx.clone(),
@@ -535,7 +547,10 @@ struct StatsConsumerFactory {
 }
 
 impl crate::client_runner_builder::ConsumerFactory for StatsConsumerFactory {
-    fn create(&self, ctx: &crate::client_runner_builder::ConsumerContext) -> Box<dyn EventConsumer> {
+    fn create(
+        &self,
+        ctx: &crate::client_runner_builder::ConsumerContext,
+    ) -> Box<dyn EventConsumer> {
         Box::new(StatsConsumer::new(ctx.client_id, self.stats.clone()).with_verbose(self.verbose))
     }
 }
@@ -649,10 +664,17 @@ struct AutoLoginConsumerFactory {
 }
 
 impl crate::client_runner_builder::ConsumerFactory for AutoLoginConsumerFactory {
-    fn create(&self, ctx: &crate::client_runner_builder::ConsumerContext) -> Box<dyn EventConsumer> {
+    fn create(
+        &self,
+        ctx: &crate::client_runner_builder::ConsumerContext,
+    ) -> Box<dyn EventConsumer> {
         Box::new(
-            AutoLoginConsumer::new(ctx.client_id, self.character_name.clone(), ctx.action_tx.clone())
-                .with_verbose(self.verbose),
+            AutoLoginConsumer::new(
+                ctx.client_id,
+                self.character_name.clone(),
+                ctx.action_tx.clone(),
+            )
+            .with_verbose(self.verbose),
         )
     }
 }

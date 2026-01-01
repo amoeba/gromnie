@@ -395,8 +395,8 @@ impl ClientRunner {
 
     /// Run a single client (internal)
     async fn run_single(self, config: ClientConfig) -> RunResult {
-        use crate::event_wrapper::EventWrapper;
         use crate::EventBusManager;
+        use crate::event_wrapper::EventWrapper;
         use gromnie_client::client::Client;
 
         // Create event bus
@@ -517,9 +517,13 @@ impl ClientRunner {
             consumers: Arc::new(self.consumers),
         });
 
-        let stats =
-            crate::client_runner::run_multi_client(multi_config, factory, generator, self.shutdown_rx)
-                .await;
+        let stats = crate::client_runner::run_multi_client(
+            multi_config,
+            factory,
+            generator,
+            self.shutdown_rx,
+        )
+        .await;
 
         RunResult::Multi(stats)
     }
@@ -540,10 +544,14 @@ impl ClientRunner {
         // Create generator from static configs
         let configs = Arc::new(configs);
         let generator = move |id: u32| {
-            configs
-                .get(id as usize)
-                .cloned()
-                .unwrap_or_else(|| ClientConfig::new(id, "localhost:9000".into(), format!("client_{}", id), format!("pass_{}", id)))
+            configs.get(id as usize).cloned().unwrap_or_else(|| {
+                ClientConfig::new(
+                    id,
+                    "localhost:9000".into(),
+                    format!("client_{}", id),
+                    format!("pass_{}", id),
+                )
+            })
         };
 
         self.run_dynamic(

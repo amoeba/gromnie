@@ -848,17 +848,18 @@ pub trait ConsumerBuilder: Send + Sync {
     ) -> Box<dyn EventConsumer>;
 }
 
+/// Type alias for consumer factory closure
+type ConsumerFactoryFn = dyn Fn(
+    u32,
+    &ClientConfig,
+    mpsc::UnboundedSender<gromnie_client::client::events::ClientAction>,
+) -> Box<dyn EventConsumer>
+    + Send
+    + Sync;
+
 /// Adapter for closure-based consumer builders
 pub struct FnConsumerBuilder {
-    f: Box<
-        dyn Fn(
-                u32,
-                &ClientConfig,
-                mpsc::UnboundedSender<gromnie_client::client::events::ClientAction>,
-            ) -> Box<dyn EventConsumer>
-            + Send
-            + Sync,
-    >,
+    f: Box<ConsumerFactoryFn>,
 }
 
 impl FnConsumerBuilder {
