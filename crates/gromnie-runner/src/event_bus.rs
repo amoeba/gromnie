@@ -221,6 +221,26 @@ impl EventBus {
     }
 }
 
+/// Unified event type specifically for the TUI
+/// This allows the TUI to receive all types of events
+#[derive(Debug, Clone)]
+pub enum TuiEvent {
+    Game(gromnie_client::client::events::GameEvent),
+    System(SystemEvent),
+}
+
+impl From<gromnie_client::client::events::GameEvent> for TuiEvent {
+    fn from(event: gromnie_client::client::events::GameEvent) -> Self {
+        TuiEvent::Game(event)
+    }
+}
+
+impl From<SystemEvent> for TuiEvent {
+    fn from(event: SystemEvent) -> Self {
+        TuiEvent::System(event)
+    }
+}
+
 /// Trait for components that can handle events
 pub trait EventHandler: Send + 'static {
     fn handle_event(&mut self, envelope: EventEnvelope);

@@ -838,7 +838,7 @@ impl Client {
         {
             *progress = PatchingProgress::DDDResponseSent;
             let game_event = GameEvent::UpdatingSetProgress { progress: 0.66 };
-            std::mem::drop(self.raw_event_tx.send(ClientEvent::Game(game_event)));
+            let _ = self.raw_event_tx.send(ClientEvent::Game(game_event)).await;
             info!(target: "net", "Progress: DDDResponse sent (66%)");
         }
 
@@ -1658,9 +1658,9 @@ impl Client {
             });
 
             // Emit authentication success system event
-            std::mem::drop(self.raw_event_tx.send(ClientEvent::System(
+            let _ = self.raw_event_tx.send(ClientEvent::System(
                 ClientSystemEvent::AuthenticationSucceeded,
-            )));
+            )).await;
 
             info!(target: "net", "Authentication succeeded - received ConnectRequest from server");
 
@@ -1855,12 +1855,8 @@ impl Client {
             && *progress == ConnectingProgress::Initial
         {
             *progress = ConnectingProgress::LoginRequestSent;
-            let game_event = GameEvent::ConnectingSetProgress { progress: 0.33 };
-            eprintln!("CLIENT: Sending ConnectingSetProgress 0.33");
-            match self.raw_event_tx.send(ClientEvent::Game(game_event)).await {
-                Ok(_) => eprintln!("CLIENT: Successfully sent ConnectingSetProgress event"),
-                Err(e) => eprintln!("CLIENT: Failed to send ConnectingSetProgress event: {}", e),
-            }
+                    let game_event = GameEvent::ConnectingSetProgress { progress: 0.33 };
+            let _ = self.raw_event_tx.send(ClientEvent::Game(game_event)).await;
             info!(target: "net", "Progress: LoginRequest sent (33%)");
         }
 

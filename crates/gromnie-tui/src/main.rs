@@ -4,7 +4,7 @@ use tracing::{error, info};
 use tracing_subscriber::EnvFilter;
 
 use gromnie_client::client::events::ClientAction;
-use gromnie_runner::{ClientConfig, EventBusManager, TuiConsumer};
+use gromnie_runner::{ClientConfig, EventBusManager, TuiConsumer, TuiEvent};
 use gromnie_tui::{App, event_handler::EventHandler, ui::try_init_tui};
 
 #[derive(Parser)]
@@ -29,12 +29,22 @@ pub struct Cli {
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    // Initialize tracing subscriber with all output disabled to prevent TUI corruption
-    // Set RUST_LOG=info to see error messages
+    // Initialize tracing subscriber with file logging for debugging
+    // Log progress and event flow to file in current directory, but keep console clean for TUI
+    let log_file = std::fs::OpenOptions::new()
+        .create(true)
+        .truncate(true) // Start fresh each run
+        .write(true)
+        .open("gromnie-tui-debug.log")
+        .unwrap();
+
     tracing_subscriber::fmt()
-        .with_env_filter(
-            EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("off")),
-        )
+        .with_writer(log_file)
+        .with_env_filter(EnvFilter::try_from_default_env().unwrap_or_else(|_| {
+            EnvFilter::new(
+                "info,event_wrapper=debug,tui_consumer=debug,tui_main=debug,events=debug",
+            )
+        }))
         .init();
 
     let cli = Cli::parse();
@@ -52,7 +62,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let event_handler = event_handler.start().await;
 
     // Set up channels for client communication
-    let (client_event_tx, mut client_event_rx) = tokio::sync::mpsc::unbounded_channel();
+    let (client_event_tx, mut client_event_rx) = tokio::sync::mpsc::unbounded_channel::<TuiEvent>();
     let (action_tx_channel, mut action_tx_rx) = tokio::sync::mpsc::unbounded_channel();
 
     // Create shutdown channel to coordinate graceful shutdown
@@ -113,10 +123,18 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     break;
                 }
             }
-            Some(game_event) = client_event_rx.recv() => {
+            Some(tui_event) = client_event_rx.recv() => {
                 // Handle game events through centralized message passing
-                tracing::info!(target: "tui_main", "Received game event in main loop: {:?}", std::mem::discriminant(&game_event));
-                app.update_from_event(game_event);
+                match tui_event {
+                    TuiEvent::Game(game_event) => {
+                        tracing::info!(target: "tui_main", "TUI main received GameEvent: {:?}", std::mem::discriminant(&game_event));
+                        app.update_from_event(game_event);
+                    }
+                    TuiEvent::System(system_event) => {
+                        tracing::info!(target: "tui_main", "TUI main received SystemEvent: {:?}", std::mem::discriminant(&system_event));
+                        app.update_from_system_event(system_event);
+                    }
+                }
             }
             // Check if client task exited
             _ = &mut client_handle => {

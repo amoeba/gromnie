@@ -29,9 +29,9 @@ impl EventWrapper {
         let sender = self.event_bus.create_sender(self.client_id);
         tracing::info!(target: "event_wrapper", "EventWrapper started for client {}", self.client_id);
         while let Some(raw_event) = raw_rx.recv().await {
-            tracing::info!(target: "event_wrapper", "EventWrapper received event: {:?}", std::mem::discriminant(&raw_event));
+            tracing::debug!(target: "event_wrapper", "EventWrapper received ClientEvent: {:?}", std::mem::discriminant(&raw_event));
             let envelope = self.wrap_event(raw_event);
-            tracing::info!(target: "event_wrapper", "EventWrapper publishing envelope: {:?}", std::mem::discriminant(&envelope.event));
+            tracing::debug!(target: "event_wrapper", "EventWrapper publishing envelope: {:?}", std::mem::discriminant(&envelope.event));
             sender.publish(envelope);
             self.sequence_counter += 1;
         }

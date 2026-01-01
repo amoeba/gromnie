@@ -11,7 +11,7 @@ pub use client_runner::{
 };
 pub use event_bus::{
     ClientStateEvent, EventBus, EventContext, EventEnvelope, EventSource, EventType,
-    ScriptEventType, SystemEvent,
+    ScriptEventType, SystemEvent, TuiEvent,
 };
 pub use event_consumer::{
     DiscordConsumer, EventConsumer, LoggingConsumer, TuiConsumer, UptimeData,

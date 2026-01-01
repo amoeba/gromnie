@@ -87,7 +87,7 @@ impl EventConsumer for LoggingConsumer {
                         }
                     },
                     _ => {
-                        // Handle other system events (e.g., Shutdown)
+                        // Handle other system events if needed
                     }
                 }
                 return;
@@ -163,15 +163,14 @@ impl EventConsumer for LoggingConsumer {
 /// Event consumer that forwards events to TUI and logs to console
 pub struct TuiConsumer {
     _action_tx: UnboundedSender<ClientAction>,
-    tui_event_tx: UnboundedSender<GameEvent>,
+    tui_event_tx: UnboundedSender<crate::event_bus::TuiEvent>,
 }
 
 impl TuiConsumer {
     pub fn new(
         action_tx: UnboundedSender<ClientAction>,
-        tui_event_tx: UnboundedSender<GameEvent>,
+        tui_event_tx: UnboundedSender<crate::event_bus::TuiEvent>,
     ) -> Self {
-        tracing::info!(target: "tui_consumer", "Creating new TuiConsumer");
         Self {
             _action_tx: action_tx,
             tui_event_tx,
@@ -181,142 +180,17 @@ impl TuiConsumer {
 
 impl EventConsumer for TuiConsumer {
     fn handle_event(&mut self, envelope: EventEnvelope) {
-        tracing::info!(target: "tui_consumer", "TuiConsumer handling event: {:?}", std::mem::discriminant(&envelope.event));
-        
-        // ALWAYS forward game events to TUI - this is critical for game world updates
-        if let Some(game_event) = envelope.extract_game_event() {
-            let event_type = format!("{:?}", std::mem::discriminant(&game_event));
-            match self.tui_event_tx.send(game_event.clone()) {
-                Ok(_) => {
-                    tracing::info!(target: "tui_events", "Forwarded to TUI: {}", event_type);
-                }
-                Err(e) => {
-                    tracing::error!(target: "tui_events", "Failed to forward {} to TUI: {}", event_type, e);
-                }
-            }
-        } else {
-            tracing::debug!(target: "tui_consumer", "No GameEvent to forward from envelope");
-        }
-
-        // Log events for debugging (without early returns that would block forwarding)
-        match &envelope.event {
+        match envelope.event {
             EventType::Game(game_event) => {
-                // Log game events
-                match game_event {
-                    GameEvent::CharacterListReceived {
-                        account,
-                        characters,
-                        num_slots,
-                    } => {
-                        let names = characters
-                            .iter()
-                            .map(|c| format!("{} ({})", c.name, c.id))
-                            .collect::<Vec<_>>()
-                            .join(", ");
-                        info!(target: "events", "CharacterList -- Account: {}, Slots: {}, Number of Chars: {}, Chars: {}", account, num_slots, characters.len(), names);
-                    }
-                    GameEvent::DDDInterrogation { language, region } => {
-                        info!(target: "events", "DDD Interrogation: lang={} region={}", language, region);
-                    }
-                    GameEvent::LoginSucceeded {
-                        character_id,
-                        character_name,
-                    } => {
-                        info!(target: "events", "LoginSucceeded -- Character: {} (ID: {}) | You are now in the game world!", character_name, character_id);
-                    }
-                    GameEvent::LoginFailed { reason } => {
-                        error!(target: "events", "LoginFailed -- Reason {}", reason);
-                    }
-                    GameEvent::CreateObject {
-                        object_id,
-                        object_name,
-                    } => {
-                        info!(target: "events", "CREATE OBJECT: {} (0x{:08X})", object_name, object_id);
-                    }
-                    GameEvent::ChatMessageReceived {
-                        message,
-                        message_type,
-                    } => {
-                        info!(target: "events", "CHAT [{}]: {}", message_type, message);
-                    }
-                    GameEvent::NetworkMessage {
-                        direction,
-                        message_type,
-                    } => {
-                        debug!(target: "events", "Network message: {:?} - {}", direction, message_type);
-                    }
-                    GameEvent::AuthenticationSucceeded => {
-                        info!(target: "events", "Authentication succeeded - connected to server");
-                    }
-                    GameEvent::AuthenticationFailed { reason } => {
-                        error!(target: "events", "Authentication failed: {}", reason);
-                    }
-                    GameEvent::ConnectingSetProgress { progress } => {
-                        debug!(target: "events", "Connecting progress: {:.1}%", progress * 100.0);
-                    }
-                    GameEvent::UpdatingSetProgress { progress } => {
-                        debug!(target: "events", "Updating progress: {:.1}%", progress * 100.0);
-                    }
-                    GameEvent::ConnectingStart => {
-                        info!(target: "events", "Connecting started");
-                    }
-                    GameEvent::ConnectingDone => {
-                        info!(target: "events", "Connecting done");
-                    }
-                    GameEvent::UpdatingStart => {
-                        info!(target: "events", "Updating started");
-                    }
-                    GameEvent::UpdatingDone => {
-                        info!(target: "events", "Updating done");
-                    }
-                    GameEvent::CharacterError {
-                        error_code,
-                        error_message,
-                    } => {
-                        error!(target: "events", "Character error (code {}): {}", error_code, error_message);
-                    }
-                }
-            }
-            EventType::State(state_event) => {
-                match state_event {
-                    crate::event_bus::ClientStateEvent::StateTransition { from, to, .. } => {
-                        info!(target: "events", "STATE TRANSITION: {:?} -> {:?}", from, to);
-                    }
-                    crate::event_bus::ClientStateEvent::ClientFailed { reason, .. } => {
-                        error!(target: "events", "CLIENT FAILED: {}", reason);
-                    }
-                }
+                tracing::info!(target: "tui_consumer", "TuiConsumer forwarding GameEvent: {:?}", std::mem::discriminant(&game_event));
+                let _ = self.tui_event_tx.send(game_event.into());
             }
             EventType::System(system_event) => {
-                match system_event {
-                    crate::event_bus::SystemEvent::AuthenticationSucceeded { .. } => {
-                        info!(target: "events", "Authentication succeeded - connected to server");
-                    }
-                    crate::event_bus::SystemEvent::AuthenticationFailed { reason, .. } => {
-                        error!(target: "events", "Authentication failed: {}", reason);
-                    }
-                    crate::event_bus::SystemEvent::LoginSucceeded {
-                        character_id,
-                        character_name,
-                    } => {
-                        info!(target: "events", "LoginSucceeded -- Character: {} (ID: {}) | You are now in the game world!", character_name, character_id);
-                    }
-                    crate::event_bus::SystemEvent::ConnectingStarted { .. } => {
-                        info!(target: "events", "Connecting started");
-                    }
-                    crate::event_bus::SystemEvent::ConnectingDone { .. } => {
-                        info!(target: "events", "Connecting done");
-                    }
-                    crate::event_bus::SystemEvent::UpdatingStarted { .. } => {
-                        info!(target: "events", "Updating started");
-                    }
-                    crate::event_bus::SystemEvent::UpdatingDone { .. } => {
-                        info!(target: "events", "Updating done");
-                    }
-                    _ => {
-                        // Handle other system events if needed
-                    }
-                }
+                tracing::info!(target: "tui_consumer", "TuiConsumer forwarding SystemEvent: {:?}", std::mem::discriminant(&system_event));
+                let _ = self.tui_event_tx.send(system_event.into());
+            }
+            EventType::State(_) => {
+                // State events are logged by other consumers, TUI doesn't need them
             }
         }
     }
@@ -456,6 +330,7 @@ impl EventConsumer for DiscordConsumer {
                     let ingame_hours = ingame_secs / 3600;
                     let ingame_mins = (ingame_secs % 3600) / 60;
                     let ingame_secs_remainder = ingame_secs % 60;
+
                     info!(target: "events", "CHAT [{}]: {} | In-game: {:02}:{:02}:{:02}", message_type, message, ingame_hours, ingame_mins, ingame_secs_remainder);
                 } else {
                     info!(target: "events", "CHAT [{}]: {}", message_type, message);
