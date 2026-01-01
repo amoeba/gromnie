@@ -22,9 +22,6 @@ default-members = [
   "crates/xtask"
 ]
 
-[workspace.features]
-scripting = []
-
 [workspace.package]
 version = "0.1.0"
 authors = ["Bryce Mecum <petridish@gmail.com>"]
