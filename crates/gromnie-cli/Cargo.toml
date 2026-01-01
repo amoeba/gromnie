@@ -7,10 +7,6 @@ description = "CLIs for gromnie"
 repository.workspace = true
 license.workspace = true
 
-[lib]
-name = "gromnie_cli"
-path = "src/lib.rs"
-
 [[bin]]
 name = "cli"
 path = "src/bin/cli.rs"

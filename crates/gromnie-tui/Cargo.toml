@@ -7,10 +7,6 @@ description = "TUI game client for gromnie"
 repository.workspace = true
 license.workspace = true
 
-[lib]
-name = "gromnie_tui"
-path = "src/lib.rs"
-
 [[bin]]
 name = "tui"
 path = "src/main.rs"
