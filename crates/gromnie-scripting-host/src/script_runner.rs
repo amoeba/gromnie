@@ -1,3 +1,4 @@
+use gromnie_client::config::scripting_config::ScriptingConfig;
 use std::collections::HashMap;
 use std::time::{Duration, Instant};
 use tokio::sync::mpsc::UnboundedSender;
@@ -397,7 +398,7 @@ impl EventConsumer for ScriptConsumer {
 /// Create a script runner consumer with the specified configuration
 pub fn create_script_consumer(
     action_tx: UnboundedSender<ClientAction>,
-    config: &gromnie_client::config::ScriptingConfig,
+    config: &ScriptingConfig,
 ) -> ScriptConsumer {
     let runner = create_runner_from_config(action_tx, config);
     ScriptConsumer::new(runner)

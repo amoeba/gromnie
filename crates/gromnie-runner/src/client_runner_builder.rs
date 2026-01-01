@@ -6,7 +6,7 @@ use std::sync::Arc;
 use tokio::sync::{mpsc, watch};
 
 use crate::event_consumer::EventConsumer;
-use gromnie_client::client::events::ClientAction;
+use gromnie_client::{client::events::ClientAction, config::scripting_config::ScriptingConfig};
 
 // Re-export types from gromnie-events
 pub use gromnie_events::{ClientConfig, ConsumerContext, ConsumerFactory};
@@ -286,7 +286,7 @@ impl ClientRunnerBuilder {
                     gromnie_client::config::Config {
                         servers: std::collections::BTreeMap::new(),
                         accounts: std::collections::BTreeMap::new(),
-                        scripting: gromnie_client::config::ScriptingConfig {
+                        scripting: ScriptingConfig {
                             enabled: false,
                             script_dir: None,
                             config: std::collections::HashMap::new(),
