@@ -43,8 +43,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut tui = try_init_tui()?;
     let mut app = App::new();
 
-    // Mark client as connected when we start
-    app.client_status.connected = true;
+    // WIP: Mark client as connected when we start. I marked this as false for
+    // testing now.
+    app.client_status.connected = false;
 
     // Set up event handler
     let (event_handler, mut tui_event_rx) = EventHandler::new();
