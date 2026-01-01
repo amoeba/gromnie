@@ -147,6 +147,9 @@ impl EventConsumer for LoggingConsumer {
             GameEvent::ConnectingDone => {}
             GameEvent::UpdatingStart => {}
             GameEvent::UpdatingDone => {}
+            GameEvent::CharacterError { error_code, error_message } => {
+                error!(target: "events", "Character error (code {}): {}", error_code, error_message);
+            }
         }
     }
 }
@@ -266,6 +269,9 @@ impl EventConsumer for TuiConsumer {
             GameEvent::ConnectingDone => {}
             GameEvent::UpdatingStart => {}
             GameEvent::UpdatingDone => {}
+            GameEvent::CharacterError { error_code, error_message } => {
+                error!(target: "events", "Character error (code {}): {}", error_code, error_message);
+            }
         }
     }
 }
@@ -475,6 +481,9 @@ impl EventConsumer for DiscordConsumer {
             GameEvent::ConnectingDone => {}
             GameEvent::UpdatingStart => {}
             GameEvent::UpdatingDone => {}
+            GameEvent::CharacterError { error_code, error_message } => {
+                error!(target: "events", "Character error (code {}): {}", error_code, error_message);
+            }
         }
     }
 }

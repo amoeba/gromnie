@@ -222,6 +222,16 @@ impl App {
                     timestamp: chrono::Utc::now(),
                 });
             }
+            GameEvent::CharacterError {
+                error_code,
+                error_message,
+            } => {
+                self.add_network_message(NetworkMessage::Received {
+                    opcode: format!("0x{:04X}", error_code),
+                    description: format!("Character error: {}", error_message),
+                    timestamp: chrono::Utc::now(),
+                });
+            }
             GameEvent::CreateObject {
                 object_id,
                 object_name,

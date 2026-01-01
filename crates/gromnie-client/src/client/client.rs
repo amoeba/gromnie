@@ -2,14 +2,16 @@ use std::collections::{HashMap, VecDeque};
 use std::io::Cursor;
 use std::net::SocketAddr;
 
-use acprotocol::enums::{AuthFlags, FragmentGroup, GameAction, PacketHeaderFlags, S2CMessage};
+use acprotocol::enums::{
+    AuthFlags, CharacterErrorType, FragmentGroup, GameAction, PacketHeaderFlags, S2CMessage,
+};
 use acprotocol::gameactions::CharacterLoginCompleteNotification;
 use acprotocol::message::{C2SMessage, GameActionMessage};
 use acprotocol::messages::c2s::{
     CharacterSendCharGenResult, DDDInterrogationResponseMessage, LoginSendEnterWorld,
     LoginSendEnterWorldRequest,
 };
-use acprotocol::messages::s2c::{DDDInterrogationMessage, LoginLoginCharacterSet};
+use acprotocol::messages::s2c::{CharacterCharacterError, DDDInterrogationMessage, LoginLoginCharacterSet};
 use tokio::sync::mpsc;
 
 // Import from our new modules
@@ -29,7 +31,7 @@ use tokio::net::UdpSocket;
 use tracing::{debug, error, info, warn};
 
 use crate::client::constants::*;
-use crate::client::events::{ClientAction, GameEvent, ClientEvent, ClientSystemEvent};
+use crate::client::events::{ClientAction, ClientEvent, ClientSystemEvent, GameEvent};
 use crate::crypto::crypto_system::CryptoSystem;
 use crate::crypto::magic_number::get_magic_number;
 
@@ -84,6 +86,8 @@ pub enum ClientState {
         character_id: u32,
         character_name: String,
     },
+    /// The client received a CharacterError
+    CharacterError { reason: CharacterErrorType },
     /// Failed state with reason
     Failed { reason: ClientFailureReason },
 }
@@ -136,14 +140,10 @@ pub struct Client {
     pending_fragments: HashMap<u32, Fragment>,   // Track incomplete fragment sequences
     message_queue: VecDeque<RawMessage>,         // Queue of parsed messages to process
     outgoing_message_queue: VecDeque<OutgoingMessage>, // Queue of messages to send with optional delays
-    raw_event_tx: mpsc::Sender<ClientEvent>,        // Raw event sender to runner
+    raw_event_tx: mpsc::Sender<ClientEvent>,           // Raw event sender to runner
     action_rx: mpsc::UnboundedReceiver<ClientAction>,  // Receive actions from handlers
     ddd_response: Option<OutgoingMessageContent>,      // Cached DDD response for retries
     known_characters: Vec<crate::client::events::CharacterInfo>, // Track characters from list and creation
-    /// Sequence counter for events emitted by this client
-    /// Each client maintains its own sequence counter, starting from 0
-    /// This provides ordering guarantees for events from the same client
-    event_sequence_counter: u64,
 }
 
 impl Client {
@@ -153,10 +153,7 @@ impl Client {
         name: String,
         password: String,
         raw_event_tx: mpsc::Sender<ClientEvent>, // Raw event sender to runner
-    ) -> (
-        Client,
-        mpsc::UnboundedSender<ClientAction>,
-    ) {
+    ) -> (Client, mpsc::UnboundedSender<ClientAction>) {
         let sok = UdpSocket::bind("0.0.0.0:0").await.unwrap();
 
         // Parse address to extract host and port
@@ -193,7 +190,6 @@ impl Client {
             action_rx,
             ddd_response: None,
             known_characters: Vec::new(),
-            event_sequence_counter: 0, // Start event sequence at 0 (relative to this client)
         };
 
         (client, action_tx)
@@ -521,10 +517,12 @@ impl Client {
                         reason: ClientFailureReason::LoginTimeout,
                     };
                     // Emit authentication failed system event
-                    let _ = self.raw_event_tx.send(ClientEvent::System(ClientSystemEvent::AuthenticationFailed { reason: "Connection timeout - server not responding".to_string(),
-                     }));
-                    
-                    
+                    let _ = self.raw_event_tx.send(ClientEvent::System(
+                        ClientSystemEvent::AuthenticationFailed {
+                            reason: "Connection timeout - server not responding".to_string(),
+                        },
+                    ));
+
                     return true;
                 }
             }
@@ -582,18 +580,6 @@ impl Client {
     /// Get cached DDD response for retries
     pub fn get_ddd_response(&self) -> Option<&OutgoingMessageContent> {
         self.ddd_response.as_ref()
-    }
-
-    /// Get the next event sequence number (relative to this client)
-    fn next_event_sequence(&mut self) -> u64 {
-        self.event_sequence_counter += 1;
-        self.event_sequence_counter
-    }
-
-    /// Emit a state transition event
-    fn emit_state_transition(&mut self, from: ClientState, to: ClientState) {
-        // Log the transition for debugging
-        info!(target: "events", "State transition: {:?} -> {:?}", from, to);
     }
 
     /// Retry sending DDD response (used in Patching state)
@@ -989,6 +975,7 @@ impl Client {
                         | S2CMessage::CommunicationHearSpeech
                         | S2CMessage::CommunicationHearRangedSpeech
                         | S2CMessage::OrderedGameEvent
+                        | S2CMessage::CharacterCharacterError
                 );
 
                 // Emit network message for debug view
@@ -1031,6 +1018,9 @@ impl Client {
                             self.handle_hear_ranged_speech(message)
                         }
                         S2CMessage::OrderedGameEvent => self.handle_game_event(message),
+                        S2CMessage::CharacterCharacterError => {
+                            self.handle_character_error(message)
+                        }
                         // Add more handlers as needed
                         _ => {
                             info!(target: "net", "Unhandled S2CMessage: {:?} (0x{:04X})", msg_type, message.opcode);
@@ -1246,17 +1236,11 @@ impl Client {
                 if matches!(self.state, ClientState::Patching { .. }) {
                     // Update progress to 100% before transitioning
                     let game_event = GameEvent::UpdatingSetProgress { progress: 1.0 };
-            let _ = self.raw_event_tx.send(ClientEvent::Game(game_event));
+                    let _ = self.raw_event_tx.send(ClientEvent::Game(game_event));
                     info!(target: "net", "Progress: CharacterList received (100%)");
 
-                    let old_state = std::mem::replace(
-                        &mut self.state,
-                        ClientState::CharSelect
-                    );
-                    
-                    // Emit state transition event
-                    self.emit_state_transition(old_state, ClientState::CharSelect);
-                    
+                    let _old_state = std::mem::replace(&mut self.state, ClientState::CharSelect);
+
                     // Clear cached DDD response since we successfully received character list
                     self.ddd_response = None;
                     info!(target: "net", "State transition: Patching -> CharSelect");
@@ -1384,7 +1368,7 @@ impl Client {
                 {
                     *progress = PatchingProgress::DDDInterrogationReceived;
                     let game_event = GameEvent::UpdatingSetProgress { progress: 0.33 };
-            let _ = self.raw_event_tx.send(ClientEvent::Game(game_event));
+                    let _ = self.raw_event_tx.send(ClientEvent::Game(game_event));
                     info!(target: "net", "Progress: DDDInterrogation received (33%)");
                 }
 
@@ -1543,6 +1527,41 @@ impl Client {
         }
     }
 
+    /// Handle CharacterCharacterError from the server
+    fn handle_character_error(&mut self, message: RawMessage) {
+        debug!(target: "net", "Processing character error message");
+
+        // Parse the incoming message
+        // Note: message.data includes the opcode as the first 4 bytes, skip it
+        let mut cursor = Cursor::new(&message.data[4..]);
+        use acprotocol::readers::ACDataType;
+
+        match CharacterCharacterError::read(&mut cursor) {
+            Ok(char_error) => {
+                let error_code = char_error.reason.clone() as u32;
+                let error_message = format!("{}", char_error.reason); // Uses Display impl from asheron-rs
+
+                error!(target: "net", "Character error received - Code: 0x{:04X} ({})", error_code, error_message);
+
+                // Transition to CharacterError state (fatal error)
+                self.state = ClientState::CharacterError {
+                    reason: char_error.reason.clone(),
+                };
+
+                // Emit CharacterError event
+                let game_event = GameEvent::CharacterError {
+                    error_code,
+                    error_message,
+                };
+
+                let _ = self.raw_event_tx.send(ClientEvent::Game(game_event));
+            }
+            Err(e) => {
+                error!(target: "net", "Failed to parse character error message: {}", e);
+            }
+        }
+    }
+
     /// Handle a fragment received from the server
     fn handle_fragment(&mut self, blob_fragment: acprotocol::types::BlobFragments) {
         let sequence = blob_fragment.sequence;
@@ -1634,10 +1653,10 @@ impl Client {
             });
 
             // Emit authentication success system event
-            let _ = self.raw_event_tx.send(ClientEvent::System(ClientSystemEvent::AuthenticationSucceeded));
-            
-            
-            
+            let _ = self.raw_event_tx.send(ClientEvent::System(
+                ClientSystemEvent::AuthenticationSucceeded,
+            ));
+
             info!(target: "net", "Authentication succeeded - received ConnectRequest from server");
 
             // Update progress to ConnectRequestReceived (66%)
@@ -1649,7 +1668,7 @@ impl Client {
             {
                 *progress = ConnectingProgress::ConnectRequestReceived;
                 let game_event = GameEvent::ConnectingSetProgress { progress: 0.66 };
-            let _ = self.raw_event_tx.send(ClientEvent::Game(game_event));
+                let _ = self.raw_event_tx.send(ClientEvent::Game(game_event));
                 info!(target: "net", "Progress: ConnectRequest received (66%)");
             }
 
@@ -1668,7 +1687,7 @@ impl Client {
                     progress: PatchingProgress::Initial,
                 };
                 let game_event = GameEvent::ConnectingSetProgress { progress: 1.0 };
-            let _ = self.raw_event_tx.send(ClientEvent::Game(game_event));
+                let _ = self.raw_event_tx.send(ClientEvent::Game(game_event));
                 info!(target: "net", "Progress: ConnectResponse sent (100%)");
                 info!(target: "net", "State transition: Connecting -> Patching");
             }

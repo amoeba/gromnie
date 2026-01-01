@@ -28,6 +28,11 @@ pub enum GameEvent {
     LoginFailed {
         reason: String,
     },
+    /// Character error received from server
+    CharacterError {
+        error_code: u32,
+        error_message: String,
+    },
     /// Object created in the game world
     CreateObject {
         object_id: u32,
