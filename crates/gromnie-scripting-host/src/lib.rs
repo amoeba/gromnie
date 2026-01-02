@@ -45,7 +45,8 @@ pub trait Script: Send + 'static {
     fn subscribed_events(&self) -> &[EventFilter];
 
     /// Handle an event that matches one of the subscribed filters
-    fn on_event(&mut self, event: &gromnie_events::SimpleGameEvent, ctx: &mut ScriptContext);
+    /// This receives the full ClientEvent which can be a Game, State, or System event
+    fn on_event(&mut self, event: &gromnie_events::ClientEvent, ctx: &mut ScriptContext);
 
     /// Called periodically at a fixed rate (configurable, default ~20Hz)
     /// Use this for timer checks, periodic updates, and time-based logic
@@ -59,34 +60,185 @@ pub trait Script: Send + 'static {
     fn as_any_mut(&mut self) -> &mut dyn Any;
 }
 
-/// Filter for subscribing to specific game events
+/// Filter for subscribing to specific events
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum EventFilter {
     /// Subscribe to all events
     All,
+
+    // Game events
     /// Character list received from server
     CharacterListReceived,
     /// Object created in game world
     CreateObject,
     /// Chat message received
     ChatMessageReceived,
+
+    // State events
+    /// Client state: Connecting
+    StateConnecting,
+    /// Client state: Connected
+    StateConnected,
+    /// Client state: Connecting failed
+    StateConnectingFailed,
+    /// Client state: Patching
+    StatePatching,
+    /// Client state: Patched
+    StatePatched,
+    /// Client state: Patching failed
+    StatePatchingFailed,
+    /// Client state: Character select
+    StateCharacterSelect,
+    /// Client state: Entering world
+    StateEnteringWorld,
+    /// Client state: In world
+    StateInWorld,
+    /// Client state: Exiting world
+    StateExitingWorld,
+    /// Client state: Character error
+    StateCharacterError,
+
+    // System events
+    /// System: Authentication succeeded
+    SystemAuthenticationSucceeded,
+    /// System: Authentication failed
+    SystemAuthenticationFailed,
+    /// System: Connecting started
+    SystemConnectingStarted,
+    /// System: Connecting done
+    SystemConnectingDone,
+    /// System: Updating started
+    SystemUpdatingStarted,
+    /// System: Updating done
+    SystemUpdatingDone,
+    /// System: Login succeeded
+    SystemLoginSucceeded,
+    /// System: Reload scripts
+    SystemReloadScripts,
+    /// System: Shutdown
+    SystemShutdown,
 }
 
 impl EventFilter {
     /// Check if this filter matches the given event
-    pub fn matches(&self, event: &gromnie_events::SimpleGameEvent) -> bool {
-        use gromnie_events::SimpleGameEvent as GameEvent;
+    pub fn matches(&self, event: &gromnie_events::ClientEvent) -> bool {
+        use gromnie_events::{ClientEvent, ClientStateEvent, SimpleGameEvent as GameEvent};
 
         match self {
             EventFilter::All => true,
+
+            // Game event filters
             EventFilter::CharacterListReceived => {
-                matches!(event, GameEvent::CharacterListReceived { .. })
+                matches!(
+                    event,
+                    ClientEvent::Game(GameEvent::CharacterListReceived { .. })
+                )
             }
             EventFilter::CreateObject => {
-                matches!(event, GameEvent::CreateObject { .. })
+                matches!(event, ClientEvent::Game(GameEvent::CreateObject { .. }))
             }
             EventFilter::ChatMessageReceived => {
-                matches!(event, GameEvent::ChatMessageReceived { .. })
+                matches!(
+                    event,
+                    ClientEvent::Game(GameEvent::ChatMessageReceived { .. })
+                )
+            }
+
+            // State event filters
+            EventFilter::StateConnecting => {
+                matches!(event, ClientEvent::State(ClientStateEvent::Connecting))
+            }
+            EventFilter::StateConnected => {
+                matches!(event, ClientEvent::State(ClientStateEvent::Connected))
+            }
+            EventFilter::StateConnectingFailed => {
+                matches!(
+                    event,
+                    ClientEvent::State(ClientStateEvent::ConnectingFailed { .. })
+                )
+            }
+            EventFilter::StatePatching => {
+                matches!(event, ClientEvent::State(ClientStateEvent::Patching))
+            }
+            EventFilter::StatePatched => {
+                matches!(event, ClientEvent::State(ClientStateEvent::Patched))
+            }
+            EventFilter::StatePatchingFailed => {
+                matches!(
+                    event,
+                    ClientEvent::State(ClientStateEvent::PatchingFailed { .. })
+                )
+            }
+            EventFilter::StateCharacterSelect => {
+                matches!(event, ClientEvent::State(ClientStateEvent::CharacterSelect))
+            }
+            EventFilter::StateEnteringWorld => {
+                matches!(event, ClientEvent::State(ClientStateEvent::EnteringWorld))
+            }
+            EventFilter::StateInWorld => {
+                matches!(event, ClientEvent::State(ClientStateEvent::InWorld))
+            }
+            EventFilter::StateExitingWorld => {
+                matches!(event, ClientEvent::State(ClientStateEvent::ExitingWorld))
+            }
+            EventFilter::StateCharacterError => {
+                matches!(event, ClientEvent::State(ClientStateEvent::CharacterError))
+            }
+
+            // System event filters
+            EventFilter::SystemAuthenticationSucceeded => {
+                matches!(
+                    event,
+                    ClientEvent::System(gromnie_events::ClientSystemEvent::AuthenticationSucceeded)
+                )
+            }
+            EventFilter::SystemAuthenticationFailed => {
+                matches!(
+                    event,
+                    ClientEvent::System(
+                        gromnie_events::ClientSystemEvent::AuthenticationFailed { .. }
+                    )
+                )
+            }
+            EventFilter::SystemConnectingStarted => {
+                matches!(
+                    event,
+                    ClientEvent::System(gromnie_events::ClientSystemEvent::ConnectingStarted)
+                )
+            }
+            EventFilter::SystemConnectingDone => {
+                matches!(
+                    event,
+                    ClientEvent::System(gromnie_events::ClientSystemEvent::ConnectingDone)
+                )
+            }
+            EventFilter::SystemUpdatingStarted => {
+                matches!(
+                    event,
+                    ClientEvent::System(gromnie_events::ClientSystemEvent::UpdatingStarted)
+                )
+            }
+            EventFilter::SystemUpdatingDone => {
+                matches!(
+                    event,
+                    ClientEvent::System(gromnie_events::ClientSystemEvent::UpdatingDone)
+                )
+            }
+            EventFilter::SystemLoginSucceeded => {
+                matches!(
+                    event,
+                    ClientEvent::System(gromnie_events::ClientSystemEvent::LoginSucceeded { .. })
+                )
+            }
+            EventFilter::SystemReloadScripts => {
+                // ReloadScripts is only in the event bus SystemEvent, not ClientSystemEvent
+                // Scripts won't receive this as it's handled at the runner level
+                false
+            }
+            EventFilter::SystemShutdown => {
+                // Shutdown is only in the event bus SystemEvent, not ClientSystemEvent
+                // Scripts won't receive this as it's handled at the runner level
+                false
             }
         }
     }
@@ -96,9 +248,32 @@ impl EventFilter {
     pub fn from_discriminant(id: u32) -> Option<Self> {
         match id {
             0 => Some(EventFilter::All),
+            // Game events (1-99)
             1 => Some(EventFilter::CharacterListReceived),
             2 => Some(EventFilter::CreateObject),
             3 => Some(EventFilter::ChatMessageReceived),
+            // State events (100-199)
+            100 => Some(EventFilter::StateConnecting),
+            101 => Some(EventFilter::StateConnected),
+            102 => Some(EventFilter::StateConnectingFailed),
+            103 => Some(EventFilter::StatePatching),
+            104 => Some(EventFilter::StatePatched),
+            105 => Some(EventFilter::StatePatchingFailed),
+            106 => Some(EventFilter::StateCharacterSelect),
+            107 => Some(EventFilter::StateEnteringWorld),
+            108 => Some(EventFilter::StateInWorld),
+            109 => Some(EventFilter::StateExitingWorld),
+            110 => Some(EventFilter::StateCharacterError),
+            // System events (200-299)
+            200 => Some(EventFilter::SystemAuthenticationSucceeded),
+            201 => Some(EventFilter::SystemAuthenticationFailed),
+            202 => Some(EventFilter::SystemConnectingStarted),
+            203 => Some(EventFilter::SystemConnectingDone),
+            204 => Some(EventFilter::SystemUpdatingStarted),
+            205 => Some(EventFilter::SystemUpdatingDone),
+            206 => Some(EventFilter::SystemLoginSucceeded),
+            207 => Some(EventFilter::SystemReloadScripts),
+            208 => Some(EventFilter::SystemShutdown),
             _ => None,
         }
     }
@@ -107,9 +282,32 @@ impl EventFilter {
     pub fn to_discriminant(&self) -> u32 {
         match self {
             EventFilter::All => 0,
+            // Game events (1-99)
             EventFilter::CharacterListReceived => 1,
             EventFilter::CreateObject => 2,
             EventFilter::ChatMessageReceived => 3,
+            // State events (100-199)
+            EventFilter::StateConnecting => 100,
+            EventFilter::StateConnected => 101,
+            EventFilter::StateConnectingFailed => 102,
+            EventFilter::StatePatching => 103,
+            EventFilter::StatePatched => 104,
+            EventFilter::StatePatchingFailed => 105,
+            EventFilter::StateCharacterSelect => 106,
+            EventFilter::StateEnteringWorld => 107,
+            EventFilter::StateInWorld => 108,
+            EventFilter::StateExitingWorld => 109,
+            EventFilter::StateCharacterError => 110,
+            // System events (200-299)
+            EventFilter::SystemAuthenticationSucceeded => 200,
+            EventFilter::SystemAuthenticationFailed => 201,
+            EventFilter::SystemConnectingStarted => 202,
+            EventFilter::SystemConnectingDone => 203,
+            EventFilter::SystemUpdatingStarted => 204,
+            EventFilter::SystemUpdatingDone => 205,
+            EventFilter::SystemLoginSucceeded => 206,
+            EventFilter::SystemReloadScripts => 207,
+            EventFilter::SystemShutdown => 208,
         }
     }
 }

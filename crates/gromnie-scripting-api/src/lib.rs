@@ -17,7 +17,9 @@ pub mod events;
 // This allows: use gromnie_scripting_api as gromnie; impl gromnie::WasmScript for MyScript
 pub use bindings::WasmScript;
 pub use bindings::WasmScript as Script;
-pub use bindings::host::GameEvent;
+
+// Re-export event types
+pub use bindings::host::{GameEvent, ScriptEvent, StateEvent, SystemEvent};
 
 // Re-export host functions for WASM scripts
 pub use bindings::host::{

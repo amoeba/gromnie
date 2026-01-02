@@ -56,7 +56,7 @@ pub use self::gromnie::scripting::host;
 ///         vec![]
 ///     }
 ///
-///     fn on_event(&mut self, event: gromnie::GameEvent) {}
+///     fn on_event(&mut self, event: gromnie::ScriptEvent) {}
 ///
 ///     fn on_tick(&mut self, delta_millis: u64) {}
 /// }
@@ -87,8 +87,8 @@ pub trait WasmScript: Send + 'static {
     /// Return the list of event IDs this script wants to receive
     fn subscribed_events(&self) -> Vec<u32>;
 
-    /// Handle an event
-    fn on_event(&mut self, event: host::GameEvent);
+    /// Handle an event (game, state, or system)
+    fn on_event(&mut self, event: host::ScriptEvent);
 
     /// Called periodically (delta_millis is time since last tick)
     fn on_tick(&mut self, delta_millis: u64);
@@ -174,7 +174,7 @@ impl Guest for ScriptComponent {
         script().subscribed_events()
     }
 
-    fn on_event(event: host::GameEvent) {
+    fn on_event(event: host::ScriptEvent) {
         script().on_event(event)
     }
 
@@ -254,7 +254,7 @@ mod tests {
             vec![1, 2, 3]
         }
 
-        fn on_event(&mut self, _event: host::GameEvent) {}
+        fn on_event(&mut self, _event: host::ScriptEvent) {}
 
         fn on_tick(&mut self, _delta_millis: u64) {}
     }

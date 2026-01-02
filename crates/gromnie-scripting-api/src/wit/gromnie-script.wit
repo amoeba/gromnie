@@ -45,9 +45,9 @@ interface host {
         delete-pending: bool,
     }
 
-    /// ===== Game Events =====
+    /// ===== Events =====
 
-    /// Game events that scripts can handle
+    /// Game events from the server
     variant game-event {
         /// Character list received from server
         character-list-received(account),
@@ -61,6 +61,59 @@ interface host {
     record chat-message {
         channel: u8,
         message: string,
+    }
+
+    /// Client state change events
+    variant state-event {
+        connecting,
+        connected,
+        connecting-failed(string),
+        patching,
+        patched,
+        patching-failed(string),
+        character-select,
+        entering-world,
+        in-world,
+        exiting-world,
+        character-error,
+    }
+
+    /// System lifecycle events
+    variant system-event {
+        /// Authentication succeeded
+        authentication-succeeded,
+        /// Authentication failed
+        authentication-failed(string),
+        /// Connecting phase started
+        connecting-started,
+        /// Connecting phase completed
+        connecting-done,
+        /// Updating/patching phase started
+        updating-started,
+        /// Updating/patching phase completed
+        updating-done,
+        /// Login succeeded
+        login-succeeded(login-info),
+        /// Script reload requested
+        reload-scripts,
+        /// System shutdown requested
+        shutdown,
+    }
+
+    /// Login information
+    record login-info {
+        character-id: u32,
+        character-name: string,
+    }
+
+    /// Unified event type that scripts receive
+    variant script-event {
+        /// Game event from server
+        game(game-event),
+        /// Client state change
+        state(state-event),
+        /// System lifecycle event
+        system(system-event),
     }
 
     /// ===== Action Methods =====
@@ -99,7 +152,7 @@ interface host {
 
 /// Interface defining what WASM scripts must export to the host
 interface guest {
-    use host.{game-event};
+    use host.{script-event};
 
     /// Initialize the script (MUST be called before other functions)
     init: func();
@@ -123,8 +176,8 @@ interface guest {
     /// Values correspond to EventFilter enum discriminants (see host interface)
     subscribed-events: func() -> list<u32>;
 
-    /// Handle a game event
-    on-event: func(event: game-event);
+    /// Handle a script event (game, state, or system)
+    on-event: func(event: script-event);
 
     /// Called periodically at fixed rate (default 20Hz)
     /// delta-millis: milliseconds since last tick

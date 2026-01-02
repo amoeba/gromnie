@@ -261,23 +261,11 @@ impl ScriptRunner {
     pub fn handle_event(&mut self, raw_event: ClientEvent) {
         let now = Instant::now();
 
-        // Extract GameEvent if this is a game event
-        let game_event = match raw_event {
-            ClientEvent::Game(game_event) => {
-                debug!(target: "scripting", "Game event received: {:?}", std::mem::discriminant(&game_event));
-                game_event
-            }
-            ClientEvent::State(state_event) => {
-                // State events are sent to scripts directly - they can maintain their own state
-                debug!(target: "scripting", "State event received: {:?}", state_event);
-                return;
-            }
-            ClientEvent::System(system_event) => {
-                // System events are sent to scripts directly
-                debug!(target: "scripting", "System event received: {:?}", system_event);
-                return;
-            }
-        };
+        debug!(
+            target: "scripting",
+            "Event received: {:?}",
+            std::mem::discriminant(&raw_event)
+        );
 
         // Tick timers FIRST so they're marked as fired
         let fired_timers = self.tick_timers(now);
@@ -298,7 +286,7 @@ impl ScriptRunner {
             let subscribed = script
                 .subscribed_events()
                 .iter()
-                .any(|filter: &EventFilter| filter.matches(&game_event));
+                .any(|filter: &EventFilter| filter.matches(&raw_event));
 
             debug!(
                 target: "scripting",
@@ -315,7 +303,7 @@ impl ScriptRunner {
 
             // Call the script's event handler
             match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-                script.on_event(&game_event, &mut ctx);
+                script.on_event(&raw_event, &mut ctx);
             })) {
                 Ok(_) => {}
                 Err(e) => {
