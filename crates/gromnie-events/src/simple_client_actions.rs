@@ -2,9 +2,7 @@
 #[derive(Debug, Clone)]
 pub enum SimpleClientAction {
     /// Send a chat message to everyone nearby (CommunicationTalk)
-    SendChatSay {
-        message: String,
-    },
+    SendChatSay { message: String },
     /// Send a direct message to a specific player by name (CommunicationTalkDirectByName)
     SendChatTell {
         recipient_name: String,
@@ -21,12 +19,7 @@ pub enum SimpleClientAction {
     /// Disconnect from the server
     Disconnect,
     /// Reload scripts from the given directory
-    ReloadScripts {
-        script_dir: std::path::PathBuf,
-    },
+    ReloadScripts { script_dir: std::path::PathBuf },
     /// Log a message from a script
-    LogScriptMessage {
-        script_id: String,
-        message: String,
-    },
+    LogScriptMessage { script_id: String, message: String },
 }

@@ -14,10 +14,10 @@ pub mod system_events;
 
 // Re-export key types for convenience
 pub use client_events::{ClientEvent, ClientStateEvent, ClientSystemEvent};
+pub use script_events::ScriptEventType;
 pub use simple_client_actions::SimpleClientAction;
 pub use simple_game_events::{CharacterInfo, SimpleGameEvent};
 pub use system_events::SystemEvent;
-pub use script_events::ScriptEventType;
 
 // ============================================================================
 // Event Source and Context

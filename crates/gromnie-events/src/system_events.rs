@@ -17,7 +17,10 @@ pub enum SystemEvent {
     /// Client finished updating/patching phase
     UpdatingDone { client_id: u32 },
     /// Character login succeeded
-    LoginSucceeded { character_id: u32, character_name: String },
+    LoginSucceeded {
+        character_id: u32,
+        character_name: String,
+    },
     /// System shutdown requested
     Shutdown,
 }

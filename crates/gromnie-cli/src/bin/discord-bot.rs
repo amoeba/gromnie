@@ -25,7 +25,11 @@ pub struct Cli {
 
 struct Handler {
     target_channel_id: serenity::model::id::ChannelId,
-    action_tx: Arc<tokio::sync::Mutex<Option<tokio::sync::mpsc::UnboundedSender<gromnie_events::SimpleClientAction>>>>,
+    action_tx: Arc<
+        tokio::sync::Mutex<
+            Option<tokio::sync::mpsc::UnboundedSender<gromnie_events::SimpleClientAction>>,
+        >,
+    >,
     uptime_data: Arc<RwLock<UptimeData>>,
 }
 
@@ -193,8 +197,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     // Create channels for client communication
-    let (_client_event_tx, _client_event_rx) = tokio::sync::mpsc::unbounded_channel::<SimpleGameEvent>();
-    let (action_tx_channel, mut action_tx_rx) = tokio::sync::mpsc::unbounded_channel::<tokio::sync::mpsc::UnboundedSender<gromnie_events::SimpleClientAction>>();
+    let (_client_event_tx, _client_event_rx) =
+        tokio::sync::mpsc::unbounded_channel::<SimpleGameEvent>();
+    let (action_tx_channel, mut action_tx_rx) = tokio::sync::mpsc::unbounded_channel::<
+        tokio::sync::mpsc::UnboundedSender<gromnie_events::SimpleClientAction>,
+    >();
 
     // Create shutdown channel
     let (_shutdown_tx, shutdown_rx) = tokio::sync::watch::channel(false);

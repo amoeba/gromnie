@@ -1,5 +1,5 @@
-use serde::{Deserialize, Serialize};
 use crate::simple_game_events::SimpleGameEvent;
+use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone)]
 pub enum ClientEvent {
@@ -12,12 +12,17 @@ pub enum ClientEvent {
 #[derive(Debug, Clone)]
 pub enum ClientSystemEvent {
     AuthenticationSucceeded,
-    AuthenticationFailed { reason: String },
+    AuthenticationFailed {
+        reason: String,
+    },
     ConnectingStarted,
     ConnectingDone,
     UpdatingStarted,
     UpdatingDone,
-    LoginSucceeded { character_id: u32, character_name: String },
+    LoginSucceeded {
+        character_id: u32,
+        character_name: String,
+    },
 }
 
 /// State of the client

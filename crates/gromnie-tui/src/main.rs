@@ -210,7 +210,8 @@ fn handle_tui_event(
                         if !app.chat_input.is_empty() {
                             if let Some(ref tx) = app.action_tx {
                                 let message = app.chat_input.clone();
-                                if let Err(e) = tx.send(SimpleClientAction::SendChatSay { message }) {
+                                if let Err(e) = tx.send(SimpleClientAction::SendChatSay { message })
+                                {
                                     error!("Failed to send chat message action: {}", e);
                                 }
                             }

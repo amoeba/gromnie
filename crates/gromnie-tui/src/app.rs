@@ -1,4 +1,4 @@
-use gromnie_events::{CharacterInfo, SimpleGameEvent, SimpleClientAction};
+use gromnie_events::{CharacterInfo, SimpleClientAction, SimpleGameEvent};
 
 // Type alias for backward compatibility
 pub type GameEvent = SimpleGameEvent;

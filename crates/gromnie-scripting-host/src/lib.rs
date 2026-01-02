@@ -45,11 +45,7 @@ pub trait Script: Send + 'static {
     fn subscribed_events(&self) -> &[EventFilter];
 
     /// Handle an event that matches one of the subscribed filters
-    fn on_event(
-        &mut self,
-        event: &gromnie_events::SimpleGameEvent,
-        ctx: &mut ScriptContext,
-    );
+    fn on_event(&mut self, event: &gromnie_events::SimpleGameEvent, ctx: &mut ScriptContext);
 
     /// Called periodically at a fixed rate (configurable, default ~20Hz)
     /// Use this for timer checks, periodic updates, and time-based logic

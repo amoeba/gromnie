@@ -331,7 +331,8 @@ impl Default for ClientRunnerBuilder {
 pub struct ClientRunner {
     pub(crate) mode: ClientMode,
     pub(crate) consumers: Vec<Box<dyn ConsumerFactory>>,
-    pub(crate) action_channel: Option<mpsc::UnboundedSender<mpsc::UnboundedSender<SimpleClientAction>>>,
+    pub(crate) action_channel:
+        Option<mpsc::UnboundedSender<mpsc::UnboundedSender<SimpleClientAction>>>,
     pub(crate) shutdown_rx: Option<watch::Receiver<bool>>,
     pub(crate) event_bus_capacity: usize,
     pub(crate) app_config: Option<gromnie_client::config::GromnieConfig>,
@@ -427,8 +428,7 @@ impl ClientRunner {
         }
 
         // Create raw event channel
-        let (raw_event_tx, raw_event_rx) =
-            mpsc::channel::<gromnie_events::ClientEvent>(256);
+        let (raw_event_tx, raw_event_rx) = mpsc::channel::<gromnie_events::ClientEvent>(256);
 
         // Spawn EventWrapper to bridge client events to event bus
         let event_wrapper = EventWrapper::new(config.id, event_bus_manager.event_bus.clone());

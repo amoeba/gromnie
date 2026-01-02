@@ -1,10 +1,7 @@
 use std::sync::Arc;
 use tokio::sync::mpsc;
 
-use crate::event_bus::{
-    EventContext, EventEnvelope, EventSource,
-    EventType, SystemEvent,
-};
+use crate::event_bus::{EventContext, EventEnvelope, EventSource, EventType, SystemEvent};
 use gromnie_events::{ClientEvent, ClientSystemEvent};
 
 /// Wraps raw events from client and enriches them with context

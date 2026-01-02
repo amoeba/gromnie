@@ -48,99 +48,95 @@ impl crate::client_runner_builder::ConsumerFactory for LoggingConsumerFactory {
 impl EventConsumer for LoggingConsumer {
     fn handle_event(&mut self, envelope: EventEnvelope) {
         match envelope.event {
-            EventType::Game(game_event) => {
-                match game_event {
-                    GameEvent::CharacterListReceived {
-                        account,
-                        characters,
-                        num_slots,
-                    } => {
-                        let names = characters
-                            .iter()
-                            .map(|c| format!("{} ({})", c.name, c.id))
-                            .collect::<Vec<_>>()
-                            .join(", ");
-                        info!(target: "events", "CharacterList -- Account: {}, Slots: {}, Number of Chars: {}, Chars: {}", account, num_slots, characters.len(), names);
-                    }
-                    GameEvent::LoginSucceeded {
-                        character_id,
-                        character_name,
-                    } => {
-                        info!(target: "events", "LoginSucceeded -- Character: {} (ID: {})", character_name, character_id);
-                    }
-                    GameEvent::LoginFailed { reason } => {
-                        error!(target: "events", "LoginFailed -- Reason: {}", reason);
-                    }
-                    GameEvent::CreateObject {
-                        object_id,
-                        object_name,
-                    } => {
-                        info!(target: "events", "CREATE OBJECT: {} (0x{:08X})", object_name, object_id);
-                    }
-                    GameEvent::ChatMessageReceived {
-                        message,
-                        message_type,
-                    } => {
-                        info!(target: "events", "CHAT [{}]: {}", message_type, message);
-                    }
-                    GameEvent::ConnectingSetProgress { progress } => {
-                        debug!(target: "events", "Connecting progress: {:.1}%", progress * 100.0);
-                    }
-                    GameEvent::UpdatingSetProgress { progress } => {
-                        debug!(target: "events", "Updating progress: {:.1}%", progress * 100.0);
-                    }
-                    GameEvent::CharacterError {
-                        error_code,
-                        error_message,
-                    } => {
-                        error!(target: "events", "Character error (code {}): {}", error_code, error_message);
-                    }
-                    GameEvent::CreatePlayer { character_id } => {
-                        info!(target: "events", "CREATE PLAYER: Character ID {}", character_id);
-                    }
+            EventType::Game(game_event) => match game_event {
+                GameEvent::CharacterListReceived {
+                    account,
+                    characters,
+                    num_slots,
+                } => {
+                    let names = characters
+                        .iter()
+                        .map(|c| format!("{} ({})", c.name, c.id))
+                        .collect::<Vec<_>>()
+                        .join(", ");
+                    info!(target: "events", "CharacterList -- Account: {}, Slots: {}, Number of Chars: {}, Chars: {}", account, num_slots, characters.len(), names);
                 }
-            }
+                GameEvent::LoginSucceeded {
+                    character_id,
+                    character_name,
+                } => {
+                    info!(target: "events", "LoginSucceeded -- Character: {} (ID: {})", character_name, character_id);
+                }
+                GameEvent::LoginFailed { reason } => {
+                    error!(target: "events", "LoginFailed -- Reason: {}", reason);
+                }
+                GameEvent::CreateObject {
+                    object_id,
+                    object_name,
+                } => {
+                    info!(target: "events", "CREATE OBJECT: {} (0x{:08X})", object_name, object_id);
+                }
+                GameEvent::ChatMessageReceived {
+                    message,
+                    message_type,
+                } => {
+                    info!(target: "events", "CHAT [{}]: {}", message_type, message);
+                }
+                GameEvent::ConnectingSetProgress { progress } => {
+                    debug!(target: "events", "Connecting progress: {:.1}%", progress * 100.0);
+                }
+                GameEvent::UpdatingSetProgress { progress } => {
+                    debug!(target: "events", "Updating progress: {:.1}%", progress * 100.0);
+                }
+                GameEvent::CharacterError {
+                    error_code,
+                    error_message,
+                } => {
+                    error!(target: "events", "Character error (code {}): {}", error_code, error_message);
+                }
+                GameEvent::CreatePlayer { character_id } => {
+                    info!(target: "events", "CREATE PLAYER: Character ID {}", character_id);
+                }
+            },
             EventType::State(state_event) => {
                 // Log state changes (new granular states)
                 info!(target: "events", "STATE CHANGE: {:?}", state_event);
             }
-            EventType::System(system_event) => {
-                match system_event {
-                    SystemEvent::AuthenticationSucceeded { .. } => {
-                        info!(target: "events", "Authentication succeeded - connected to server");
-                    }
-                    SystemEvent::AuthenticationFailed { reason, .. } => {
-                        error!(target: "events", "Authentication failed: {}", reason);
-                    }
-                    SystemEvent::ConnectingStarted { .. } => {
-                        info!(target: "events", "Connecting started");
-                    }
-                    SystemEvent::ConnectingDone { .. } => {
-                        info!(target: "events", "Connecting done");
-                    }
-                    SystemEvent::UpdatingStarted { .. } => {
-                        info!(target: "events", "Updating started");
-                    }
-                    SystemEvent::UpdatingDone { .. } => {
-                        info!(target: "events", "Updating done");
-                    }
-                    SystemEvent::LoginSucceeded {
-                        character_id,
-                        character_name,
-                    } => {
-                        info!(target: "events", "LoginSucceeded -- Character: {} (ID: {})", character_name, character_id);
-                    }
-                    SystemEvent::ReloadScripts { .. } => {
-                        info!(target: "events", "Reloading scripts");
-                    }
-                    SystemEvent::LogScriptMessage { script_id, message } => {
-                        info!(target: "events", "Script [{}]: {}", script_id, message);
-                    }
-                    SystemEvent::Shutdown => {
-                        info!(target: "events", "System shutdown");
-                    }
+            EventType::System(system_event) => match system_event {
+                SystemEvent::AuthenticationSucceeded { .. } => {
+                    info!(target: "events", "Authentication succeeded - connected to server");
                 }
-            }
+                SystemEvent::AuthenticationFailed { reason, .. } => {
+                    error!(target: "events", "Authentication failed: {}", reason);
+                }
+                SystemEvent::ConnectingStarted { .. } => {
+                    info!(target: "events", "Connecting started");
+                }
+                SystemEvent::ConnectingDone { .. } => {
+                    info!(target: "events", "Connecting done");
+                }
+                SystemEvent::UpdatingStarted { .. } => {
+                    info!(target: "events", "Updating started");
+                }
+                SystemEvent::UpdatingDone { .. } => {
+                    info!(target: "events", "Updating done");
+                }
+                SystemEvent::LoginSucceeded {
+                    character_id,
+                    character_name,
+                } => {
+                    info!(target: "events", "LoginSucceeded -- Character: {} (ID: {})", character_name, character_id);
+                }
+                SystemEvent::ReloadScripts { .. } => {
+                    info!(target: "events", "Reloading scripts");
+                }
+                SystemEvent::LogScriptMessage { script_id, message } => {
+                    info!(target: "events", "Script [{}]: {}", script_id, message);
+                }
+                SystemEvent::Shutdown => {
+                    info!(target: "events", "System shutdown");
+                }
+            },
         }
     }
 }
@@ -502,40 +498,36 @@ impl crate::client_runner_builder::ConsumerFactory for StatsConsumerFactory {
 impl EventConsumer for StatsConsumer {
     fn handle_event(&mut self, envelope: EventEnvelope) {
         match envelope.event {
-            EventType::Game(event) => {
-                match event {
-                    GameEvent::LoginSucceeded { .. } => {
-                        self.stats.logged_in.fetch_add(1, Ordering::SeqCst);
-                        if self.verbose {
-                            info!("[Client {}] Login succeeded", self.client_id);
-                        }
+            EventType::Game(event) => match event {
+                GameEvent::LoginSucceeded { .. } => {
+                    self.stats.logged_in.fetch_add(1, Ordering::SeqCst);
+                    if self.verbose {
+                        info!("[Client {}] Login succeeded", self.client_id);
                     }
-                    GameEvent::LoginFailed { .. } => {
-                        self.stats.errors.fetch_add(1, Ordering::SeqCst);
-                        if self.verbose {
-                            error!("[Client {}] Login failed", self.client_id);
-                        }
-                    }
-                    _ => {}
                 }
-            }
-            EventType::System(event) => {
-                match event {
-                    SystemEvent::AuthenticationSucceeded { .. } => {
-                        self.stats.authenticated.fetch_add(1, Ordering::SeqCst);
-                        if self.verbose {
-                            info!("[Client {}] Authentication succeeded", self.client_id);
-                        }
+                GameEvent::LoginFailed { .. } => {
+                    self.stats.errors.fetch_add(1, Ordering::SeqCst);
+                    if self.verbose {
+                        error!("[Client {}] Login failed", self.client_id);
                     }
-                    SystemEvent::AuthenticationFailed { .. } => {
-                        self.stats.errors.fetch_add(1, Ordering::SeqCst);
-                        if self.verbose {
-                            error!("[Client {}] Authentication failed", self.client_id);
-                        }
-                    }
-                    _ => {}
                 }
-            }
+                _ => {}
+            },
+            EventType::System(event) => match event {
+                SystemEvent::AuthenticationSucceeded { .. } => {
+                    self.stats.authenticated.fetch_add(1, Ordering::SeqCst);
+                    if self.verbose {
+                        info!("[Client {}] Authentication succeeded", self.client_id);
+                    }
+                }
+                SystemEvent::AuthenticationFailed { .. } => {
+                    self.stats.errors.fetch_add(1, Ordering::SeqCst);
+                    if self.verbose {
+                        error!("[Client {}] Authentication failed", self.client_id);
+                    }
+                }
+                _ => {}
+            },
             EventType::State(_) => {}
         }
     }

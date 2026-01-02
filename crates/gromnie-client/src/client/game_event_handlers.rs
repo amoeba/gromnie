@@ -6,10 +6,10 @@
 
 use tracing::info;
 
-use acprotocol::readers::{ACDataType, ACReader};
+use crate::client::Client;
 use crate::client::GameEvent;
 use crate::client::game_event_handler::GameEventHandler;
-use crate::client::Client;
+use acprotocol::readers::{ACDataType, ACReader};
 
 /// Communication_HearDirectSpeech game event (tell messages)
 /// Format: Message, SenderName, SenderId, TargetId, Type, SecretFlags

@@ -3,8 +3,8 @@ use std::io::Cursor;
 use std::net::SocketAddr;
 
 use acprotocol::enums::{
-    AuthFlags, CharacterErrorType, FragmentGroup, GameEvent as GameEventType,
-    PacketHeaderFlags, S2CMessage,
+    AuthFlags, CharacterErrorType, FragmentGroup, GameEvent as GameEventType, PacketHeaderFlags,
+    S2CMessage,
 };
 
 use acprotocol::gameactions::CharacterLoginCompleteNotification;
@@ -32,12 +32,12 @@ use tokio::net::UdpSocket;
 use tracing::{debug, error, info, warn};
 
 use crate::client::constants::*;
-use crate::client::{ClientEvent, ClientSystemEvent, GameEvent};
 use crate::client::game_event_handler::dispatch_game_event;
 use crate::client::game_event_handlers::{
     CommunicationHearDirectSpeech, CommunicationTransientString,
 };
 use crate::client::message_handler::dispatch_message;
+use crate::client::{ClientEvent, ClientSystemEvent, GameEvent};
 use crate::crypto::crypto_system::CryptoSystem;
 use crate::crypto::magic_number::get_magic_number;
 
@@ -142,12 +142,12 @@ pub struct Client {
     fragment_sequence: u32, // Counter for outgoing fragment sequences
     next_game_action_sequence: u32, // Sequence counter for GameAction messages
     session: Option<SessionState>,
-    pending_fragments: HashMap<u32, Fragment>,   // Track incomplete fragment sequences
-    message_queue: VecDeque<RawMessage>,         // Queue of parsed messages to process
+    pending_fragments: HashMap<u32, Fragment>, // Track incomplete fragment sequences
+    message_queue: VecDeque<RawMessage>,       // Queue of parsed messages to process
     pub(crate) outgoing_message_queue: VecDeque<OutgoingMessage>, // Queue of messages to send with optional delays
     pub(crate) raw_event_tx: mpsc::Sender<ClientEvent>,           // Raw event sender to runner
     action_rx: mpsc::UnboundedReceiver<gromnie_events::SimpleClientAction>, // Receive actions from handlers
-    pub(crate) ddd_response: Option<OutgoingMessageContent>,      // Cached DDD response for retries
+    pub(crate) ddd_response: Option<OutgoingMessageContent>, // Cached DDD response for retries
     pub(crate) known_characters: Vec<crate::client::CharacterInfo>, // Track characters from list and creation
 }
 
@@ -158,7 +158,10 @@ impl Client {
         name: String,
         password: String,
         raw_event_tx: mpsc::Sender<ClientEvent>, // Raw event sender to runner
-    ) -> (Client, mpsc::UnboundedSender<gromnie_events::SimpleClientAction>) {
+    ) -> (
+        Client,
+        mpsc::UnboundedSender<gromnie_events::SimpleClientAction>,
+    ) {
         let sok = UdpSocket::bind("0.0.0.0:0").await.unwrap();
 
         // Parse address to extract host and port
@@ -456,10 +459,11 @@ impl Client {
         {
             let mut cursor = Cursor::new(&mut message_data);
             use acprotocol::gameactions::CommunicationTalkDirectByName;
-            let action = GameActionMessage::CommunicationTalkDirectByName(CommunicationTalkDirectByName {
-                message: message.clone(),
-                target_name: recipient_name.clone(),
-            });
+            let action =
+                GameActionMessage::CommunicationTalkDirectByName(CommunicationTalkDirectByName {
+                    message: message.clone(),
+                    target_name: recipient_name.clone(),
+                });
             let msg = C2SMessage::OrderedGameAction {
                 sequence: self.next_game_action_sequence,
                 action,
@@ -660,7 +664,10 @@ impl Client {
                     debug!(target: "events", "Action: Sending chat say: {}", message);
                     self.send_chat_say(message);
                 }
-                gromnie_events::SimpleClientAction::SendChatTell { recipient_name, message } => {
+                gromnie_events::SimpleClientAction::SendChatTell {
+                    recipient_name,
+                    message,
+                } => {
                     debug!(target: "events", "Action: Sending tell to {}: {}", recipient_name, message);
                     self.send_chat_tell(recipient_name, message);
                 }
@@ -986,12 +993,14 @@ impl Client {
                             let mut cursor = Cursor::new(&message.data[8..]); // Skip outer opcode + seq
                             match u32::read(&mut cursor) {
                                 Ok(event_opcode) => match GameEventType::try_from(event_opcode) {
-                                    Ok(event_type) => {
-                                        self.handle_game_event(event_type, message)
+                                    Ok(event_type) => self.handle_game_event(event_type, message),
+                                    Err(_) => {
+                                        debug!(target: "net", "Unknown game event opcode: 0x{:04X}", event_opcode)
                                     }
-                                    Err(_) => debug!(target: "net", "Unknown game event opcode: 0x{:04X}", event_opcode),
                                 },
-                                Err(e) => error!(target: "net", "Failed to read game event opcode: {}", e),
+                                Err(e) => {
+                                    error!(target: "net", "Failed to read game event opcode: {}", e)
+                                }
                             }
                         } else {
                             error!(target: "net", "Game event message too short");
@@ -1093,7 +1102,6 @@ impl Client {
             }
         }
     }
-
 
     /// Handle LoginEnterGameServerReady (0xF7DF) - Step 2 of character login
     /// Server is ready to receive the character ID, so we send EnterWorld (0xF657)

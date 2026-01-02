@@ -1,6 +1,6 @@
-use std::io::Cursor;
 use acprotocol::network::RawMessage;
 use acprotocol::readers::ACDataType;
+use std::io::Cursor;
 use tokio::sync::mpsc;
 use tracing::error;
 

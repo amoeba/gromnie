@@ -4,11 +4,11 @@ use std::time::{Duration, Instant};
 use tokio::sync::mpsc::UnboundedSender;
 use tracing::{debug, error, info};
 
+use super::EventFilter;
+use super::Script;
 use super::context::ScriptContext;
 use super::timer::TimerManager;
 use super::wasm::WasmScript;
-use super::EventFilter;
-use super::Script;
 use crate::create_runner_from_config;
 use gromnie_events::{ClientEvent, ClientSystemEvent, SimpleClientAction};
 use gromnie_events::{EventConsumer, EventEnvelope};
@@ -378,7 +378,10 @@ impl ScriptConsumer {
 impl EventConsumer for ScriptConsumer {
     fn handle_event(&mut self, envelope: EventEnvelope) {
         // Check for reload event
-        if let gromnie_events::EventType::System(gromnie_events::SystemEvent::ReloadScripts { .. }) = &envelope.event {
+        if let gromnie_events::EventType::System(gromnie_events::SystemEvent::ReloadScripts {
+            ..
+        }) = &envelope.event
+        {
             if let Some(ref script_dir) = self.script_dir {
                 if let Some(ref script_config) = self.script_config {
                     self.runner.reload_scripts(script_dir, script_config);
