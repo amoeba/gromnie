@@ -138,7 +138,7 @@ impl ScriptRunner {
             self.register_script(script);
         }
 
-        if self.scripts.len() > 0 {
+        if !self.scripts.is_empty() {
             info!(target: "scripting", "Loaded {} script(s)", self.scripts.len());
         }
     }

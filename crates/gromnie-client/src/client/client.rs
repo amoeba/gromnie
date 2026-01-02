@@ -3,7 +3,7 @@ use std::io::Cursor;
 use std::net::SocketAddr;
 
 use acprotocol::enums::{
-    AuthFlags, CharacterErrorType, FragmentGroup, GameAction, GameEvent as GameEventType,
+    AuthFlags, CharacterErrorType, FragmentGroup, GameEvent as GameEventType,
     PacketHeaderFlags, S2CMessage,
 };
 
@@ -142,7 +142,6 @@ pub struct Client {
     fragment_sequence: u32, // Counter for outgoing fragment sequences
     next_game_action_sequence: u32, // Sequence counter for GameAction messages
     session: Option<SessionState>,
-    login_timestamp: Option<std::time::Instant>, // Time when login was completed
     pending_fragments: HashMap<u32, Fragment>,   // Track incomplete fragment sequences
     message_queue: VecDeque<RawMessage>,         // Queue of parsed messages to process
     pub(crate) outgoing_message_queue: VecDeque<OutgoingMessage>, // Queue of messages to send with optional delays
@@ -188,7 +187,6 @@ impl Client {
             fragment_sequence: 1,         // Start at 1 as per actestclient
             next_game_action_sequence: 0, // Start at 0 for GameAction sequences
             session: None,
-            login_timestamp: None, // Initialize to None
             pending_fragments: HashMap::new(),
             message_queue: VecDeque::new(),
             outgoing_message_queue: VecDeque::new(),
@@ -1065,21 +1063,6 @@ impl Client {
         }
     }
 
-    /// Handle game action messages
-    /// TODO: Do we need this here?
-    fn handle_game_action(&mut self, action: GameAction, message: RawMessage) {
-        debug!(target: "net", "Processing game action: {:?}", action);
-
-        match action {
-            GameAction::CharacterLoginCompleteNotification => {
-                self.handle_login_complete(message);
-            }
-            _ => {
-                warn!(target: "net", "Unhandled GameAction: {:?} (0x{:02X})", action, message.opcode);
-            }
-        }
-    }
-
     /// Handle OrderedGameEvent (0xF7B0) messages
     fn handle_game_event(&mut self, event_type: GameEventType, message: RawMessage) {
         info!(target: "net", "Processing OrderedGameEvent message, data len={}", message.data.len());
@@ -1111,27 +1094,6 @@ impl Client {
         }
     }
 
-    /// Handle LoginComplete notification from the server
-    fn handle_login_complete(&mut self, _message: RawMessage) {
-        debug!(target: "net", "Processing login complete notification");
-
-        // Update character login state
-        self.character_login_state = CharacterLoginState::Succeeded;
-
-        // Set the login timestamp for delayed message sending
-        self.login_timestamp = Some(std::time::Instant::now());
-
-        info!(target: "net", "Login completed successfully!");
-
-        // Emit event to broadcast channel
-        let game_event = GameEvent::LoginSucceeded {
-            character_id: 0,                       // TODO: Parse this from message if available
-            character_name: "Unknown".to_string(), // TODO: Parse this from message if available
-        };
-
-        // Send on channel (ignore error if no subscribers)
-        let _ = self.raw_event_tx.try_send(ClientEvent::Game(game_event));
-    }
 
     /// Handle LoginEnterGameServerReady (0xF7DF) - Step 2 of character login
     /// Server is ready to receive the character ID, so we send EnterWorld (0xF657)

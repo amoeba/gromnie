@@ -408,22 +408,22 @@ impl ClientRunner {
         let event_bus_manager = Arc::new(EventBusManager::new(self.event_bus_capacity));
 
         // Setup SIGUSR2 handler if scripting is enabled
-        if let Some(ref app_config) = self.app_config {
-            if app_config.scripting.enabled {
-                let event_sender = event_bus_manager.create_sender(config.id);
-                let script_dir = app_config.scripting.script_dir();
-                gromnie_scripting_host::setup_reload_signal_handler(move || {
-                    let reload_event = EventEnvelope::system_event(
-                        SystemEvent::ReloadScripts {
-                            script_dir: script_dir.clone(),
-                        },
-                        0, // client_id (use 0 for system-wide events)
-                        0, // sequence
-                        EventSource::System,
-                    );
-                    event_sender.publish(reload_event);
-                });
-            }
+        if let Some(ref app_config) = self.app_config
+            && app_config.scripting.enabled
+        {
+            let event_sender = event_bus_manager.create_sender(config.id);
+            let script_dir = app_config.scripting.script_dir();
+            gromnie_scripting_host::setup_reload_signal_handler(move || {
+                let reload_event = EventEnvelope::system_event(
+                    SystemEvent::ReloadScripts {
+                        script_dir: script_dir.clone(),
+                    },
+                    0, // client_id (use 0 for system-wide events)
+                    0, // sequence
+                    EventSource::System,
+                );
+                event_sender.publish(reload_event);
+            });
         }
 
         // Create raw event channel
