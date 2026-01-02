@@ -314,6 +314,7 @@ impl ClientRunnerBuilder {
             action_channel: self.action_channel,
             shutdown_rx: self.shutdown_rx,
             event_bus_capacity: self.event_bus_capacity,
+            app_config: Some(config),
         })
     }
 }
@@ -331,6 +332,7 @@ pub struct ClientRunner {
     pub(crate) action_channel: Option<mpsc::UnboundedSender<mpsc::UnboundedSender<ClientAction>>>,
     pub(crate) shutdown_rx: Option<watch::Receiver<bool>>,
     pub(crate) event_bus_capacity: usize,
+    pub(crate) app_config: Option<gromnie_client::config::GromnieConfig>,
 }
 
 /// Result from running clients
@@ -438,7 +440,7 @@ impl ClientRunner {
         };
 
         // Create all consumers
-        let consumers: Vec<Box<dyn EventConsumer>> = self
+        let mut consumers: Vec<Box<dyn EventConsumer>> = self
             .consumers
             .iter()
             .map(|factory| factory.create(&ctx))
