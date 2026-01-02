@@ -1,4 +1,4 @@
-// Integration tests for the scripting system
+// Integration tests for scripting system
 
 use gromnie_events::SimpleGameEvent as GameEvent;
 use gromnie_scripting_host::ScriptRunner;
@@ -42,11 +42,7 @@ async fn test_script_lifecycle() {
         }
     }
 
-    // For now, just test that the runner can be created and basic operations work
-    // The full WASM loading will be tested separately due to runtime constraints
-    println!("Basic script runner functionality test passed");
-
-    // Test that we can get script count (should be 0 initially)
+    // For now, just test that we can get script count (should be 0 initially)
     assert_eq!(runner.script_count(), 0, "Should start with no scripts");
 
     // Test that we can get script IDs (should be empty initially)

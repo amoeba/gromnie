@@ -52,34 +52,71 @@ impl Script for TestScript {
 
     fn subscribed_events(&self) -> Vec<u32> {
         // Subscribe to all event types for testing
-        vec![0, 1, 2, 3] // All, CharacterListReceived, CreateObject, ChatMessageReceived
+        vec![gromnie::events::EVENT_ALL] // All events
     }
 
-    fn on_event(&mut self, event: GameEvent) {
+    fn on_event(&mut self, event: gromnie::ScriptEvent) {
         self.event_count += 1;
 
         match event {
-            GameEvent::CharacterListReceived(account_data) => {
-                self.last_event = Some(format!(
-                    "CharacterList: {} chars",
-                    account_data.character_list.len()
-                ));
-                log(&format!(
-                    "Received character list for account: {}",
-                    account_data.name
-                ));
-            }
-            GameEvent::CreateObject(object_data) => {
-                self.last_event = Some(format!("CreateObject: {}", object_data.name));
-                log(&format!(
-                    "Object created: {} (ID: {})",
-                    object_data.name, object_data.id
-                ));
-            }
-            GameEvent::ChatMessageReceived(chat_data) => {
-                self.last_event = Some(format!("Chat: {}", chat_data.message));
-                log(&format!("Chat message: {}", chat_data.message));
-            }
+            gromnie::ScriptEvent::Game(game_event) => match game_event {
+                gromnie::GameEvent::CharacterListReceived(account_data) => {
+                    self.last_event = Some(format!(
+                        "Game/CharacterList: {} chars",
+                        account_data.character_list.len()
+                    ));
+                    log(&format!(
+                        "Received character list for account: {}",
+                        account_data.name
+                    ));
+                }
+                gromnie::GameEvent::CreateObject(object_data) => {
+                    self.last_event = Some(format!("Game/CreateObject: {}", object_data.name));
+                    log(&format!(
+                        "Object created: {} (ID: {})",
+                        object_data.name, object_data.id
+                    ));
+                }
+                gromnie::GameEvent::ChatMessageReceived(chat_data) => {
+                    self.last_event = Some(format!("Game/Chat: {}", chat_data.message));
+                    log(&format!("Chat message: {}", chat_data.message));
+                }
+            },
+            gromnie::ScriptEvent::State(state_event) => match state_event {
+                gromnie::StateEvent::Connecting => {
+                    self.last_event = Some("State/Connecting".to_string());
+                    log("State: Connecting");
+                }
+                gromnie::StateEvent::Connected => {
+                    self.last_event = Some("State/Connected".to_string());
+                    log("State: Connected");
+                }
+                gromnie::StateEvent::InWorld => {
+                    self.last_event = Some("State/InWorld".to_string());
+                    log("State: InWorld");
+                }
+                _ => {
+                    self.last_event = Some(format!("State/Other: {:?}", state_event));
+                    log(&format!("State event: {:?}", state_event));
+                }
+            },
+            gromnie::ScriptEvent::System(system_event) => match system_event {
+                gromnie::SystemEvent::AuthenticationSucceeded => {
+                    self.last_event = Some("System/AuthSucceeded".to_string());
+                    log("System: AuthenticationSucceeded");
+                }
+                gromnie::SystemEvent::LoginSucceeded(login_info) => {
+                    self.last_event = Some(format!("System/Login: {}", login_info.character_name));
+                    log(&format!(
+                        "System: LoginSucceeded - {} (ID: {})",
+                        login_info.character_name, login_info.character_id
+                    ));
+                }
+                _ => {
+                    self.last_event = Some(format!("System/Other: {:?}", system_event));
+                    log(&format!("System event: {:?}", system_event));
+                }
+            },
         }
     }
 
