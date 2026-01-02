@@ -174,6 +174,9 @@ impl EventConsumer for LoggingConsumer {
             } => {
                 error!(target: "events", "Character error (code {}): {}", error_code, error_message);
             }
+            GameEvent::CreatePlayer { character_id } => {
+                info!(target: "events", "CREATE PLAYER: Character ID {}", character_id);
+            }
         }
     }
 }
@@ -500,16 +503,19 @@ impl EventConsumer for DiscordConsumer {
             GameEvent::UpdatingStart => {}
             GameEvent::UpdatingDone => {}
             GameEvent::CharacterError {
-                error_code,
-                error_message,
+               error_code,
+               error_message,
             } => {
-                error!(target: "events", "Character error (code {}): {}", error_code, error_message);
+               error!(target: "events", "Character error (code {}): {}", error_code, error_message);
             }
-        }
-    }
-}
+            GameEvent::CreatePlayer { character_id } => {
+               debug!(target: "events", "CREATE PLAYER: Character ID {}", character_id);
+            }
+            }
+            }
+            }
 
-/// Consumer that collects statistics across clients for multi-client runs
+            /// Consumer that collects statistics across clients for multi-client runs
 pub struct StatsConsumer {
     client_id: u32,
     stats: Arc<MultiClientStats>,
