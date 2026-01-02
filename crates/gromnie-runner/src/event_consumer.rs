@@ -4,7 +4,7 @@ use tokio::sync::mpsc::UnboundedSender;
 use tracing::{debug, error, info};
 
 use crate::client_runner::MultiClientStats;
-use crate::event_bus::{EventEnvelope, EventType, ScriptEventType, SystemEvent};
+use crate::event_bus::{EventEnvelope, EventType, SystemEvent};
 use gromnie_events::{SimpleClientAction, SimpleGameEvent};
 use serenity::http::Http;
 use serenity::model::id::ChannelId;

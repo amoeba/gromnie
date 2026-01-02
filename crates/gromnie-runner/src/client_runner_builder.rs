@@ -411,9 +411,12 @@ impl ClientRunner {
         if let Some(ref app_config) = self.app_config {
             if app_config.scripting.enabled {
                 let event_sender = event_bus_manager.create_sender(config.id);
+                let script_dir = app_config.scripting.script_dir();
                 gromnie_scripting_host::setup_reload_signal_handler(move || {
                     let reload_event = EventEnvelope::system_event(
-                        SystemEvent::ReloadScripts,
+                        SystemEvent::ReloadScripts {
+                            script_dir: script_dir.clone(),
+                        },
                         0, // client_id (use 0 for system-wide events)
                         0, // sequence
                         EventSource::System,
@@ -446,20 +449,23 @@ impl ClientRunner {
         )
         .await;
 
+        // Create an adapter to convert SimpleClientAction to ClientAction
+        let simple_action_tx = crate::client_runner::create_simple_action_adapter(action_tx);
+
         // Send action_tx back if requested (for TUI)
         if let Some(ref sender) = self.action_channel {
-            let _ = sender.send(action_tx.clone());
+            let _ = sender.send(simple_action_tx.clone());
         }
 
-        // Create consumer context
+        // Create consumer context  - use default () config type 
         let ctx = ConsumerContext {
             client_id: config.id,
-            client_config: &config,
-            action_tx: action_tx.clone(),
+            client_config: &(),
+            action_tx: simple_action_tx.clone(),
         };
 
         // Create all consumers
-        let mut consumers: Vec<Box<dyn EventConsumer>> = self
+        let consumers: Vec<Box<dyn EventConsumer>> = self
             .consumers
             .iter()
             .map(|factory| factory.create(&ctx))
@@ -511,12 +517,12 @@ impl ClientRunner {
             fn create_consumer(
                 &self,
                 client_id: u32,
-                client_config: &ClientConfig,
+                _client_config: &ClientConfig,
                 action_tx: mpsc::UnboundedSender<SimpleClientAction>,
             ) -> Box<dyn EventConsumer> {
                 let ctx = ConsumerContext {
                     client_id,
-                    client_config,
+                    client_config: &(),
                     action_tx: action_tx.clone(),
                 };
 

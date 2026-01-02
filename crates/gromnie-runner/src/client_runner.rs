@@ -8,9 +8,61 @@ use crate::event_bus::{EventBus, EventEnvelope};
 use crate::event_consumer::EventConsumer;
 use crate::event_wrapper::EventWrapper;
 use gromnie_client::client::Client;
+use gromnie_client::client::types::ClientAction;
 
 // Re-export ClientConfig from gromnie-client
 pub use gromnie_client::config::ClientConfig;
+
+/// Adapter that converts SimpleClientAction to ClientAction and forwards to the internal channel
+pub fn create_simple_action_adapter(
+    client_action_tx: mpsc::UnboundedSender<ClientAction>,
+) -> mpsc::UnboundedSender<gromnie_events::SimpleClientAction> {
+    let (simple_tx, mut simple_rx) = mpsc::unbounded_channel::<gromnie_events::SimpleClientAction>();
+    
+    tokio::spawn(async move {
+        while let Some(simple_action) = simple_rx.recv().await {
+            let client_action = match simple_action {
+                gromnie_events::SimpleClientAction::SendChatSay { message: _ } => {
+                    // For now, we'll skip SendMessage variants since they require OutgoingMessageContent
+                    continue;
+                }
+                gromnie_events::SimpleClientAction::SendChatTell { .. } => {
+                    continue;
+                }
+                gromnie_events::SimpleClientAction::LoginCharacter {
+                    character_id,
+                    character_name,
+                    account,
+                } => ClientAction::LoginCharacter {
+                    character_id,
+                    character_name,
+                    account,
+                },
+                gromnie_events::SimpleClientAction::SendLoginComplete => {
+                    ClientAction::SendLoginComplete
+                }
+                gromnie_events::SimpleClientAction::Disconnect => ClientAction::Disconnect,
+                gromnie_events::SimpleClientAction::SendChatMessage { message: _ } => {
+                    // Skip chat for now
+                    continue;
+                }
+                gromnie_events::SimpleClientAction::ReloadScripts { script_dir } => {
+                    ClientAction::ReloadScripts { script_dir }
+                }
+                gromnie_events::SimpleClientAction::LogScriptMessage { script_id, message } => {
+                    ClientAction::LogScriptMessage { script_id, message }
+                }
+            };
+            
+            if let Err(e) = client_action_tx.send(client_action) {
+                error!("Failed to forward action to client: {}", e);
+                break;
+            }
+        }
+    });
+    
+    simple_tx
+}
 
 /// Configuration for running clients - either single or multi-client
 #[derive(Clone, Debug)]
@@ -315,8 +367,11 @@ pub async fn run_client<C, F>(
     )
     .await;
 
-    // Create the event consumer with the action_tx
-    let event_consumer = event_consumer_factory(action_tx);
+    // Create an adapter to convert SimpleClientAction to ClientAction
+    let simple_action_tx = create_simple_action_adapter(action_tx);
+
+    // Create the event consumer with the adapted action_tx
+    let event_consumer = event_consumer_factory(simple_action_tx);
 
     // Run the client with the event consumer
     run_client_internal(client, event_rx, Box::new(event_consumer), shutdown_rx).await;
@@ -357,8 +412,11 @@ pub async fn run_client_with_consumers<F>(
     )
     .await;
 
+    // Create an adapter to convert SimpleClientAction to ClientAction
+    let simple_action_tx = create_simple_action_adapter(action_tx);
+
     // Create all event consumers
-    let mut consumers = consumers_factory(action_tx);
+    let mut consumers = consumers_factory(simple_action_tx);
 
     // Create a shutdown sender that will be used to signal consumers to stop
     let shutdown_sender = event_bus_manager.create_sender(config.id);
@@ -376,7 +434,7 @@ pub async fn run_client_with_consumers<F>(
                         // Check if this is a shutdown event
                         if matches!(
                             &envelope.event,
-                            EventType::System(SystemEvent::Shutdown { .. })
+                            EventType::System(SystemEvent::Shutdown)
                         ) {
                             info!(target: "events", "Event consumer {} received shutdown signal", idx);
                             break;
@@ -404,9 +462,7 @@ pub async fn run_client_with_consumers<F>(
     // Send shutdown event to all consumers
     info!(target: "events", "Sending shutdown signal to consumers");
     let shutdown_event = EventEnvelope::system_event(
-        SystemEvent::Shutdown {
-            client_id: config.id,
-        },
+        SystemEvent::Shutdown,
         config.id,
         0,
         EventSource::System,
@@ -461,11 +517,14 @@ pub async fn run_client_with_action_channel<C, F>(
     )
     .await;
 
-    // Send the action_tx channel back to the caller (e.g., TUI)
-    let _ = action_tx_sender.send(action_tx.clone());
+    // Create an adapter to convert SimpleClientAction to ClientAction
+    let simple_action_tx = create_simple_action_adapter(action_tx);
 
-    // Create the event consumer with the action_tx
-    let event_consumer = event_consumer_factory(action_tx);
+    // Send the action_tx channel back to the caller (e.g., TUI)
+    let _ = action_tx_sender.send(simple_action_tx.clone());
+
+    // Create the event consumer with the adapted action_tx
+    let event_consumer = event_consumer_factory(simple_action_tx);
 
     // Run the client with the event consumer
     run_client_internal(
@@ -765,9 +824,12 @@ where
             // Mark that we successfully spawned this client
             stats.spawned.fetch_add(1, Ordering::SeqCst);
 
+            // Create an adapter to convert SimpleClientAction to ClientAction
+            let simple_action_tx = create_simple_action_adapter(action_tx);
+
             // Create the event consumer
             let event_consumer =
-                consumer_factory.create_consumer(client_config.id, &client_config, action_tx);
+                consumer_factory.create_consumer(client_config.id, &client_config, simple_action_tx);
 
             // Run the client
             run_client_internal(client, event_rx, event_consumer, Some(shutdown_rx)).await;
@@ -934,7 +996,10 @@ where
             )
             .await;
 
-            let event_consumer = consumer_builder.build(client.id, &client, action_tx);
+            // Create an adapter to convert SimpleClientAction to ClientAction
+            let simple_action_tx = create_simple_action_adapter(action_tx);
+
+            let event_consumer = consumer_builder.build(client.id, &client, simple_action_tx);
 
             run_client_internal(client_obj, event_rx, event_consumer, shutdown_rx).await;
 

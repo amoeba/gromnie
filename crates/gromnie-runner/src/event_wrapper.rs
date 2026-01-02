@@ -2,7 +2,7 @@ use std::sync::Arc;
 use tokio::sync::mpsc;
 
 use crate::event_bus::{
-    ClientStateEvent as RunnerClientStateEvent, EventContext, EventEnvelope, EventSource,
+    EventContext, EventEnvelope, EventSource,
     EventType, SystemEvent,
 };
 use gromnie_events::{ClientEvent, ClientSystemEvent};

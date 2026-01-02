@@ -1,5 +1,6 @@
 use crate::app::{App, GameScene};
-use gromnie_client::client::events::{CharacterInfo, ClientAction};
+use gromnie_events::CharacterInfo;
+use gromnie_client::client::types::ClientAction;
 
 // Character selection functions that belong with the character selection view
 impl App {

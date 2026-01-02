@@ -1,4 +1,8 @@
-use gromnie_client::client::events::{CharacterInfo, ClientAction, GameEvent};
+use gromnie_events::{CharacterInfo, SimpleGameEvent};
+use gromnie_client::client::types::ClientAction;
+
+// Type alias for backward compatibility
+pub type GameEvent = SimpleGameEvent;
 use std::collections::VecDeque;
 use tokio::sync::{broadcast, mpsc};
 
