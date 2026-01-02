@@ -1172,6 +1172,7 @@ dependencies = [
  "clap",
  "crossterm",
  "gromnie-client",
+ "gromnie-events",
  "gromnie-runner",
  "gromnie-scripting-host",
  "ratatui",
@@ -1194,6 +1195,7 @@ dependencies = [
  "clap",
  "crossterm",
  "directories",
+ "gromnie-events",
  "rand 0.8.5",
  "rand_isaac",
  "ratatui",
@@ -1214,7 +1216,7 @@ dependencies = [
 name = "gromnie-events"
 version = "0.1.0"
 dependencies = [
- "gromnie-client",
+ "serde",
  "tokio",
 ]
 
@@ -1271,6 +1273,7 @@ dependencies = [
  "clap",
  "crossterm",
  "gromnie-client",
+ "gromnie-events",
  "gromnie-runner",
  "gromnie-scripting-host",
  "ratatui",

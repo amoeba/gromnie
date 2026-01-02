@@ -3,8 +3,8 @@ use std::io::Cursor;
 use std::net::SocketAddr;
 
 use acprotocol::enums::{
-    AuthFlags, CharacterErrorType, FragmentGroup, GameAction, GameEvent as GameEventType,
-    PacketHeaderFlags, S2CMessage,
+    AuthFlags, CharacterErrorType, FragmentGroup, GameEvent as GameEventType, PacketHeaderFlags,
+    S2CMessage,
 };
 
 use acprotocol::gameactions::CharacterLoginCompleteNotification;
@@ -32,12 +32,12 @@ use tokio::net::UdpSocket;
 use tracing::{debug, error, info, warn};
 
 use crate::client::constants::*;
-use crate::client::events::{ClientAction, ClientEvent, ClientSystemEvent, GameEvent};
 use crate::client::game_event_handler::dispatch_game_event;
 use crate::client::game_event_handlers::{
     CommunicationHearDirectSpeech, CommunicationTransientString,
 };
 use crate::client::message_handler::dispatch_message;
+use crate::client::{ClientEvent, ClientSystemEvent, GameEvent};
 use crate::crypto::crypto_system::CryptoSystem;
 use crate::crypto::magic_number::get_magic_number;
 
@@ -142,14 +142,13 @@ pub struct Client {
     fragment_sequence: u32, // Counter for outgoing fragment sequences
     next_game_action_sequence: u32, // Sequence counter for GameAction messages
     session: Option<SessionState>,
-    login_timestamp: Option<std::time::Instant>, // Time when login was completed
-    pending_fragments: HashMap<u32, Fragment>,   // Track incomplete fragment sequences
-    message_queue: VecDeque<RawMessage>,         // Queue of parsed messages to process
+    pending_fragments: HashMap<u32, Fragment>, // Track incomplete fragment sequences
+    message_queue: VecDeque<RawMessage>,       // Queue of parsed messages to process
     pub(crate) outgoing_message_queue: VecDeque<OutgoingMessage>, // Queue of messages to send with optional delays
     pub(crate) raw_event_tx: mpsc::Sender<ClientEvent>,           // Raw event sender to runner
-    action_rx: mpsc::UnboundedReceiver<ClientAction>,             // Receive actions from handlers
-    pub(crate) ddd_response: Option<OutgoingMessageContent>,      // Cached DDD response for retries
-    pub(crate) known_characters: Vec<crate::client::events::CharacterInfo>, // Track characters from list and creation
+    action_rx: mpsc::UnboundedReceiver<gromnie_events::SimpleClientAction>, // Receive actions from handlers
+    pub(crate) ddd_response: Option<OutgoingMessageContent>, // Cached DDD response for retries
+    pub(crate) known_characters: Vec<crate::client::CharacterInfo>, // Track characters from list and creation
 }
 
 impl Client {
@@ -159,7 +158,10 @@ impl Client {
         name: String,
         password: String,
         raw_event_tx: mpsc::Sender<ClientEvent>, // Raw event sender to runner
-    ) -> (Client, mpsc::UnboundedSender<ClientAction>) {
+    ) -> (
+        Client,
+        mpsc::UnboundedSender<gromnie_events::SimpleClientAction>,
+    ) {
         let sok = UdpSocket::bind("0.0.0.0:0").await.unwrap();
 
         // Parse address to extract host and port
@@ -188,7 +190,6 @@ impl Client {
             fragment_sequence: 1,         // Start at 1 as per actestclient
             next_game_action_sequence: 0, // Start at 0 for GameAction sequences
             session: None,
-            login_timestamp: None, // Initialize to None
             pending_fragments: HashMap::new(),
             message_queue: VecDeque::new(),
             outgoing_message_queue: VecDeque::new(),
@@ -423,15 +424,14 @@ impl Client {
     /// Send a chat message to the server
     /// This sends a general chat message that will appear as a /say command
     /// TODO: Parse message for @tell, /say, /emote, etc. commands
-    fn send_chat_message(&mut self, message: String) {
-        info!(target: "net", "Sending chat message: {}", message);
+    fn send_chat_say(&mut self, message: String) {
+        info!(target: "net", "Sending chat say: {}", message);
 
         // Create OrderedGameAction with CommunicationTalk (for general chat)
         // This is the correct message type for general chat (equivalent to /say command)
         let mut message_data = Vec::new();
         {
             let mut cursor = Cursor::new(&mut message_data);
-            // Use CommunicationTalk for general chat messages (/say)
             use acprotocol::gameactions::CommunicationTalk;
             let action = GameActionMessage::CommunicationTalk(CommunicationTalk {
                 message: message.clone(),
@@ -448,7 +448,35 @@ impl Client {
         self.outgoing_message_queue.push_back(OutgoingMessage::new(
             OutgoingMessageContent::GameAction(message_data),
         ));
-        info!(target: "net", "Chat message queued for sending");
+        info!(target: "net", "Chat say message queued for sending");
+    }
+
+    fn send_chat_tell(&mut self, recipient_name: String, message: String) {
+        info!(target: "net", "Sending tell to '{}': {}", recipient_name, message);
+
+        // Create OrderedGameAction with CommunicationTalkDirectByName (for direct messages)
+        let mut message_data = Vec::new();
+        {
+            let mut cursor = Cursor::new(&mut message_data);
+            use acprotocol::gameactions::CommunicationTalkDirectByName;
+            let action =
+                GameActionMessage::CommunicationTalkDirectByName(CommunicationTalkDirectByName {
+                    message: message.clone(),
+                    target_name: recipient_name.clone(),
+                });
+            let msg = C2SMessage::OrderedGameAction {
+                sequence: self.next_game_action_sequence,
+                action,
+            };
+            self.next_game_action_sequence += 1;
+            msg.write(&mut cursor).expect("write failed");
+        }
+
+        // Queue for sending
+        self.outgoing_message_queue.push_back(OutgoingMessage::new(
+            OutgoingMessageContent::GameAction(message_data),
+        ));
+        info!(target: "net", "Chat tell message queued for sending");
     }
 
     /// Send a TimeSync packet to keep connection alive
@@ -607,12 +635,7 @@ impl Client {
         // Process all pending actions without blocking
         while let Ok(action) = self.action_rx.try_recv() {
             match action {
-                ClientAction::SendMessage(msg) => {
-                    debug!(target: "events", "Action: Enqueueing message from event handler");
-                    self.outgoing_message_queue
-                        .push_back(OutgoingMessage::new(*msg));
-                }
-                ClientAction::Disconnect => {
+                gromnie_events::SimpleClientAction::Disconnect => {
                     info!(target: "events", "Action: Disconnecting");
                     // Disconnect action - transition to Failed state
                     self.state = ClientState::Failed {
@@ -621,7 +644,7 @@ impl Client {
                         ),
                     };
                 }
-                ClientAction::LoginCharacter {
+                gromnie_events::SimpleClientAction::LoginCharacter {
                     character_id,
                     character_name,
                     account,
@@ -633,22 +656,29 @@ impl Client {
                         error!(target: "events", "Failed to attempt character login: {}", e);
                     }
                 }
-                ClientAction::SendLoginComplete => {
+                gromnie_events::SimpleClientAction::SendLoginComplete => {
                     debug!(target: "events", "Action: Sending LoginComplete notification to server");
                     self.send_login_complete_notification();
                 }
-                ClientAction::SendChatMessage { message } => {
-                    debug!(target: "events", "Action: Sending chat message: {}", message);
-                    self.send_chat_message(message);
+                gromnie_events::SimpleClientAction::SendChatSay { message } => {
+                    debug!(target: "events", "Action: Sending chat say: {}", message);
+                    self.send_chat_say(message);
                 }
-                ClientAction::ReloadScripts { script_dir } => {
+                gromnie_events::SimpleClientAction::SendChatTell {
+                    recipient_name,
+                    message,
+                } => {
+                    debug!(target: "events", "Action: Sending tell to {}: {}", recipient_name, message);
+                    self.send_chat_tell(recipient_name, message);
+                }
+                gromnie_events::SimpleClientAction::ReloadScripts { script_dir } => {
                     debug!(target: "events", "Action: Reloading scripts from {:?}", script_dir);
                     // Note: This action is handled by ScriptRunner, not here
                     // The client just forwards it via the event channel
                     // We shouldn't see this here, but handle it gracefully
                     warn!(target: "events", "ReloadScripts action received in Client - this should be handled by ScriptRunner");
                 }
-                ClientAction::LogScriptMessage { script_id, message } => {
+                gromnie_events::SimpleClientAction::LogScriptMessage { script_id, message } => {
                     info!(target: "script", "[{}] {}", script_id, message);
                 }
             }
@@ -953,13 +983,8 @@ impl Client {
             Ok(msg_type) => {
                 info!(target: "net", "Client got S2CMessage: {:?} (0x{:04X})", msg_type, message.opcode);
 
-                // Prepare an event for broadcast
-                let game_event = GameEvent::NetworkMessage {
-                    direction: crate::client::events::MessageDirection::Received,
-                    message_type: format!("{:?}", msg_type),
-                };
-                info!(target: "net", "Emitting NetworkMessage event: {:?} (0x{:04X})", msg_type, message.opcode);
-                let _ = event_tx.try_send(ClientEvent::Game(game_event));
+                // TODO: NetworkMessage event removed in simplified event model
+                // Could be added back to SimpleGameEvent if debug visibility is needed
 
                 match msg_type {
                     S2CMessage::OrderedGameEvent => {
@@ -968,12 +993,14 @@ impl Client {
                             let mut cursor = Cursor::new(&message.data[8..]); // Skip outer opcode + seq
                             match u32::read(&mut cursor) {
                                 Ok(event_opcode) => match GameEventType::try_from(event_opcode) {
-                                    Ok(event_type) => {
-                                        self.handle_game_event(event_type, message)
+                                    Ok(event_type) => self.handle_game_event(event_type, message),
+                                    Err(_) => {
+                                        debug!(target: "net", "Unknown game event opcode: 0x{:04X}", event_opcode)
                                     }
-                                    Err(_) => debug!(target: "net", "Unknown game event opcode: 0x{:04X}", event_opcode),
                                 },
-                                Err(e) => error!(target: "net", "Failed to read game event opcode: {}", e),
+                                Err(e) => {
+                                    error!(target: "net", "Failed to read game event opcode: {}", e)
+                                }
                             }
                         } else {
                             error!(target: "net", "Game event message too short");
@@ -1045,21 +1072,6 @@ impl Client {
         }
     }
 
-    /// Handle game action messages
-    /// TODO: Do we need this here?
-    fn handle_game_action(&mut self, action: GameAction, message: RawMessage) {
-        debug!(target: "net", "Processing game action: {:?}", action);
-
-        match action {
-            GameAction::CharacterLoginCompleteNotification => {
-                self.handle_login_complete(message);
-            }
-            _ => {
-                warn!(target: "net", "Unhandled GameAction: {:?} (0x{:02X})", action, message.opcode);
-            }
-        }
-    }
-
     /// Handle OrderedGameEvent (0xF7B0) messages
     fn handle_game_event(&mut self, event_type: GameEventType, message: RawMessage) {
         info!(target: "net", "Processing OrderedGameEvent message, data len={}", message.data.len());
@@ -1089,28 +1101,6 @@ impl Client {
                 debug!(target: "net", "Unhandled GameEvent: {:?}", event_type);
             }
         }
-    }
-
-    /// Handle LoginComplete notification from the server
-    fn handle_login_complete(&mut self, _message: RawMessage) {
-        debug!(target: "net", "Processing login complete notification");
-
-        // Update character login state
-        self.character_login_state = CharacterLoginState::Succeeded;
-
-        // Set the login timestamp for delayed message sending
-        self.login_timestamp = Some(std::time::Instant::now());
-
-        info!(target: "net", "Login completed successfully!");
-
-        // Emit event to broadcast channel
-        let game_event = GameEvent::LoginSucceeded {
-            character_id: 0,                       // TODO: Parse this from message if available
-            character_name: "Unknown".to_string(), // TODO: Parse this from message if available
-        };
-
-        // Send on channel (ignore error if no subscribers)
-        let _ = self.raw_event_tx.try_send(ClientEvent::Game(game_event));
     }
 
     /// Handle LoginEnterGameServerReady (0xF7DF) - Step 2 of character login

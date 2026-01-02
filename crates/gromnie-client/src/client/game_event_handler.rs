@@ -2,7 +2,7 @@ use acprotocol::readers::{ACDataType, ACReader};
 use tokio::sync::mpsc;
 use tracing::error;
 
-use crate::client::events::{ClientEvent, GameEvent};
+use crate::client::{ClientEvent, GameEvent};
 
 /// Trait for handling a specific parsed game event type.
 ///

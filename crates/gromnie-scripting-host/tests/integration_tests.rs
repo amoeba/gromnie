@@ -1,6 +1,6 @@
 // Integration tests for the scripting system
 
-use gromnie_client::client::events::GameEvent;
+use gromnie_events::SimpleGameEvent as GameEvent;
 use gromnie_scripting_host::ScriptRunner;
 use std::collections::HashMap;
 use std::path::Path;
@@ -82,7 +82,7 @@ async fn test_event_handling() {
 
     // Process events
     for event in test_events {
-        runner.handle_event(gromnie_client::client::events::ClientEvent::Game(event));
+        runner.handle_event(gromnie_events::ClientEvent::Game(event));
     }
 
     // Give scripts time to process (in real scenario, we'd check actions)
@@ -113,7 +113,7 @@ async fn test_timer_functionality() {
             message_type: 1,
         };
 
-        runner.handle_event(gromnie_client::client::events::ClientEvent::Game(event));
+        runner.handle_event(gromnie_events::ClientEvent::Game(event));
 
         // Small delay to allow timers to progress
         tokio::time::sleep(Duration::from_millis(50)).await;
@@ -162,7 +162,7 @@ async fn test_host_function_calls() {
         message_type: 1,
     };
 
-    runner.handle_event(gromnie_client::client::events::ClientEvent::Game(event));
+    runner.handle_event(gromnie_events::ClientEvent::Game(event));
 
     // Check if scripts generated any actions
     let mut action_count = 0;

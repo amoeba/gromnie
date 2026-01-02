@@ -1,4 +1,7 @@
-use gromnie_client::client::events::{CharacterInfo, ClientAction, GameEvent};
+use gromnie_events::{CharacterInfo, SimpleClientAction, SimpleGameEvent};
+
+// Type alias for backward compatibility
+pub type GameEvent = SimpleGameEvent;
 use std::collections::VecDeque;
 use tokio::sync::{broadcast, mpsc};
 
@@ -84,7 +87,7 @@ pub struct App {
     pub network_messages: VecDeque<NetworkMessage>,
     pub max_network_messages: usize,
     pub event_rx: Option<broadcast::Receiver<GameEvent>>,
-    pub action_tx: Option<mpsc::UnboundedSender<ClientAction>>,
+    pub action_tx: Option<mpsc::UnboundedSender<SimpleClientAction>>,
     /// Currently selected character index in the character list
     pub selected_character_index: usize,
     /// Chat messages received from the server
@@ -137,7 +140,7 @@ impl App {
     pub fn set_channels(
         &mut self,
         event_rx: broadcast::Receiver<GameEvent>,
-        action_tx: mpsc::UnboundedSender<ClientAction>,
+        action_tx: mpsc::UnboundedSender<SimpleClientAction>,
     ) {
         self.event_rx = Some(event_rx);
         self.action_tx = Some(action_tx);
@@ -228,24 +231,7 @@ impl App {
                     timestamp: chrono::Utc::now(),
                 });
             }
-            GameEvent::DDDInterrogation { language, region } => {
-                // Mark that we received DDD interrogation
-                if let GameScene::Logging { authenticated, .. } = self.game_scene {
-                    self.game_scene = GameScene::Logging {
-                        authenticated,
-                        ddd_received: true,
-                    };
-                }
 
-                self.add_network_message(NetworkMessage::Received {
-                    opcode: "0xF758".to_string(),
-                    description: format!(
-                        "DDD Interrogation (lang={}, region={})",
-                        language, region
-                    ),
-                    timestamp: chrono::Utc::now(),
-                });
-            }
             GameEvent::LoginSucceeded {
                 character_id,
                 character_name,
@@ -301,7 +287,7 @@ impl App {
                         && created_objects.len() == 1
                         && let Some(ref tx) = self.action_tx
                     {
-                        let _ = tx.send(ClientAction::SendLoginComplete);
+                        let _ = tx.send(SimpleClientAction::SendLoginComplete);
                     }
                 }
 
@@ -328,70 +314,13 @@ impl App {
                     timestamp: chrono::Utc::now(),
                 });
             }
-            GameEvent::NetworkMessage {
-                direction,
-                message_type,
-            } => {
-                // Add all network messages to the debug view
-                use gromnie_client::client::events::MessageDirection;
-                match direction {
-                    MessageDirection::Received => {
-                        self.add_network_message(NetworkMessage::Received {
-                            opcode: "".to_string(),
-                            description: message_type,
-                            timestamp: chrono::Utc::now(),
-                        });
-                    }
-                    MessageDirection::Sent => {
-                        self.add_network_message(NetworkMessage::Sent {
-                            opcode: "".to_string(),
-                            description: message_type,
-                            timestamp: chrono::Utc::now(),
-                        });
-                    }
-                }
-            }
             GameEvent::ConnectingSetProgress { progress } => {
                 self.connecting_progress = progress.clamp(0.0, 1.0);
             }
             GameEvent::UpdatingSetProgress { progress } => {
                 self.updating_progress = progress.clamp(0.0, 1.0);
             }
-            GameEvent::ConnectingStart => {
-                // Could add any connecting start logic here
-            }
-            GameEvent::ConnectingDone => {
-                // Could add any connecting done logic here
-            }
-            GameEvent::UpdatingStart => {
-                // Could add any updating start logic here
-            }
-            GameEvent::UpdatingDone => {
-                // Could add any updating done logic here
-            }
-            GameEvent::AuthenticationSucceeded => {
-                // Mark that authentication succeeded (received ConnectRequest)
-                if let GameScene::Logging { ddd_received, .. } = self.game_scene {
-                    self.game_scene = GameScene::Logging {
-                        authenticated: true,
-                        ddd_received,
-                    };
-                }
-                self.client_status.connected = true;
 
-                self.add_network_message(NetworkMessage::Received {
-                    opcode: "CONNECT".to_string(),
-                    description: "Authentication succeeded - ConnectRequest received".to_string(),
-                    timestamp: chrono::Utc::now(),
-                });
-            }
-            GameEvent::AuthenticationFailed { reason } => {
-                self.add_network_message(NetworkMessage::Received {
-                    opcode: "ERROR".to_string(),
-                    description: format!("Authentication failed: {}", reason),
-                    timestamp: chrono::Utc::now(),
-                });
-            }
             GameEvent::CreatePlayer { character_id } => {
                 self.add_network_message(NetworkMessage::Received {
                     opcode: "0xF7B0".to_string(),

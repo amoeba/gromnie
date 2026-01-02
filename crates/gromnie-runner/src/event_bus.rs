@@ -66,12 +66,12 @@ impl EventBus {
 /// This allows the TUI to receive all types of events
 #[derive(Debug, Clone)]
 pub enum TuiEvent {
-    Game(gromnie_client::client::events::GameEvent),
+    Game(gromnie_events::SimpleGameEvent),
     System(SystemEvent),
 }
 
-impl From<gromnie_client::client::events::GameEvent> for TuiEvent {
-    fn from(event: gromnie_client::client::events::GameEvent) -> Self {
+impl From<gromnie_events::SimpleGameEvent> for TuiEvent {
+    fn from(event: gromnie_events::SimpleGameEvent) -> Self {
         TuiEvent::Game(event)
     }
 }

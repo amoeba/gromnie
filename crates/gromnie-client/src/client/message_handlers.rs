@@ -8,9 +8,9 @@ use tracing::{error, info};
 
 use crate::client::client::CharacterLoginState;
 use crate::client::constants::UI_DELAY_MS;
-use crate::client::events::{CharacterInfo, ClientEvent, GameEvent};
 use crate::client::message_handler::MessageHandler;
 use crate::client::messages::{OutgoingMessage, OutgoingMessageContent};
+use crate::client::{CharacterInfo, ClientEvent, GameEvent};
 use crate::client::{Client, ClientState, PatchingProgress};
 
 /// Handle LoginCreatePlayer messages

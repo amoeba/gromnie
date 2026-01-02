@@ -1,10 +1,10 @@
-use std::io::Cursor;
 use acprotocol::network::RawMessage;
 use acprotocol::readers::ACDataType;
+use std::io::Cursor;
 use tokio::sync::mpsc;
 use tracing::error;
 
-use crate::client::events::{ClientEvent, GameEvent};
+use crate::client::{ClientEvent, GameEvent};
 
 /// Trait for handling a specific parsed message type.
 ///

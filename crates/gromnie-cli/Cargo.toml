@@ -23,6 +23,7 @@ path = "src/bin/load-tester.rs"
 clap.workspace = true
 crossterm.workspace = true
 gromnie-client = { path = "../gromnie-client" }
+gromnie-events = { path = "../gromnie-events" }
 gromnie-runner = { path = "../gromnie-runner" }
 gromnie-scripting-host = { path = "../gromnie-scripting-host", optional = true }
 ratatui.workspace = true
