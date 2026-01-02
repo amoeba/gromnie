@@ -1211,13 +1211,24 @@ dependencies = [
 ]
 
 [[package]]
+name = "gromnie-events"
+version = "0.1.0"
+dependencies = [
+ "gromnie-client",
+ "tokio",
+]
+
+[[package]]
 name = "gromnie-runner"
 version = "0.1.0"
 dependencies = [
  "acprotocol",
  "chrono",
  "gromnie-client",
+ "gromnie-events",
+ "gromnie-scripting-host",
  "serenity",
+ "thiserror 2.0.17",
  "tokio",
  "tracing",
 ]
@@ -1236,7 +1247,7 @@ dependencies = [
  "anyhow",
  "directories",
  "gromnie-client",
- "gromnie-runner",
+ "gromnie-events",
  "gromnie-scripting-api",
  "tokio",
  "toml",

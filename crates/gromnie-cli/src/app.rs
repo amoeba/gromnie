@@ -3,7 +3,7 @@ use ratatui::prelude::Backend;
 use ratatui::{Frame, Terminal};
 use std::error::Error;
 
-use gromnie_client::config::Config;
+use gromnie_client::config::GromnieConfig;
 
 use super::draw::Draw;
 use super::wizards::{ConfigWizard, ConfigWizardStage, LaunchWizard, WizardStage};
@@ -29,7 +29,7 @@ impl App {
         }
     }
 
-    pub fn new_with_config(config: Config) -> Self {
+    pub fn new_with_config(config: GromnieConfig) -> Self {
         Self {
             app_screen: AppScreen::Launch,
             launch_wizard: Some(LaunchWizard::new(config)),

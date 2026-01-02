@@ -12,11 +12,8 @@ wit_bindgen::generate!({
     world: "script",
 });
 
-// Re-export the main types that scripts will use
 pub use self::exports::gromnie::scripting::guest::Guest;
 pub use self::gromnie::scripting::host as host_interface;
-
-// Expose the raw generated module structure for direct imports
 pub use self::gromnie::scripting::host;
 
 /// Trait for WASM script implementations
@@ -97,73 +94,63 @@ pub trait WasmScript: Send + 'static {
     fn on_tick(&mut self, delta_millis: u64);
 }
 
-// Storage for script implementation (WASM is single-threaded)
-#[doc(hidden)]
-pub static mut SCRIPT_IMPL: Option<Box<dyn WasmScript>> = None;
+// Only compile this code when building for WASM targets or running tests
+// This prevents linker errors when this crate is used as a dependency in non-WASM builds
+#[cfg(any(target_family = "wasm", test))]
+mod script_impl {
+    use super::*;
 
-#[doc(hidden)]
-pub fn register_script_impl(build_script: fn() -> Box<dyn WasmScript>) {
-    unsafe {
-        SCRIPT_IMPL = Some((build_script)());
+    // Storage for script implementation (WASM is single-threaded)
+    #[doc(hidden)]
+    pub(super) static mut SCRIPT_IMPL: Option<Box<dyn WasmScript>> = None;
+
+    // This function is defined by the register_script! macro
+    // It will be defined in user code and linked into the WASM module
+    unsafe extern "Rust" {
+        fn __gromnie_script_constructor() -> Box<dyn WasmScript>;
     }
-}
 
-#[doc(hidden)]
-pub static mut SCRIPT_INIT_FN: Option<fn() -> Box<dyn WasmScript>> = None;
-
-/// Initialize the script if not already initialized
-#[doc(hidden)]
-pub fn init_script() {
-    #[expect(static_mut_refs)]
-    unsafe {
-        // Initialize lazily if needed - SCRIPT_INIT_FN is set by register_script! at compile time
-        if SCRIPT_IMPL.is_none()
-            && let Some(init_fn) = SCRIPT_INIT_FN
-        {
-            SCRIPT_IMPL = Some((init_fn)());
-        }
-    }
-}
-
-fn script() -> &'static mut dyn WasmScript {
-    #[expect(static_mut_refs)]
-    unsafe {
-        // Initialize lazily if needed - SCRIPT_INIT_FN is set by register_script! at compile time
-        if SCRIPT_IMPL.is_none() {
-            if let Some(init_fn) = SCRIPT_INIT_FN {
-                SCRIPT_IMPL = Some((init_fn)());
-            } else {
-                panic!("Script not initialized. Did you call register_script! macro?");
+    #[doc(hidden)]
+    pub(super) fn ensure_initialized() {
+        #[expect(static_mut_refs)]
+        unsafe {
+            if SCRIPT_IMPL.is_none() {
+                SCRIPT_IMPL = Some(__gromnie_script_constructor());
             }
         }
-        SCRIPT_IMPL
-            .as_deref_mut()
-            .expect("Script implementation is missing")
+    }
+
+    #[doc(hidden)]
+    pub(super) fn script() -> &'static mut dyn WasmScript {
+        ensure_initialized();
+
+        #[expect(static_mut_refs)]
+        unsafe {
+            SCRIPT_IMPL
+                .as_deref_mut()
+                .expect("Script implementation missing")
+        }
     }
 }
 
+#[cfg(any(target_family = "wasm", test))]
+use script_impl::{ensure_initialized, script};
+
 // Implement Guest trait to bridge to user's Script
+// Only export this when building for WASM or tests
+#[cfg(any(target_family = "wasm", test))]
 export!(ScriptComponent);
 
+#[cfg(any(target_family = "wasm", test))]
 struct ScriptComponent;
 
+#[cfg(any(target_family = "wasm", test))]
 impl Guest for ScriptComponent {
     fn init() {
-        // Initialize script on first call
-        // Call the macro-generated init function if it exists
-        unsafe extern "C" {
-            #[link_name = "init-script"]
-            fn __call_init_script();
-        }
-
-        unsafe {
-            __call_init_script();
-        }
+        ensure_initialized();
     }
 
     fn get_id() -> String {
-        // Initialize script if needed (lazy initialization)
-        init_script();
         script().id().to_string()
     }
 
@@ -223,26 +210,87 @@ impl Guest for ScriptComponent {
 #[macro_export]
 macro_rules! register_script {
     ($script_type:ty) => {
-        // Store the constructor function in a module-level function
         #[doc(hidden)]
+        #[unsafe(no_mangle)]
         pub fn __gromnie_script_constructor() -> ::std::boxed::Box<dyn $crate::bindings::WasmScript>
         {
             ::std::boxed::Box::new(<$script_type as $crate::bindings::WasmScript>::new())
         }
-
-        // Export a function the host can call to set up initialization
-        #[doc(hidden)]
-        #[unsafe(export_name = "init-script")]
-        pub extern "C" fn __init_script() {
-            #[expect(unsafe_op_in_unsafe_fn)]
-            unsafe {
-                // Set up the init function on first call
-                if $crate::bindings::SCRIPT_INIT_FN.is_none() {
-                    $crate::bindings::SCRIPT_INIT_FN = Some(__gromnie_script_constructor);
-                }
-                // Perform initialization
-                $crate::bindings::init_script();
-            }
-        }
     };
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    struct TestScript {
+        load_count: usize,
+    }
+
+    impl WasmScript for TestScript {
+        fn new() -> Self {
+            TestScript { load_count: 0 }
+        }
+
+        fn id(&self) -> &str {
+            "test_script"
+        }
+
+        fn name(&self) -> &str {
+            "Test Script"
+        }
+
+        fn description(&self) -> &str {
+            "A test script for unit testing"
+        }
+
+        fn on_load(&mut self) {
+            self.load_count += 1;
+        }
+
+        fn on_unload(&mut self) {}
+
+        fn subscribed_events(&self) -> Vec<u32> {
+            vec![1, 2, 3]
+        }
+
+        fn on_event(&mut self, _event: host::GameEvent) {}
+
+        fn on_tick(&mut self, _delta_millis: u64) {}
+    }
+
+    // Register the test script to provide __gromnie_script_constructor during tests
+    register_script!(TestScript);
+
+    #[test]
+    fn test_script_initialization() {
+        // Call ensure_initialized to trigger script creation
+        ensure_initialized();
+
+        // Verify the script was created and can be accessed
+        let s = script();
+        assert_eq!(s.id(), "test_script");
+        assert_eq!(s.name(), "Test Script");
+        assert_eq!(s.description(), "A test script for unit testing");
+    }
+
+    #[test]
+    fn test_script_subscribed_events() {
+        let s = script();
+        let events = s.subscribed_events();
+        assert_eq!(events, vec![1, 2, 3]);
+    }
+
+    #[test]
+    fn test_guest_implementation() {
+        // Test the Guest trait implementation
+        ScriptComponent::init();
+        assert_eq!(ScriptComponent::get_id(), "test_script");
+        assert_eq!(ScriptComponent::get_name(), "Test Script");
+        assert_eq!(
+            ScriptComponent::get_description(),
+            "A test script for unit testing"
+        );
+        assert_eq!(ScriptComponent::subscribed_events(), vec![1, 2, 3]);
+    }
 }

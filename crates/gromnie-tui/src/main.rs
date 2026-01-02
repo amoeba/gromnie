@@ -1,10 +1,9 @@
 use clap::Parser;
-use std::sync::Arc;
 use tracing::{error, info};
 use tracing_subscriber::EnvFilter;
 
 use gromnie_client::client::events::ClientAction;
-use gromnie_runner::{ClientConfig, EventBusManager, TuiConsumer, TuiEvent};
+use gromnie_runner::{ClientConfig, ClientRunner, TuiConsumer, TuiEvent};
 use gromnie_tui::{App, event_handler::EventHandler, ui::try_init_tui};
 
 #[derive(Parser)]
@@ -76,16 +75,18 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         password: cli.password,
     };
 
-    let event_bus_manager = Arc::new(EventBusManager::new(100));
-
     // Spawn client task using the runner module
-    let mut client_handle = tokio::spawn(gromnie_runner::run_client_with_action_channel(
-        config,
-        event_bus_manager,
-        |action_tx| TuiConsumer::new(action_tx.clone(), client_event_tx),
-        action_tx_channel,
-        shutdown_rx,
-    ));
+    let runner = ClientRunner::builder()
+        .with_clients(config)
+        .with_consumer(TuiConsumer::from_factory(client_event_tx))
+        .with_action_channel(action_tx_channel)
+        .with_shutdown(shutdown_rx)
+        .build()
+        .expect("Failed to build client runner");
+
+    let mut client_handle = tokio::spawn(async move {
+        runner.run().await;
+    });
 
     // Wait for the action_tx channel from the client task (with timeout)
     match tokio::time::timeout(tokio::time::Duration::from_secs(5), action_tx_rx.recv()).await {

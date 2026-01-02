@@ -3,12 +3,23 @@ resolver = "2"
 members = [
   "crates/gromnie-cli",
   "crates/gromnie-client",
+  "crates/gromnie-events",
   "crates/gromnie-runner",
   "crates/gromnie-scripting-api",
   "crates/gromnie-scripting-host",
   "crates/gromnie-tui",
   "crates/xtask",
   "tests/scripting"
+]
+default-members = [
+  "crates/gromnie-cli",
+  "crates/gromnie-client",
+  "crates/gromnie-events",
+  "crates/gromnie-runner",
+  "crates/gromnie-scripting-api",
+  "crates/gromnie-scripting-host",
+  "crates/gromnie-tui",
+  "crates/xtask"
 ]
 
 [workspace.package]
