@@ -32,7 +32,7 @@ use tokio::net::UdpSocket;
 use tracing::{debug, error, info, warn};
 
 use crate::client::constants::*;
-use crate::client::events::{ClientAction, ClientEvent, ClientSystemEvent, GameEvent};
+use crate::client::{ClientAction, ClientEvent, ClientSystemEvent, GameEvent};
 use crate::client::game_event_handler::dispatch_game_event;
 use crate::client::game_event_handlers::{
     CommunicationHearDirectSpeech, CommunicationTransientString,
@@ -149,7 +149,7 @@ pub struct Client {
     pub(crate) raw_event_tx: mpsc::Sender<ClientEvent>,           // Raw event sender to runner
     action_rx: mpsc::UnboundedReceiver<ClientAction>,             // Receive actions from handlers
     pub(crate) ddd_response: Option<OutgoingMessageContent>,      // Cached DDD response for retries
-    pub(crate) known_characters: Vec<crate::client::events::CharacterInfo>, // Track characters from list and creation
+    pub(crate) known_characters: Vec<crate::client::CharacterInfo>, // Track characters from list and creation
 }
 
 impl Client {
@@ -953,13 +953,8 @@ impl Client {
             Ok(msg_type) => {
                 info!(target: "net", "Client got S2CMessage: {:?} (0x{:04X})", msg_type, message.opcode);
 
-                // Prepare an event for broadcast
-                let game_event = GameEvent::NetworkMessage {
-                    direction: crate::client::events::MessageDirection::Received,
-                    message_type: format!("{:?}", msg_type),
-                };
-                info!(target: "net", "Emitting NetworkMessage event: {:?} (0x{:04X})", msg_type, message.opcode);
-                let _ = event_tx.try_send(ClientEvent::Game(game_event));
+                // TODO: NetworkMessage event removed in simplified event model
+                // Could be added back to SimpleGameEvent if debug visibility is needed
 
                 match msg_type {
                     S2CMessage::OrderedGameEvent => {

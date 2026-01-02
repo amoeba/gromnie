@@ -7,7 +7,7 @@
 use tracing::info;
 
 use acprotocol::readers::{ACDataType, ACReader};
-use crate::client::events::GameEvent;
+use crate::client::GameEvent;
 use crate::client::game_event_handler::GameEventHandler;
 use crate::client::Client;
 

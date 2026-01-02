@@ -5,7 +5,7 @@ use crate::event_bus::{
     ClientStateEvent as RunnerClientStateEvent, EventContext, EventEnvelope, EventSource,
     EventType, SystemEvent,
 };
-use gromnie_client::client::events::{ClientEvent, ClientSystemEvent};
+use gromnie_events::{ClientEvent, ClientSystemEvent};
 
 /// Wraps raw events from client and enriches them with context
 pub struct EventWrapper {
@@ -44,26 +44,7 @@ impl EventWrapper {
 
         let event = match raw {
             ClientEvent::Game(game) => EventType::Game(game),
-            ClientEvent::State(state) => {
-                // Convert client state event to runner state event
-                match state {
-                    gromnie_client::client::events::ClientStateEvent::StateTransition {
-                        from,
-                        to,
-                        client_id,
-                    } => EventType::State(RunnerClientStateEvent::StateTransition {
-                        from,
-                        to,
-                        client_id,
-                    }),
-                    gromnie_client::client::events::ClientStateEvent::ClientFailed {
-                        reason,
-                        client_id,
-                    } => {
-                        EventType::State(RunnerClientStateEvent::ClientFailed { reason, client_id })
-                    }
-                }
-            }
+            ClientEvent::State(state) => EventType::State(state),
             ClientEvent::System(sys) => EventType::System(self.convert_system_event(sys)),
         };
 

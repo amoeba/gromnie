@@ -47,7 +47,7 @@ pub trait Script: Send + 'static {
     /// Handle an event that matches one of the subscribed filters
     fn on_event(
         &mut self,
-        event: &gromnie_client::client::events::GameEvent,
+        event: &gromnie_events::SimpleGameEvent,
         ctx: &mut ScriptContext,
     );
 
@@ -78,8 +78,8 @@ pub enum EventFilter {
 
 impl EventFilter {
     /// Check if this filter matches the given event
-    pub fn matches(&self, event: &gromnie_client::client::events::GameEvent) -> bool {
-        use gromnie_client::client::events::GameEvent;
+    pub fn matches(&self, event: &gromnie_events::SimpleGameEvent) -> bool {
+        use gromnie_events::SimpleGameEvent as GameEvent;
 
         match self {
             EventFilter::All => true,
