@@ -94,43 +94,57 @@ pub trait WasmScript: Send + 'static {
     fn on_tick(&mut self, delta_millis: u64);
 }
 
-// Storage for script implementation (WASM is single-threaded)
-#[doc(hidden)]
-static mut SCRIPT_IMPL: Option<Box<dyn WasmScript>> = None;
+// Only compile this code when building for WASM targets or running tests
+// This prevents linker errors when this crate is used as a dependency in non-WASM builds
+#[cfg(any(target_family = "wasm", test))]
+mod script_impl {
+    use super::*;
 
-// This function is defined by the register_script! macro
-// It will be defined in user code and linked into the WASM module
-unsafe extern "Rust" {
-    fn __gromnie_script_constructor() -> Box<dyn WasmScript>;
-}
+    // Storage for script implementation (WASM is single-threaded)
+    #[doc(hidden)]
+    pub(super) static mut SCRIPT_IMPL: Option<Box<dyn WasmScript>> = None;
 
-#[doc(hidden)]
-fn ensure_initialized() {
-    #[expect(static_mut_refs)]
-    unsafe {
-        if SCRIPT_IMPL.is_none() {
-            SCRIPT_IMPL = Some(__gromnie_script_constructor());
+    // This function is defined by the register_script! macro
+    // It will be defined in user code and linked into the WASM module
+    unsafe extern "Rust" {
+        fn __gromnie_script_constructor() -> Box<dyn WasmScript>;
+    }
+
+    #[doc(hidden)]
+    pub(super) fn ensure_initialized() {
+        #[expect(static_mut_refs)]
+        unsafe {
+            if SCRIPT_IMPL.is_none() {
+                SCRIPT_IMPL = Some(__gromnie_script_constructor());
+            }
+        }
+    }
+
+    #[doc(hidden)]
+    pub(super) fn script() -> &'static mut dyn WasmScript {
+        ensure_initialized();
+
+        #[expect(static_mut_refs)]
+        unsafe {
+            SCRIPT_IMPL
+                .as_deref_mut()
+                .expect("Script implementation missing")
         }
     }
 }
 
-#[doc(hidden)]
-fn script() -> &'static mut dyn WasmScript {
-    ensure_initialized();
-
-    #[expect(static_mut_refs)]
-    unsafe {
-        SCRIPT_IMPL
-            .as_deref_mut()
-            .expect("Script implementation missing")
-    }
-}
+#[cfg(any(target_family = "wasm", test))]
+use script_impl::{ensure_initialized, script};
 
 // Implement Guest trait to bridge to user's Script
+// Only export this when building for WASM or tests
+#[cfg(any(target_family = "wasm", test))]
 export!(ScriptComponent);
 
+#[cfg(any(target_family = "wasm", test))]
 struct ScriptComponent;
 
+#[cfg(any(target_family = "wasm", test))]
 impl Guest for ScriptComponent {
     fn init() {
         ensure_initialized();
