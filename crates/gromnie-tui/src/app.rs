@@ -392,6 +392,13 @@ impl App {
                     timestamp: chrono::Utc::now(),
                 });
             }
+            GameEvent::CreatePlayer { character_id } => {
+                self.add_network_message(NetworkMessage::Received {
+                    opcode: "0xF7B0".to_string(),
+                    description: format!("CreatePlayer: Character ID {}", character_id),
+                    timestamp: chrono::Utc::now(),
+                });
+            }
         }
     }
 
