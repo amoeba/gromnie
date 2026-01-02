@@ -511,7 +511,7 @@ pub(crate) async fn run_client_internal(
 
     // Wait for event handler task to finish with a timeout
     info!(target: "events", "Waiting for event handler task to finish");
-    let timeout = tokio::time::Duration::from_millis(100);
+    let timeout = tokio::time::Duration::from_secs(1);
     match tokio::time::timeout(timeout, event_task).await {
         Ok(Ok(())) => {
             info!(target: "events", "Event handler task finished gracefully");
