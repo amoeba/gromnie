@@ -1,7 +1,7 @@
 use gromnie_client::config::scripting_config::ScriptingConfig;
 use std::collections::HashMap;
 use std::time::{Duration, Instant};
-use tokio::sync::{mpsc::UnboundedSender, watch};
+use tokio::sync::mpsc::UnboundedSender;
 use tracing::{debug, error, info};
 
 use super::context::ScriptContext;
@@ -124,32 +124,66 @@ impl ScriptRunner {
         dir: &std::path::Path,
         script_config: &HashMap<String, toml::Value>,
     ) {
+        debug!(target: "scripting", "Loading scripts from {}", dir.display());
+
         let Some(ref engine) = self.wasm_engine else {
-            debug!(target: "scripting", "Script engine not available, skipping script loading");
+            tracing::warn!(target: "scripting", "Script engine not available, skipping script loading");
             return;
         };
 
         let scripts = super::wasm::load_wasm_scripts(engine, dir, script_config);
 
         for script in scripts {
+            debug!(target: "scripting", "Registering script: {} ({})", script.name(), script.id());
             self.register_script(script);
+        }
+
+        if self.scripts.len() > 0 {
+            info!(target: "scripting", "Loaded {} script(s)", self.scripts.len());
         }
     }
 
     /// Reload scripts (for hot-reload)
     /// This unloads all existing scripts and loads new ones from the directory
+    /// If reload fails and no scripts are loaded, this will warn but continue with no scripts
     pub fn reload_scripts(
         &mut self,
         dir: &std::path::Path,
         script_config: &HashMap<String, toml::Value>,
     ) {
+        let old_script_count = self.scripts.len();
         debug!(target: "scripting", "Reloading scripts from {}", dir.display());
 
         // Unload existing scripts
         self.unload_scripts();
 
+        // Force drop of any remaining script resources by clearing the vector
+        self.scripts.clear();
+        self.scripts.shrink_to_fit();
+
+        // Give the system a moment to fully release WASM/WASI resources
+        // This is important because wasmtime stores might not be immediately dropped
+        std::thread::sleep(std::time::Duration::from_millis(100));
+
         // Load new ones
         self.load_scripts(dir, script_config);
+
+        let new_script_count = self.scripts.len();
+
+        // Warn if we went from having scripts to having none
+        if old_script_count > 0 && new_script_count == 0 {
+            tracing::warn!(
+                target: "scripting",
+                "Script reload resulted in zero scripts (was {}). Check logs for loading errors.",
+                old_script_count
+            );
+        } else if new_script_count > 0 {
+            info!(
+                target: "scripting",
+                "Reloaded {} script(s)",
+                new_script_count
+            );
+        }
     }
 
     /// Unload all scripts
@@ -157,6 +191,14 @@ impl ScriptRunner {
     /// This method unloads all scripts by calling their on_unload methods.
     /// The system only supports WASM scripts, so all scripts are WASM scripts.
     pub fn unload_scripts(&mut self) {
+        let count = self.scripts.len();
+
+        if count == 0 {
+            return;
+        }
+
+        debug!(target: "scripting", "Unloading {} script(s)", count);
+
         // Create context once before the loop
         let mut ctx = Self::create_script_context(
             self.action_tx.clone(),
@@ -164,21 +206,14 @@ impl ScriptRunner {
             Instant::now(),
         );
 
-        // Identify WASM scripts and call on_unload
-        let mut to_remove = Vec::new();
-
-        // Unload all scripts directly
-        for (idx, script) in self.scripts.iter_mut().enumerate() {
-            debug!(target: "scripting", "Unloading script: {} ({})", script.name(), script.id());
+        // Unload all scripts directly and call on_unload
+        for script in self.scripts.iter_mut() {
+            debug!(target: "scripting", "Calling on_unload for: {} ({})", script.name(), script.id());
             script.on_unload(&mut ctx);
-
-            to_remove.push(idx);
         }
 
-        // Remove scripts in reverse order to preserve indices during removal
-        for idx in to_remove.into_iter().rev() {
-            self.scripts.remove(idx);
-        }
+        // Clear the scripts vector
+        self.scripts.clear();
     }
 
     /// Process timers and return fired timer IDs
@@ -316,7 +351,6 @@ impl Drop for ScriptRunner {
 /// Wrapper around ScriptRunner that implements EventConsumer trait
 pub struct ScriptConsumer {
     runner: ScriptRunner,
-    reload_rx: Option<watch::Receiver<Option<super::ReloadSignal>>>,
     script_dir: Option<std::path::PathBuf>,
     script_config: Option<std::collections::HashMap<String, toml::Value>>,
 }
@@ -325,7 +359,6 @@ impl ScriptConsumer {
     pub fn new(runner: ScriptRunner) -> Self {
         Self {
             runner,
-            reload_rx: None,
             script_dir: None,
             script_config: None,
         }
@@ -333,11 +366,9 @@ impl ScriptConsumer {
 
     pub fn with_reload_config(
         mut self,
-        reload_rx: watch::Receiver<Option<super::ReloadSignal>>,
         script_dir: std::path::PathBuf,
         script_config: std::collections::HashMap<String, toml::Value>,
     ) -> Self {
-        self.reload_rx = Some(reload_rx);
         self.script_dir = Some(script_dir);
         self.script_config = Some(script_config);
         self
@@ -346,21 +377,18 @@ impl ScriptConsumer {
 
 impl EventConsumer for ScriptConsumer {
     fn handle_event(&mut self, envelope: EventEnvelope) {
-        debug!(target: "scripting", "ScriptConsumer::handle_event called with event type: {:?}", std::mem::discriminant(&envelope.event));
-
-        // Check for reload signal - only reload when we get Some(signal), not None
-        if let Some(ref reload_rx) = self.reload_rx {
-            if let Ok(true) = reload_rx.has_changed() {
-                let signal = reload_rx.borrow();
-                if signal.is_some() {
-                    if let Some(ref script_dir) = self.script_dir {
-                        if let Some(ref script_config) = self.script_config {
-                            info!(target: "scripting", "Reloading scripts from {}", script_dir.display());
-                            self.runner.reload_scripts(script_dir, script_config);
-                        }
-                    }
+        // Check for reload event
+        if let gromnie_events::EventType::System(gromnie_events::SystemEvent::ReloadScripts) = &envelope.event {
+            if let Some(ref script_dir) = self.script_dir {
+                if let Some(ref script_config) = self.script_config {
+                    self.runner.reload_scripts(script_dir, script_config);
+                } else {
+                    tracing::warn!(target: "scripting", "ReloadScripts event received but script_config is None");
                 }
+            } else {
+                tracing::warn!(target: "scripting", "ReloadScripts event received but script_dir is None");
             }
+            return; // Don't process reload events as game events
         }
 
         // Extract ClientEvent from EventEnvelope
@@ -440,9 +468,7 @@ pub fn create_script_consumer(
 
     if scripting_config.enabled {
         let script_dir = scripting_config.script_dir();
-        let reload_rx = super::setup_reload_signal(script_dir.clone());
-        consumer =
-            consumer.with_reload_config(reload_rx, script_dir, scripting_config.config.clone());
+        consumer = consumer.with_reload_config(script_dir, scripting_config.config.clone());
     }
 
     consumer

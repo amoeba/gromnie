@@ -108,6 +108,8 @@ pub enum SystemEvent {
         script_id: String,
         event_type: ScriptEventType,
     },
+    /// Request to reload all scripts (triggered by SIGUSR2 or other mechanism)
+    ReloadScripts,
     Shutdown {
         client_id: u32,
     },

@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
-use tracing::{info, warn};
+use tracing::warn;
 use wasmtime::Engine;
 
 use super::WasmScript;
@@ -25,10 +25,22 @@ pub fn load_wasm_scripts(
         std::thread::spawn(move || load_wasm_scripts_blocking(&engine, &dir, &script_config));
 
     // Wait for the thread to complete and return the result
-    handle.join().unwrap_or_else(|_| {
-        warn!(target: "scripting", "Script loading thread panicked");
-        Vec::new()
-    })
+    match handle.join() {
+        Ok(scripts) => scripts,
+        Err(panic_payload) => {
+            // Try to extract panic message
+            let panic_msg = if let Some(s) = panic_payload.downcast_ref::<&str>() {
+                s.to_string()
+            } else if let Some(s) = panic_payload.downcast_ref::<String>() {
+                s.clone()
+            } else {
+                "Unknown panic".to_string()
+            };
+
+            tracing::error!(target: "scripting", "Script loading thread panicked: {}", panic_msg);
+            Vec::new()
+        }
+    }
 }
 
 /// Internal blocking implementation of script loading
@@ -37,14 +49,16 @@ fn load_wasm_scripts_blocking(
     dir: &Path,
     script_config: &HashMap<String, toml::Value>,
 ) -> Vec<WasmScript> {
+    use tracing::debug;
+
     let mut scripts = Vec::new();
     let mut seen_ids = std::collections::HashSet::new();
 
     // Check if directory exists
     if !dir.exists() {
-        info!(
+        debug!(
             target: "scripting",
-            "Script directory does not exist: {} (this is fine if no scripts are being used)",
+            "Script directory does not exist: {}",
             dir.display()
         );
         return scripts;
@@ -72,12 +86,10 @@ fn load_wasm_scripts_blocking(
         }
 
         // Try to load the script to get its ID
-        let script_result = WasmScript::from_file(engine, &path);
-
-        let script = match script_result {
+        let script = match WasmScript::from_file(engine, &path) {
             Ok(s) => s,
             Err(e) => {
-                warn!(
+                tracing::error!(
                     target: "scripting",
                     "Failed to load script {}: {:#}",
                     path.display(),
@@ -109,38 +121,22 @@ fn load_wasm_scripts_blocking(
             .unwrap_or(true); // Default to true
 
         if !is_enabled {
-            info!(
+            debug!(
                 target: "scripting",
-                "Skipping disabled script: {} ({}) from {}",
+                "Skipping disabled script: {} ({})",
                 script.name(),
-                script_id,
-                path.display()
+                script_id
             );
             continue;
         }
 
-        info!(
+        debug!(
             target: "scripting",
-            "Loaded script: {} ({}) from {}",
+            "Loaded: {} ({})",
             script.name(),
-            script_id,
-            path.display()
+            script_id
         );
         scripts.push(script);
-    }
-
-    if scripts.is_empty() {
-        info!(
-            target: "scripting",
-            "No scripts found in {}",
-            dir.display()
-        );
-    } else {
-        info!(
-            target: "scripting",
-            "Loaded {} script(s)",
-            scripts.len()
-        );
     }
 
     scripts
