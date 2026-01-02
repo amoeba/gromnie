@@ -70,6 +70,9 @@ pub enum GameEvent {
     UpdatingStart,
     /// Signal updating phase is done
     UpdatingDone,
+    CreatePlayer {
+        character_id: u32,
+    },
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
