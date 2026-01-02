@@ -417,8 +417,10 @@ impl EventConsumer for ScriptConsumer {
                         character_id,
                         character_name,
                     }),
-                    _ => {
-                        // Ignore other system events
+                    // These events don't have ClientSystemEvent equivalents
+                    gromnie_events::SystemEvent::ReloadScripts { .. }
+                    | gromnie_events::SystemEvent::LogScriptMessage { .. }
+                    | gromnie_events::SystemEvent::Shutdown => {
                         return;
                     }
                 }
