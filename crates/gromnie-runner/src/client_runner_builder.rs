@@ -400,9 +400,26 @@ impl ClientRunner {
         use crate::EventBusManager;
         use crate::event_wrapper::EventWrapper;
         use gromnie_client::client::Client;
+        use gromnie_events::{EventEnvelope, EventSource, SystemEvent};
 
         // Create event bus
         let event_bus_manager = Arc::new(EventBusManager::new(self.event_bus_capacity));
+
+        // Setup SIGUSR2 handler if scripting is enabled
+        if let Some(ref app_config) = self.app_config {
+            if app_config.scripting.enabled {
+                let event_sender = event_bus_manager.create_sender(config.id);
+                gromnie_scripting_host::setup_reload_signal_handler(move || {
+                    let reload_event = EventEnvelope::system_event(
+                        SystemEvent::ReloadScripts,
+                        0, // client_id (use 0 for system-wide events)
+                        0, // sequence
+                        EventSource::System,
+                    );
+                    event_sender.publish(reload_event);
+                });
+            }
+        }
 
         // Create raw event channel
         let (raw_event_tx, raw_event_rx) =

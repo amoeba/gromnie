@@ -1,60 +1,49 @@
-use std::path::PathBuf;
-use tokio::sync::watch;
-use tracing::info;
+use tracing::{debug, info};
 
-/// Reload signal type (empty - just signals that a reload is requested)
-#[derive(Debug, Clone)]
-pub struct ReloadSignal;
-
-/// Create a reload signal channel and spawn SIGUSR2 handler
+/// Setup SIGUSR2 handler that calls a callback when reload is requested
 ///
-/// Returns a receiver that will be notified when SIGUSR2 is received
+/// This function spawns a task that listens for SIGUSR2 signals and calls
+/// the provided callback when the signal is received.
 #[cfg(unix)]
-pub fn setup_reload_signal(_script_dir: PathBuf) -> watch::Receiver<Option<ReloadSignal>> {
-    let (reload_tx, reload_rx) = watch::channel(None);
-
+pub fn setup_reload_signal_handler<F>(on_reload: F)
+where
+    F: Fn() + Send + Sync + 'static,
+{
     tokio::spawn(async move {
-        use tokio::signal::unix::{SignalKind, signal};
+        use tokio::signal::unix;
 
-        let mut sigusr2 = match signal(SignalKind::user_defined2()) {
-            Ok(s) => s,
+        // Create signal stream for SIGUSR2
+        let mut signal = match unix::signal(unix::SignalKind::user_defined2()) {
+            Ok(sig) => sig,
             Err(e) => {
-                tracing::error!(target: "scripting", "Failed to register SIGUSR2 handler: {}", e);
+                tracing::error!(target: "scripting", "Failed to create SIGUSR2 handler: {}", e);
                 return;
             }
         };
 
+        debug!(target: "scripting", "SIGUSR2 handler installed");
+
+        // Block on signal
         loop {
-            // Check if receiver is still alive - exit if dropped
-            if reload_tx.is_closed() {
-                info!(target: "scripting", "Reload signal receiver dropped, shutting down SIGUSR2 handler");
-                break;
+            match signal.recv().await {
+                Some(()) => {
+                    info!(target: "scripting", "Received reload signal (SIGUSR2)");
+                    on_reload();
+                }
+                None => {
+                    tracing::warn!(target: "scripting", "Signal handler closed");
+                    break;
+                }
             }
-
-            sigusr2.recv().await;
-            info!(target: "scripting", "Received SIGUSR2 - triggering script reload");
-
-            // Send reload signal
-            if reload_tx.send(Some(ReloadSignal)).is_err() {
-                tracing::error!(target: "scripting", "Failed to send reload signal - receiver dropped");
-                break;
-            }
-
-            // Clear the signal after a moment to allow detection
-            tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
-            let _ = reload_tx.send(None);
         }
     });
-
-    reload_rx
 }
 
-/// Create a reload signal channel (non-Unix platforms don't support SIGUSR2)
+/// Setup reload signal handler (non-Unix platforms don't support SIGUSR2)
 #[cfg(not(unix))]
-pub fn setup_reload_signal(_script_dir: PathBuf) -> watch::Receiver<Option<ReloadSignal>> {
-    let (reload_tx, reload_rx) = watch::channel(None);
+pub fn setup_reload_signal_handler<F>(_on_reload: F)
+where
+    F: Fn() + Send + Sync + 'static,
+{
     tracing::warn!(target: "scripting", "SIGUSR2 reload not supported on this platform");
-    // Keep the sender alive but never send signals
-    std::mem::forget(reload_tx);
-    reload_rx
 }
