@@ -1,14 +1,14 @@
 use gromnie_client::config::scripting_config::ScriptingConfig;
 use std::collections::HashMap;
 use std::time::{Duration, Instant};
-use tokio::sync::mpsc::UnboundedSender;
-use tracing::{debug, error};
+use tokio::sync::{mpsc::UnboundedSender, watch};
+use tracing::{debug, error, info};
 
-use super::EventFilter;
-use super::Script;
 use super::context::ScriptContext;
 use super::timer::TimerManager;
 use super::wasm::WasmScript;
+use super::EventFilter;
+use super::Script;
 use crate::create_runner_from_config;
 use gromnie_client::client::events::{ClientAction, ClientEvent, ClientSystemEvent};
 use gromnie_events::{EventConsumer, EventEnvelope};
@@ -316,17 +316,52 @@ impl Drop for ScriptRunner {
 /// Wrapper around ScriptRunner that implements EventConsumer trait
 pub struct ScriptConsumer {
     runner: ScriptRunner,
+    reload_rx: Option<watch::Receiver<Option<super::ReloadSignal>>>,
+    script_dir: Option<std::path::PathBuf>,
+    script_config: Option<std::collections::HashMap<String, toml::Value>>,
 }
 
 impl ScriptConsumer {
     pub fn new(runner: ScriptRunner) -> Self {
-        Self { runner }
+        Self {
+            runner,
+            reload_rx: None,
+            script_dir: None,
+            script_config: None,
+        }
+    }
+
+    pub fn with_reload_config(
+        mut self,
+        reload_rx: watch::Receiver<Option<super::ReloadSignal>>,
+        script_dir: std::path::PathBuf,
+        script_config: std::collections::HashMap<String, toml::Value>,
+    ) -> Self {
+        self.reload_rx = Some(reload_rx);
+        self.script_dir = Some(script_dir);
+        self.script_config = Some(script_config);
+        self
     }
 }
 
 impl EventConsumer for ScriptConsumer {
     fn handle_event(&mut self, envelope: EventEnvelope) {
         debug!(target: "scripting", "ScriptConsumer::handle_event called with event type: {:?}", std::mem::discriminant(&envelope.event));
+
+        // Check for reload signal - only reload when we get Some(signal), not None
+        if let Some(ref reload_rx) = self.reload_rx {
+            if let Ok(true) = reload_rx.has_changed() {
+                let signal = reload_rx.borrow();
+                if signal.is_some() {
+                    if let Some(ref script_dir) = self.script_dir {
+                        if let Some(ref script_config) = self.script_config {
+                            info!(target: "scripting", "Reloading scripts from {}", script_dir.display());
+                            self.runner.reload_scripts(script_dir, script_config);
+                        }
+                    }
+                }
+            }
+        }
 
         // Extract ClientEvent from EventEnvelope
         let client_event = match envelope.event {
@@ -398,8 +433,17 @@ impl EventConsumer for ScriptConsumer {
 /// Create a script runner consumer with the specified configuration
 pub fn create_script_consumer(
     action_tx: UnboundedSender<ClientAction>,
-    config: &ScriptingConfig,
+    scripting_config: &ScriptingConfig,
 ) -> ScriptConsumer {
-    let runner = create_runner_from_config(action_tx, config);
-    ScriptConsumer::new(runner)
+    let runner = create_runner_from_config(action_tx, scripting_config);
+    let mut consumer = ScriptConsumer::new(runner);
+
+    if scripting_config.enabled {
+        let script_dir = scripting_config.script_dir();
+        let reload_rx = super::setup_reload_signal(script_dir.clone());
+        consumer =
+            consumer.with_reload_config(reload_rx, script_dir, scripting_config.config.clone());
+    }
+
+    consumer
 }

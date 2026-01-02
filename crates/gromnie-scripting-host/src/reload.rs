@@ -2,27 +2,24 @@ use std::path::PathBuf;
 use tokio::sync::watch;
 use tracing::info;
 
-/// Reload signal type
+/// Reload signal type (empty - just signals that a reload is requested)
 #[derive(Debug, Clone)]
-pub struct ReloadSignal {
-    /// Path to the script directory to reload from
-    pub script_dir: PathBuf,
-}
+pub struct ReloadSignal;
 
-/// Create a reload signal channel and spawn SIGHUP handler
+/// Create a reload signal channel and spawn SIGUSR2 handler
 ///
-/// Returns a receiver that will be notified when SIGHUP is received
+/// Returns a receiver that will be notified when SIGUSR2 is received
 #[cfg(unix)]
-pub fn setup_reload_signal(script_dir: PathBuf) -> watch::Receiver<Option<ReloadSignal>> {
+pub fn setup_reload_signal(_script_dir: PathBuf) -> watch::Receiver<Option<ReloadSignal>> {
     let (reload_tx, reload_rx) = watch::channel(None);
 
     tokio::spawn(async move {
         use tokio::signal::unix::{SignalKind, signal};
 
-        let mut sighup = match signal(SignalKind::hangup()) {
+        let mut sigusr2 = match signal(SignalKind::user_defined2()) {
             Ok(s) => s,
             Err(e) => {
-                tracing::error!(target: "scripting", "Failed to register SIGHUP handler: {}", e);
+                tracing::error!(target: "scripting", "Failed to register SIGUSR2 handler: {}", e);
                 return;
             }
         };
@@ -30,19 +27,15 @@ pub fn setup_reload_signal(script_dir: PathBuf) -> watch::Receiver<Option<Reload
         loop {
             // Check if receiver is still alive - exit if dropped
             if reload_tx.is_closed() {
-                info!(target: "scripting", "Reload signal receiver dropped, shutting down SIGHUP handler");
+                info!(target: "scripting", "Reload signal receiver dropped, shutting down SIGUSR2 handler");
                 break;
             }
 
-            sighup.recv().await;
-            info!(target: "scripting", "Received SIGHUP - triggering script reload");
+            sigusr2.recv().await;
+            info!(target: "scripting", "Received SIGUSR2 - triggering script reload");
 
             // Send reload signal
-            let signal = ReloadSignal {
-                script_dir: script_dir.clone(),
-            };
-
-            if reload_tx.send(Some(signal)).is_err() {
+            if reload_tx.send(Some(ReloadSignal)).is_err() {
                 tracing::error!(target: "scripting", "Failed to send reload signal - receiver dropped");
                 break;
             }
@@ -56,11 +49,11 @@ pub fn setup_reload_signal(script_dir: PathBuf) -> watch::Receiver<Option<Reload
     reload_rx
 }
 
-/// Create a reload signal channel (non-Unix platforms don't support SIGHUP)
+/// Create a reload signal channel (non-Unix platforms don't support SIGUSR2)
 #[cfg(not(unix))]
 pub fn setup_reload_signal(_script_dir: PathBuf) -> watch::Receiver<Option<ReloadSignal>> {
     let (reload_tx, reload_rx) = watch::channel(None);
-    tracing::warn!(target: "scripting", "SIGHUP reload not supported on this platform");
+    tracing::warn!(target: "scripting", "SIGUSR2 reload not supported on this platform");
     // Keep the sender alive but never send signals
     std::mem::forget(reload_tx);
     reload_rx
