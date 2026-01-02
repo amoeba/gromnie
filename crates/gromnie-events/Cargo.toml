@@ -1,0 +1,16 @@
+[package]
+name = "gromnie-events"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+description = "Event system traits and types for gromnie"
+repository.workspace = true
+license.workspace = true
+
+[lib]
+name = "gromnie_events"
+path = "src/lib.rs"
+
+[dependencies]
+gromnie-client = { path = "../gromnie-client" }
+tokio = { version = "1.36.0", features = ["sync"] }

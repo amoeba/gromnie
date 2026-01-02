@@ -1,7 +1,7 @@
 use ratatui::Frame;
 use std::error::Error;
 
-use gromnie_client::config::Config;
+use gromnie_client::config::GromnieConfig;
 
 use crate::app::App;
 use crate::draw::Draw;
@@ -51,7 +51,7 @@ impl ConfigWizard {
         }
     }
 
-    pub fn to_config(&self) -> Config {
+    pub fn to_config(&self) -> GromnieConfig {
         use std::collections::BTreeMap;
 
         let mut servers = BTreeMap::new();
@@ -74,7 +74,7 @@ impl ConfigWizard {
             },
         );
 
-        Config {
+        GromnieConfig {
             servers,
             accounts,
             scripting: Default::default(),

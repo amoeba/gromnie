@@ -1,5 +1,7 @@
 use std::sync::Arc;
-use tokio::sync::{broadcast, mpsc};
+use std::sync::atomic::{AtomicU32, Ordering};
+use std::time::{Duration, Instant};
+use tokio::sync::{broadcast, mpsc, watch};
 use tracing::{error, info};
 
 use crate::event_bus::{EventBus, EventEnvelope};
@@ -7,12 +9,239 @@ use crate::event_consumer::EventConsumer;
 use crate::event_wrapper::EventWrapper;
 use gromnie_client::client::Client;
 
-/// Configuration for running a client
-pub struct ClientConfig {
-    pub id: u32,
-    pub address: String,
-    pub account_name: String,
-    pub password: String,
+// Re-export ClientConfig from gromnie-events
+pub use gromnie_events::ClientConfig;
+
+/// Configuration for running clients - either single or multi-client
+#[derive(Clone, Debug)]
+pub enum RunConfig {
+    /// Run a single client
+    Single {
+        /// Client configuration
+        client: ClientConfig,
+    },
+    /// Run multiple clients
+    Multi {
+        /// Base server address (e.g., "localhost:9000")
+        server_address: String,
+        /// Number of clients to spawn
+        num_clients: u32,
+        /// Delay between spawning each client (milliseconds)
+        spawn_interval_ms: u64,
+        /// If true, all clients share a single event bus
+        shared_event_bus: bool,
+    },
+}
+
+impl RunConfig {
+    /// Create a single-client run config
+    pub fn single(client: ClientConfig) -> Self {
+        Self::Single { client }
+    }
+
+    /// Create a multi-client run config
+    pub fn multi(
+        server_address: String,
+        num_clients: u32,
+        spawn_interval_ms: u64,
+        shared_event_bus: bool,
+    ) -> Self {
+        Self::Multi {
+            server_address,
+            num_clients,
+            spawn_interval_ms,
+            shared_event_bus,
+        }
+    }
+
+    /// Create a multi-client run config with defaults
+    pub fn multi_default(server_address: String, num_clients: u32) -> Self {
+        Self::Multi {
+            server_address,
+            num_clients,
+            spawn_interval_ms: 1000,
+            shared_event_bus: false,
+        }
+    }
+}
+
+/// Configuration for running multiple clients
+#[derive(Clone, Debug)]
+pub struct MultiClientConfig {
+    /// Base server address (e.g., "localhost:9000")
+    pub server_address: String,
+
+    /// Number of clients to spawn
+    pub num_clients: u32,
+
+    /// Delay between spawning each client (milliseconds)
+    pub spawn_interval_ms: u64,
+
+    /// If true, all clients share a single event bus
+    /// If false, each client gets its own event bus
+    pub shared_event_bus: bool,
+}
+
+impl MultiClientConfig {
+    /// Create a new multi-client config with defaults
+    pub fn new(server_address: String, num_clients: u32) -> Self {
+        Self {
+            server_address,
+            num_clients,
+            spawn_interval_ms: 1000,
+            shared_event_bus: false,
+        }
+    }
+
+    /// Set the spawn interval
+    pub fn with_spawn_interval(mut self, interval_ms: u64) -> Self {
+        self.spawn_interval_ms = interval_ms;
+        self
+    }
+
+    /// Set whether to use a shared event bus
+    pub fn with_shared_event_bus(mut self, shared: bool) -> Self {
+        self.shared_event_bus = shared;
+        self
+    }
+}
+
+/// Statistics shared across all clients in a multi-client run
+#[derive(Default)]
+pub struct MultiClientStats {
+    /// Number of clients we attempted to spawn
+    pub attempted: AtomicU32,
+    /// Number of clients that successfully started
+    pub spawned: AtomicU32,
+    /// Number of clients that authenticated successfully
+    pub authenticated: AtomicU32,
+    /// Number of characters created
+    pub character_created: AtomicU32,
+    /// Number of clients that logged in successfully
+    pub logged_in: AtomicU32,
+    /// Number of errors encountered
+    pub errors: AtomicU32,
+    /// Number of client tasks that panicked or failed to start
+    pub task_failures: AtomicU32,
+}
+
+impl MultiClientStats {
+    /// Print statistics to the log
+    pub fn print(&self, elapsed_secs: u64) {
+        let attempted = self.attempted.load(Ordering::SeqCst);
+        let spawned = self.spawned.load(Ordering::SeqCst);
+        let auth = self.authenticated.load(Ordering::SeqCst);
+        let login = self.logged_in.load(Ordering::SeqCst);
+        let char_created = self.character_created.load(Ordering::SeqCst);
+        let errors = self.errors.load(Ordering::SeqCst);
+        let task_failures = self.task_failures.load(Ordering::SeqCst);
+
+        info!(
+            "[Stats @ {}s] Attempted: {} | Spawned: {} | Auth: {} | LoggedIn: {} | CharCreated: {} | Errors: {} | TaskFailures: {}",
+            elapsed_secs, attempted, spawned, auth, login, char_created, errors, task_failures
+        );
+    }
+
+    /// Print final statistics
+    pub fn print_final(&self, total_time: Duration) {
+        let attempted = self.attempted.load(Ordering::SeqCst);
+        let spawned = self.spawned.load(Ordering::SeqCst);
+        let auth = self.authenticated.load(Ordering::SeqCst);
+        let login = self.logged_in.load(Ordering::SeqCst);
+        let errors = self.errors.load(Ordering::SeqCst);
+        let task_failures = self.task_failures.load(Ordering::SeqCst);
+
+        info!("========================================");
+        info!("Multi-client run complete");
+        info!("Total time: {:.2}s", total_time.as_secs_f64());
+        info!("========================================");
+        info!("Client Launch:");
+        info!("  Attempted:      {}", attempted);
+        info!("  Spawned:        {}", spawned);
+        info!("  Task failures:  {}", task_failures);
+        info!(
+            "  Failed to spawn: {}",
+            attempted.saturating_sub(spawned + task_failures)
+        );
+        info!("========================================");
+        info!("Client Progress:");
+        info!("  Authenticated:  {}", auth);
+        info!("  Logged in:      {}", login);
+        info!("  Auth/login errors: {}", errors);
+        info!("========================================");
+        if attempted > 0 {
+            info!(
+                "Success rate: {:.1}% ({} / {} attempted)",
+                (login as f64 / attempted as f64) * 100.0,
+                login,
+                attempted
+            );
+        }
+        info!("========================================");
+    }
+}
+
+/// Factory for creating consumers for each client in a multi-client run
+///
+/// This trait allows the caller to customize which consumers are created
+/// for each client, while the runner handles the orchestration.
+pub trait MultiClientConsumerFactory: Send + Sync {
+    /// Create a consumer for a specific client
+    fn create_consumer(
+        &self,
+        client_id: u32,
+        client_config: &ClientConfig,
+        action_tx: mpsc::UnboundedSender<gromnie_client::client::events::ClientAction>,
+    ) -> Box<dyn EventConsumer>;
+}
+
+/// Simple adapter to convert a closure into a MultiClientConsumerFactory
+pub struct FnConsumerFactory<F>
+where
+    F: Fn(
+            u32,
+            &ClientConfig,
+            mpsc::UnboundedSender<gromnie_client::client::events::ClientAction>,
+        ) -> Box<dyn EventConsumer>
+        + Send
+        + Sync,
+{
+    f: F,
+}
+
+impl<F> FnConsumerFactory<F>
+where
+    F: Fn(
+            u32,
+            &ClientConfig,
+            mpsc::UnboundedSender<gromnie_client::client::events::ClientAction>,
+        ) -> Box<dyn EventConsumer>
+        + Send
+        + Sync,
+{
+    pub fn new(f: F) -> Self {
+        Self { f }
+    }
+}
+
+impl<F> MultiClientConsumerFactory for FnConsumerFactory<F>
+where
+    F: Fn(
+            u32,
+            &ClientConfig,
+            mpsc::UnboundedSender<gromnie_client::client::events::ClientAction>,
+        ) -> Box<dyn EventConsumer>
+        + Send
+        + Sync,
+{
+    fn create_consumer(
+        &self,
+        client_id: u32,
+        client_config: &ClientConfig,
+        action_tx: mpsc::UnboundedSender<gromnie_client::client::events::ClientAction>,
+    ) -> Box<dyn EventConsumer> {
+        (self.f)(client_id, client_config, action_tx)
+    }
 }
 
 /// Shared event bus manager that owns the central event bus
@@ -90,7 +319,7 @@ pub async fn run_client<C, F>(
     let event_consumer = event_consumer_factory(action_tx);
 
     // Run the client with the event consumer
-    run_client_internal(client, event_rx, event_consumer, shutdown_rx).await;
+    run_client_internal(client, event_rx, Box::new(event_consumer), shutdown_rx).await;
 }
 
 /// Run the client with multiple event consumers (event bus pattern)
@@ -239,14 +468,20 @@ pub async fn run_client_with_action_channel<C, F>(
     let event_consumer = event_consumer_factory(action_tx);
 
     // Run the client with the event consumer
-    run_client_internal(client, event_rx, event_consumer, Some(shutdown_rx)).await;
+    run_client_internal(
+        client,
+        event_rx,
+        Box::new(event_consumer),
+        Some(shutdown_rx),
+    )
+    .await;
 }
 
 /// Internal client runner implementation
-async fn run_client_internal<C: EventConsumer>(
+pub(crate) async fn run_client_internal(
     client: Client,
     mut event_rx: broadcast::Receiver<EventEnvelope>,
-    mut event_consumer: C,
+    mut event_consumer: Box<dyn EventConsumer>,
     shutdown_rx: Option<tokio::sync::watch::Receiver<bool>>,
 ) {
     // Spawn event handler task
@@ -424,4 +659,339 @@ async fn run_client_loop(
 /// Create a new EventBusManager for managing a shared event bus
 pub fn create_event_bus_manager() -> EventBusManager {
     EventBusManager::new(100)
+}
+
+/// Run multiple clients with coordinated lifecycle
+///
+/// This function:
+/// - Spawns the specified number of clients with rate limiting
+/// - Optionally shares a single event bus across all clients
+/// - Collects statistics across all clients
+/// - Handles graceful shutdown for all clients
+///
+/// # Arguments
+/// * `config` - Multi-client configuration (server address, num clients, etc.)
+/// * `consumer_factory` - Factory for creating consumers per client
+/// * `client_config_generator` - Function to generate client config for each client ID
+/// * `shutdown_rx` - Optional shutdown signal receiver
+///
+/// # Returns
+/// Statistics collected during the run
+pub async fn run_multi_client<G>(
+    config: MultiClientConfig,
+    consumer_factory: Arc<dyn MultiClientConsumerFactory>,
+    client_config_generator: G,
+    shutdown_rx: Option<watch::Receiver<bool>>,
+) -> Arc<MultiClientStats>
+where
+    G: Fn(u32) -> ClientConfig + Send + Sync + 'static,
+{
+    let stats = Arc::new(MultiClientStats::default());
+    let (local_shutdown_tx, local_shutdown_rx) = watch::channel(false);
+
+    // Use provided shutdown channel or create our own
+    let shutdown_rx = shutdown_rx.unwrap_or(local_shutdown_rx);
+
+    // Create shared event bus if configured
+    let shared_event_bus = if config.shared_event_bus {
+        Some(Arc::new(EventBusManager::new(100)))
+    } else {
+        None
+    };
+
+    let mut join_handles = vec![];
+    let _start_time = Instant::now();
+
+    info!(
+        "Starting multi-client run: {} clients to {}",
+        config.num_clients, config.server_address
+    );
+    info!(
+        "Rate limiting: {} ms between connections",
+        config.spawn_interval_ms
+    );
+
+    // Spawn client tasks
+    for client_id in 0..config.num_clients {
+        stats.attempted.fetch_add(1, Ordering::SeqCst);
+
+        let client_config = client_config_generator(client_id);
+        let event_bus_manager = shared_event_bus
+            .clone()
+            .unwrap_or_else(|| Arc::new(EventBusManager::new(100)));
+
+        let consumer_factory = consumer_factory.clone();
+        let stats = stats.clone();
+        let mut shutdown_rx = shutdown_rx.clone();
+        let spawn_interval = config.spawn_interval_ms;
+
+        let handle = tokio::spawn(async move {
+            // Rate limiting: stagger client connections
+            let sleep_duration = Duration::from_millis(client_id as u64 * spawn_interval);
+            tokio::select! {
+                _ = tokio::time::sleep(sleep_duration) => {
+                    // Sleep completed normally, proceed with client connection
+                }
+                _ = shutdown_rx.changed() => {
+                    // Shutdown signal received during sleep, exit early
+                    return;
+                }
+            }
+
+            // Create the consumer for this client
+            let (raw_event_tx, raw_event_rx) =
+                mpsc::channel::<gromnie_client::client::events::ClientEvent>(256);
+
+            // Spawn EventWrapper to bridge client events to event bus
+            let event_wrapper =
+                EventWrapper::new(client_config.id, event_bus_manager.event_bus.clone());
+            tokio::spawn(async move {
+                event_wrapper.run(raw_event_rx).await;
+            });
+
+            // Subscribe to the event bus for the consumer
+            let event_rx = event_bus_manager.subscribe();
+
+            // Create the client
+            let (client, action_tx) = Client::new(
+                client_config.id,
+                client_config.address.clone(),
+                client_config.account_name.clone(),
+                client_config.password.clone(),
+                raw_event_tx,
+            )
+            .await;
+
+            // Mark that we successfully spawned this client
+            stats.spawned.fetch_add(1, Ordering::SeqCst);
+
+            // Create the event consumer
+            let event_consumer =
+                consumer_factory.create_consumer(client_config.id, &client_config, action_tx);
+
+            // Run the client
+            run_client_internal(client, event_rx, event_consumer, Some(shutdown_rx)).await;
+        });
+
+        join_handles.push(handle);
+    }
+
+    info!("All clients spawned, waiting for events...");
+
+    // Wait for Ctrl+C or external shutdown
+    match tokio::signal::ctrl_c().await {
+        Ok(()) => {
+            info!("Received Ctrl+C, shutting down all clients...");
+            info!("Press Ctrl+C again to force quit");
+            let _ = local_shutdown_tx.send(true);
+        }
+        Err(e) => {
+            error!("Failed to listen for Ctrl+C: {}", e);
+        }
+    }
+
+    // Wait for all client tasks to complete with timeout or second Ctrl+C
+    let shutdown_timeout = Duration::from_secs(5);
+    let wait_future = async {
+        for (idx, handle) in join_handles.into_iter().enumerate() {
+            match handle.await {
+                Ok(_) => {
+                    // Task completed normally
+                }
+                Err(e) => {
+                    // Task panicked or was cancelled
+                    stats.task_failures.fetch_add(1, Ordering::SeqCst);
+                    if e.is_panic() {
+                        error!("[Client {}] Task panicked: {:?}", idx, e);
+                    } else {
+                        error!("[Client {}] Task was cancelled", idx);
+                    }
+                }
+            }
+        }
+    };
+
+    tokio::select! {
+        _ = wait_future => {
+            info!("All clients shut down gracefully");
+        }
+        _ = tokio::time::sleep(shutdown_timeout) => {
+            info!("Shutdown timeout reached, forcing exit");
+        }
+        _ = tokio::signal::ctrl_c() => {
+            info!("Second Ctrl+C received, forcing immediate exit");
+        }
+    }
+
+    stats
+}
+
+/// Result from running clients
+pub enum RunResult {
+    /// Single client completed
+    Single,
+    /// Multi-client run completed with statistics
+    Multi(Arc<MultiClientStats>),
+}
+
+/// Builder for creating consumers for each client
+///
+/// This trait provides a flexible way to create consumers for each client,
+/// whether single or multi-client mode.
+pub trait ConsumerBuilder: Send + Sync {
+    /// Create a consumer for a single client
+    fn build(
+        &self,
+        client_id: u32,
+        client_config: &ClientConfig,
+        action_tx: mpsc::UnboundedSender<gromnie_client::client::events::ClientAction>,
+    ) -> Box<dyn EventConsumer>;
+}
+
+/// Type alias for consumer factory closure
+type ConsumerFactoryFn = dyn Fn(
+        u32,
+        &ClientConfig,
+        mpsc::UnboundedSender<gromnie_client::client::events::ClientAction>,
+    ) -> Box<dyn EventConsumer>
+    + Send
+    + Sync;
+
+/// Adapter for closure-based consumer builders
+pub struct FnConsumerBuilder {
+    f: Box<ConsumerFactoryFn>,
+}
+
+impl FnConsumerBuilder {
+    pub fn new<F>(f: F) -> Self
+    where
+        F: Fn(
+                u32,
+                &ClientConfig,
+                mpsc::UnboundedSender<gromnie_client::client::events::ClientAction>,
+            ) -> Box<dyn EventConsumer>
+            + Send
+            + Sync
+            + 'static,
+    {
+        Self { f: Box::new(f) }
+    }
+}
+
+impl ConsumerBuilder for FnConsumerBuilder {
+    fn build(
+        &self,
+        client_id: u32,
+        client_config: &ClientConfig,
+        action_tx: mpsc::UnboundedSender<gromnie_client::client::events::ClientAction>,
+    ) -> Box<dyn EventConsumer> {
+        (self.f)(client_id, client_config, action_tx)
+    }
+}
+
+/// Unified client runner
+///
+/// This function handles both single-client and multi-client runs based on the config.
+///
+/// # Arguments
+/// * `config` - Run configuration (single or multi-client)
+/// * `consumer_builder` - Builder for creating consumers per client
+/// * `client_config_generator` - Optional function to generate client config for each client ID (multi-client only)
+/// * `shutdown_rx` - Optional shutdown signal receiver
+///
+/// # Returns
+/// Run result with statistics for multi-client runs
+pub async fn run<B, G>(
+    config: RunConfig,
+    consumer_builder: B,
+    client_config_generator: Option<G>,
+    shutdown_rx: Option<watch::Receiver<bool>>,
+) -> RunResult
+where
+    B: ConsumerBuilder + 'static,
+    G: Fn(u32) -> ClientConfig + Send + Sync + 'static,
+{
+    match config {
+        RunConfig::Single { client } => {
+            let event_bus_manager = Arc::new(EventBusManager::new(100));
+
+            let (raw_event_tx, raw_event_rx) =
+                mpsc::channel::<gromnie_client::client::events::ClientEvent>(256);
+
+            let event_wrapper = EventWrapper::new(client.id, event_bus_manager.event_bus.clone());
+            tokio::spawn(async move {
+                event_wrapper.run(raw_event_rx).await;
+            });
+
+            let event_rx = event_bus_manager.subscribe();
+
+            let (client_obj, action_tx) = Client::new(
+                client.id,
+                client.address.clone(),
+                client.account_name.clone(),
+                client.password.clone(),
+                raw_event_tx,
+            )
+            .await;
+
+            let event_consumer = consumer_builder.build(client.id, &client, action_tx);
+
+            run_client_internal(client_obj, event_rx, event_consumer, shutdown_rx).await;
+
+            RunResult::Single
+        }
+        RunConfig::Multi {
+            server_address,
+            num_clients,
+            spawn_interval_ms,
+            shared_event_bus,
+        } => {
+            let multi_config = MultiClientConfig {
+                server_address,
+                num_clients,
+                spawn_interval_ms,
+                shared_event_bus,
+            };
+
+            // Create an adapter from ConsumerBuilder to MultiClientConsumerFactory
+            struct Adapter<T> {
+                inner: T,
+            }
+
+            impl<T: ConsumerBuilder> MultiClientConsumerFactory for Adapter<T> {
+                fn create_consumer(
+                    &self,
+                    client_id: u32,
+                    client_config: &ClientConfig,
+                    action_tx: mpsc::UnboundedSender<gromnie_client::client::events::ClientAction>,
+                ) -> Box<dyn EventConsumer> {
+                    self.inner.build(client_id, client_config, action_tx)
+                }
+            }
+
+            let factory = Adapter {
+                inner: consumer_builder,
+            };
+
+            let stats = match client_config_generator {
+                Some(config_gen) => {
+                    run_multi_client(multi_config, Arc::new(factory), config_gen, shutdown_rx).await
+                }
+                None => {
+                    let default_gen = |id| {
+                        ClientConfig::new(
+                            id,
+                            "localhost:9000".to_string(),
+                            format!("client_{}", id),
+                            format!("client_{}", id),
+                        )
+                    };
+                    run_multi_client(multi_config, Arc::new(factory), default_gen, shutdown_rx)
+                        .await
+                }
+            };
+
+            RunResult::Multi(stats)
+        }
+    }
 }

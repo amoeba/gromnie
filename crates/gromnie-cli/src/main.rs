@@ -1,16 +1,14 @@
 use std::error::Error;
 use std::fs;
-use std::sync::Arc;
 
 use clap::Parser;
-use gromnie_runner::{ClientConfig, EventBusManager, LoggingConsumer, run_client_with_consumers};
-use gromnie_scripting_host::create_script_consumer;
+use gromnie_runner::{ClientConfig, ClientRunner, LoggingConsumer};
 use ratatui::{TerminalOptions, Viewport};
 use tracing::info;
 use tracing_subscriber::EnvFilter;
 
 use gromnie_cli::{app::App, run as cli_run};
-use gromnie_client::config::Config;
+use gromnie_client::config::GromnieConfig;
 
 #[derive(Parser)]
 #[command(version, about, long_about = None)]
@@ -29,7 +27,7 @@ pub struct Cli {
 }
 
 fn create_example_config() -> Result<(), Box<dyn Error>> {
-    let config_path = Config::config_path();
+    let config_path = GromnieConfig::config_path();
 
     // Create parent directories if they don't exist
     if let Some(parent) = config_path.parent() {
@@ -73,7 +71,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
     info!("Starting gromnie client...");
 
     // Load or create config
-    let config = match Config::load() {
+    let config = match GromnieConfig::load() {
         Ok(cfg) => {
             info!("Loaded existing config");
             cfg
@@ -127,31 +125,15 @@ async fn main() -> Result<(), Box<dyn Error>> {
                 server_name, account_name
             );
 
-            let event_bus_manager = Arc::new(EventBusManager::new(100));
-
-            if config.scripting.enabled {
-                let scripting_config = config.scripting.clone();
-                run_client_with_consumers(
-                    client_config,
-                    event_bus_manager,
-                    move |action_tx| {
-                        vec![
-                            Box::new(LoggingConsumer::new(action_tx.clone())),
-                            Box::new(create_script_consumer(action_tx, &scripting_config)),
-                        ]
-                    },
-                    None,
-                )
+            // Build and run the client using the new builder API
+            // Note: with_config() is optional - config is loaded from default location if not specified
+            ClientRunner::builder()
+                .with_clients(client_config)
+                .with_consumer(LoggingConsumer::from_factory())
+                .with_config(config.clone())
+                .build()?
+                .run()
                 .await;
-            } else {
-                gromnie_runner::run_client(
-                    client_config,
-                    event_bus_manager,
-                    LoggingConsumer::new,
-                    None,
-                )
-                .await;
-            }
 
             return Ok(());
         }
@@ -188,36 +170,14 @@ async fn main() -> Result<(), Box<dyn Error>> {
             password: account.password.clone(),
         };
 
-        let event_bus_manager = Arc::new(EventBusManager::new(100));
-
-        // Use multi-consumer event bus when scripting is enabled
-        let config = &wizard.config;
-
-        if config.scripting.enabled {
-            let scripting_config = config.scripting.clone();
-            run_client_with_consumers(
-                client_config,
-                event_bus_manager,
-                move |action_tx| {
-                    vec![
-                        // Add logging consumer
-                        Box::new(LoggingConsumer::new(action_tx.clone())),
-                        // Add script runner (handles auto-login via scripts)
-                        Box::new(create_script_consumer(action_tx, &scripting_config)),
-                    ]
-                },
-                None,
-            )
+        // Build and run the client using the new builder API
+        ClientRunner::builder()
+            .with_clients(client_config)
+            .with_consumer(LoggingConsumer::from_factory())
+            .with_config(wizard.config.clone())
+            .build()?
+            .run()
             .await;
-        } else {
-            gromnie_runner::run_client(
-                client_config,
-                event_bus_manager,
-                LoggingConsumer::new,
-                None,
-            )
-            .await;
-        }
     }
 
     Ok(())

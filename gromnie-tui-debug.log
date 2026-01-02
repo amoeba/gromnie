@@ -1,0 +1,361 @@
+[2m2026-01-01T17:43:15.220947Z[0m [32m INFO[0m [2mgromnie_client::config[0m[2m:[0m Loaded config from /Users/bryce/Library/Application Support/gromnie/config.toml
+[2m2026-01-01T17:43:15.458606Z[0m [32m INFO[0m [2mscripting[0m[2m:[0m Loaded script: Auto Login (WASM) (auto_login_wasm) from /Users/bryce/Library/Application Support/gromnie/scripts/auto_login.wasm
+[2m2026-01-01T17:43:15.700404Z[0m [32m INFO[0m [2mscripting[0m[2m:[0m Loaded script: File Logger (WASM) (file_logger_wasm) from /Users/bryce/Library/Application Support/gromnie/scripts/file_logger.wasm
+[2m2026-01-01T17:43:15.858980Z[0m [32m INFO[0m [2mscripting[0m[2m:[0m Loaded script: Hello World (WASM) (hello_world_wasm) from /Users/bryce/Library/Application Support/gromnie/scripts/hello_world.wasm
+[2m2026-01-01T17:43:15.859018Z[0m [32m INFO[0m [2mscripting[0m[2m:[0m Loaded 3 script(s)
+[2m2026-01-01T17:43:15.862467Z[0m [32m INFO[0m [2mevent_wrapper[0m[2m:[0m EventWrapper started for client 0
+[2m2026-01-01T17:43:15.869558Z[0m [32m INFO[0m [2mevents[0m[2m:[0m Event handler task started
+[2m2026-01-01T17:43:15.869570Z[0m [32m INFO[0m [2mnet[0m[2m:[0m Client 0 network loop started
+[2m2026-01-01T17:43:16.877763Z[0m [32m INFO[0m [2mnet[0m[2m:[0m Progress: LoginRequest sent (33%)
+[2m2026-01-01T17:43:16.877913Z[0m [32m INFO[0m [2mgromnie_runner::client_runner[0m[2m:[0m Initial LoginRequest sent - entering state machine loop
+[2m2026-01-01T17:43:16.878023Z[0m [34mDEBUG[0m [2mevent_wrapper[0m[2m:[0m EventWrapper received ClientEvent: Discriminant(0)
+[2m2026-01-01T17:43:16.878059Z[0m [34mDEBUG[0m [2mevent_wrapper[0m[2m:[0m EventWrapper publishing envelope: Discriminant(0)
+[2m2026-01-01T17:43:16.878120Z[0m [32m INFO[0m [2mtui_consumer[0m[2m:[0m TuiConsumer forwarding GameEvent: Discriminant(8)
+[2m2026-01-01T17:43:16.878209Z[0m [32m INFO[0m [2mtui_main[0m[2m:[0m TUI main received GameEvent: Discriminant(8)
+[2m2026-01-01T17:43:16.888022Z[0m [32m INFO[0m [2mnet[0m[2m:[0m Authentication succeeded - received ConnectRequest from server
+[2m2026-01-01T17:43:16.888078Z[0m [32m INFO[0m [2mnet[0m[2m:[0m Progress: ConnectRequest received (66%)
+[2m2026-01-01T17:43:16.888110Z[0m [34mDEBUG[0m [2mevent_wrapper[0m[2m:[0m EventWrapper received ClientEvent: Discriminant(2)
+[2m2026-01-01T17:43:16.888125Z[0m [34mDEBUG[0m [2mevent_wrapper[0m[2m:[0m EventWrapper publishing envelope: Discriminant(2)
+[2m2026-01-01T17:43:16.888142Z[0m [34mDEBUG[0m [2mevent_wrapper[0m[2m:[0m EventWrapper received ClientEvent: Discriminant(0)
+[2m2026-01-01T17:43:16.888150Z[0m [34mDEBUG[0m [2mevent_wrapper[0m[2m:[0m EventWrapper publishing envelope: Discriminant(0)
+[2m2026-01-01T17:43:16.888168Z[0m [32m INFO[0m [2mtui_consumer[0m[2m:[0m TuiConsumer forwarding SystemEvent: Discriminant(0)
+[2m2026-01-01T17:43:16.888189Z[0m [32m INFO[0m [2mtui_consumer[0m[2m:[0m TuiConsumer forwarding GameEvent: Discriminant(8)
+[2m2026-01-01T17:43:16.888190Z[0m [32m INFO[0m [2mtui_main[0m[2m:[0m TUI main received SystemEvent: Discriminant(0)
+[2m2026-01-01T17:43:16.888218Z[0m [32m INFO[0m [2mtui_main[0m[2m:[0m TUI main received GameEvent: Discriminant(8)
+[2m2026-01-01T17:43:17.892470Z[0m [32m INFO[0m [2mnet[0m[2m:[0m Progress: ConnectResponse sent (100%)
+[2m2026-01-01T17:43:17.892497Z[0m [32m INFO[0m [2mnet[0m[2m:[0m State transition: Connecting -> Patching
+[2m2026-01-01T17:43:17.892531Z[0m [32m INFO[0m [2mscript[0m[2m:[0m [auto_login_wasm] Auto Login script loaded
+[2m2026-01-01T17:43:17.892541Z[0m [32m INFO[0m [2mscript[0m[2m:[0m [file_logger_wasm] File logger started - logging to /script_data/chat.log
+[2m2026-01-01T17:43:17.892548Z[0m [32m INFO[0m [2mscript[0m[2m:[0m [hello_world_wasm] Hello World script loaded!
+[2m2026-01-01T17:43:17.892999Z[0m [34mDEBUG[0m [2mevent_wrapper[0m[2m:[0m EventWrapper received ClientEvent: Discriminant(0)
+[2m2026-01-01T17:43:17.893016Z[0m [34mDEBUG[0m [2mevent_wrapper[0m[2m:[0m EventWrapper publishing envelope: Discriminant(0)
+[2m2026-01-01T17:43:17.893078Z[0m [32m INFO[0m [2mtui_consumer[0m[2m:[0m TuiConsumer forwarding GameEvent: Discriminant(8)
+[2m2026-01-01T17:43:17.893098Z[0m [32m INFO[0m [2mtui_main[0m[2m:[0m TUI main received GameEvent: Discriminant(8)
+[2m2026-01-01T17:43:17.902636Z[0m [32m INFO[0m [2mnet[0m[2m:[0m Emitting NetworkMessage event: DDDInterrogationMessage
+[2m2026-01-01T17:43:17.902654Z[0m [32m INFO[0m [2mnet[0m[2m:[0m Parsed as S2CMessage: DDDInterrogationMessage (0xF7E5)
+[2m2026-01-01T17:43:17.902687Z[0m [32m INFO[0m [2mnet[0m[2m:[0m Received DDD Interrogation - Language: 1, Region: 1, Product: 1
+[2m2026-01-01T17:43:17.902696Z[0m [32m INFO[0m [2mnet[0m[2m:[0m Progress: DDDInterrogation received (33%)
+[2m2026-01-01T17:43:17.902705Z[0m [32m INFO[0m [2mnet[0m[2m:[0m DDD response cached and queued for sending with 1000ms delay
+[2m2026-01-01T17:43:17.902731Z[0m [34mDEBUG[0m [2mevent_wrapper[0m[2m:[0m EventWrapper received ClientEvent: Discriminant(0)
+[2m2026-01-01T17:43:17.902739Z[0m [34mDEBUG[0m [2mevent_wrapper[0m[2m:[0m EventWrapper publishing envelope: Discriminant(0)
+[2m2026-01-01T17:43:17.902749Z[0m [34mDEBUG[0m [2mevent_wrapper[0m[2m:[0m EventWrapper received ClientEvent: Discriminant(0)
+[2m2026-01-01T17:43:17.902754Z[0m [34mDEBUG[0m [2mevent_wrapper[0m[2m:[0m EventWrapper publishing envelope: Discriminant(0)
+[2m2026-01-01T17:43:17.902766Z[0m [32m INFO[0m [2mtui_consumer[0m[2m:[0m TuiConsumer forwarding GameEvent: Discriminant(7)
+[2m2026-01-01T17:43:17.902784Z[0m [32m INFO[0m [2mtui_consumer[0m[2m:[0m TuiConsumer forwarding GameEvent: Discriminant(9)
+[2m2026-01-01T17:43:17.902782Z[0m [32m INFO[0m [2mtui_main[0m[2m:[0m TUI main received GameEvent: Discriminant(7)
+[2m2026-01-01T17:43:17.902803Z[0m [32m INFO[0m [2mtui_main[0m[2m:[0m TUI main received GameEvent: Discriminant(9)
+[2m2026-01-01T17:43:17.904886Z[0m [32m INFO[0m [2mnet[0m[2m:[0m Emitting NetworkMessage event: LoginLoginCharacterSet
+[2m2026-01-01T17:43:17.904901Z[0m [32m INFO[0m [2mnet[0m[2m:[0m Parsed as S2CMessage: LoginLoginCharacterSet (0xF658)
+[2m2026-01-01T17:43:17.904945Z[0m [32m INFO[0m [2mnet[0m[2m:[0m CharacterList -- Account: testing, Slots: 11, Characters: [+TestChar8009 (ID: ObjectId(1342177282))]
+[2m2026-01-01T17:43:17.904957Z[0m [32m INFO[0m [2mnet[0m[2m:[0m Progress: CharacterList received (100%)
+[2m2026-01-01T17:43:17.904964Z[0m [32m INFO[0m [2mnet[0m[2m:[0m State transition: Patching -> CharSelect
+[2m2026-01-01T17:43:17.904981Z[0m [32m INFO[0m [2mnet[0m[2m:[0m CharacterListReceived event scheduled with 1000ms delay
+[2m2026-01-01T17:43:17.904990Z[0m [34mDEBUG[0m [2mevent_wrapper[0m[2m:[0m EventWrapper received ClientEvent: Discriminant(0)
+[2m2026-01-01T17:43:17.905000Z[0m [34mDEBUG[0m [2mevent_wrapper[0m[2m:[0m EventWrapper publishing envelope: Discriminant(0)
+[2m2026-01-01T17:43:17.905009Z[0m [34mDEBUG[0m [2mevent_wrapper[0m[2m:[0m EventWrapper received ClientEvent: Discriminant(0)
+[2m2026-01-01T17:43:17.905015Z[0m [34mDEBUG[0m [2mevent_wrapper[0m[2m:[0m EventWrapper publishing envelope: Discriminant(0)
+[2m2026-01-01T17:43:17.905026Z[0m [32m INFO[0m [2mtui_consumer[0m[2m:[0m TuiConsumer forwarding GameEvent: Discriminant(7)
+[2m2026-01-01T17:43:17.905039Z[0m [32m INFO[0m [2mtui_consumer[0m[2m:[0m TuiConsumer forwarding GameEvent: Discriminant(9)
+[2m2026-01-01T17:43:17.905039Z[0m [32m INFO[0m [2mtui_main[0m[2m:[0m TUI main received GameEvent: Discriminant(7)
+[2m2026-01-01T17:43:17.905053Z[0m [32m INFO[0m [2mtui_main[0m[2m:[0m TUI main received GameEvent: Discriminant(9)
+[2m2026-01-01T17:43:18.907173Z[0m [32m INFO[0m [2mnet[0m[2m:[0m Sending CharacterListReceived event after delay
+[2m2026-01-01T17:43:18.907255Z[0m [32m INFO[0m [2mnet[0m[2m:[0m CharacterListReceived event sent successfully
+[2m2026-01-01T17:43:18.907305Z[0m [34mDEBUG[0m [2mevent_wrapper[0m[2m:[0m EventWrapper received ClientEvent: Discriminant(0)
+[2m2026-01-01T17:43:18.907399Z[0m [34mDEBUG[0m [2mevent_wrapper[0m[2m:[0m EventWrapper publishing envelope: Discriminant(0)
+[2m2026-01-01T17:43:18.907456Z[0m [32m INFO[0m [2mtui_consumer[0m[2m:[0m TuiConsumer forwarding GameEvent: Discriminant(0)
+[2m2026-01-01T17:43:18.907500Z[0m [32m INFO[0m [2mtui_main[0m[2m:[0m TUI main received GameEvent: Discriminant(0)
+[2m2026-01-01T17:43:20.206654Z[0m [32m INFO[0m [2mtui[0m[2m:[0m Logging in with selected character
+[2m2026-01-01T17:43:20.879767Z[0m [32m INFO[0m [2mscript[0m[2m:[0m [auto_login_wasm] Auto Login: Logging in as first character '+TestChar8009' (ID: 1342177282)
+[2m2026-01-01T17:43:20.879834Z[0m [34mDEBUG[0m [2mevents[0m[2m:[0m Action: Logging in as character +TestChar8009 (ID: 1342177282)
+[2m2026-01-01T17:43:20.879863Z[0m [32m INFO[0m [2mnet[0m[2m:[0m State transition: CharSelect -> Ingame
+[2m2026-01-01T17:43:20.879883Z[0m [32m INFO[0m [2mnet[0m[2m:[0m Sent CharacterEnterWorldRequest for character: +TestChar8009 (ID: 1342177282)
+[2m2026-01-01T17:43:20.879899Z[0m [34mDEBUG[0m [2mevents[0m[2m:[0m Action: Logging in as character +TestChar8009 (ID: 1342177282)
+[2m2026-01-01T17:43:20.879932Z[0m [31mERROR[0m [2mevents[0m[2m:[0m Failed to attempt character login: Cannot login: not in CharSelect state (current state: Ingame { character_id: 1342177282, character_name: "+TestChar8009" })
+[2m2026-01-01T17:43:20.879969Z[0m [32m INFO[0m [2mnet[0m[2m:[0m send_pending_messages: sending message: Discriminant(0)
+[2m2026-01-01T17:43:20.880034Z[0m [32m INFO[0m [2mnet[0m[2m:[0m Sending DDD Interrogation Response - Language: 1, Files: [4294967296, -8899172235240, 4294967297]
+[2m2026-01-01T17:43:20.880085Z[0m [32m INFO[0m [2mnet[0m[2m:[0m send_fragmented_message: message_data len=36, group=Object
+[2m2026-01-01T17:43:20.880726Z[0m [32m INFO[0m [2mnet[0m[2m:[0m send_pending_messages: sending message: Discriminant(3)
+[2m2026-01-01T17:43:20.880760Z[0m [32m INFO[0m [2mnet[0m[2m:[0m Sending Login_SendEnterWorldRequest (0xF7C8)
+[2m2026-01-01T17:43:20.880779Z[0m [32m INFO[0m [2mnet[0m[2m:[0m send_fragmented_message: message_data len=4, group=Object
+[2m2026-01-01T17:43:20.885439Z[0m [32m INFO[0m [2mnet[0m[2m:[0m Emitting NetworkMessage event: LoginEnterGameServerReady
+[2m2026-01-01T17:43:20.885484Z[0m [32m INFO[0m [2mnet[0m[2m:[0m Parsed as S2CMessage: LoginEnterGameServerReady (0xF7DF)
+[2m2026-01-01T17:43:20.885508Z[0m [32m INFO[0m [2mnet[0m[2m:[0m Received LoginEnterGameServerReady (0xF7DF) - Server ready for character login
+[2m2026-01-01T17:43:20.885529Z[0m [32m INFO[0m [2mnet[0m[2m:[0m Queued EnterWorld (0xF657) for character: +TestChar8009 (ID: 1342177282)
+[2m2026-01-01T17:43:20.885549Z[0m [32m INFO[0m [2mnet[0m[2m:[0m send_pending_messages: sending message: Discriminant(4)
+[2m2026-01-01T17:43:20.885569Z[0m [32m INFO[0m [2mnet[0m[2m:[0m Sending Login_SendEnterWorld (0xF657) - Character ID: 1342177282
+[2m2026-01-01T17:43:20.885591Z[0m [32m INFO[0m [2mnet[0m[2m:[0m send_fragmented_message: message_data len=20, group=Object
+[2m2026-01-01T17:43:20.885640Z[0m [34mDEBUG[0m [2mevent_wrapper[0m[2m:[0m EventWrapper received ClientEvent: Discriminant(0)
+[2m2026-01-01T17:43:20.885660Z[0m [34mDEBUG[0m [2mevent_wrapper[0m[2m:[0m EventWrapper publishing envelope: Discriminant(0)
+[2m2026-01-01T17:43:20.885699Z[0m [32m INFO[0m [2mtui_consumer[0m[2m:[0m TuiConsumer forwarding GameEvent: Discriminant(7)
+[2m2026-01-01T17:43:20.885735Z[0m [32m INFO[0m [2mtui_main[0m[2m:[0m TUI main received GameEvent: Discriminant(7)
+[2m2026-01-01T17:43:20.898360Z[0m [32m INFO[0m [2mnet[0m[2m:[0m Emitting NetworkMessage event: OrderedGameEvent
+[2m2026-01-01T17:43:20.898384Z[0m [32m INFO[0m [2mnet[0m[2m:[0m Parsed as S2CMessage: OrderedGameEvent (0xF7B0)
+[2m2026-01-01T17:43:20.898416Z[0m [32m INFO[0m [2mnet[0m[2m:[0m Processing OrderedGameEvent message, data len=896
+[2m2026-01-01T17:43:20.898490Z[0m [32m INFO[0m [2mnet[0m[2m:[0m Emitting NetworkMessage event: OrderedGameEvent
+[2m2026-01-01T17:43:20.898503Z[0m [32m INFO[0m [2mnet[0m[2m:[0m Parsed as S2CMessage: OrderedGameEvent (0xF7B0)
+[2m2026-01-01T17:43:20.898512Z[0m [32m INFO[0m [2mnet[0m[2m:[0m Processing OrderedGameEvent message, data len=448
+[2m2026-01-01T17:43:20.898576Z[0m [32m INFO[0m [2mnet[0m[2m:[0m Emitting NetworkMessage event: CommunicationTextboxString
+[2m2026-01-01T17:43:20.898589Z[0m [32m INFO[0m [2mnet[0m[2m:[0m Parsed as S2CMessage: CommunicationTextboxString (0xF7E0)
+[2m2026-01-01T17:43:20.898605Z[0m [32m INFO[0m [2mnet[0m[2m:[0m Chat message received - Opcode: 0xF7E0, Type: 0, Text: Welcome to Asheron's Call
+  powered by ACEmulator
+
+For more information on commands supported by this server, type @acehelp
+
+[2m2026-01-01T17:43:20.898636Z[0m [34mDEBUG[0m [2mevent_wrapper[0m[2m:[0m EventWrapper received ClientEvent: Discriminant(0)
+[2m2026-01-01T17:43:20.898649Z[0m [34mDEBUG[0m [2mevent_wrapper[0m[2m:[0m EventWrapper publishing envelope: Discriminant(0)
+[2m2026-01-01T17:43:20.898663Z[0m [34mDEBUG[0m [2mevent_wrapper[0m[2m:[0m EventWrapper received ClientEvent: Discriminant(0)
+[2m2026-01-01T17:43:20.898673Z[0m [34mDEBUG[0m [2mevent_wrapper[0m[2m:[0m EventWrapper publishing envelope: Discriminant(0)
+[2m2026-01-01T17:43:20.898683Z[0m [34mDEBUG[0m [2mevent_wrapper[0m[2m:[0m EventWrapper received ClientEvent: Discriminant(0)
+[2m2026-01-01T17:43:20.898692Z[0m [34mDEBUG[0m [2mevent_wrapper[0m[2m:[0m EventWrapper publishing envelope: Discriminant(0)
+[2m2026-01-01T17:43:20.898702Z[0m [34mDEBUG[0m [2mevent_wrapper[0m[2m:[0m EventWrapper received ClientEvent: Discriminant(0)
+[2m2026-01-01T17:43:20.898711Z[0m [34mDEBUG[0m [2mevent_wrapper[0m[2m:[0m EventWrapper publishing envelope: Discriminant(0)
+[2m2026-01-01T17:43:20.898728Z[0m [32m INFO[0m [2mtui_consumer[0m[2m:[0m TuiConsumer forwarding GameEvent: Discriminant(7)
+[2m2026-01-01T17:43:20.898752Z[0m [32m INFO[0m [2mtui_main[0m[2m:[0m TUI main received GameEvent: Discriminant(7)
+[2m2026-01-01T17:43:20.898755Z[0m [32m INFO[0m [2mtui_consumer[0m[2m:[0m TuiConsumer forwarding GameEvent: Discriminant(7)
+[2m2026-01-01T17:43:20.898801Z[0m [32m INFO[0m [2mtui_main[0m[2m:[0m TUI main received GameEvent: Discriminant(7)
+[2m2026-01-01T17:43:20.898803Z[0m [32m INFO[0m [2mtui_consumer[0m[2m:[0m TuiConsumer forwarding GameEvent: Discriminant(7)
+[2m2026-01-01T17:43:20.898830Z[0m [32m INFO[0m [2mtui_consumer[0m[2m:[0m TuiConsumer forwarding GameEvent: Discriminant(6)
+[2m2026-01-01T17:43:20.898831Z[0m [32m INFO[0m [2mtui_main[0m[2m:[0m TUI main received GameEvent: Discriminant(7)
+[2m2026-01-01T17:43:20.898857Z[0m [32m INFO[0m [2mtui_main[0m[2m:[0m TUI main received GameEvent: Discriminant(6)
+[2m2026-01-01T17:43:20.903793Z[0m [32m INFO[0m [2mnet[0m[2m:[0m Emitting NetworkMessage event: ⚠ UNHANDLED: LoginCreatePlayer
+[2m2026-01-01T17:43:20.903811Z[0m [32m INFO[0m [2mnet[0m[2m:[0m Parsed as S2CMessage: LoginCreatePlayer (0xF746)
+[2m2026-01-01T17:43:20.903824Z[0m [32m INFO[0m [2mnet[0m[2m:[0m Received LoginCreatePlayer (0xF746) - character logged in successfully
+[2m2026-01-01T17:43:20.903835Z[0m [32m INFO[0m [2mnet[0m[2m:[0m Sending LoginComplete notification to server
+[2m2026-01-01T17:43:20.903871Z[0m [32m INFO[0m [2mnet[0m[2m:[0m LoginComplete notification queued and event emitted
+[2m2026-01-01T17:43:20.903885Z[0m [32m INFO[0m [2mnet[0m[2m:[0m send_pending_messages: sending message: Discriminant(5)
+[2m2026-01-01T17:43:20.903896Z[0m [32m INFO[0m [2mnet[0m[2m:[0m send_fragmented_message: message_data len=12, group=Object
+[2m2026-01-01T17:43:20.903930Z[0m [34mDEBUG[0m [2mevent_wrapper[0m[2m:[0m EventWrapper received ClientEvent: Discriminant(0)
+[2m2026-01-01T17:43:20.903942Z[0m [34mDEBUG[0m [2mevent_wrapper[0m[2m:[0m EventWrapper publishing envelope: Discriminant(0)
+[2m2026-01-01T17:43:20.903982Z[0m [34mDEBUG[0m [2mevent_wrapper[0m[2m:[0m EventWrapper received ClientEvent: Discriminant(0)
+[2m2026-01-01T17:43:20.903992Z[0m [34mDEBUG[0m [2mevent_wrapper[0m[2m:[0m EventWrapper publishing envelope: Discriminant(0)
+[2m2026-01-01T17:43:20.904007Z[0m [32m INFO[0m [2mtui_consumer[0m[2m:[0m TuiConsumer forwarding GameEvent: Discriminant(7)
+[2m2026-01-01T17:43:20.904025Z[0m [32m INFO[0m [2mtui_main[0m[2m:[0m TUI main received GameEvent: Discriminant(7)
+[2m2026-01-01T17:43:20.904027Z[0m [32m INFO[0m [2mtui_consumer[0m[2m:[0m TuiConsumer forwarding GameEvent: Discriminant(2)
+[2m2026-01-01T17:43:20.904280Z[0m [32m INFO[0m [2mnet[0m[2m:[0m Emitting NetworkMessage event: ItemCreateObject
+[2m2026-01-01T17:43:20.904297Z[0m [32m INFO[0m [2mnet[0m[2m:[0m Parsed as S2CMessage: ItemCreateObject (0xF745)
+[2m2026-01-01T17:43:20.904323Z[0m [32m INFO[0m [2mnet[0m[2m:[0m Object created in world: Blackmoor's Favor (ID: 0x8000013E)
+[2m2026-01-01T17:43:20.904383Z[0m [32m INFO[0m [2mnet[0m[2m:[0m Emitting NetworkMessage event: ItemCreateObject
+[2m2026-01-01T17:43:20.904396Z[0m [32m INFO[0m [2mnet[0m[2m:[0m Parsed as S2CMessage: ItemCreateObject (0xF745)
+[2m2026-01-01T17:43:20.904418Z[0m [32m INFO[0m [2mnet[0m[2m:[0m Object created in world: Shirt (ID: 0x800000C0)
+[2m2026-01-01T17:43:20.904529Z[0m [32m INFO[0m [2mnet[0m[2m:[0m Emitting NetworkMessage event: ItemCreateObject
+[2m2026-01-01T17:43:20.904540Z[0m [32m INFO[0m [2mnet[0m[2m:[0m Parsed as S2CMessage: ItemCreateObject (0xF745)
+[2m2026-01-01T17:43:20.904579Z[0m [32m INFO[0m [2mnet[0m[2m:[0m Object created in world: Society Greeter (ID: 0x800001E4)
+[2m2026-01-01T17:43:20.904629Z[0m [32m INFO[0m [2mnet[0m[2m:[0m Emitting NetworkMessage event: ItemCreateObject
+[2m2026-01-01T17:43:20.904640Z[0m [32m INFO[0m [2mnet[0m[2m:[0m Parsed as S2CMessage: ItemCreateObject (0xF745)
+[2m2026-01-01T17:43:20.904659Z[0m [32m INFO[0m [2mnet[0m[2m:[0m Object created in world: Door (ID: 0x7860202D)
+[2m2026-01-01T17:43:20.904754Z[0m [32m INFO[0m [2mnet[0m[2m:[0m Emitting NetworkMessage event: ItemCreateObject
+[2m2026-01-01T17:43:20.904765Z[0m [32m INFO[0m [2mnet[0m[2m:[0m Parsed as S2CMessage: ItemCreateObject (0xF745)
+[2m2026-01-01T17:43:20.904803Z[0m [32m INFO[0m [2mnet[0m[2m:[0m Object created in world: Jonathan (ID: 0x800001E1)
+[2m2026-01-01T17:43:20.904856Z[0m [32m INFO[0m [2mnet[0m[2m:[0m Emitting NetworkMessage event: ItemCreateObject
+[2m2026-01-01T17:43:20.904866Z[0m [32m INFO[0m [2mnet[0m[2m:[0m Parsed as S2CMessage: ItemCreateObject (0xF745)
+[2m2026-01-01T17:43:20.904885Z[0m [32m INFO[0m [2mnet[0m[2m:[0m Object created in world: Leather Leggings (ID: 0x8000020D)
+[2m2026-01-01T17:43:20.904936Z[0m [32m INFO[0m [2mnet[0m[2m:[0m Emitting NetworkMessage event: ItemCreateObject
+[2m2026-01-01T17:43:20.904947Z[0m [32m INFO[0m [2mnet[0m[2m:[0m Parsed as S2CMessage: ItemCreateObject (0xF745)
+[2m2026-01-01T17:43:20.904965Z[0m [32m INFO[0m [2mnet[0m[2m:[0m Object created in world: Leather Cap (ID: 0x80000210)
+[2m2026-01-01T17:43:20.905052Z[0m [32m INFO[0m [2mnet[0m[2m:[0m Emitting NetworkMessage event: ItemCreateObject
+[2m2026-01-01T17:43:20.905062Z[0m [32m INFO[0m [2mnet[0m[2m:[0m Parsed as S2CMessage: ItemCreateObject (0xF745)
+[2m2026-01-01T17:43:20.905101Z[0m [32m INFO[0m [2mnet[0m[2m:[0m Object created in world: Samuel (ID: 0x800001E7)
+[2m2026-01-01T17:43:20.905154Z[0m [32m INFO[0m [2mnet[0m[2m:[0m Emitting NetworkMessage event: ItemCreateObject
+[2m2026-01-01T17:43:20.905167Z[0m [32m INFO[0m [2mnet[0m[2m:[0m Parsed as S2CMessage: ItemCreateObject (0xF745)
+[2m2026-01-01T17:43:20.905185Z[0m [32m INFO[0m [2mnet[0m[2m:[0m Object created in world: Training Area (ID: 0x7860202C)
+[2m2026-01-01T17:43:20.905235Z[0m [32m INFO[0m [2mnet[0m[2m:[0m Emitting NetworkMessage event: ItemCreateObject
+[2m2026-01-01T17:43:20.905272Z[0m [32m INFO[0m [2mnet[0m[2m:[0m Parsed as S2CMessage: ItemCreateObject (0xF745)
+[2m2026-01-01T17:43:20.905293Z[0m [32m INFO[0m [2mnet[0m[2m:[0m Object created in world: Sparring Golem (ID: 0x800001BE)
+[2m2026-01-01T17:43:20.905380Z[0m [32m INFO[0m [2mnet[0m[2m:[0m Emitting NetworkMessage event: ItemCreateObject
+[2m2026-01-01T17:43:20.905391Z[0m [32m INFO[0m [2mnet[0m[2m:[0m Parsed as S2CMessage: ItemCreateObject (0xF745)
+[2m2026-01-01T17:43:20.905429Z[0m [32m INFO[0m [2mnet[0m[2m:[0m Object created in world: Training Master (ID: 0x800001EA)
+[2m2026-01-01T17:43:20.905479Z[0m [32m INFO[0m [2mnet[0m[2m:[0m Emitting NetworkMessage event: ItemCreateObject
+[2m2026-01-01T17:43:20.905489Z[0m [32m INFO[0m [2mnet[0m[2m:[0m Parsed as S2CMessage: ItemCreateObject (0xF745)
+[2m2026-01-01T17:43:20.905508Z[0m [32m INFO[0m [2mnet[0m[2m:[0m Object created in world: Sparring Golem (ID: 0x800001C2)
+[2m2026-01-01T17:43:20.905557Z[0m [32m INFO[0m [2mnet[0m[2m:[0m Emitting NetworkMessage event: ItemCreateObject
+[2m2026-01-01T17:43:20.905567Z[0m [32m INFO[0m [2mnet[0m[2m:[0m Parsed as S2CMessage: ItemCreateObject (0xF745)
+[2m2026-01-01T17:43:20.905586Z[0m [32m INFO[0m [2mnet[0m[2m:[0m Object created in world: Sparring Golem (ID: 0x800001C3)
+[2m2026-01-01T17:43:20.905639Z[0m [32m INFO[0m [2mnet[0m[2m:[0m Emitting NetworkMessage event: ItemCreateObject
+[2m2026-01-01T17:43:20.905650Z[0m [32m INFO[0m [2mnet[0m[2m:[0m Parsed as S2CMessage: ItemCreateObject (0xF745)
+[2m2026-01-01T17:43:20.905669Z[0m [32m INFO[0m [2mnet[0m[2m:[0m Object created in world: Sparring Golem (ID: 0x800001C0)
+[2m2026-01-01T17:43:20.905690Z[0m [34mDEBUG[0m [2mevent_wrapper[0m[2m:[0m EventWrapper received ClientEvent: Discriminant(0)
+[2m2026-01-01T17:43:20.905701Z[0m [34mDEBUG[0m [2mevent_wrapper[0m[2m:[0m EventWrapper publishing envelope: Discriminant(0)
+[2m2026-01-01T17:43:20.905714Z[0m [34mDEBUG[0m [2mevent_wrapper[0m[2m:[0m EventWrapper received ClientEvent: Discriminant(0)
+[2m2026-01-01T17:43:20.905723Z[0m [34mDEBUG[0m [2mevent_wrapper[0m[2m:[0m EventWrapper publishing envelope: Discriminant(0)
+[2m2026-01-01T17:43:20.905734Z[0m [34mDEBUG[0m [2mevent_wrapper[0m[2m:[0m EventWrapper received ClientEvent: Discriminant(0)
+[2m2026-01-01T17:43:20.905742Z[0m [34mDEBUG[0m [2mevent_wrapper[0m[2m:[0m EventWrapper publishing envelope: Discriminant(0)
+[2m2026-01-01T17:43:20.905752Z[0m [34mDEBUG[0m [2mevent_wrapper[0m[2m:[0m EventWrapper received ClientEvent: Discriminant(0)
+[2m2026-01-01T17:43:20.905761Z[0m [34mDEBUG[0m [2mevent_wrapper[0m[2m:[0m EventWrapper publishing envelope: Discriminant(0)
+[2m2026-01-01T17:43:20.905770Z[0m [34mDEBUG[0m [2mevent_wrapper[0m[2m:[0m EventWrapper received ClientEvent: Discriminant(0)
+[2m2026-01-01T17:43:20.905779Z[0m [34mDEBUG[0m [2mevent_wrapper[0m[2m:[0m EventWrapper publishing envelope: Discriminant(0)
+[2m2026-01-01T17:43:20.905789Z[0m [34mDEBUG[0m [2mevent_wrapper[0m[2m:[0m EventWrapper received ClientEvent: Discriminant(0)
+[2m2026-01-01T17:43:20.905797Z[0m [34mDEBUG[0m [2mevent_wrapper[0m[2m:[0m EventWrapper publishing envelope: Discriminant(0)
+[2m2026-01-01T17:43:20.905807Z[0m [34mDEBUG[0m [2mevent_wrapper[0m[2m:[0m EventWrapper received ClientEvent: Discriminant(0)
+[2m2026-01-01T17:43:20.905816Z[0m [34mDEBUG[0m [2mevent_wrapper[0m[2m:[0m EventWrapper publishing envelope: Discriminant(0)
+[2m2026-01-01T17:43:20.905825Z[0m [34mDEBUG[0m [2mevent_wrapper[0m[2m:[0m EventWrapper received ClientEvent: Discriminant(0)
+[2m2026-01-01T17:43:20.905834Z[0m [34mDEBUG[0m [2mevent_wrapper[0m[2m:[0m EventWrapper publishing envelope: Discriminant(0)
+[2m2026-01-01T17:43:20.905843Z[0m [34mDEBUG[0m [2mevent_wrapper[0m[2m:[0m EventWrapper received ClientEvent: Discriminant(0)
+[2m2026-01-01T17:43:20.905852Z[0m [34mDEBUG[0m [2mevent_wrapper[0m[2m:[0m EventWrapper publishing envelope: Discriminant(0)
+[2m2026-01-01T17:43:20.905884Z[0m [34mDEBUG[0m [2mevent_wrapper[0m[2m:[0m EventWrapper received ClientEvent: Discriminant(0)
+[2m2026-01-01T17:43:20.905893Z[0m [34mDEBUG[0m [2mevent_wrapper[0m[2m:[0m EventWrapper publishing envelope: Discriminant(0)
+[2m2026-01-01T17:43:20.905903Z[0m [34mDEBUG[0m [2mevent_wrapper[0m[2m:[0m EventWrapper received ClientEvent: Discriminant(0)
+[2m2026-01-01T17:43:20.905912Z[0m [34mDEBUG[0m [2mevent_wrapper[0m[2m:[0m EventWrapper publishing envelope: Discriminant(0)
+[2m2026-01-01T17:43:20.905921Z[0m [34mDEBUG[0m [2mevent_wrapper[0m[2m:[0m EventWrapper received ClientEvent: Discriminant(0)
+[2m2026-01-01T17:43:20.905930Z[0m [34mDEBUG[0m [2mevent_wrapper[0m[2m:[0m EventWrapper publishing envelope: Discriminant(0)
+[2m2026-01-01T17:43:20.905939Z[0m [34mDEBUG[0m [2mevent_wrapper[0m[2m:[0m EventWrapper received ClientEvent: Discriminant(0)
+[2m2026-01-01T17:43:20.905948Z[0m [34mDEBUG[0m [2mevent_wrapper[0m[2m:[0m EventWrapper publishing envelope: Discriminant(0)
+[2m2026-01-01T17:43:20.905957Z[0m [34mDEBUG[0m [2mevent_wrapper[0m[2m:[0m EventWrapper received ClientEvent: Discriminant(0)
+[2m2026-01-01T17:43:20.905965Z[0m [34mDEBUG[0m [2mevent_wrapper[0m[2m:[0m EventWrapper publishing envelope: Discriminant(0)
+[2m2026-01-01T17:43:20.905974Z[0m [34mDEBUG[0m [2mevent_wrapper[0m[2m:[0m EventWrapper received ClientEvent: Discriminant(0)
+[2m2026-01-01T17:43:20.905983Z[0m [34mDEBUG[0m [2mevent_wrapper[0m[2m:[0m EventWrapper publishing envelope: Discriminant(0)
+[2m2026-01-01T17:43:20.905992Z[0m [34mDEBUG[0m [2mevent_wrapper[0m[2m:[0m EventWrapper received ClientEvent: Discriminant(0)
+[2m2026-01-01T17:43:20.906001Z[0m [34mDEBUG[0m [2mevent_wrapper[0m[2m:[0m EventWrapper publishing envelope: Discriminant(0)
+[2m2026-01-01T17:43:20.906010Z[0m [34mDEBUG[0m [2mevent_wrapper[0m[2m:[0m EventWrapper received ClientEvent: Discriminant(0)
+[2m2026-01-01T17:43:20.906019Z[0m [34mDEBUG[0m [2mevent_wrapper[0m[2m:[0m EventWrapper publishing envelope: Discriminant(0)
+[2m2026-01-01T17:43:20.906029Z[0m [34mDEBUG[0m [2mevent_wrapper[0m[2m:[0m EventWrapper received ClientEvent: Discriminant(0)
+[2m2026-01-01T17:43:20.906037Z[0m [34mDEBUG[0m [2mevent_wrapper[0m[2m:[0m EventWrapper publishing envelope: Discriminant(0)
+[2m2026-01-01T17:43:20.906047Z[0m [34mDEBUG[0m [2mevent_wrapper[0m[2m:[0m EventWrapper received ClientEvent: Discriminant(0)
+[2m2026-01-01T17:43:20.906055Z[0m [34mDEBUG[0m [2mevent_wrapper[0m[2m:[0m EventWrapper publishing envelope: Discriminant(0)
+[2m2026-01-01T17:43:20.906064Z[0m [34mDEBUG[0m [2mevent_wrapper[0m[2m:[0m EventWrapper received ClientEvent: Discriminant(0)
+[2m2026-01-01T17:43:20.906073Z[0m [34mDEBUG[0m [2mevent_wrapper[0m[2m:[0m EventWrapper publishing envelope: Discriminant(0)
+[2m2026-01-01T17:43:20.906082Z[0m [34mDEBUG[0m [2mevent_wrapper[0m[2m:[0m EventWrapper received ClientEvent: Discriminant(0)
+[2m2026-01-01T17:43:20.906090Z[0m [34mDEBUG[0m [2mevent_wrapper[0m[2m:[0m EventWrapper publishing envelope: Discriminant(0)
+[2m2026-01-01T17:43:20.906100Z[0m [34mDEBUG[0m [2mevent_wrapper[0m[2m:[0m EventWrapper received ClientEvent: Discriminant(0)
+[2m2026-01-01T17:43:20.906108Z[0m [34mDEBUG[0m [2mevent_wrapper[0m[2m:[0m EventWrapper publishing envelope: Discriminant(0)
+[2m2026-01-01T17:43:20.906117Z[0m [34mDEBUG[0m [2mevent_wrapper[0m[2m:[0m EventWrapper received ClientEvent: Discriminant(0)
+[2m2026-01-01T17:43:20.906126Z[0m [34mDEBUG[0m [2mevent_wrapper[0m[2m:[0m EventWrapper publishing envelope: Discriminant(0)
+[2m2026-01-01T17:43:20.906135Z[0m [34mDEBUG[0m [2mevent_wrapper[0m[2m:[0m EventWrapper received ClientEvent: Discriminant(0)
+[2m2026-01-01T17:43:20.906143Z[0m [34mDEBUG[0m [2mevent_wrapper[0m[2m:[0m EventWrapper publishing envelope: Discriminant(0)
+[2m2026-01-01T17:43:20.906153Z[0m [34mDEBUG[0m [2mevent_wrapper[0m[2m:[0m EventWrapper received ClientEvent: Discriminant(0)
+[2m2026-01-01T17:43:20.906185Z[0m [34mDEBUG[0m [2mevent_wrapper[0m[2m:[0m EventWrapper publishing envelope: Discriminant(0)
+[2m2026-01-01T17:43:20.906195Z[0m [34mDEBUG[0m [2mevent_wrapper[0m[2m:[0m EventWrapper received ClientEvent: Discriminant(0)
+[2m2026-01-01T17:43:20.906203Z[0m [34mDEBUG[0m [2mevent_wrapper[0m[2m:[0m EventWrapper publishing envelope: Discriminant(0)
+[2m2026-01-01T17:43:20.906212Z[0m [34mDEBUG[0m [2mevent_wrapper[0m[2m:[0m EventWrapper received ClientEvent: Discriminant(0)
+[2m2026-01-01T17:43:20.906221Z[0m [34mDEBUG[0m [2mevent_wrapper[0m[2m:[0m EventWrapper publishing envelope: Discriminant(0)
+[2m2026-01-01T17:43:20.906230Z[0m [34mDEBUG[0m [2mevent_wrapper[0m[2m:[0m EventWrapper received ClientEvent: Discriminant(0)
+[2m2026-01-01T17:43:20.906239Z[0m [34mDEBUG[0m [2mevent_wrapper[0m[2m:[0m EventWrapper publishing envelope: Discriminant(0)
+[2m2026-01-01T17:43:20.906253Z[0m [32m INFO[0m [2mtui_consumer[0m[2m:[0m TuiConsumer forwarding GameEvent: Discriminant(7)
+[2m2026-01-01T17:43:20.906267Z[0m [32m INFO[0m [2mtui_consumer[0m[2m:[0m TuiConsumer forwarding GameEvent: Discriminant(5)
+[2m2026-01-01T17:43:20.906366Z[0m [32m INFO[0m [2mtui_consumer[0m[2m:[0m TuiConsumer forwarding GameEvent: Discriminant(7)
+[2m2026-01-01T17:43:20.906380Z[0m [32m INFO[0m [2mtui_consumer[0m[2m:[0m TuiConsumer forwarding GameEvent: Discriminant(5)
+[2m2026-01-01T17:43:20.906417Z[0m [32m INFO[0m [2mtui_consumer[0m[2m:[0m TuiConsumer forwarding GameEvent: Discriminant(7)
+[2m2026-01-01T17:43:20.906431Z[0m [32m INFO[0m [2mtui_consumer[0m[2m:[0m TuiConsumer forwarding GameEvent: Discriminant(5)
+[2m2026-01-01T17:43:20.906464Z[0m [32m INFO[0m [2mtui_consumer[0m[2m:[0m TuiConsumer forwarding GameEvent: Discriminant(7)
+[2m2026-01-01T17:43:20.906477Z[0m [32m INFO[0m [2mtui_consumer[0m[2m:[0m TuiConsumer forwarding GameEvent: Discriminant(5)
+[2m2026-01-01T17:43:20.906511Z[0m [32m INFO[0m [2mtui_consumer[0m[2m:[0m TuiConsumer forwarding GameEvent: Discriminant(7)
+[2m2026-01-01T17:43:20.906526Z[0m [32m INFO[0m [2mtui_consumer[0m[2m:[0m TuiConsumer forwarding GameEvent: Discriminant(5)
+[2m2026-01-01T17:43:20.906557Z[0m [32m INFO[0m [2mtui_consumer[0m[2m:[0m TuiConsumer forwarding GameEvent: Discriminant(7)
+[2m2026-01-01T17:43:20.906571Z[0m [32m INFO[0m [2mtui_consumer[0m[2m:[0m TuiConsumer forwarding GameEvent: Discriminant(5)
+[2m2026-01-01T17:43:20.906603Z[0m [32m INFO[0m [2mtui_consumer[0m[2m:[0m TuiConsumer forwarding GameEvent: Discriminant(7)
+[2m2026-01-01T17:43:20.906616Z[0m [32m INFO[0m [2mtui_consumer[0m[2m:[0m TuiConsumer forwarding GameEvent: Discriminant(5)
+[2m2026-01-01T17:43:20.906646Z[0m [32m INFO[0m [2mtui_consumer[0m[2m:[0m TuiConsumer forwarding GameEvent: Discriminant(7)
+[2m2026-01-01T17:43:20.906662Z[0m [32m INFO[0m [2mtui_consumer[0m[2m:[0m TuiConsumer forwarding GameEvent: Discriminant(5)
+[2m2026-01-01T17:43:20.906701Z[0m [32m INFO[0m [2mtui_consumer[0m[2m:[0m TuiConsumer forwarding GameEvent: Discriminant(7)
+[2m2026-01-01T17:43:20.906717Z[0m [32m INFO[0m [2mtui_consumer[0m[2m:[0m TuiConsumer forwarding GameEvent: Discriminant(5)
+[2m2026-01-01T17:43:20.906747Z[0m [32m INFO[0m [2mtui_consumer[0m[2m:[0m TuiConsumer forwarding GameEvent: Discriminant(7)
+[2m2026-01-01T17:43:20.906765Z[0m [32m INFO[0m [2mtui_consumer[0m[2m:[0m TuiConsumer forwarding GameEvent: Discriminant(5)
+[2m2026-01-01T17:43:20.906797Z[0m [32m INFO[0m [2mtui_consumer[0m[2m:[0m TuiConsumer forwarding GameEvent: Discriminant(7)
+[2m2026-01-01T17:43:20.906811Z[0m [32m INFO[0m [2mtui_consumer[0m[2m:[0m TuiConsumer forwarding GameEvent: Discriminant(5)
+[2m2026-01-01T17:43:20.906841Z[0m [32m INFO[0m [2mtui_consumer[0m[2m:[0m TuiConsumer forwarding GameEvent: Discriminant(7)
+[2m2026-01-01T17:43:20.906856Z[0m [32m INFO[0m [2mtui_consumer[0m[2m:[0m TuiConsumer forwarding GameEvent: Discriminant(5)
+[2m2026-01-01T17:43:20.907102Z[0m [32m INFO[0m [2mtui_consumer[0m[2m:[0m TuiConsumer forwarding GameEvent: Discriminant(7)
+[2m2026-01-01T17:43:20.907118Z[0m [32m INFO[0m [2mtui_consumer[0m[2m:[0m TuiConsumer forwarding GameEvent: Discriminant(5)
+[2m2026-01-01T17:43:20.907148Z[0m [32m INFO[0m [2mtui_consumer[0m[2m:[0m TuiConsumer forwarding GameEvent: Discriminant(7)
+[2m2026-01-01T17:43:20.907162Z[0m [32m INFO[0m [2mtui_consumer[0m[2m:[0m TuiConsumer forwarding GameEvent: Discriminant(5)
+[2m2026-01-01T17:43:20.907252Z[0m [32m INFO[0m [2mtui_main[0m[2m:[0m TUI main received GameEvent: Discriminant(2)
+[2m2026-01-01T17:43:20.907269Z[0m [32m INFO[0m [2mtui_main[0m[2m:[0m TUI main received GameEvent: Discriminant(7)
+[2m2026-01-01T17:43:20.907280Z[0m [32m INFO[0m [2mtui_main[0m[2m:[0m TUI main received GameEvent: Discriminant(5)
+[2m2026-01-01T17:43:20.907292Z[0m [32m INFO[0m [2mtui_main[0m[2m:[0m TUI main received GameEvent: Discriminant(7)
+[2m2026-01-01T17:43:20.907303Z[0m [32m INFO[0m [2mtui_main[0m[2m:[0m TUI main received GameEvent: Discriminant(5)
+[2m2026-01-01T17:43:20.907314Z[0m [32m INFO[0m [2mtui_main[0m[2m:[0m TUI main received GameEvent: Discriminant(7)
+[2m2026-01-01T17:43:20.907323Z[0m [32m INFO[0m [2mtui_main[0m[2m:[0m TUI main received GameEvent: Discriminant(5)
+[2m2026-01-01T17:43:20.907336Z[0m [32m INFO[0m [2mtui_main[0m[2m:[0m TUI main received GameEvent: Discriminant(7)
+[2m2026-01-01T17:43:20.907346Z[0m [32m INFO[0m [2mtui_main[0m[2m:[0m TUI main received GameEvent: Discriminant(5)
+[2m2026-01-01T17:43:20.907356Z[0m [32m INFO[0m [2mtui_main[0m[2m:[0m TUI main received GameEvent: Discriminant(7)
+[2m2026-01-01T17:43:20.907366Z[0m [32m INFO[0m [2mtui_main[0m[2m:[0m TUI main received GameEvent: Discriminant(5)
+[2m2026-01-01T17:43:20.907379Z[0m [32m INFO[0m [2mtui_main[0m[2m:[0m TUI main received GameEvent: Discriminant(7)
+[2m2026-01-01T17:43:20.907391Z[0m [32m INFO[0m [2mtui_main[0m[2m:[0m TUI main received GameEvent: Discriminant(5)
+[2m2026-01-01T17:43:20.907401Z[0m [32m INFO[0m [2mtui_main[0m[2m:[0m TUI main received GameEvent: Discriminant(7)
+[2m2026-01-01T17:43:20.907412Z[0m [32m INFO[0m [2mtui_main[0m[2m:[0m TUI main received GameEvent: Discriminant(5)
+[2m2026-01-01T17:43:20.907422Z[0m [32m INFO[0m [2mtui_main[0m[2m:[0m TUI main received GameEvent: Discriminant(7)
+[2m2026-01-01T17:43:20.907431Z[0m [32m INFO[0m [2mtui_main[0m[2m:[0m TUI main received GameEvent: Discriminant(5)
+[2m2026-01-01T17:43:20.907442Z[0m [32m INFO[0m [2mtui_main[0m[2m:[0m TUI main received GameEvent: Discriminant(7)
+[2m2026-01-01T17:43:20.907453Z[0m [32m INFO[0m [2mtui_main[0m[2m:[0m TUI main received GameEvent: Discriminant(5)
+[2m2026-01-01T17:43:20.907465Z[0m [32m INFO[0m [2mtui_main[0m[2m:[0m TUI main received GameEvent: Discriminant(7)
+[2m2026-01-01T17:43:20.907475Z[0m [32m INFO[0m [2mtui_main[0m[2m:[0m TUI main received GameEvent: Discriminant(5)
+[2m2026-01-01T17:43:20.907487Z[0m [32m INFO[0m [2mtui_main[0m[2m:[0m TUI main received GameEvent: Discriminant(7)
+[2m2026-01-01T17:43:20.907498Z[0m [32m INFO[0m [2mtui_main[0m[2m:[0m TUI main received GameEvent: Discriminant(5)
+[2m2026-01-01T17:43:20.907510Z[0m [32m INFO[0m [2mtui_main[0m[2m:[0m TUI main received GameEvent: Discriminant(7)
+[2m2026-01-01T17:43:20.907520Z[0m [32m INFO[0m [2mtui_main[0m[2m:[0m TUI main received GameEvent: Discriminant(5)
+[2m2026-01-01T17:43:20.907532Z[0m [32m INFO[0m [2mtui_main[0m[2m:[0m TUI main received GameEvent: Discriminant(7)
+[2m2026-01-01T17:43:20.907543Z[0m [32m INFO[0m [2mtui_main[0m[2m:[0m TUI main received GameEvent: Discriminant(5)
+[2m2026-01-01T17:43:20.907554Z[0m [32m INFO[0m [2mtui_main[0m[2m:[0m TUI main received GameEvent: Discriminant(7)
+[2m2026-01-01T17:43:20.907565Z[0m [32m INFO[0m [2mtui_main[0m[2m:[0m TUI main received GameEvent: Discriminant(5)
+[2m2026-01-01T17:43:20.909857Z[0m [32m INFO[0m [2mnet[0m[2m:[0m Emitting NetworkMessage event: ⚠ UNHANDLED: ItemSetState
+[2m2026-01-01T17:43:20.909898Z[0m [32m INFO[0m [2mnet[0m[2m:[0m Parsed as S2CMessage: ItemSetState (0xF74B)
+[2m2026-01-01T17:43:20.909910Z[0m [32m INFO[0m [2mnet[0m[2m:[0m Unhandled S2CMessage: ItemSetState (0xF74B)
+[2m2026-01-01T17:43:20.909921Z[0m [32m INFO[0m [2mscript[0m[2m:[0m [hello_world_wasm] Object created: Blackmoor's Favor (ID: 2147483966)
+[2m2026-01-01T17:43:20.909933Z[0m [32m INFO[0m [2mscript[0m[2m:[0m [hello_world_wasm] Scheduled 5-second greeting timer
+[2m2026-01-01T17:43:20.909943Z[0m [32m INFO[0m [2mscript[0m[2m:[0m [hello_world_wasm] Object created: Shirt (ID: 2147483840)
+[2m2026-01-01T17:43:20.909954Z[0m [32m INFO[0m [2mscript[0m[2m:[0m [hello_world_wasm] Scheduled 5-second greeting timer
+[2m2026-01-01T17:43:20.909964Z[0m [32m INFO[0m [2mscript[0m[2m:[0m [hello_world_wasm] Object created: Society Greeter (ID: 2147484132)
+[2m2026-01-01T17:43:20.909974Z[0m [32m INFO[0m [2mscript[0m[2m:[0m [hello_world_wasm] Scheduled 5-second greeting timer
+[2m2026-01-01T17:43:20.909983Z[0m [32m INFO[0m [2mscript[0m[2m:[0m [hello_world_wasm] Object created: Door (ID: 2019565613)
+[2m2026-01-01T17:43:20.909994Z[0m [32m INFO[0m [2mscript[0m[2m:[0m [hello_world_wasm] Scheduled 5-second greeting timer
+[2m2026-01-01T17:43:20.910003Z[0m [32m INFO[0m [2mscript[0m[2m:[0m [hello_world_wasm] Object created: Jonathan (ID: 2147484129)
+[2m2026-01-01T17:43:20.910013Z[0m [32m INFO[0m [2mscript[0m[2m:[0m [hello_world_wasm] Scheduled 5-second greeting timer
+[2m2026-01-01T17:43:20.910022Z[0m [32m INFO[0m [2mscript[0m[2m:[0m [hello_world_wasm] Object created: Leather Leggings (ID: 2147484173)
+[2m2026-01-01T17:43:20.910032Z[0m [32m INFO[0m [2mscript[0m[2m:[0m [hello_world_wasm] Scheduled 5-second greeting timer
+[2m2026-01-01T17:43:20.910041Z[0m [32m INFO[0m [2mscript[0m[2m:[0m [hello_world_wasm] Object created: Leather Cap (ID: 2147484176)
+[2m2026-01-01T17:43:20.910051Z[0m [32m INFO[0m [2mscript[0m[2m:[0m [hello_world_wasm] Scheduled 5-second greeting timer
+[2m2026-01-01T17:43:20.910060Z[0m [32m INFO[0m [2mscript[0m[2m:[0m [hello_world_wasm] Object created: Samuel (ID: 2147484135)
+[2m2026-01-01T17:43:20.910070Z[0m [32m INFO[0m [2mscript[0m[2m:[0m [hello_world_wasm] Scheduled 5-second greeting timer
+[2m2026-01-01T17:43:20.910079Z[0m [32m INFO[0m [2mscript[0m[2m:[0m [hello_world_wasm] Object created: Training Area (ID: 2019565612)
+[2m2026-01-01T17:43:20.910089Z[0m [32m INFO[0m [2mscript[0m[2m:[0m [hello_world_wasm] Scheduled 5-second greeting timer
+[2m2026-01-01T17:43:20.910101Z[0m [32m INFO[0m [2mscript[0m[2m:[0m [hello_world_wasm] Object created: Sparring Golem (ID: 2147484094)
+[2m2026-01-01T17:43:20.910110Z[0m [32m INFO[0m [2mscript[0m[2m:[0m [hello_world_wasm] Scheduled 5-second greeting timer
+[2m2026-01-01T17:43:20.910119Z[0m [32m INFO[0m [2mscript[0m[2m:[0m [hello_world_wasm] Object created: Training Master (ID: 2147484138)
+[2m2026-01-01T17:43:20.910130Z[0m [32m INFO[0m [2mscript[0m[2m:[0m [hello_world_wasm] Scheduled 5-second greeting timer
+[2m2026-01-01T17:43:20.910139Z[0m [32m INFO[0m [2mscript[0m[2m:[0m [hello_world_wasm] Object created: Sparring Golem (ID: 2147484098)
+[2m2026-01-01T17:43:20.910149Z[0m [32m INFO[0m [2mscript[0m[2m:[0m [hello_world_wasm] Scheduled 5-second greeting timer
+[2m2026-01-01T17:43:20.910158Z[0m [32m INFO[0m [2mscript[0m[2m:[0m [hello_world_wasm] Object created: Sparring Golem (ID: 2147484099)
+[2m2026-01-01T17:43:20.910168Z[0m [32m INFO[0m [2mscript[0m[2m:[0m [hello_world_wasm] Scheduled 5-second greeting timer
+[2m2026-01-01T17:43:20.910178Z[0m [32m INFO[0m [2mscript[0m[2m:[0m [hello_world_wasm] Object created: Sparring Golem (ID: 2147484096)
+[2m2026-01-01T17:43:20.910189Z[0m [32m INFO[0m [2mscript[0m[2m:[0m [hello_world_wasm] Scheduled 5-second greeting timer
+[2m2026-01-01T17:43:20.910231Z[0m [34mDEBUG[0m [2mevent_wrapper[0m[2m:[0m EventWrapper received ClientEvent: Discriminant(0)
+[2m2026-01-01T17:43:20.910243Z[0m [34mDEBUG[0m [2mevent_wrapper[0m[2m:[0m EventWrapper publishing envelope: Discriminant(0)
+[2m2026-01-01T17:43:20.910259Z[0m [32m INFO[0m [2mtui_consumer[0m[2m:[0m TuiConsumer forwarding GameEvent: Discriminant(7)
+[2m2026-01-01T17:43:20.910281Z[0m [32m INFO[0m [2mtui_main[0m[2m:[0m TUI main received GameEvent: Discriminant(7)
+[2m2026-01-01T17:43:27.902202Z[0m [32m INFO[0m [2mnet[0m[2m:[0m Emitting NetworkMessage event: ⚠ UNHANDLED: QualitiesPrivateUpdateInt
+[2m2026-01-01T17:43:27.902518Z[0m [32m INFO[0m [2mnet[0m[2m:[0m Parsed as S2CMessage: QualitiesPrivateUpdateInt (0x02CD)
+[2m2026-01-01T17:43:27.902548Z[0m [32m INFO[0m [2mnet[0m[2m:[0m Unhandled S2CMessage: QualitiesPrivateUpdateInt (0x02CD)
+[2m2026-01-01T17:43:27.902608Z[0m [34mDEBUG[0m [2mevent_wrapper[0m[2m:[0m EventWrapper received ClientEvent: Discriminant(0)
+[2m2026-01-01T17:43:27.902636Z[0m [34mDEBUG[0m [2mevent_wrapper[0m[2m:[0m EventWrapper publishing envelope: Discriminant(0)
+[2m2026-01-01T17:43:27.902691Z[0m [32m INFO[0m [2mtui_consumer[0m[2m:[0m TuiConsumer forwarding GameEvent: Discriminant(7)
+[2m2026-01-01T17:43:27.902737Z[0m [32m INFO[0m [2mtui_main[0m[2m:[0m TUI main received GameEvent: Discriminant(7)
+[2m2026-01-01T17:43:28.881695Z[0m [32m INFO[0m [2mscript[0m[2m:[0m [hello_world_wasm] Timer fired! Sending greeting...
+[2m2026-01-01T17:43:28.881768Z[0m [34mDEBUG[0m [2mevents[0m[2m:[0m Action: Sending chat message: Hello from WASM! 👋
+[2m2026-01-01T17:43:28.881793Z[0m [32m INFO[0m [2mnet[0m[2m:[0m Sending chat message: Hello from WASM! 👋
+[2m2026-01-01T17:43:28.881840Z[0m [32m INFO[0m [2mnet[0m[2m:[0m Chat message queued for sending
+[2m2026-01-01T17:43:28.881865Z[0m [32m INFO[0m [2mnet[0m[2m:[0m send_pending_messages: sending message: Discriminant(5)
+[2m2026-01-01T17:43:28.881890Z[0m [32m INFO[0m [2mnet[0m[2m:[0m send_fragmented_message: message_data len=40, group=Object
+[2m2026-01-01T17:43:28.887070Z[0m [32m INFO[0m [2mnet[0m[2m:[0m Emitting NetworkMessage event: CommunicationHearSpeech
+[2m2026-01-01T17:43:28.887124Z[0m [32m INFO[0m [2mnet[0m[2m:[0m Parsed as S2CMessage: CommunicationHearSpeech (0x02BB)
+[2m2026-01-01T17:43:28.887172Z[0m [32m INFO[0m [2mnet[0m[2m:[0m Hear speech received - Opcode: 0x02BB, Type: 2, Text: +TestChar8009 says, "Hello from WASM! &#128075;"
+[2m2026-01-01T17:43:28.887229Z[0m [34mDEBUG[0m [2mevent_wrapper[0m[2m:[0m EventWrapper received ClientEvent: Discriminant(0)
+[2m2026-01-01T17:43:28.887261Z[0m [34mDEBUG[0m [2mevent_wrapper[0m[2m:[0m EventWrapper publishing envelope: Discriminant(0)
+[2m2026-01-01T17:43:28.887293Z[0m [34mDEBUG[0m [2mevent_wrapper[0m[2m:[0m EventWrapper received ClientEvent: Discriminant(0)
+[2m2026-01-01T17:43:28.887312Z[0m [34mDEBUG[0m [2mevent_wrapper[0m[2m:[0m EventWrapper publishing envelope: Discriminant(0)
+[2m2026-01-01T17:43:28.887350Z[0m [32m INFO[0m [2mtui_consumer[0m[2m:[0m TuiConsumer forwarding GameEvent: Discriminant(7)
+[2m2026-01-01T17:43:28.887564Z[0m [32m INFO[0m [2mtui_consumer[0m[2m:[0m TuiConsumer forwarding GameEvent: Discriminant(6)
+[2m2026-01-01T17:43:28.892067Z[0m [32m INFO[0m [2mtui_main[0m[2m:[0m TUI main received GameEvent: Discriminant(7)
+[2m2026-01-01T17:43:28.892105Z[0m [32m INFO[0m [2mtui_main[0m[2m:[0m TUI main received GameEvent: Discriminant(6)
+[2m2026-01-01T17:43:34.906480Z[0m [32m INFO[0m [2mnet[0m[2m:[0m Emitting NetworkMessage event: ⚠ UNHANDLED: QualitiesPrivateUpdateInt
+[2m2026-01-01T17:43:34.906547Z[0m [32m INFO[0m [2mnet[0m[2m:[0m Parsed as S2CMessage: QualitiesPrivateUpdateInt (0x02CD)
+[2m2026-01-01T17:43:34.906566Z[0m [32m INFO[0m [2mnet[0m[2m:[0m Unhandled S2CMessage: QualitiesPrivateUpdateInt (0x02CD)
+[2m2026-01-01T17:43:34.906604Z[0m [34mDEBUG[0m [2mevent_wrapper[0m[2m:[0m EventWrapper received ClientEvent: Discriminant(0)
+[2m2026-01-01T17:43:34.906690Z[0m [34mDEBUG[0m [2mevent_wrapper[0m[2m:[0m EventWrapper publishing envelope: Discriminant(0)
+[2m2026-01-01T17:43:34.906737Z[0m [32m INFO[0m [2mtui_consumer[0m[2m:[0m TuiConsumer forwarding GameEvent: Discriminant(7)
+[2m2026-01-01T17:43:34.906775Z[0m [32m INFO[0m [2mtui_main[0m[2m:[0m TUI main received GameEvent: Discriminant(7)
+[2m2026-01-01T17:43:37.197027Z[0m [32m INFO[0m [2mtui[0m[2m:[0m TUI shutting down - waiting for client task to finish...
+[2m2026-01-01T17:43:37.449605Z[0m [32m INFO[0m [2mtui[0m[2m:[0m Client task did not shut down within timeout, proceeding anyway
+[2m2026-01-01T17:43:37.449738Z[0m [32m INFO[0m [2mtui[0m[2m:[0m TUI shut down cleanly
+[2m2026-01-01T17:43:37.450066Z[0m [32m INFO[0m [2mgromnie_runner::client_runner[0m[2m:[0m Client task received shutdown signal
+[2m2026-01-01T17:43:37.450112Z[0m [32m INFO[0m [2mgromnie_runner::client_runner[0m[2m:[0m Client 0 network loop stopped
+[2m2026-01-01T17:43:37.450135Z[0m [32m INFO[0m [2mgromnie_runner::client_runner[0m[2m:[0m Client task shutting down - cleaning up network connections...
+[2m2026-01-01T17:43:37.450257Z[0m [32m INFO[0m [2mevents[0m[2m:[0m Waiting for event handler task to finish

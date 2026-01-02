@@ -1,3 +1,4 @@
+use gromnie_client::config::scripting_config::ScriptingConfig;
 use std::collections::HashMap;
 use std::time::{Duration, Instant};
 use tokio::sync::mpsc::UnboundedSender;
@@ -10,7 +11,7 @@ use super::timer::TimerManager;
 use super::wasm::WasmScript;
 use crate::create_runner_from_config;
 use gromnie_client::client::events::{ClientAction, ClientEvent, ClientSystemEvent};
-use gromnie_runner::{EventConsumer, EventEnvelope};
+use gromnie_events::{EventConsumer, EventEnvelope};
 
 /// Default tick rate for scripts (50ms = 20Hz)
 const DEFAULT_TICK_INTERVAL: Duration = Duration::from_millis(50);
@@ -329,11 +330,11 @@ impl EventConsumer for ScriptConsumer {
 
         // Extract ClientEvent from EventEnvelope
         let client_event = match envelope.event {
-            gromnie_runner::EventType::Game(game_event) => ClientEvent::Game(game_event),
-            gromnie_runner::EventType::State(state_event) => {
+            gromnie_events::EventType::Game(game_event) => ClientEvent::Game(game_event),
+            gromnie_events::EventType::State(state_event) => {
                 // Convert ClientState-based event to string-based
                 match state_event {
-                    gromnie_runner::ClientStateEvent::StateTransition {
+                    gromnie_events::ClientStateEvent::StateTransition {
                         from,
                         to,
                         client_id,
@@ -344,7 +345,7 @@ impl EventConsumer for ScriptConsumer {
                             client_id,
                         },
                     ),
-                    gromnie_runner::ClientStateEvent::ClientFailed { reason, client_id } => {
+                    gromnie_events::ClientStateEvent::ClientFailed { reason, client_id } => {
                         ClientEvent::State(
                             gromnie_client::client::events::ClientStateEvent::ClientFailed {
                                 reason,
@@ -354,28 +355,28 @@ impl EventConsumer for ScriptConsumer {
                     }
                 }
             }
-            gromnie_runner::EventType::System(system_event) => {
+            gromnie_events::EventType::System(system_event) => {
                 // Convert SystemEvent to ClientSystemEvent
                 match system_event {
-                    gromnie_runner::SystemEvent::AuthenticationSucceeded { .. } => {
+                    gromnie_events::SystemEvent::AuthenticationSucceeded { .. } => {
                         ClientEvent::System(ClientSystemEvent::AuthenticationSucceeded)
                     }
-                    gromnie_runner::SystemEvent::AuthenticationFailed { reason, .. } => {
+                    gromnie_events::SystemEvent::AuthenticationFailed { reason, .. } => {
                         ClientEvent::System(ClientSystemEvent::AuthenticationFailed { reason })
                     }
-                    gromnie_runner::SystemEvent::ConnectingStarted { .. } => {
+                    gromnie_events::SystemEvent::ConnectingStarted { .. } => {
                         ClientEvent::System(ClientSystemEvent::ConnectingStarted)
                     }
-                    gromnie_runner::SystemEvent::ConnectingDone { .. } => {
+                    gromnie_events::SystemEvent::ConnectingDone { .. } => {
                         ClientEvent::System(ClientSystemEvent::ConnectingDone)
                     }
-                    gromnie_runner::SystemEvent::UpdatingStarted { .. } => {
+                    gromnie_events::SystemEvent::UpdatingStarted { .. } => {
                         ClientEvent::System(ClientSystemEvent::UpdatingStarted)
                     }
-                    gromnie_runner::SystemEvent::UpdatingDone { .. } => {
+                    gromnie_events::SystemEvent::UpdatingDone { .. } => {
                         ClientEvent::System(ClientSystemEvent::UpdatingDone)
                     }
-                    gromnie_runner::SystemEvent::LoginSucceeded {
+                    gromnie_events::SystemEvent::LoginSucceeded {
                         character_id,
                         character_name,
                     } => ClientEvent::System(ClientSystemEvent::LoginSucceeded {
@@ -397,7 +398,7 @@ impl EventConsumer for ScriptConsumer {
 /// Create a script runner consumer with the specified configuration
 pub fn create_script_consumer(
     action_tx: UnboundedSender<ClientAction>,
-    config: &gromnie_client::config::ScriptingConfig,
+    config: &ScriptingConfig,
 ) -> ScriptConsumer {
     let runner = create_runner_from_config(action_tx, config);
     ScriptConsumer::new(runner)

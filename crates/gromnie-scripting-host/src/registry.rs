@@ -2,12 +2,12 @@ use tokio::sync::mpsc::UnboundedSender;
 use tracing::debug;
 
 use super::script_runner::ScriptRunner;
-use gromnie_client::client::events::ClientAction;
+use gromnie_client::{client::events::ClientAction, config::scripting_config::ScriptingConfig};
 
 /// Create a script runner from config
 pub fn create_runner_from_config(
     action_tx: UnboundedSender<ClientAction>,
-    config: &gromnie_client::config::ScriptingConfig,
+    config: &ScriptingConfig,
 ) -> ScriptRunner {
     // Create runner with script support
     debug!(target: "scripting", "Creating script runner");

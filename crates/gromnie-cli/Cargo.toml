@@ -24,10 +24,14 @@ clap.workspace = true
 crossterm.workspace = true
 gromnie-client = { path = "../gromnie-client" }
 gromnie-runner = { path = "../gromnie-runner" }
-gromnie-scripting-host = { path = "../gromnie-scripting-host" }
+gromnie-scripting-host = { path = "../gromnie-scripting-host", optional = true }
 ratatui.workspace = true
 serenity.workspace = true
 tokio = { version = "1.36.0", features = ["full"] }
 tracing.workspace = true
 tracing-appender.workspace = true
 tracing-subscriber.workspace = true
+
+[features]
+default = ["scripting"]
+scripting = ["gromnie-scripting-host"]
