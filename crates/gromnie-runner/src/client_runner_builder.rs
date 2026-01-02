@@ -257,8 +257,8 @@ impl ClientRunnerBuilder {
     /// Multiple clients with custom config:
     /// ```no_run
     /// # use gromnie_runner::{ClientRunner, ClientConfig, LoggingConsumer};
-    /// # use gromnie_client::config::Config;
-    /// # async fn example(custom_config: Config) {
+    /// # use gromnie_client::config::GromnieConfig;
+    /// # async fn example(custom_config: GromnieConfig) {
     /// let configs = vec![
     ///     ClientConfig::new(0, "localhost:9000".into(), "user1".into(), "pass1".into()),
     ///     ClientConfig::new(1, "localhost:9000".into(), "user2".into(), "pass2".into()),
