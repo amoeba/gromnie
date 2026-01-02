@@ -12,5 +12,5 @@ name = "gromnie_events"
 path = "src/lib.rs"
 
 [dependencies]
-gromnie-client = { path = "../gromnie-client" }
+serde = { version = "1.0", features = ["derive"] }
 tokio = { version = "1.36.0", features = ["sync"] }

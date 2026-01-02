@@ -4,13 +4,13 @@ use std::time::{Duration, Instant};
 use tokio::sync::mpsc::UnboundedSender;
 use tracing::{debug, error, info};
 
+use super::EventFilter;
+use super::Script;
 use super::context::ScriptContext;
 use super::timer::TimerManager;
 use super::wasm::WasmScript;
-use super::EventFilter;
-use super::Script;
 use crate::create_runner_from_config;
-use gromnie_client::client::events::{ClientAction, ClientEvent, ClientSystemEvent};
+use gromnie_events::{ClientEvent, ClientSystemEvent, SimpleClientAction};
 use gromnie_events::{EventConsumer, EventEnvelope};
 
 /// Default tick rate for scripts (50ms = 20Hz)
@@ -23,7 +23,7 @@ pub struct ScriptRunner {
     /// WASM engine (if WASM support is enabled)
     wasm_engine: Option<wasmtime::Engine>,
     /// Channel for sending client actions
-    action_tx: UnboundedSender<ClientAction>,
+    action_tx: UnboundedSender<SimpleClientAction>,
     /// Timer manager shared across all scripts
     timer_manager: TimerManager,
     /// Last time scripts were ticked
@@ -34,13 +34,13 @@ pub struct ScriptRunner {
 
 impl ScriptRunner {
     /// Create a new script runner with default tick rate (20Hz)
-    pub fn new(action_tx: UnboundedSender<ClientAction>) -> Self {
+    pub fn new(action_tx: UnboundedSender<SimpleClientAction>) -> Self {
         Self::new_with_tick_rate(action_tx, DEFAULT_TICK_INTERVAL)
     }
 
     /// Create a new script runner with custom tick rate
     pub fn new_with_tick_rate(
-        action_tx: UnboundedSender<ClientAction>,
+        action_tx: UnboundedSender<SimpleClientAction>,
         tick_interval: Duration,
     ) -> Self {
         Self {
@@ -54,7 +54,7 @@ impl ScriptRunner {
     }
 
     /// Create a new script runner with WASM support enabled
-    pub fn new_with_wasm(action_tx: UnboundedSender<ClientAction>) -> Self {
+    pub fn new_with_wasm(action_tx: UnboundedSender<SimpleClientAction>) -> Self {
         let wasm_engine = match super::wasm::create_engine() {
             Ok(engine) => {
                 debug!(target: "scripting", "WASM engine initialized");
@@ -111,7 +111,7 @@ impl ScriptRunner {
 
     /// Create a script context for the current state
     fn create_script_context(
-        action_tx: UnboundedSender<ClientAction>,
+        action_tx: UnboundedSender<SimpleClientAction>,
         timer_manager: &mut TimerManager,
         now: Instant,
     ) -> ScriptContext {
@@ -138,7 +138,7 @@ impl ScriptRunner {
             self.register_script(script);
         }
 
-        if self.scripts.len() > 0 {
+        if !self.scripts.is_empty() {
             info!(target: "scripting", "Loaded {} script(s)", self.scripts.len());
         }
     }
@@ -378,7 +378,10 @@ impl ScriptConsumer {
 impl EventConsumer for ScriptConsumer {
     fn handle_event(&mut self, envelope: EventEnvelope) {
         // Check for reload event
-        if let gromnie_events::EventType::System(gromnie_events::SystemEvent::ReloadScripts) = &envelope.event {
+        if let gromnie_events::EventType::System(gromnie_events::SystemEvent::ReloadScripts {
+            ..
+        }) = &envelope.event
+        {
             if let Some(ref script_dir) = self.script_dir {
                 if let Some(ref script_config) = self.script_config {
                     self.runner.reload_scripts(script_dir, script_config);
@@ -395,28 +398,8 @@ impl EventConsumer for ScriptConsumer {
         let client_event = match envelope.event {
             gromnie_events::EventType::Game(game_event) => ClientEvent::Game(game_event),
             gromnie_events::EventType::State(state_event) => {
-                // Convert ClientState-based event to string-based
-                match state_event {
-                    gromnie_events::ClientStateEvent::StateTransition {
-                        from,
-                        to,
-                        client_id,
-                    } => ClientEvent::State(
-                        gromnie_client::client::events::ClientStateEvent::StateTransition {
-                            from,
-                            to,
-                            client_id,
-                        },
-                    ),
-                    gromnie_events::ClientStateEvent::ClientFailed { reason, client_id } => {
-                        ClientEvent::State(
-                            gromnie_client::client::events::ClientStateEvent::ClientFailed {
-                                reason,
-                                client_id,
-                            },
-                        )
-                    }
-                }
+                // Pass through state event directly (new granular states)
+                ClientEvent::State(state_event)
             }
             gromnie_events::EventType::System(system_event) => {
                 // Convert SystemEvent to ClientSystemEvent
@@ -460,7 +443,7 @@ impl EventConsumer for ScriptConsumer {
 
 /// Create a script runner consumer with the specified configuration
 pub fn create_script_consumer(
-    action_tx: UnboundedSender<ClientAction>,
+    action_tx: UnboundedSender<SimpleClientAction>,
     scripting_config: &ScriptingConfig,
 ) -> ScriptConsumer {
     let runner = create_runner_from_config(action_tx, scripting_config);

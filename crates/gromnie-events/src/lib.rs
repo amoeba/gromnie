@@ -1,5 +1,3 @@
-use gromnie_client::client::events::ClientAction;
-use gromnie_client::client::events::GameEvent;
 /// Core event system traits and types for gromnie
 ///
 /// This crate provides the foundational types for the event system,
@@ -7,6 +5,19 @@ use gromnie_client::client::events::GameEvent;
 use std::collections::HashMap;
 use std::time::Instant;
 use tokio::sync::mpsc::UnboundedSender;
+
+pub mod client_events;
+pub mod script_events;
+pub mod simple_client_actions;
+pub mod simple_game_events;
+pub mod system_events;
+
+// Re-export key types for convenience
+pub use client_events::{ClientEvent, ClientStateEvent, ClientSystemEvent};
+pub use script_events::ScriptEventType;
+pub use simple_client_actions::SimpleClientAction;
+pub use simple_game_events::{CharacterInfo, SimpleGameEvent};
+pub use system_events::SystemEvent;
 
 // ============================================================================
 // Event Source and Context
@@ -51,74 +62,10 @@ impl EventContext {
     }
 }
 
-// ============================================================================
-// Event Types
-// ============================================================================
-
-/// Client state transition events
-#[derive(Debug, Clone)]
-pub enum ClientStateEvent {
-    StateTransition {
-        from: String,
-        to: String,
-        client_id: u32,
-    },
-    ClientFailed {
-        reason: String,
-        client_id: u32,
-    },
-}
-
-/// Types of script-related events
-#[derive(Debug, Clone)]
-pub enum ScriptEventType {
-    Loaded,
-    Unloaded,
-    Error { message: String },
-    Log { message: String },
-}
-
-/// System and lifecycle events
-#[derive(Debug, Clone)]
-pub enum SystemEvent {
-    AuthenticationSucceeded {
-        client_id: u32,
-    },
-    AuthenticationFailed {
-        client_id: u32,
-        reason: String,
-    },
-    ConnectingStarted {
-        client_id: u32,
-    },
-    ConnectingDone {
-        client_id: u32,
-    },
-    UpdatingStarted {
-        client_id: u32,
-    },
-    UpdatingDone {
-        client_id: u32,
-    },
-    LoginSucceeded {
-        character_id: u32,
-        character_name: String,
-    },
-    ScriptEvent {
-        script_id: String,
-        event_type: ScriptEventType,
-    },
-    /// Request to reload all scripts (triggered by SIGUSR2 or other mechanism)
-    ReloadScripts,
-    Shutdown {
-        client_id: u32,
-    },
-}
-
 /// Unified event type (enriched event from the runner's perspective)
 #[derive(Debug, Clone)]
 pub enum EventType {
-    Game(GameEvent),
+    Game(SimpleGameEvent),
     State(ClientStateEvent),
     System(SystemEvent),
 }
@@ -147,7 +94,7 @@ impl EventEnvelope {
     }
 
     pub fn game_event(
-        game_event: GameEvent,
+        game_event: SimpleGameEvent,
         client_id: u32,
         client_sequence: u64,
         source: EventSource,
@@ -176,7 +123,7 @@ impl EventEnvelope {
         Self::new(EventType::System(system_event), context, source)
     }
 
-    pub fn extract_game_event(&self) -> Option<GameEvent> {
+    pub fn extract_game_event(&self) -> Option<SimpleGameEvent> {
         match &self.event {
             EventType::Game(game_event) => Some(game_event.clone()),
             _ => None,
@@ -195,59 +142,42 @@ pub trait EventConsumer: Send + 'static {
 }
 
 // ============================================================================
-// Client Configuration
-// ============================================================================
-
-/// Configuration for running a client
-#[derive(Clone, Debug)]
-pub struct ClientConfig {
-    pub id: u32,
-    pub address: String,
-    pub account_name: String,
-    pub password: String,
-}
-
-impl ClientConfig {
-    /// Create a new client config
-    pub fn new(id: u32, address: String, account_name: String, password: String) -> Self {
-        Self {
-            id,
-            address,
-            account_name,
-            password,
-        }
-    }
-}
-
-// ============================================================================
 // Consumer Factory System
 // ============================================================================
 
 /// Context provided to consumer factories when creating consumers
-pub struct ConsumerContext<'a> {
+///
+/// The Config type parameter is generic to avoid circular dependencies.
+/// Most consumers use the default `()` type since they only need `client_id` and `action_tx`.
+/// Advanced use cases can provide a custom config type if needed.
+pub struct ConsumerContext<'a, Config = ()> {
     /// The client ID
     pub client_id: u32,
-    /// The client configuration
-    pub client_config: &'a ClientConfig,
+    /// The client configuration (type provided by consumer)
+    ///
+    /// Note: Most consumers use `Config = ()` to avoid circular dependencies.
+    /// This field is available for advanced consumers that need configuration access.
+    pub client_config: &'a Config,
     /// Channel to send actions back to the client
-    pub action_tx: UnboundedSender<ClientAction>,
+    pub action_tx: UnboundedSender<SimpleClientAction>,
 }
 
 /// Factory trait for creating event consumers
 ///
 /// This trait allows consumers to be created lazily when the client is ready,
 /// providing access to the client's action channel and configuration.
-pub trait ConsumerFactory: Send + Sync + 'static {
+pub trait ConsumerFactory<Config = ()>: Send + Sync + 'static {
     /// Create a consumer for the given client context
-    fn create(&self, ctx: &ConsumerContext) -> Box<dyn EventConsumer>;
+    fn create(&self, ctx: &ConsumerContext<Config>) -> Box<dyn EventConsumer>;
 }
 
 // Allow closures to be used as consumer factories
-impl<F> ConsumerFactory for F
+impl<F, Config> ConsumerFactory<Config> for F
 where
-    F: Fn(&ConsumerContext) -> Box<dyn EventConsumer> + Send + Sync + 'static,
+    F: Fn(&ConsumerContext<Config>) -> Box<dyn EventConsumer> + Send + Sync + 'static,
+    Config: 'static,
 {
-    fn create(&self, ctx: &ConsumerContext) -> Box<dyn EventConsumer> {
+    fn create(&self, ctx: &ConsumerContext<Config>) -> Box<dyn EventConsumer> {
         (self)(ctx)
     }
 }

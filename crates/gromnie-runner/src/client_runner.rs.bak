@@ -201,7 +201,7 @@ where
     F: Fn(
             u32,
             &ClientConfig,
-            mpsc::UnboundedSender<gromnie_events::SimpleClientAction>,
+            mpsc::UnboundedSender<gromnie_client::client::ClientAction>,
         ) -> Box<dyn EventConsumer>
         + Send
         + Sync,
@@ -214,7 +214,7 @@ where
     F: Fn(
             u32,
             &ClientConfig,
-            mpsc::UnboundedSender<gromnie_events::SimpleClientAction>,
+            mpsc::UnboundedSender<gromnie_client::client::ClientAction>,
         ) -> Box<dyn EventConsumer>
         + Send
         + Sync,
@@ -229,7 +229,7 @@ where
     F: Fn(
             u32,
             &ClientConfig,
-            mpsc::UnboundedSender<gromnie_events::SimpleClientAction>,
+            mpsc::UnboundedSender<gromnie_client::client::ClientAction>,
         ) -> Box<dyn EventConsumer>
         + Send
         + Sync,
@@ -238,7 +238,7 @@ where
         &self,
         client_id: u32,
         client_config: &ClientConfig,
-        action_tx: mpsc::UnboundedSender<gromnie_events::SimpleClientAction>,
+        action_tx: mpsc::UnboundedSender<gromnie_client::client::ClientAction>,
     ) -> Box<dyn EventConsumer> {
         (self.f)(client_id, client_config, action_tx)
     }
@@ -291,10 +291,11 @@ pub async fn run_client<C, F>(
     shutdown_rx: Option<tokio::sync::watch::Receiver<bool>>,
 ) where
     C: EventConsumer,
-    F: FnOnce(mpsc::UnboundedSender<gromnie_events::SimpleClientAction>) -> C,
+    F: FnOnce(mpsc::UnboundedSender<gromnie_client::client::ClientAction>) -> C,
 {
     // Create a channel for raw events from client to EventWrapper
-    let (raw_event_tx, raw_event_rx) = mpsc::channel::<gromnie_events::ClientEvent>(256);
+    let (raw_event_tx, raw_event_rx) =
+        mpsc::channel::<gromnie_events::ClientEvent>(256);
 
     // Spawn EventWrapper to bridge client events to event bus
     let event_wrapper = EventWrapper::new(config.id, event_bus_manager.event_bus.clone());
@@ -332,13 +333,14 @@ pub async fn run_client_with_consumers<F>(
     shutdown_rx: Option<tokio::sync::watch::Receiver<bool>>,
 ) where
     F: FnOnce(
-        mpsc::UnboundedSender<gromnie_events::SimpleClientAction>,
+        mpsc::UnboundedSender<gromnie_client::client::ClientAction>,
     ) -> Vec<Box<dyn EventConsumer>>,
 {
     use crate::event_bus::{EventEnvelope, EventSource, EventType, SystemEvent};
 
     // Create a channel for raw events from client to EventWrapper
-    let (raw_event_tx, raw_event_rx) = mpsc::channel::<gromnie_events::ClientEvent>(256);
+    let (raw_event_tx, raw_event_rx) =
+        mpsc::channel::<gromnie_events::ClientEvent>(256);
 
     // Spawn EventWrapper to bridge client events to event bus
     let event_wrapper = EventWrapper::new(config.id, event_bus_manager.event_bus.clone());
@@ -372,7 +374,10 @@ pub async fn run_client_with_consumers<F>(
                 match consumer_rx.recv().await {
                     Ok(envelope) => {
                         // Check if this is a shutdown event
-                        if matches!(&envelope.event, EventType::System(SystemEvent::Shutdown)) {
+                        if matches!(
+                            &envelope.event,
+                            EventType::System(SystemEvent::Shutdown { .. })
+                        ) {
                             info!(target: "events", "Event consumer {} received shutdown signal", idx);
                             break;
                         }
@@ -398,8 +403,12 @@ pub async fn run_client_with_consumers<F>(
 
     // Send shutdown event to all consumers
     info!(target: "events", "Sending shutdown signal to consumers");
-    let shutdown_event =
-        EventEnvelope::system_event(SystemEvent::Shutdown, config.id, 0, EventSource::System);
+    let shutdown_event = EventEnvelope::system_event(
+        SystemEvent::Shutdown,
+        config.id,
+        0,
+        EventSource::System,
+    );
     shutdown_sender.publish(shutdown_event);
 
     // Give consumers a moment to receive and process the shutdown event
@@ -421,15 +430,16 @@ pub async fn run_client_with_action_channel<C, F>(
     event_bus_manager: Arc<EventBusManager>,
     event_consumer_factory: F,
     action_tx_sender: mpsc::UnboundedSender<
-        mpsc::UnboundedSender<gromnie_events::SimpleClientAction>,
+        mpsc::UnboundedSender<gromnie_client::client::ClientAction>,
     >,
     shutdown_rx: tokio::sync::watch::Receiver<bool>,
 ) where
     C: EventConsumer,
-    F: FnOnce(mpsc::UnboundedSender<gromnie_events::SimpleClientAction>) -> C,
+    F: FnOnce(mpsc::UnboundedSender<gromnie_client::client::ClientAction>) -> C,
 {
     // Create a channel for raw events from client to EventWrapper
-    let (raw_event_tx, raw_event_rx) = mpsc::channel::<gromnie_events::ClientEvent>(256);
+    let (raw_event_tx, raw_event_rx) =
+        mpsc::channel::<gromnie_events::ClientEvent>(256);
 
     // Spawn EventWrapper to bridge client events to event bus
     let event_wrapper = EventWrapper::new(config.id, event_bus_manager.event_bus.clone());
@@ -727,7 +737,8 @@ where
             }
 
             // Create the consumer for this client
-            let (raw_event_tx, raw_event_rx) = mpsc::channel::<gromnie_events::ClientEvent>(256);
+            let (raw_event_tx, raw_event_rx) =
+                mpsc::channel::<gromnie_events::ClientEvent>(256);
 
             // Spawn EventWrapper to bridge client events to event bus
             let event_wrapper =
@@ -831,7 +842,7 @@ pub trait ConsumerBuilder: Send + Sync {
         &self,
         client_id: u32,
         client_config: &ClientConfig,
-        action_tx: mpsc::UnboundedSender<gromnie_events::SimpleClientAction>,
+        action_tx: mpsc::UnboundedSender<gromnie_client::client::ClientAction>,
     ) -> Box<dyn EventConsumer>;
 }
 
@@ -839,7 +850,7 @@ pub trait ConsumerBuilder: Send + Sync {
 type ConsumerFactoryFn = dyn Fn(
         u32,
         &ClientConfig,
-        mpsc::UnboundedSender<gromnie_events::SimpleClientAction>,
+        mpsc::UnboundedSender<gromnie_client::client::ClientAction>,
     ) -> Box<dyn EventConsumer>
     + Send
     + Sync;
@@ -855,7 +866,7 @@ impl FnConsumerBuilder {
         F: Fn(
                 u32,
                 &ClientConfig,
-                mpsc::UnboundedSender<gromnie_events::SimpleClientAction>,
+                mpsc::UnboundedSender<gromnie_client::client::ClientAction>,
             ) -> Box<dyn EventConsumer>
             + Send
             + Sync
@@ -870,7 +881,7 @@ impl ConsumerBuilder for FnConsumerBuilder {
         &self,
         client_id: u32,
         client_config: &ClientConfig,
-        action_tx: mpsc::UnboundedSender<gromnie_events::SimpleClientAction>,
+        action_tx: mpsc::UnboundedSender<gromnie_client::client::ClientAction>,
     ) -> Box<dyn EventConsumer> {
         (self.f)(client_id, client_config, action_tx)
     }
@@ -902,7 +913,8 @@ where
         RunConfig::Single { client } => {
             let event_bus_manager = Arc::new(EventBusManager::new(100));
 
-            let (raw_event_tx, raw_event_rx) = mpsc::channel::<gromnie_events::ClientEvent>(256);
+            let (raw_event_tx, raw_event_rx) =
+                mpsc::channel::<gromnie_events::ClientEvent>(256);
 
             let event_wrapper = EventWrapper::new(client.id, event_bus_manager.event_bus.clone());
             tokio::spawn(async move {
@@ -949,7 +961,7 @@ where
                     &self,
                     client_id: u32,
                     client_config: &ClientConfig,
-                    action_tx: mpsc::UnboundedSender<gromnie_events::SimpleClientAction>,
+                    action_tx: mpsc::UnboundedSender<gromnie_client::client::ClientAction>,
                 ) -> Box<dyn EventConsumer> {
                     self.inner.build(client_id, client_config, action_tx)
                 }

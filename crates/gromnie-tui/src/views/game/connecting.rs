@@ -1,5 +1,5 @@
 use crate::app::{App, GameScene};
-use gromnie_client::client::events::{CharacterInfo, ClientAction};
+use gromnie_events::{CharacterInfo, SimpleClientAction};
 
 // Character selection functions that belong with the character selection view
 impl App {
@@ -46,7 +46,7 @@ impl App {
                 created_objects: Vec::new(),
             };
 
-            tx.send(ClientAction::LoginCharacter {
+            tx.send(SimpleClientAction::LoginCharacter {
                 character_id,
                 character_name,
                 account: self.client_status.account_name.clone(),

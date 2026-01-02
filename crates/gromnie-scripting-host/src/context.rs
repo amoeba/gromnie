@@ -2,8 +2,7 @@ use std::time::{Duration, Instant};
 use tokio::sync::mpsc::UnboundedSender;
 
 use super::timer::TimerId;
-use gromnie_client::client::OutgoingMessageContent;
-use gromnie_client::client::events::ClientAction;
+use gromnie_events::SimpleClientAction;
 
 /// Snapshot of client state at the time of an event
 #[derive(Debug, Clone)]
@@ -39,7 +38,7 @@ impl Default for ClientStateSnapshot {
 /// Context provided to scripts for interacting with the client
 pub struct ScriptContext {
     /// Channel for sending client actions
-    action_tx: UnboundedSender<ClientAction>,
+    action_tx: UnboundedSender<SimpleClientAction>,
     /// Reference to the timer manager (will be updated by ScriptRunner)
     timer_manager: *mut super::timer::TimerManager,
     /// Timestamp when the current event occurred
@@ -52,7 +51,7 @@ impl ScriptContext {
     /// # Safety
     /// The timer_manager pointer must remain valid for the lifetime of this context
     pub(crate) unsafe fn new(
-        action_tx: UnboundedSender<ClientAction>,
+        action_tx: UnboundedSender<SimpleClientAction>,
         timer_manager: *mut super::timer::TimerManager,
         event_time: Instant,
     ) -> Self {
@@ -65,23 +64,30 @@ impl ScriptContext {
 
     // ===== Action Methods =====
 
-    /// Send a chat message
+    /// Send a chat message (say to nearby players)
     pub fn send_chat(&self, message: impl Into<String>) {
-        let _ = self.action_tx.send(ClientAction::SendChatMessage {
+        let _ = self.action_tx.send(SimpleClientAction::SendChatSay {
+            message: message.into(),
+        });
+    }
+
+    /// Send a direct message to a specific player
+    pub fn send_tell(&self, recipient: impl Into<String>, message: impl Into<String>) {
+        let _ = self.action_tx.send(SimpleClientAction::SendChatTell {
+            recipient_name: recipient.into(),
             message: message.into(),
         });
     }
 
     /// Send a client action
-    pub fn send_action(&self, action: ClientAction) {
+    pub fn send_action(&self, action: SimpleClientAction) {
         let _ = self.action_tx.send(action);
     }
 
-    /// Send a raw message (advanced usage)
-    pub fn send_message(&self, message: OutgoingMessageContent) {
-        let _ = self
-            .action_tx
-            .send(ClientAction::SendMessage(Box::new(message)));
+    /// Send a raw message (advanced usage) - deprecated, use send_action instead
+    pub fn send_message_deprecated(&self, _message: &str) {
+        // This method is no longer supported with SimpleClientAction
+        // Use send_action() with the appropriate variant instead
     }
 
     // ===== Timer Methods =====

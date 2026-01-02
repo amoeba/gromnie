@@ -6,10 +6,12 @@ use std::sync::Arc;
 use tokio::sync::{mpsc, watch};
 
 use crate::event_consumer::EventConsumer;
-use gromnie_client::{client::events::ClientAction, config::scripting_config::ScriptingConfig};
+use gromnie_client::config::scripting_config::ScriptingConfig;
+use gromnie_events::SimpleClientAction;
 
-// Re-export types from gromnie-events
-pub use gromnie_events::{ClientConfig, ConsumerContext, ConsumerFactory};
+// Re-export types
+pub use gromnie_client::config::ClientConfig;
+pub use gromnie_events::{ConsumerContext, ConsumerFactory};
 
 /// Client mode - either static configs or dynamic generation
 pub enum ClientMode {
@@ -67,7 +69,7 @@ impl IntoClientConfigs for Vec<ClientConfig> {
 pub struct ClientRunnerBuilder {
     mode: Option<ClientMode>,
     consumers: Vec<Box<dyn ConsumerFactory>>,
-    action_channel: Option<mpsc::UnboundedSender<mpsc::UnboundedSender<ClientAction>>>,
+    action_channel: Option<mpsc::UnboundedSender<mpsc::UnboundedSender<SimpleClientAction>>>,
     shutdown_rx: Option<watch::Receiver<bool>>,
     event_bus_capacity: usize,
     app_config: Option<gromnie_client::config::GromnieConfig>,
@@ -208,7 +210,7 @@ impl ClientRunnerBuilder {
     /// Provide a channel to receive the action_tx (useful for TUI)
     pub fn with_action_channel(
         mut self,
-        tx: mpsc::UnboundedSender<mpsc::UnboundedSender<ClientAction>>,
+        tx: mpsc::UnboundedSender<mpsc::UnboundedSender<SimpleClientAction>>,
     ) -> Self {
         self.action_channel = Some(tx);
         self
@@ -329,7 +331,8 @@ impl Default for ClientRunnerBuilder {
 pub struct ClientRunner {
     pub(crate) mode: ClientMode,
     pub(crate) consumers: Vec<Box<dyn ConsumerFactory>>,
-    pub(crate) action_channel: Option<mpsc::UnboundedSender<mpsc::UnboundedSender<ClientAction>>>,
+    pub(crate) action_channel:
+        Option<mpsc::UnboundedSender<mpsc::UnboundedSender<SimpleClientAction>>>,
     pub(crate) shutdown_rx: Option<watch::Receiver<bool>>,
     pub(crate) event_bus_capacity: usize,
     pub(crate) app_config: Option<gromnie_client::config::GromnieConfig>,
@@ -406,24 +409,26 @@ impl ClientRunner {
         let event_bus_manager = Arc::new(EventBusManager::new(self.event_bus_capacity));
 
         // Setup SIGUSR2 handler if scripting is enabled
-        if let Some(ref app_config) = self.app_config {
-            if app_config.scripting.enabled {
-                let event_sender = event_bus_manager.create_sender(config.id);
-                gromnie_scripting_host::setup_reload_signal_handler(move || {
-                    let reload_event = EventEnvelope::system_event(
-                        SystemEvent::ReloadScripts,
-                        0, // client_id (use 0 for system-wide events)
-                        0, // sequence
-                        EventSource::System,
-                    );
-                    event_sender.publish(reload_event);
-                });
-            }
+        if let Some(ref app_config) = self.app_config
+            && app_config.scripting.enabled
+        {
+            let event_sender = event_bus_manager.create_sender(config.id);
+            let script_dir = app_config.scripting.script_dir();
+            gromnie_scripting_host::setup_reload_signal_handler(move || {
+                let reload_event = EventEnvelope::system_event(
+                    SystemEvent::ReloadScripts {
+                        script_dir: script_dir.clone(),
+                    },
+                    0, // client_id (use 0 for system-wide events)
+                    0, // sequence
+                    EventSource::System,
+                );
+                event_sender.publish(reload_event);
+            });
         }
 
         // Create raw event channel
-        let (raw_event_tx, raw_event_rx) =
-            mpsc::channel::<gromnie_client::client::events::ClientEvent>(256);
+        let (raw_event_tx, raw_event_rx) = mpsc::channel::<gromnie_events::ClientEvent>(256);
 
         // Spawn EventWrapper to bridge client events to event bus
         let event_wrapper = EventWrapper::new(config.id, event_bus_manager.event_bus.clone());
@@ -449,15 +454,17 @@ impl ClientRunner {
             let _ = sender.send(action_tx.clone());
         }
 
-        // Create consumer context
+        // Create consumer context with default () config type.
+        // We use () instead of &ClientConfig to avoid circular dependencies between
+        // gromnie-events and gromnie-client. Consumers only need client_id and action_tx.
         let ctx = ConsumerContext {
             client_id: config.id,
-            client_config: &config,
+            client_config: &(),
             action_tx: action_tx.clone(),
         };
 
         // Create all consumers
-        let mut consumers: Vec<Box<dyn EventConsumer>> = self
+        let consumers: Vec<Box<dyn EventConsumer>> = self
             .consumers
             .iter()
             .map(|factory| factory.create(&ctx))
@@ -509,12 +516,13 @@ impl ClientRunner {
             fn create_consumer(
                 &self,
                 client_id: u32,
-                client_config: &ClientConfig,
-                action_tx: mpsc::UnboundedSender<ClientAction>,
+                _client_config: &ClientConfig,
+                action_tx: mpsc::UnboundedSender<SimpleClientAction>,
             ) -> Box<dyn EventConsumer> {
+                // Use () as config type to avoid circular dependencies
                 let ctx = ConsumerContext {
                     client_id,
-                    client_config,
+                    client_config: &(),
                     action_tx: action_tx.clone(),
                 };
 
