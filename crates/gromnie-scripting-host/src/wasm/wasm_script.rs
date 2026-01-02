@@ -7,7 +7,9 @@ use wasmtime_wasi::{WasiCtx, WasiView};
 
 use crate::Script as HostScript;
 use crate::{EventFilter, context::ScriptContext};
-use gromnie_events::SimpleGameEvent as GameEvent;
+use gromnie_events::{
+    ClientEvent, ClientStateEvent, ClientSystemEvent, SimpleGameEvent as GameEvent,
+};
 
 // Generate bindings from WIT (use the canonical definition from gromnie-scripting-api)
 wasmtime::component::bindgen!({
@@ -221,9 +223,9 @@ impl HostScript for WasmScript {
         &self.subscribed_events
     }
 
-    fn on_event(&mut self, event: &GameEvent, ctx: &mut ScriptContext) {
-        // Convert Rust GameEvent to WIT GameEvent (same structure, different module)
-        let wasm_event = game_event_to_wasm(event);
+    fn on_event(&mut self, event: &ClientEvent, ctx: &mut ScriptContext) {
+        // Convert Rust ClientEvent to WIT ScriptEvent
+        let wasm_event = client_event_to_wasm(event);
 
         self.with_context(ctx, move |this| {
             let guest = this.script.gromnie_scripting_guest();
@@ -256,6 +258,19 @@ impl HostScript for WasmScript {
 
     fn as_any_mut(&mut self) -> &mut dyn Any {
         self
+    }
+}
+
+/// Convert Rust ClientEvent to WIT ScriptEvent
+fn client_event_to_wasm(event: &ClientEvent) -> gromnie::scripting::host::ScriptEvent {
+    use gromnie::scripting::host::ScriptEvent as WitScriptEvent;
+
+    match event {
+        ClientEvent::Game(game_event) => WitScriptEvent::Game(game_event_to_wasm(game_event)),
+        ClientEvent::State(state_event) => WitScriptEvent::State(state_event_to_wasm(state_event)),
+        ClientEvent::System(system_event) => {
+            WitScriptEvent::System(system_event_to_wasm(system_event))
+        }
     }
 }
 
@@ -314,5 +329,51 @@ fn game_event_to_wasm(event: &GameEvent) -> gromnie::scripting::host::GameEvent 
                 message: String::new(),
             })
         }
+    }
+}
+
+/// Convert Rust StateEvent to WIT StateEvent
+fn state_event_to_wasm(event: &ClientStateEvent) -> gromnie::scripting::host::StateEvent {
+    use gromnie::scripting::host::StateEvent as WitStateEvent;
+
+    match event {
+        ClientStateEvent::Connecting => WitStateEvent::Connecting,
+        ClientStateEvent::Connected => WitStateEvent::Connected,
+        ClientStateEvent::ConnectingFailed { reason } => {
+            WitStateEvent::ConnectingFailed(reason.clone())
+        }
+        ClientStateEvent::Patching => WitStateEvent::Patching,
+        ClientStateEvent::Patched => WitStateEvent::Patched,
+        ClientStateEvent::PatchingFailed { reason } => {
+            WitStateEvent::PatchingFailed(reason.clone())
+        }
+        ClientStateEvent::CharacterSelect => WitStateEvent::CharacterSelect,
+        ClientStateEvent::EnteringWorld => WitStateEvent::EnteringWorld,
+        ClientStateEvent::InWorld => WitStateEvent::InWorld,
+        ClientStateEvent::ExitingWorld => WitStateEvent::ExitingWorld,
+        ClientStateEvent::CharacterError => WitStateEvent::CharacterError,
+    }
+}
+
+/// Convert Rust SystemEvent to WIT SystemEvent
+fn system_event_to_wasm(event: &ClientSystemEvent) -> gromnie::scripting::host::SystemEvent {
+    use gromnie::scripting::host::{LoginInfo, SystemEvent as WitSystemEvent};
+
+    match event {
+        ClientSystemEvent::AuthenticationSucceeded => WitSystemEvent::AuthenticationSucceeded,
+        ClientSystemEvent::AuthenticationFailed { reason } => {
+            WitSystemEvent::AuthenticationFailed(reason.clone())
+        }
+        ClientSystemEvent::ConnectingStarted => WitSystemEvent::ConnectingStarted,
+        ClientSystemEvent::ConnectingDone => WitSystemEvent::ConnectingDone,
+        ClientSystemEvent::UpdatingStarted => WitSystemEvent::UpdatingStarted,
+        ClientSystemEvent::UpdatingDone => WitSystemEvent::UpdatingDone,
+        ClientSystemEvent::LoginSucceeded {
+            character_id,
+            character_name,
+        } => WitSystemEvent::LoginSucceeded(LoginInfo {
+            character_id: *character_id,
+            character_name: character_name.clone(),
+        }),
     }
 }
