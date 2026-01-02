@@ -1,6 +1,6 @@
 // Integration tests for the scripting system
 
-use gromnie_events::GameEvent;
+use gromnie_events::SimpleGameEvent as GameEvent;
 use gromnie_scripting_host::ScriptRunner;
 use std::collections::HashMap;
 use std::path::Path;
