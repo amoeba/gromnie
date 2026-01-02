@@ -423,15 +423,14 @@ impl Client {
     /// Send a chat message to the server
     /// This sends a general chat message that will appear as a /say command
     /// TODO: Parse message for @tell, /say, /emote, etc. commands
-    fn send_chat_message(&mut self, message: String) {
-        info!(target: "net", "Sending chat message: {}", message);
+    fn send_chat_say(&mut self, message: String) {
+        info!(target: "net", "Sending chat say: {}", message);
 
         // Create OrderedGameAction with CommunicationTalk (for general chat)
         // This is the correct message type for general chat (equivalent to /say command)
         let mut message_data = Vec::new();
         {
             let mut cursor = Cursor::new(&mut message_data);
-            // Use CommunicationTalk for general chat messages (/say)
             use acprotocol::gameactions::CommunicationTalk;
             let action = GameActionMessage::CommunicationTalk(CommunicationTalk {
                 message: message.clone(),
@@ -448,7 +447,34 @@ impl Client {
         self.outgoing_message_queue.push_back(OutgoingMessage::new(
             OutgoingMessageContent::GameAction(message_data),
         ));
-        info!(target: "net", "Chat message queued for sending");
+        info!(target: "net", "Chat say message queued for sending");
+    }
+
+    fn send_chat_tell(&mut self, recipient_name: String, message: String) {
+        info!(target: "net", "Sending tell to '{}': {}", recipient_name, message);
+
+        // Create OrderedGameAction with CommunicationTalkDirectByName (for direct messages)
+        let mut message_data = Vec::new();
+        {
+            let mut cursor = Cursor::new(&mut message_data);
+            use acprotocol::gameactions::CommunicationTalkDirectByName;
+            let action = GameActionMessage::CommunicationTalkDirectByName(CommunicationTalkDirectByName {
+                message: message.clone(),
+                target_name: recipient_name.clone(),
+            });
+            let msg = C2SMessage::OrderedGameAction {
+                sequence: self.next_game_action_sequence,
+                action,
+            };
+            self.next_game_action_sequence += 1;
+            msg.write(&mut cursor).expect("write failed");
+        }
+
+        // Queue for sending
+        self.outgoing_message_queue.push_back(OutgoingMessage::new(
+            OutgoingMessageContent::GameAction(message_data),
+        ));
+        info!(target: "net", "Chat tell message queued for sending");
     }
 
     /// Send a TimeSync packet to keep connection alive
@@ -637,9 +663,13 @@ impl Client {
                     debug!(target: "events", "Action: Sending LoginComplete notification to server");
                     self.send_login_complete_notification();
                 }
-                ClientAction::SendChatMessage { message } => {
-                    debug!(target: "events", "Action: Sending chat message: {}", message);
-                    self.send_chat_message(message);
+                ClientAction::SendChatSay { message } => {
+                    debug!(target: "events", "Action: Sending chat say: {}", message);
+                    self.send_chat_say(message);
+                }
+                ClientAction::SendChatTell { recipient_name, message } => {
+                    debug!(target: "events", "Action: Sending tell to {}: {}", recipient_name, message);
+                    self.send_chat_tell(recipient_name, message);
                 }
                 ClientAction::ReloadScripts { script_dir } => {
                     debug!(target: "events", "Action: Reloading scripts from {:?}", script_dir);

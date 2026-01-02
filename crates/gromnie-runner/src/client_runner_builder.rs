@@ -457,7 +457,9 @@ impl ClientRunner {
             let _ = sender.send(simple_action_tx.clone());
         }
 
-        // Create consumer context  - use default () config type 
+        // Create consumer context with default () config type.
+        // We use () instead of &ClientConfig to avoid circular dependencies between
+        // gromnie-events and gromnie-client. Consumers only need client_id and action_tx.
         let ctx = ConsumerContext {
             client_id: config.id,
             client_config: &(),
@@ -520,6 +522,7 @@ impl ClientRunner {
                 _client_config: &ClientConfig,
                 action_tx: mpsc::UnboundedSender<SimpleClientAction>,
             ) -> Box<dyn EventConsumer> {
+                // Use () as config type to avoid circular dependencies
                 let ctx = ConsumerContext {
                     client_id,
                     client_config: &(),

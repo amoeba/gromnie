@@ -12,7 +12,7 @@ use tokio::sync::RwLock;
 use tracing::{error, info};
 use tracing_subscriber::EnvFilter;
 
-use gromnie_client::client::events::{ClientAction, GameEvent};
+use gromnie_events::SimpleGameEvent;
 use gromnie_runner::{ClientConfig, DiscordConsumer, EventBusManager, UptimeData};
 
 #[derive(Parser)]
@@ -25,7 +25,7 @@ pub struct Cli {
 
 struct Handler {
     target_channel_id: serenity::model::id::ChannelId,
-    action_tx: Arc<tokio::sync::Mutex<Option<tokio::sync::mpsc::UnboundedSender<ClientAction>>>>,
+    action_tx: Arc<tokio::sync::Mutex<Option<tokio::sync::mpsc::UnboundedSender<gromnie_events::SimpleClientAction>>>>,
     uptime_data: Arc<RwLock<UptimeData>>,
 }
 
@@ -84,7 +84,7 @@ impl EventHandler for Handler {
             let action_tx = self.action_tx.lock().await;
             if let Some(ref tx) = *action_tx {
                 let game_message = format!("Discord: {}: {}", msg.author.name, msg.content);
-                if let Err(e) = tx.send(ClientAction::SendChatMessage {
+                if let Err(e) = tx.send(gromnie_events::SimpleClientAction::SendChatSay {
                     message: game_message,
                 }) {
                     error!("Failed to send Discord message to game: {}", e);
@@ -184,8 +184,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     // Create channels for client communication
-    let (_client_event_tx, _client_event_rx) = tokio::sync::mpsc::unbounded_channel::<GameEvent>();
-    let (action_tx_channel, mut action_tx_rx) = tokio::sync::mpsc::unbounded_channel();
+    let (_client_event_tx, _client_event_rx) = tokio::sync::mpsc::unbounded_channel::<SimpleGameEvent>();
+    let (action_tx_channel, mut action_tx_rx) = tokio::sync::mpsc::unbounded_channel::<tokio::sync::mpsc::UnboundedSender<gromnie_events::SimpleClientAction>>();
 
     // Create shutdown channel
     let (_shutdown_tx, shutdown_rx) = tokio::sync::watch::channel(false);

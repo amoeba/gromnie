@@ -146,11 +146,17 @@ pub trait EventConsumer: Send + 'static {
 // ============================================================================
 
 /// Context provided to consumer factories when creating consumers
-/// Config type parameter is generic to avoid circular dependency
+///
+/// The Config type parameter is generic to avoid circular dependencies.
+/// Most consumers use the default `()` type since they only need `client_id` and `action_tx`.
+/// Advanced use cases can provide a custom config type if needed.
 pub struct ConsumerContext<'a, Config = ()> {
     /// The client ID
     pub client_id: u32,
     /// The client configuration (type provided by consumer)
+    ///
+    /// Note: Most consumers use `Config = ()` to avoid circular dependencies.
+    /// This field is available for advanced consumers that need configuration access.
     pub client_config: &'a Config,
     /// Channel to send actions back to the client
     pub action_tx: UnboundedSender<SimpleClientAction>,

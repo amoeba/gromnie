@@ -64,9 +64,17 @@ impl ScriptContext {
 
     // ===== Action Methods =====
 
-    /// Send a chat message
+    /// Send a chat message (say to nearby players)
     pub fn send_chat(&self, message: impl Into<String>) {
-        let _ = self.action_tx.send(SimpleClientAction::SendChatMessage {
+        let _ = self.action_tx.send(SimpleClientAction::SendChatSay {
+            message: message.into(),
+        });
+    }
+
+    /// Send a direct message to a specific player
+    pub fn send_tell(&self, recipient: impl Into<String>, message: impl Into<String>) {
+        let _ = self.action_tx.send(SimpleClientAction::SendChatTell {
+            recipient_name: recipient.into(),
             message: message.into(),
         });
     }

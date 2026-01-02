@@ -17,8 +17,13 @@ pub enum ClientAction {
     },
     /// Send LoginComplete notification to server
     SendLoginComplete,
-    /// Send a chat message
-    SendChatMessage {
+    /// Send a chat message to everyone nearby (CommunicationTalk)
+    SendChatSay {
+        message: String,
+    },
+    /// Send a direct message to a specific player (CommunicationTalkDirectByName)
+    SendChatTell {
+        recipient_name: String,
         message: String,
     },
     /// Reload scripts

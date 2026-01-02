@@ -20,14 +20,17 @@ pub fn create_simple_action_adapter(
     let (simple_tx, mut simple_rx) = mpsc::unbounded_channel::<gromnie_events::SimpleClientAction>();
     
     tokio::spawn(async move {
+        info!(target: "adapter", "SimpleClientAction adapter task started");
+
         while let Some(simple_action) = simple_rx.recv().await {
             let client_action = match simple_action {
-                gromnie_events::SimpleClientAction::SendChatSay { message: _ } => {
-                    // For now, we'll skip SendMessage variants since they require OutgoingMessageContent
-                    continue;
+                // Map SendChatSay to ClientAction::SendChatSay (CommunicationTalk)
+                gromnie_events::SimpleClientAction::SendChatSay { message } => {
+                    ClientAction::SendChatSay { message }
                 }
-                gromnie_events::SimpleClientAction::SendChatTell { .. } => {
-                    continue;
+                // Map SendChatTell to ClientAction::SendChatTell (CommunicationTalkDirectByName)
+                gromnie_events::SimpleClientAction::SendChatTell { recipient_name, message } => {
+                    ClientAction::SendChatTell { recipient_name, message }
                 }
                 gromnie_events::SimpleClientAction::LoginCharacter {
                     character_id,
@@ -42,10 +45,6 @@ pub fn create_simple_action_adapter(
                     ClientAction::SendLoginComplete
                 }
                 gromnie_events::SimpleClientAction::Disconnect => ClientAction::Disconnect,
-                gromnie_events::SimpleClientAction::SendChatMessage { message: _ } => {
-                    // Skip chat for now
-                    continue;
-                }
                 gromnie_events::SimpleClientAction::ReloadScripts { script_dir } => {
                     ClientAction::ReloadScripts { script_dir }
                 }
@@ -53,12 +52,14 @@ pub fn create_simple_action_adapter(
                     ClientAction::LogScriptMessage { script_id, message }
                 }
             };
-            
+
             if let Err(e) = client_action_tx.send(client_action) {
-                error!("Failed to forward action to client: {}", e);
+                error!(target: "adapter", "Failed to forward action to client: {}", e);
                 break;
             }
         }
+
+        info!(target: "adapter", "SimpleClientAction adapter task stopped");
     });
     
     simple_tx

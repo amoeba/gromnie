@@ -2,7 +2,7 @@ use clap::Parser;
 use tracing::{error, info};
 use tracing_subscriber::EnvFilter;
 
-use gromnie_client::client::events::ClientAction;
+use gromnie_events::SimpleClientAction;
 use gromnie_runner::{ClientConfig, ClientRunner, TuiConsumer, TuiEvent};
 use gromnie_tui::{App, event_handler::EventHandler, ui::try_init_tui};
 
@@ -210,7 +210,7 @@ fn handle_tui_event(
                         if !app.chat_input.is_empty() {
                             if let Some(ref tx) = app.action_tx {
                                 let message = app.chat_input.clone();
-                                if let Err(e) = tx.send(ClientAction::SendChatMessage { message }) {
+                                if let Err(e) = tx.send(SimpleClientAction::SendChatSay { message }) {
                                     error!("Failed to send chat message action: {}", e);
                                 }
                             }
