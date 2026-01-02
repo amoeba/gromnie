@@ -449,12 +449,9 @@ impl ClientRunner {
         )
         .await;
 
-        // Create an adapter to convert SimpleClientAction to ClientAction
-        let simple_action_tx = crate::client_runner::create_simple_action_adapter(action_tx);
-
         // Send action_tx back if requested (for TUI)
         if let Some(ref sender) = self.action_channel {
-            let _ = sender.send(simple_action_tx.clone());
+            let _ = sender.send(action_tx.clone());
         }
 
         // Create consumer context with default () config type.
@@ -463,7 +460,7 @@ impl ClientRunner {
         let ctx = ConsumerContext {
             client_id: config.id,
             client_config: &(),
-            action_tx: simple_action_tx.clone(),
+            action_tx: action_tx.clone(),
         };
 
         // Create all consumers

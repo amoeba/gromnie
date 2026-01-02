@@ -66,7 +66,7 @@ impl EventHandler for Handler {
         }
     }
 
-    async fn message(&self, _: Context, msg: serenity::model::channel::Message) {
+    async fn message(&self, ctx: Context, msg: serenity::model::channel::Message) {
         // Ignore bot messages
         if msg.author.bot {
             return;
@@ -88,8 +88,17 @@ impl EventHandler for Handler {
                     message: game_message,
                 }) {
                     error!("Failed to send Discord message to game: {}", e);
+                    // Notify the Discord user that their message failed to send
+                    if let Err(reply_err) = msg.reply(&ctx.http, "⚠️ Failed to send your message to the game. The game client may be disconnected.").await {
+                        error!("Failed to send error notification to Discord user: {}", reply_err);
+                    }
                 } else {
                     info!("Forwarded Discord message to game");
+                }
+            } else {
+                // No action_tx available (game client not connected)
+                if let Err(reply_err) = msg.reply(&ctx.http, "⚠️ Game client is not connected yet. Please wait or contact an administrator.").await {
+                    error!("Failed to send not-connected notification to Discord user: {}", reply_err);
                 }
             }
         }

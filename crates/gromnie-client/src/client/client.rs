@@ -32,7 +32,7 @@ use tokio::net::UdpSocket;
 use tracing::{debug, error, info, warn};
 
 use crate::client::constants::*;
-use crate::client::{ClientAction, ClientEvent, ClientSystemEvent, GameEvent};
+use crate::client::{ClientEvent, ClientSystemEvent, GameEvent};
 use crate::client::game_event_handler::dispatch_game_event;
 use crate::client::game_event_handlers::{
     CommunicationHearDirectSpeech, CommunicationTransientString,
@@ -147,7 +147,7 @@ pub struct Client {
     message_queue: VecDeque<RawMessage>,         // Queue of parsed messages to process
     pub(crate) outgoing_message_queue: VecDeque<OutgoingMessage>, // Queue of messages to send with optional delays
     pub(crate) raw_event_tx: mpsc::Sender<ClientEvent>,           // Raw event sender to runner
-    action_rx: mpsc::UnboundedReceiver<ClientAction>,             // Receive actions from handlers
+    action_rx: mpsc::UnboundedReceiver<gromnie_events::SimpleClientAction>, // Receive actions from handlers
     pub(crate) ddd_response: Option<OutgoingMessageContent>,      // Cached DDD response for retries
     pub(crate) known_characters: Vec<crate::client::CharacterInfo>, // Track characters from list and creation
 }
@@ -159,7 +159,7 @@ impl Client {
         name: String,
         password: String,
         raw_event_tx: mpsc::Sender<ClientEvent>, // Raw event sender to runner
-    ) -> (Client, mpsc::UnboundedSender<ClientAction>) {
+    ) -> (Client, mpsc::UnboundedSender<gromnie_events::SimpleClientAction>) {
         let sok = UdpSocket::bind("0.0.0.0:0").await.unwrap();
 
         // Parse address to extract host and port
@@ -633,12 +633,7 @@ impl Client {
         // Process all pending actions without blocking
         while let Ok(action) = self.action_rx.try_recv() {
             match action {
-                ClientAction::SendMessage(msg) => {
-                    debug!(target: "events", "Action: Enqueueing message from event handler");
-                    self.outgoing_message_queue
-                        .push_back(OutgoingMessage::new(*msg));
-                }
-                ClientAction::Disconnect => {
+                gromnie_events::SimpleClientAction::Disconnect => {
                     info!(target: "events", "Action: Disconnecting");
                     // Disconnect action - transition to Failed state
                     self.state = ClientState::Failed {
@@ -647,7 +642,7 @@ impl Client {
                         ),
                     };
                 }
-                ClientAction::LoginCharacter {
+                gromnie_events::SimpleClientAction::LoginCharacter {
                     character_id,
                     character_name,
                     account,
@@ -659,26 +654,26 @@ impl Client {
                         error!(target: "events", "Failed to attempt character login: {}", e);
                     }
                 }
-                ClientAction::SendLoginComplete => {
+                gromnie_events::SimpleClientAction::SendLoginComplete => {
                     debug!(target: "events", "Action: Sending LoginComplete notification to server");
                     self.send_login_complete_notification();
                 }
-                ClientAction::SendChatSay { message } => {
+                gromnie_events::SimpleClientAction::SendChatSay { message } => {
                     debug!(target: "events", "Action: Sending chat say: {}", message);
                     self.send_chat_say(message);
                 }
-                ClientAction::SendChatTell { recipient_name, message } => {
+                gromnie_events::SimpleClientAction::SendChatTell { recipient_name, message } => {
                     debug!(target: "events", "Action: Sending tell to {}: {}", recipient_name, message);
                     self.send_chat_tell(recipient_name, message);
                 }
-                ClientAction::ReloadScripts { script_dir } => {
+                gromnie_events::SimpleClientAction::ReloadScripts { script_dir } => {
                     debug!(target: "events", "Action: Reloading scripts from {:?}", script_dir);
                     // Note: This action is handled by ScriptRunner, not here
                     // The client just forwards it via the event channel
                     // We shouldn't see this here, but handle it gracefully
                     warn!(target: "events", "ReloadScripts action received in Client - this should be handled by ScriptRunner");
                 }
-                ClientAction::LogScriptMessage { script_id, message } => {
+                gromnie_events::SimpleClientAction::LogScriptMessage { script_id, message } => {
                     info!(target: "script", "[{}] {}", script_id, message);
                 }
             }
