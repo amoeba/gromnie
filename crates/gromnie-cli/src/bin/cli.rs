@@ -24,6 +24,10 @@ pub struct Cli {
     /// Account to use
     #[arg(short, long)]
     account: Option<String>,
+
+    /// Character to log in with
+    #[arg(short, long)]
+    character: Option<String>,
 }
 
 fn create_example_config() -> Result<(), Box<dyn Error>> {
@@ -45,6 +49,8 @@ port = 9000
 [accounts.default]
 username = "user"
 password = "pass"
+# Optional: character name to auto-login with
+# character = "MyCharacterName"
 
 [scripting]
 enabled = true
@@ -119,11 +125,19 @@ async fn main() -> Result<(), Box<dyn Error>> {
                 account_name: account.username.clone(),
                 password: account.password.clone(),
                 reconnect: server.reconnect.clone(),
+                // CLI flag takes precedence over account config
+                character_name: cli.character.clone().or_else(|| account.character.clone()),
             };
 
             info!(
-                "Connecting to {} with account {}",
-                server_name, account_name
+                "Connecting to {} with account {}{}",
+                server_name,
+                account_name,
+                if let Some(char_name) = &client_config.character_name {
+                    format!(", character {}", char_name)
+                } else {
+                    String::new()
+                }
             );
 
             // Build and run the client using the new builder API
@@ -169,6 +183,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
             account_name: account.username.clone(),
             password: account.password.clone(),
             reconnect: server.reconnect.clone(),
+            character_name: account.character.clone(),
         };
 
         // Build and run the client using the new builder API

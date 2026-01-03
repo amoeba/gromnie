@@ -72,6 +72,7 @@ impl ConfigWizard {
             gromnie_client::config::AccountConfig {
                 username: self.account_username.clone(),
                 password: self.account_password.clone(),
+                character: None,
             },
         );
 

@@ -157,6 +157,10 @@ pub struct Client {
     // Reconnection state
     reconnect_config: crate::config::ReconnectConfig,
     reconnect_attempt_count: u32, // Track reconnection attempts across state transitions
+    /// Optional character name to auto-login with after receiving character list
+    pub(crate) character: Option<String>,
+    /// Pending auto-login action to be processed after character list is received
+    pub(crate) pending_auto_login: Option<gromnie_events::SimpleClientAction>,
 }
 
 impl Client {
@@ -165,6 +169,7 @@ impl Client {
         address: String,
         name: String,
         password: String,
+        character: Option<String>,
         raw_event_tx: mpsc::Sender<ClientEvent>, // Raw event sender to runner
     ) -> (
         Client,
@@ -175,6 +180,7 @@ impl Client {
             address,
             name,
             password,
+            character,
             raw_event_tx,
             crate::config::ReconnectConfig::default(),
         )
@@ -186,6 +192,7 @@ impl Client {
         address: String,
         name: String,
         password: String,
+        character: Option<String>,
         raw_event_tx: mpsc::Sender<ClientEvent>, // Raw event sender to runner
         reconnect_config: crate::config::ReconnectConfig,
     ) -> (
@@ -229,6 +236,8 @@ impl Client {
             known_characters: Vec::new(),
             reconnect_config,
             reconnect_attempt_count: 0,
+            character,
+            pending_auto_login: None,
         };
 
         (client, action_tx)
@@ -784,6 +793,28 @@ impl Client {
 
     /// Process actions sent from event handlers
     pub fn process_actions(&mut self) {
+        // Process pending auto-login action first (if any)
+        if let Some(action) = self.pending_auto_login.take() {
+            match action {
+                gromnie_events::SimpleClientAction::LoginCharacter {
+                    character_id,
+                    character_name,
+                    account,
+                } => {
+                    info!(target: "events", "Auto-login: Logging in as character {} (ID: {})", character_name, character_id);
+                    if let Err(e) =
+                        self.attempt_character_login(character_id, character_name, account)
+                    {
+                        error!(target: "events", "Failed to attempt auto-login: {}", e);
+                    }
+                }
+                _ => {
+                    // Put it back if it's not a LoginCharacter action (shouldn't happen)
+                    self.pending_auto_login = Some(action);
+                }
+            }
+        }
+
         // Process all pending actions without blocking
         while let Ok(action) = self.action_rx.try_recv() {
             match action {
@@ -1159,7 +1190,7 @@ impl Client {
                         }
                     }
                     S2CMessage::LoginCreatePlayer => {
-                        dispatch_message::<acprotocol::messages::s2c::LoginLoginCharacterSet, _>(
+                        dispatch_message::<acprotocol::messages::s2c::LoginCreatePlayer, _>(
                             self, message, &event_tx,
                         )
                         .ok();

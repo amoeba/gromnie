@@ -310,6 +310,7 @@ pub async fn run_client<C, F>(
         config.address.clone(),
         config.account_name.clone(),
         config.password.clone(),
+        config.character_name.clone(),
         raw_event_tx,
         config.reconnect.clone(),
     )
@@ -352,6 +353,7 @@ pub async fn run_client_with_consumers<F>(
         config.address.clone(),
         config.account_name.clone(),
         config.password.clone(),
+        config.character_name.clone(),
         raw_event_tx,
         config.reconnect.clone(),
     )
@@ -447,6 +449,7 @@ pub async fn run_client_with_action_channel<C, F>(
         config.address.clone(),
         config.account_name.clone(),
         config.password.clone(),
+        config.character_name.clone(),
         raw_event_tx,
         config.reconnect.clone(),
     )
@@ -777,6 +780,7 @@ where
                 client_config.address.clone(),
                 client_config.account_name.clone(),
                 client_config.password.clone(),
+                client_config.character_name.clone(),
                 raw_event_tx,
             )
             .await;
@@ -948,6 +952,7 @@ where
                 client.address.clone(),
                 client.account_name.clone(),
                 client.password.clone(),
+                client.character_name.clone(),
                 raw_event_tx,
             )
             .await;

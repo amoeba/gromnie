@@ -219,6 +219,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         account_name: game_username,
         password: game_password,
         reconnect: Default::default(),
+        character_name: None,
     };
 
     let event_bus_manager = Arc::new(EventBusManager::new(100));
