@@ -24,6 +24,10 @@ pub struct Cli {
     /// Account to use
     #[arg(short, long)]
     account: Option<String>,
+
+    /// Enable automatic reconnection on connection loss
+    #[arg(long)]
+    reconnect: bool,
 }
 
 fn create_example_config() -> Result<(), Box<dyn Error>> {
@@ -118,7 +122,15 @@ async fn main() -> Result<(), Box<dyn Error>> {
                 address,
                 account_name: account.username.clone(),
                 password: account.password.clone(),
-                reconnect: server.reconnect.clone(),
+                // CLI flag overrides server config
+                reconnect: if cli.reconnect {
+                    gromnie_client::config::ReconnectConfig {
+                        enabled: true,
+                        ..server.reconnect.clone()
+                    }
+                } else {
+                    server.reconnect.clone()
+                },
                 character_name: None,
             };
 
@@ -170,7 +182,15 @@ async fn main() -> Result<(), Box<dyn Error>> {
             address,
             account_name: account.username.clone(),
             password: account.password.clone(),
-            reconnect: server.reconnect.clone(),
+            // CLI flag overrides server config
+            reconnect: if cli.reconnect {
+                gromnie_client::config::ReconnectConfig {
+                    enabled: true,
+                    ..server.reconnect.clone()
+                }
+            } else {
+                server.reconnect.clone()
+            },
             character_name: None,
         };
 
