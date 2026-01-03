@@ -9,8 +9,8 @@ use wasmtime_wasi::{WasiCtx, WasiView};
 use crate::Script as HostScript;
 use crate::{EventFilter, context::ScriptContext};
 use gromnie_events::{
-    ClientEvent, ClientStateEvent, ClientSystemEvent, GameEventMsg, ProtocolEvent,
-    S2CEvent, SimpleGameEvent as GameEvent,
+    ClientEvent, ClientStateEvent, ClientSystemEvent, GameEventMsg, ProtocolEvent, S2CEvent,
+    SimpleGameEvent as GameEvent,
 };
 
 // Generate bindings from WIT (use the canonical definition from gromnie-scripting-api)
