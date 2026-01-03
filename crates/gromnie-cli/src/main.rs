@@ -118,6 +118,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
                 address,
                 account_name: account.username.clone(),
                 password: account.password.clone(),
+                character_name: None,
             };
 
             info!(
@@ -168,6 +169,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
             address,
             account_name: account.username.clone(),
             password: account.password.clone(),
+            character_name: None,
         };
 
         // Build and run the client using the new builder API

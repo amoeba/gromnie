@@ -164,6 +164,37 @@ impl MessageHandler<acprotocol::messages::s2c::LoginLoginCharacterSet> for Clien
             info!(target: "net", "State transition: Patching -> CharSelect");
         }
 
+        // Check if auto-login is configured
+        if let Some(ref char_name) = self.character {
+            // Find the character in the list
+            let found_char = self
+                .known_characters
+                .iter()
+                .find(|c| c.name.eq_ignore_ascii_case(char_name) && !c.delete_pending);
+
+            if let Some(character) = found_char {
+                info!(target: "net", "Auto-login enabled, queuing login for character: {} (ID: {})", character.name, character.id);
+
+                // Store the pending auto-login action to be processed in the main loop
+                self.pending_auto_login =
+                    Some(gromnie_events::SimpleClientAction::LoginCharacter {
+                        character_id: character.id,
+                        character_name: character.name.clone(),
+                        account: char_list.account.clone(),
+                    });
+            } else {
+                let available_names: Vec<&str> = self
+                    .known_characters
+                    .iter()
+                    .filter(|c| !c.delete_pending)
+                    .map(|c| c.name.as_str())
+                    .collect();
+
+                error!(target: "net", "Auto-login character '{}' not found in character list. Available characters: [{}]",
+                    char_name, available_names.join(", "));
+            }
+        }
+
         // Delay sending the CharacterListReceived event (to make UI progress visible)
         let game_event = GameEvent::CharacterListReceived {
             account: char_list.account.clone(),

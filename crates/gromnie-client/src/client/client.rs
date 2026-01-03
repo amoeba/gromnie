@@ -149,6 +149,10 @@ pub struct Client {
     action_rx: mpsc::UnboundedReceiver<gromnie_events::SimpleClientAction>, // Receive actions from handlers
     pub(crate) ddd_response: Option<OutgoingMessageContent>, // Cached DDD response for retries
     pub(crate) known_characters: Vec<crate::client::CharacterInfo>, // Track characters from list and creation
+    /// Optional character name to auto-login with after receiving character list
+    pub(crate) character: Option<String>,
+    /// Pending auto-login action to be processed after character list is received
+    pub(crate) pending_auto_login: Option<gromnie_events::SimpleClientAction>,
 }
 
 impl Client {
@@ -157,6 +161,7 @@ impl Client {
         address: String,
         name: String,
         password: String,
+        character: Option<String>,
         raw_event_tx: mpsc::Sender<ClientEvent>, // Raw event sender to runner
     ) -> (
         Client,
@@ -197,6 +202,8 @@ impl Client {
             action_rx,
             ddd_response: None,
             known_characters: Vec::new(),
+            character,
+            pending_auto_login: None,
         };
 
         (client, action_tx)
@@ -632,6 +639,28 @@ impl Client {
 
     /// Process actions sent from event handlers
     pub fn process_actions(&mut self) {
+        // Process pending auto-login action first (if any)
+        if let Some(action) = self.pending_auto_login.take() {
+            match action {
+                gromnie_events::SimpleClientAction::LoginCharacter {
+                    character_id,
+                    character_name,
+                    account,
+                } => {
+                    info!(target: "events", "Auto-login: Logging in as character {} (ID: {})", character_name, character_id);
+                    if let Err(e) =
+                        self.attempt_character_login(character_id, character_name, account)
+                    {
+                        error!(target: "events", "Failed to attempt auto-login: {}", e);
+                    }
+                }
+                _ => {
+                    // Put it back if it's not a LoginCharacter action (shouldn't happen)
+                    self.pending_auto_login = Some(action);
+                }
+            }
+        }
+
         // Process all pending actions without blocking
         while let Ok(action) = self.action_rx.try_recv() {
             match action {

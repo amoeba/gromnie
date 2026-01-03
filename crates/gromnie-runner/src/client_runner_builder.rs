@@ -445,6 +445,7 @@ impl ClientRunner {
             config.address.clone(),
             config.account_name.clone(),
             config.password.clone(),
+            config.character_name.clone(),
             raw_event_tx,
         )
         .await;
