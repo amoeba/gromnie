@@ -669,7 +669,10 @@ impl Client {
         }
 
         // Check if we've exceeded max retry attempts
-        if !self.reconnect_config.should_attempt_reconnect(self.reconnect_attempt_count) {
+        if !self
+            .reconnect_config
+            .should_attempt_reconnect(self.reconnect_attempt_count)
+        {
             error!(
                 target: "net",
                 "Max reconnection attempts reached ({}), entering Failed state",
@@ -684,7 +687,9 @@ impl Client {
             return false;
         }
 
-        let delay = self.reconnect_config.delay_for_attempt(self.reconnect_attempt_count);
+        let delay = self
+            .reconnect_config
+            .delay_for_attempt(self.reconnect_attempt_count);
 
         info!(
             target: "net",
@@ -694,12 +699,12 @@ impl Client {
 
         // Emit reconnection event
         let delay_secs: u64 = delay.as_secs();
-        let _ = self.raw_event_tx.try_send(ClientEvent::System(
-            ClientSystemEvent::Reconnecting {
+        let _ = self
+            .raw_event_tx
+            .try_send(ClientEvent::System(ClientSystemEvent::Reconnecting {
                 attempt: self.reconnect_attempt_count,
                 delay_secs,
-            },
-        ));
+            }));
 
         // Transition back to Connecting state after delay
         let now = std::time::Instant::now();
@@ -717,7 +722,9 @@ impl Client {
         // Increment attempt counter (stored separately from state to survive transitions)
         self.reconnect_attempt_count += 1;
 
-        let delay = self.reconnect_config.delay_for_attempt(self.reconnect_attempt_count);
+        let delay = self
+            .reconnect_config
+            .delay_for_attempt(self.reconnect_attempt_count);
 
         info!(
             target: "net",
@@ -742,13 +749,13 @@ impl Client {
         self.next_game_action_sequence = 0;
 
         // Emit disconnected event
-        let _ = self.raw_event_tx.try_send(ClientEvent::System(
-            ClientSystemEvent::Disconnected {
+        let _ = self
+            .raw_event_tx
+            .try_send(ClientEvent::System(ClientSystemEvent::Disconnected {
                 will_reconnect: self.reconnect_config.enabled,
                 reconnect_attempt: self.reconnect_attempt_count,
                 delay_secs: delay.as_secs(),
-            },
-        ));
+            }));
     }
 
     /// Get current client state

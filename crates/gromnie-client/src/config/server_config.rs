@@ -37,7 +37,7 @@ impl ReconnectConfig {
     pub fn delay_for_attempt(&self, attempt: u32) -> std::time::Duration {
         let delay_secs = (self.initial_delay_secs as f64
             * self.backoff_multiplier.powi(attempt as i32))
-            .min(self.max_delay_secs as f64) as u64;
+        .min(self.max_delay_secs as f64) as u64;
         std::time::Duration::from_secs(delay_secs)
     }
 
