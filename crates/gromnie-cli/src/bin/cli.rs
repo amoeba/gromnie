@@ -28,6 +28,14 @@ pub struct Cli {
     /// Character to log in with
     #[arg(short, long)]
     character: Option<String>,
+
+    /// Enable automatic reconnection on connection loss
+    #[arg(long, conflicts_with = "no_reconnect")]
+    reconnect: bool,
+
+    /// Disable automatic reconnection (overrides config file)
+    #[arg(long)]
+    no_reconnect: bool,
 }
 
 fn create_example_config() -> Result<(), Box<dyn Error>> {
@@ -124,6 +132,14 @@ async fn main() -> Result<(), Box<dyn Error>> {
                 address,
                 account_name: account.username.clone(),
                 password: account.password.clone(),
+                // CLI flags override config file: --reconnect enables, --no-reconnect disables
+                reconnect: if cli.no_reconnect {
+                    false
+                } else if cli.reconnect {
+                    true
+                } else {
+                    config.reconnect
+                },
                 // CLI flag takes precedence over account config
                 character_name: cli.character.clone().or_else(|| account.character.clone()),
             };
@@ -181,6 +197,14 @@ async fn main() -> Result<(), Box<dyn Error>> {
             address,
             account_name: account.username.clone(),
             password: account.password.clone(),
+            // CLI flags override config file: --reconnect enables, --no-reconnect disables
+            reconnect: if cli.no_reconnect {
+                false
+            } else if cli.reconnect {
+                true
+            } else {
+                wizard.config.reconnect
+            },
             character_name: account.character.clone(),
         };
 

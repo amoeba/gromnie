@@ -438,6 +438,7 @@ impl ClientRunner {
             config.password.clone(),
             config.character_name.clone(),
             raw_event_tx,
+            config.reconnect,
         )
         .await;
 
@@ -570,6 +571,7 @@ impl ClientRunner {
                     format!("client_{}", id),
                     format!("pass_{}", id),
                 )
+                .with_reconnect(Default::default())
             })
         };
 

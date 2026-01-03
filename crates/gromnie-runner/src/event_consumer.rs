@@ -127,6 +127,25 @@ impl EventConsumer for LoggingConsumer {
                 } => {
                     info!(target: "events", "LoginSucceeded -- Character: {} (ID: {})", character_name, character_id);
                 }
+                SystemEvent::Disconnected {
+                    will_reconnect,
+                    reconnect_attempt,
+                    delay_secs,
+                    ..
+                } => {
+                    info!(
+                        target: "events",
+                        "Disconnected (will_reconnect={}, attempt={}, delay={}s)",
+                        will_reconnect, reconnect_attempt, delay_secs
+                    );
+                }
+                SystemEvent::Reconnecting {
+                    attempt,
+                    delay_secs,
+                    ..
+                } => {
+                    info!(target: "events", "Reconnecting (attempt={}, delay={}s)", attempt, delay_secs);
+                }
                 SystemEvent::ReloadScripts { .. } => {
                     info!(target: "events", "Reloading scripts");
                 }
@@ -439,6 +458,25 @@ impl EventConsumer for DiscordConsumer {
 
                         info!(target: "events", "LoginSucceeded -- Character: {} (ID: {})", character_name, character_id);
                         info!(target: "events", "Bot uptime: {:02}:{:02}:{:02} | Now tracking in-game time", total_hours, total_mins, total_secs_remainder);
+                    }
+                    SystemEvent::Disconnected {
+                        will_reconnect,
+                        reconnect_attempt,
+                        delay_secs,
+                        ..
+                    } => {
+                        info!(
+                            target: "events",
+                            "Disconnected (will_reconnect={}, attempt={}, delay={}s)",
+                            will_reconnect, reconnect_attempt, delay_secs
+                        );
+                    }
+                    SystemEvent::Reconnecting {
+                        attempt,
+                        delay_secs,
+                        ..
+                    } => {
+                        info!(target: "events", "Reconnecting (attempt={}, delay={}s)", attempt, delay_secs);
                     }
                     _ => {
                         // Handle other system events if needed

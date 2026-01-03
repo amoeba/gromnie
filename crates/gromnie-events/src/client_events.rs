@@ -23,6 +23,17 @@ pub enum ClientSystemEvent {
         character_id: u32,
         character_name: String,
     },
+    /// Connection was lost
+    Disconnected {
+        will_reconnect: bool,
+        reconnect_attempt: u32,
+        delay_secs: u64,
+    },
+    /// Attempting to reconnect
+    Reconnecting {
+        attempt: u32,
+        delay_secs: u64,
+    },
 }
 
 /// State of the client
