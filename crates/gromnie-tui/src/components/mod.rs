@@ -87,27 +87,23 @@ pub fn render_status_bar(frame: &mut Frame, area: Rect, app: &crate::app::App) {
 
     // Determine style for scene state (bold if in world, dim if error)
     let scene_style = match &app.client_status.scene_state {
-        crate::app::SceneState::InWorld => Style::default().bg(Color::White).fg(Color::Black).bold(),
+        crate::app::SceneState::InWorld => {
+            Style::default().bg(Color::White).fg(Color::Black).bold()
+        }
         crate::app::SceneState::Error(_) => Style::default().bg(Color::White).fg(Color::Red),
         _ => Style::default().bg(Color::White).fg(Color::Black),
     };
 
     // Create spans for each part
     let spans = vec![
-        Span::styled(
-            format!(" Conn: {}", connection_text),
-            conn_style,
-        ),
+        Span::styled(format!(" Conn: {}", connection_text), conn_style),
         Span::styled(" | ", Style::default().bg(Color::White).fg(Color::Black)),
         Span::styled(
             format!("Session: {}", session_text),
             Style::default().bg(Color::White).fg(Color::Black),
         ),
         Span::styled(" | ", Style::default().bg(Color::White).fg(Color::Black)),
-        Span::styled(
-            format!("Scene: {}", scene_text),
-            scene_style,
-        ),
+        Span::styled(format!("Scene: {}", scene_text), scene_style),
     ];
 
     let status_line = Line::from(spans);

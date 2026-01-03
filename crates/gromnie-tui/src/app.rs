@@ -130,9 +130,7 @@ impl ClientStatus {
         if self.is_logged_in() {
             format!(
                 "Logged in {}",
-                self.current_character
-                    .as_deref()
-                    .unwrap_or("Unknown")
+                self.current_character.as_deref().unwrap_or("Unknown")
             )
         } else if self.is_connected() {
             "Connected".to_string()
@@ -446,12 +444,8 @@ impl App {
             ClientStateEvent::ConnectingFailed { reason } => {
                 (SessionState::AuthLoginRequest, SceneState::Error(reason))
             }
-            ClientStateEvent::Patching => {
-                (SessionState::AuthConnected, SceneState::Connecting)
-            }
-            ClientStateEvent::Patched => {
-                (SessionState::AuthConnected, SceneState::CharacterSelect)
-            }
+            ClientStateEvent::Patching => (SessionState::AuthConnected, SceneState::Connecting),
+            ClientStateEvent::Patched => (SessionState::AuthConnected, SceneState::CharacterSelect),
             ClientStateEvent::PatchingFailed { reason } => {
                 (SessionState::AuthConnected, SceneState::Error(reason))
             }
@@ -461,15 +455,14 @@ impl App {
             ClientStateEvent::EnteringWorld => {
                 (SessionState::AuthConnected, SceneState::EnteringWorld)
             }
-            ClientStateEvent::InWorld => {
-                (SessionState::WorldConnected, SceneState::InWorld)
-            }
+            ClientStateEvent::InWorld => (SessionState::WorldConnected, SceneState::InWorld),
             ClientStateEvent::ExitingWorld => {
                 (SessionState::AuthConnected, SceneState::CharacterSelect)
             }
-            ClientStateEvent::CharacterError => {
-                (SessionState::AuthConnected, SceneState::Error("Character error".to_string()))
-            }
+            ClientStateEvent::CharacterError => (
+                SessionState::AuthConnected,
+                SceneState::Error("Character error".to_string()),
+            ),
         };
 
         self.client_status.session_state = session;
