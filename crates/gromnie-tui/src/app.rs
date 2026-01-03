@@ -1,4 +1,4 @@
-use gromnie_events::{CharacterInfo, SimpleClientAction, SimpleGameEvent};
+use gromnie_events::{CharacterInfo, ClientStateEvent, SimpleClientAction, SimpleGameEvent};
 
 // Type alias for backward compatibility
 pub type GameEvent = SimpleGameEvent;
@@ -9,6 +9,54 @@ use tokio::sync::{broadcast, mpsc};
 pub enum AppView {
     Game,
     Debug,
+}
+
+/// Session state - protocol-level connection state
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SessionState {
+    Unknown,
+    AuthLoginRequest,
+    AuthConnectResponse,
+    AuthConnected,
+    WorldConnected,
+}
+
+impl SessionState {
+    /// Display name for the session state
+    pub fn display_name(&self) -> &'static str {
+        match self {
+            SessionState::Unknown => "Unknown",
+            SessionState::AuthLoginRequest => "AuthLoginRequest",
+            SessionState::AuthConnectResponse => "AuthConnectResponse",
+            SessionState::AuthConnected => "AuthConnected",
+            SessionState::WorldConnected => "WorldConnected",
+        }
+    }
+}
+
+/// Scene state - UI-level state
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum SceneState {
+    Unknown,
+    Connecting,
+    CharacterSelect,
+    EnteringWorld,
+    InWorld,
+    Error(String),
+}
+
+impl SceneState {
+    /// Display name for the scene state
+    pub fn display_name(&self) -> String {
+        match self {
+            SceneState::Unknown => "Unknown".to_string(),
+            SceneState::Connecting => "Connecting".to_string(),
+            SceneState::CharacterSelect => "CharacterSelect".to_string(),
+            SceneState::EnteringWorld => "EnteringWorld".to_string(),
+            SceneState::InWorld => "InWorld".to_string(),
+            SceneState::Error(msg) => format!("Error: {}", msg),
+        }
+    }
 }
 
 /// Scene states for the GameView
@@ -48,13 +96,60 @@ pub enum GameWorldTab {
     Inventory,
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone)]
 pub struct ClientStatus {
-    pub connected: bool,
-    pub logged_in: bool,
     pub account_name: String,
     pub current_character: Option<String>,
     pub characters: Vec<CharacterInfo>,
+    /// Session state from the client (protocol-level state)
+    pub session_state: SessionState,
+    /// Scene state from the client (UI-level state)
+    pub scene_state: SceneState,
+}
+
+impl ClientStatus {
+    /// Check if the client is connected (has progressed beyond initial connection states)
+    pub fn is_connected(&self) -> bool {
+        matches!(
+            self.session_state,
+            SessionState::AuthConnectResponse
+                | SessionState::AuthConnected
+                | SessionState::WorldConnected
+        )
+    }
+
+    /// Check if the client is logged in (in world with a character)
+    pub fn is_logged_in(&self) -> bool {
+        self.session_state == SessionState::WorldConnected
+            && matches!(self.scene_state, SceneState::InWorld)
+            && self.current_character.is_some()
+    }
+
+    /// Get a human-readable connection status
+    pub fn connection_status(&self) -> String {
+        if self.is_logged_in() {
+            format!(
+                "Logged in {}",
+                self.current_character.as_deref().unwrap_or("Unknown")
+            )
+        } else if self.is_connected() {
+            "Connected".to_string()
+        } else {
+            "Disconnected".to_string()
+        }
+    }
+}
+
+impl Default for ClientStatus {
+    fn default() -> Self {
+        Self {
+            account_name: String::new(),
+            current_character: None,
+            characters: Vec::new(),
+            session_state: SessionState::Unknown,
+            scene_state: SceneState::Unknown,
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -167,7 +262,6 @@ impl App {
                         ddd_received,
                     };
                 }
-                self.client_status.connected = true;
 
                 self.add_network_message(NetworkMessage::Received {
                     opcode: "CONNECT".to_string(),
@@ -176,6 +270,8 @@ impl App {
                 });
             }
             gromnie_runner::SystemEvent::AuthenticationFailed { reason, .. } => {
+                self.client_status.scene_state = SceneState::Error(reason.clone());
+
                 self.add_network_message(NetworkMessage::Received {
                     opcode: "ERROR".to_string(),
                     description: format!("Authentication failed: {}", reason),
@@ -186,7 +282,6 @@ impl App {
                 character_id,
                 character_name,
             } => {
-                self.client_status.logged_in = true;
                 self.client_status.current_character = Some(character_name.clone());
 
                 // Transition from LoggingIn to LoggedIn
@@ -236,7 +331,6 @@ impl App {
                 character_id,
                 character_name,
             } => {
-                self.client_status.logged_in = true;
                 self.client_status.current_character = Some(character_name.clone());
 
                 // Transition from LoggingIn to LoggedIn
@@ -336,6 +430,43 @@ impl App {
         if self.chat_messages.len() > self.max_chat_messages {
             self.chat_messages.pop_front();
         }
+    }
+
+    /// Update from state events from the client
+    pub fn update_from_state_event(&mut self, state_event: ClientStateEvent) {
+        let (session, scene) = match state_event {
+            ClientStateEvent::Connecting => {
+                (SessionState::AuthLoginRequest, SceneState::Connecting)
+            }
+            ClientStateEvent::Connected => {
+                (SessionState::AuthConnectResponse, SceneState::Connecting)
+            }
+            ClientStateEvent::ConnectingFailed { reason } => {
+                (SessionState::AuthLoginRequest, SceneState::Error(reason))
+            }
+            ClientStateEvent::Patching => (SessionState::AuthConnected, SceneState::Connecting),
+            ClientStateEvent::Patched => (SessionState::AuthConnected, SceneState::CharacterSelect),
+            ClientStateEvent::PatchingFailed { reason } => {
+                (SessionState::AuthConnected, SceneState::Error(reason))
+            }
+            ClientStateEvent::CharacterSelect => {
+                (SessionState::AuthConnected, SceneState::CharacterSelect)
+            }
+            ClientStateEvent::EnteringWorld => {
+                (SessionState::AuthConnected, SceneState::EnteringWorld)
+            }
+            ClientStateEvent::InWorld => (SessionState::WorldConnected, SceneState::InWorld),
+            ClientStateEvent::ExitingWorld => {
+                (SessionState::AuthConnected, SceneState::CharacterSelect)
+            }
+            ClientStateEvent::CharacterError => (
+                SessionState::AuthConnected,
+                SceneState::Error("Character error".to_string()),
+            ),
+        };
+
+        self.client_status.session_state = session;
+        self.client_status.scene_state = scene;
     }
 }
 

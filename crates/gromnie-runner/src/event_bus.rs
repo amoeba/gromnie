@@ -68,6 +68,7 @@ impl EventBus {
 pub enum TuiEvent {
     Game(gromnie_events::SimpleGameEvent),
     System(SystemEvent),
+    State(ClientStateEvent),
 }
 
 impl From<gromnie_events::SimpleGameEvent> for TuiEvent {
@@ -79,6 +80,12 @@ impl From<gromnie_events::SimpleGameEvent> for TuiEvent {
 impl From<SystemEvent> for TuiEvent {
     fn from(event: SystemEvent) -> Self {
         TuiEvent::System(event)
+    }
+}
+
+impl From<ClientStateEvent> for TuiEvent {
+    fn from(event: ClientStateEvent) -> Self {
+        TuiEvent::State(event)
     }
 }
 
