@@ -9,12 +9,24 @@ use crate::config::{
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct GromnieConfig {
+    #[serde(default)]
     pub servers: BTreeMap<String, ServerConfig>,
+    #[serde(default)]
     pub accounts: BTreeMap<String, AccountConfig>,
 
     /// Scripting configuration
     #[serde(default)]
     pub scripting: ScriptingConfig,
+}
+
+impl Default for GromnieConfig {
+    fn default() -> Self {
+        Self {
+            servers: BTreeMap::new(),
+            accounts: BTreeMap::new(),
+            scripting: ScriptingConfig::default(),
+        }
+    }
 }
 
 impl GromnieConfig {
