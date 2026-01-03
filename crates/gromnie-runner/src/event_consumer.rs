@@ -212,8 +212,9 @@ impl EventConsumer for TuiConsumer {
                 tracing::info!(target: "tui_consumer", "TuiConsumer forwarding SystemEvent: {:?}", std::mem::discriminant(&system_event));
                 let _ = self.tui_event_tx.send(system_event.into());
             }
-            EventType::State(_) => {
-                // State events are logged by other consumers, TUI doesn't need them
+            EventType::State(state_event) => {
+                tracing::info!(target: "tui_consumer", "TuiConsumer forwarding StateEvent: {:?}", std::mem::discriminant(&state_event));
+                let _ = self.tui_event_tx.send(state_event.into());
             }
         }
     }

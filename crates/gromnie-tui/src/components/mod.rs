@@ -71,28 +71,42 @@ pub fn render_tab_bar(frame: &mut Frame, area: Rect, app: &crate::app::App) {
 
 /// Common status bar component
 pub fn render_status_bar(frame: &mut Frame, area: Rect, app: &crate::app::App) {
-    let status_text = if app.client_status.logged_in {
-        format!(
-            "Logged in {}",
-            app.client_status
-                .current_character
-                .as_deref()
-                .unwrap_or("Unknown")
-        )
-    } else if app.client_status.connected {
-        "Connected".to_string()
+    // Get connection status from the client status
+    let connection_text = app.client_status.connection_status();
+
+    // Get session and scene state display names (defer string creation until render time)
+    let session_text = app.client_status.session_state.display_name();
+    let scene_text = app.client_status.scene_state.display_name();
+
+    // Determine style for connection state (bold if connected)
+    let conn_style = if app.client_status.is_connected() {
+        Style::default().bg(Color::White).fg(Color::Black).bold()
     } else {
-        "Disconnected".to_string()
+        Style::default().bg(Color::White).fg(Color::Black)
     };
 
+    // Determine style for scene state (bold if in world, dim if error)
+    let scene_style = match &app.client_status.scene_state {
+        crate::app::SceneState::InWorld => Style::default().bg(Color::White).fg(Color::Black).bold(),
+        crate::app::SceneState::Error(_) => Style::default().bg(Color::White).fg(Color::Red),
+        _ => Style::default().bg(Color::White).fg(Color::Black),
+    };
+
+    // Create spans for each part
     let spans = vec![
         Span::styled(
-            " Status: ",
+            format!(" Conn: {}", connection_text),
+            conn_style,
+        ),
+        Span::styled(" | ", Style::default().bg(Color::White).fg(Color::Black)),
+        Span::styled(
+            format!("Session: {}", session_text),
             Style::default().bg(Color::White).fg(Color::Black),
         ),
+        Span::styled(" | ", Style::default().bg(Color::White).fg(Color::Black)),
         Span::styled(
-            status_text,
-            Style::default().bg(Color::White).fg(Color::Black).bold(),
+            format!("Scene: {}", scene_text),
+            scene_style,
         ),
     ];
 
