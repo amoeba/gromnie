@@ -2,7 +2,7 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::time::{Duration, Instant};
 use tokio::sync::{broadcast, mpsc, watch};
-use tracing::{error, info, warn};
+use tracing::{error, info};
 
 use crate::event_bus::{EventBus, EventEnvelope};
 use crate::event_consumer::EventConsumer;
@@ -547,12 +547,9 @@ async fn run_client_loop(
     // Main network loop
     let mut buf = [0u8; 1024];
     let mut last_keepalive = tokio::time::Instant::now();
-    let mut last_packet_received = tokio::time::Instant::now();
     // Send keepalive every 5 seconds to stay well within the server's timeout window
     // (Server timeout is configurable but defaults to 60s for gameplay, could be as low as 10s)
     let keepalive_interval = tokio::time::Duration::from_secs(5);
-    // Consider connection lost if no packets received for this long
-    const CONNECTION_TIMEOUT: tokio::time::Duration = tokio::time::Duration::from_secs(30);
 
     // Tick interval for checking retries and timeouts
     let tick_interval = tokio::time::Duration::from_millis(100); // Check every 100ms
@@ -564,7 +561,6 @@ async fn run_client_loop(
             recv_result = tokio::time::timeout(tokio::time::Duration::from_millis(100), client.socket.recv_from(&mut buf)) => {
                 match recv_result {
                     Ok(Ok((size, peer))) => {
-                        last_packet_received = tokio::time::Instant::now();
                         client.process_packet(&buf[..size], size, &peer).await;
 
                         if client.has_messages() {
@@ -591,16 +587,6 @@ async fn run_client_loop(
             }
             _ = tokio::time::sleep_until(last_tick + tick_interval) => {
                 last_tick = tokio::time::Instant::now();
-
-                // Check for connection timeout (no packets received for a while)
-                // Check for Ingame and CharSelect states (Connecting/Patching have their own timeouts)
-                use gromnie_client::client::ClientState;
-                if matches!(client.get_state(), ClientState::Ingame { .. } | ClientState::CharSelect)
-                    && last_packet_received.elapsed() >= CONNECTION_TIMEOUT
-                {
-                    warn!("No packets received for {:?}, connection may be lost", CONNECTION_TIMEOUT);
-                    client.enter_disconnected();
-                }
 
                 // Check for state timeouts
                 if client.check_state_timeout() {
