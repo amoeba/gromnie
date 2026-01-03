@@ -113,10 +113,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut tui = try_init_tui()?;
     let mut app = App::new();
 
-    // WIP: Mark client as connected when we start. I marked this as false for
-    // testing now.
-    app.client_status.connected = false;
-
     // Set up event handler
     let (event_handler, mut tui_event_rx) = EventHandler::new();
     let event_handler = event_handler.start().await;
@@ -199,6 +195,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     TuiEvent::System(system_event) => {
                         tracing::info!(target: "tui_main", "TUI main received SystemEvent: {:?}", std::mem::discriminant(&system_event));
                         app.update_from_system_event(system_event);
+                    }
+                    TuiEvent::State(state_event) => {
+                        tracing::info!(target: "tui_main", "TUI main received StateEvent: {:?}", std::mem::discriminant(&state_event));
+                        app.update_from_state_event(state_event);
                     }
                 }
             }
