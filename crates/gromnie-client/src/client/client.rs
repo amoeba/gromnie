@@ -146,9 +146,9 @@ pub struct Client {
     pub character_login_state: CharacterLoginState,
     pub send_count: u32,
     pub recv_count: u32,
-    last_ack_sent: u32,     // Track the last sequence we ACKed to the server
+    last_ack_sent: u32,      // Track the last sequence we ACKed to the server
     unacked_send_count: u32, // Track how many sends we've done without receiving a packet
-    fragment_sequence: u32, // Counter for outgoing fragment sequences
+    fragment_sequence: u32,  // Counter for outgoing fragment sequences
     next_game_action_sequence: u32, // Sequence counter for GameAction messages
     session: Option<SessionState>,
     pending_fragments: HashMap<u32, Fragment>, // Track incomplete fragment sequences
@@ -239,7 +239,7 @@ impl Client {
             send_count: 0,
             recv_count: 0,
             last_ack_sent: 0,             // Initialize to 0
-            unacked_send_count: 0,         // Initialize to 0
+            unacked_send_count: 0,        // Initialize to 0
             fragment_sequence: 1,         // Start at 1 as per actestclient
             next_game_action_sequence: 0, // Start at 0 for GameAction sequences
             session: None,
