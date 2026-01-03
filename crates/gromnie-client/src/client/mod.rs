@@ -24,7 +24,6 @@ mod client;
 mod connection;
 mod constants;
 pub mod game_event_handler;
-mod game_event_handlers;
 pub mod message_handler;
 mod message_handlers;
 mod messages;

@@ -1,27 +1,106 @@
 // Test script that exercises all major scripting functionality
 // This will be compiled to WASM for testing the scripting host
 
-// Generate bindings from WIT
+// Generate WIT bindings for this WASM component
+// Note: Each WASM component must generate its own bindings per the WIT component model.
+// We reference the WIT definitions from gromnie-scripting-api to avoid duplication.
 wit_bindgen::generate!({
     path: "../../crates/gromnie-scripting-api/src/wit",
     world: "script",
 });
 
-// Import the generated bindings and host functions
+// Import the generated Guest trait and host interface
 use exports::gromnie::scripting::guest::Guest;
-
-// The wit_bindgen::generate! macro generates a `gromnie` module
-// with all the host functions
 use gromnie::scripting::host;
 
-#[derive(Default)]
-pub struct TestScript {
-    load_called: bool,
-    unload_called: bool,
-    event_count: u32,
-    tick_count: u32,
-    last_event: Option<String>,
+/// Helper function to handle protocol events with detailed pattern matching
+/// This demonstrates how scripts can access strongly-typed protocol events
+fn handle_protocol_event(protocol_event: host::ProtocolEvent) {
+    match protocol_event {
+        // Top-level S2C messages
+        host::ProtocolEvent::S2c(s2c_event) => match s2c_event {
+            host::S2cEvent::LoginCreatePlayer(msg) => {
+                host::log(&format!(
+                    "[Protocol] LoginCreatePlayer - Character ID: 0x{:08X}",
+                    msg.character_id
+                ));
+            }
+            host::S2cEvent::LoginCharacterSet(msg) => {
+                host::log(&format!(
+                    "[Protocol] LoginCharacterSet - Account: {}, {} characters, {} slots",
+                    msg.account,
+                    msg.characters.len(),
+                    msg.num_slots
+                ));
+                for character in msg.characters {
+                    let status = if character.delete_pending {
+                        "PENDING DELETION"
+                    } else {
+                        "Active"
+                    };
+                    host::log(&format!(
+                        "  - {} (ID: 0x{:08X}) [{}]",
+                        character.name, character.id, status
+                    ));
+                }
+            }
+            host::S2cEvent::ItemCreateObject(msg) => {
+                host::log(&format!(
+                    "[Protocol] ItemCreateObject - {} (ID: 0x{:08X})",
+                    msg.name, msg.object_id
+                ));
+            }
+            host::S2cEvent::CharacterError(err) => {
+                host::log(&format!(
+                    "[Protocol] CharacterError - Code: 0x{:04X}, Message: {}",
+                    err.error_code, err.error_message
+                ));
+            }
+            host::S2cEvent::HearSpeech(msg) => {
+                host::log(&format!(
+                    "[Protocol] HearSpeech - {} says: \"{}\" (type: 0x{:02X})",
+                    msg.sender_name, msg.message, msg.message_type
+                ));
+            }
+            host::S2cEvent::HearRangedSpeech(msg) => {
+                host::log(&format!(
+                    "[Protocol] HearRangedSpeech - {} says: \"{}\" (type: 0x{:02X})",
+                    msg.sender_name, msg.message, msg.message_type
+                ));
+            }
+            host::S2cEvent::DddInterrogation(msg) => {
+                host::log(&format!(
+                    "[Protocol] DDDInterrogation - Language: {}, Region: {}, Product: {}",
+                    msg.language, msg.region, msg.product
+                ));
+            }
+            host::S2cEvent::ChargenVerificationResponse => {
+                host::log("[Protocol] CharGenVerificationResponse - Character creation verified");
+            }
+        },
+        // Nested game events with metadata
+        host::ProtocolEvent::GameEvent(game_event) => {
+            host::log(&format!(
+                "[Protocol] GameEvent - Object: 0x{:08X}, Sequence: {}",
+                game_event.object_id, game_event.sequence
+            ));
+            match game_event.event {
+                host::GameEventMsg::HearDirectSpeech(msg) => {
+                    host::log(&format!(
+                        "  -> HearDirectSpeech: {} (0x{:08X}) tells you: \"{}\" (type: 0x{:02X})",
+                        msg.sender_name, msg.sender_id, msg.message, msg.message_type
+                    ));
+                }
+                host::GameEventMsg::TransientString(msg) => {
+                    host::log(&format!("  -> TransientString: {}", msg.message));
+                }
+            }
+        }
+    }
 }
+
+#[derive(Default)]
+pub struct TestScript;
 
 impl TestScript {
     pub fn new() -> Self {
@@ -63,8 +142,6 @@ impl Guest for TestScript {
     }
 
     fn on_event(event: host::ScriptEvent) {
-        host::log(&format!("Received event: {:?}", event));
-
         match event {
             host::ScriptEvent::Game(game_event) => match game_event {
                 host::GameEvent::CharacterListReceived(account_data) => {
@@ -90,7 +167,8 @@ impl Guest for TestScript {
                     host::log(&format!("Chat message: {}", chat_data.message));
                 }
                 host::GameEvent::Protocol(protocol_event) => {
-                    host::log(&format!("Protocol event received"));
+                    // Demonstrate full protocol event handling
+                    handle_protocol_event(protocol_event);
                 }
             },
             host::ScriptEvent::State(state_event) => {

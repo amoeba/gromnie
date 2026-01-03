@@ -9,6 +9,10 @@ path = "src/lib.rs"
 
 [dependencies]
 gromnie-scripting-api = { path = "../../crates/gromnie-scripting-api" }
+# wit-bindgen is required to generate the Guest trait implementation and export! macro.
+# While we try to minimize dependencies, the WIT component model requires generating
+# bindings in each WASM component (script). The WIT definitions themselves come from
+# gromnie-scripting-api, so there's no duplication of interface definitions.
 wit-bindgen = { version = "0.36", default-features = false }
 
 [package.metadata.wasm-pack.profile.release]
