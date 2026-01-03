@@ -7,4 +7,4 @@ pub mod server_config;
 pub use account_config::AccountConfig;
 pub use client_config::ClientConfig;
 pub use gromnie_config::GromnieConfig;
-pub use server_config::ServerConfig;
+pub use server_config::{ReconnectConfig, ServerConfig};

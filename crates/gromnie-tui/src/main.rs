@@ -73,6 +73,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         address: cli.address,
         account_name: cli.username,
         password: cli.password,
+        reconnect: Default::default(),
     };
 
     // Spawn client task using the runner module

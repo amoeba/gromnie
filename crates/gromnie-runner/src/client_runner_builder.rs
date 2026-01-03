@@ -578,6 +578,7 @@ impl ClientRunner {
                     format!("client_{}", id),
                     format!("pass_{}", id),
                 )
+                .with_reconnect(Default::default())
             })
         };
 

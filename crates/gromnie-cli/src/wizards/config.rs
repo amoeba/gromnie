@@ -60,6 +60,7 @@ impl ConfigWizard {
             gromnie_client::config::ServerConfig {
                 host: self.server_host.clone(),
                 port: self.server_port.parse().unwrap_or(9000),
+                reconnect: Default::default(),
             },
         );
 
