@@ -44,8 +44,6 @@ use crate::client::{ClientEvent, ClientSystemEvent, GameEvent};
 use crate::crypto::crypto_system::CryptoSystem;
 use crate::crypto::magic_number::get_magic_number;
 
-use std::cell::RefCell;
-
 /// Maximum number of packets we can send without receiving before considering connection dead
 const MAX_UNACKED_SENDS: u32 = 20;
 
@@ -1344,7 +1342,9 @@ impl Client {
                 cookie: connect_req_packet.cookie,
                 client_id: connect_req_packet.net_id as u16, // Use net_id from payload - this is our session index!
                 table: packet.iteration, // Use iteration from packet header as table value
-                send_generator: RefCell::new(CryptoSystem::new(connect_req_packet.incoming_seed)), // Client->Server seed
+                send_generator: std::sync::Mutex::new(CryptoSystem::new(
+                    connect_req_packet.incoming_seed,
+                )), // Client->Server seed
             });
             self.session
                 .transition_to(SessionState::AuthConnectResponse);

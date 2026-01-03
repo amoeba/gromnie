@@ -1,16 +1,27 @@
-use std::cell::RefCell;
+use std::sync::Mutex;
 use std::time::Instant;
 
 use crate::crypto::crypto_system::CryptoSystem;
 
 /// Session state received from the server's ConnectRequest packet
 /// This is now used internally within ClientSession
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 pub struct ConnectionState {
     pub cookie: u64,
     pub client_id: u16,
     pub table: u16, // Table/iteration value from packet header
-    pub send_generator: RefCell<CryptoSystem>, // Client->Server checksum encryption (initialized from seed_c2s)
+    pub send_generator: Mutex<CryptoSystem>, // Client->Server checksum encryption (initialized from seed_c2s)
+}
+
+impl Clone for ConnectionState {
+    fn clone(&self) -> Self {
+        Self {
+            cookie: self.cookie,
+            client_id: self.client_id,
+            table: self.table,
+            send_generator: Mutex::new(self.send_generator.lock().unwrap().clone()),
+        }
+    }
 }
 
 /// Account credentials

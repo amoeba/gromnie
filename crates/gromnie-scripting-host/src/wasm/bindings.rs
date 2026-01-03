@@ -76,36 +76,35 @@ impl gromnie::scripting::host::Host for WasmScriptState {
         ctx.check_timer(timer_id)
     }
 
-    fn get_client_state(&mut self) -> gromnie::scripting::host::Client {
+    fn get_client_state(&mut self) -> gromnie::scripting::host::ClientState {
+        use gromnie_client::client::SessionState;
+
         let ctx = get_context(self);
-        let state = ctx.client_state();
+        let client_state = ctx.client();
 
-        // Map from boolean-based internal state to enum-based WIT state
-        let connection_state = if state.is_ingame {
-            gromnie::scripting::host::ClientState::Ingame
-        } else if state.is_authenticated {
-            gromnie::scripting::host::ClientState::Charselect
-        } else {
-            // TODO: Distinguish between connecting and patching
-            gromnie::scripting::host::ClientState::Connecting
+        // Convert SessionState to WIT
+        let session_state = match client_state.session.state {
+            SessionState::AuthLoginRequest => {
+                gromnie::scripting::host::SessionState::AuthLoginRequest
+            }
+            SessionState::AuthConnectResponse => {
+                gromnie::scripting::host::SessionState::AuthConnectResponse
+            }
+            SessionState::AuthConnected => gromnie::scripting::host::SessionState::AuthConnected,
+            SessionState::WorldConnected => gromnie::scripting::host::SessionState::WorldConnected,
+            SessionState::TerminationStarted => {
+                gromnie::scripting::host::SessionState::TerminationStarted
+            }
         };
 
-        // Build character if we have one
-        let character = if let (Some(id), Some(name)) = (state.character_id, &state.character_name)
-        {
-            Some(gromnie::scripting::host::WorldObject {
-                id,
-                name: name.clone(),
-            })
-        } else {
-            None
+        let session = gromnie::scripting::host::ClientSession {
+            state: session_state,
         };
 
-        gromnie::scripting::host::Client {
-            state: connection_state,
-            account: None, // TODO: Need to track account info in ClientStateSnapshot
-            character,
-        }
+        // Convert Scene to WIT
+        let scene = convert_scene_to_wit(&client_state.scene);
+
+        gromnie::scripting::host::ClientState { session, scene }
     }
 
     fn get_event_time_millis(&mut self) -> u64 {
@@ -135,4 +134,110 @@ fn timer_id_to_u64(timer_id: crate::TimerId) -> u64 {
 /// Convert u64 to TimerId
 fn timer_id_from_u64(id: u64) -> crate::TimerId {
     unsafe { std::mem::transmute(id) }
+}
+
+/// Convert Rust Scene to WIT Scene
+fn convert_scene_to_wit(scene: &gromnie_client::client::Scene) -> gromnie::scripting::host::Scene {
+    use gromnie_client::client::{ConnectingProgress, PatchingProgress, Scene};
+
+    match scene {
+        Scene::Connecting(connecting) => {
+            let connect_progress = match connecting.connect_progress {
+                ConnectingProgress::Initial => {
+                    gromnie::scripting::host::ConnectingProgress::Initial
+                }
+                ConnectingProgress::LoginRequestSent => {
+                    gromnie::scripting::host::ConnectingProgress::LoginRequestSent
+                }
+                ConnectingProgress::ConnectRequestReceived => {
+                    gromnie::scripting::host::ConnectingProgress::ConnectRequestReceived
+                }
+                ConnectingProgress::ConnectResponseSent => {
+                    gromnie::scripting::host::ConnectingProgress::ConnectResponseSent
+                }
+            };
+
+            let patch_progress = match connecting.patch_progress {
+                PatchingProgress::NotStarted => {
+                    gromnie::scripting::host::PatchingProgress::NotStarted
+                }
+                PatchingProgress::WaitingForDDD => {
+                    gromnie::scripting::host::PatchingProgress::WaitingForDdd
+                }
+                PatchingProgress::ReceivedDDD => {
+                    gromnie::scripting::host::PatchingProgress::ReceivedDdd
+                }
+                PatchingProgress::SentDDDResponse => {
+                    gromnie::scripting::host::PatchingProgress::SentDddResponse
+                }
+                PatchingProgress::Complete => gromnie::scripting::host::PatchingProgress::Complete,
+            };
+
+            gromnie::scripting::host::Scene::Connecting(gromnie::scripting::host::ConnectingScene {
+                connect_progress,
+                patch_progress,
+            })
+        }
+        Scene::CharacterSelect(char_select) => {
+            let characters = char_select
+                .characters
+                .iter()
+                .map(|c| gromnie::scripting::host::CharacterInfo {
+                    id: c.id,
+                    name: c.name.clone(),
+                    delete_pending: c.delete_pending,
+                })
+                .collect();
+
+            let entering_world = char_select.entering_world.as_ref().map(|ew| {
+                gromnie::scripting::host::EnteringWorldState {
+                    character_id: ew.character_id,
+                    character_name: ew.character_name.clone(),
+                    account: ew.account.clone(),
+                    login_complete: ew.login_complete,
+                }
+            });
+
+            gromnie::scripting::host::Scene::CharacterSelect(
+                gromnie::scripting::host::CharacterSelectScene {
+                    account_name: char_select.account_name.clone(),
+                    characters,
+                    entering_world,
+                },
+            )
+        }
+        Scene::CharacterCreate(_) => gromnie::scripting::host::Scene::CharacterCreate(
+            gromnie::scripting::host::CharacterCreateScene {},
+        ),
+        Scene::InWorld(in_world) => {
+            gromnie::scripting::host::Scene::InWorld(gromnie::scripting::host::InWorldScene {
+                character_id: in_world.character_id,
+                character_name: in_world.character_name.clone(),
+            })
+        }
+        Scene::Error(error) => {
+            use gromnie_client::client::ClientError;
+
+            let client_error = match &error.error {
+                ClientError::CharacterError(err_type) => {
+                    gromnie::scripting::host::ClientError::CharacterError(err_type.clone() as u32)
+                }
+                ClientError::ConnectionFailed(msg) => {
+                    gromnie::scripting::host::ClientError::ConnectionFailed(msg.clone())
+                }
+                ClientError::PatchingFailed(msg) => {
+                    gromnie::scripting::host::ClientError::PatchingFailed(msg.clone())
+                }
+                ClientError::LoginTimeout => gromnie::scripting::host::ClientError::LoginTimeout,
+                ClientError::PatchingTimeout => {
+                    gromnie::scripting::host::ClientError::PatchingTimeout
+                }
+            };
+
+            gromnie::scripting::host::Scene::Error(gromnie::scripting::host::ErrorScene {
+                error: client_error,
+                can_retry: error.can_retry,
+            })
+        }
+    }
 }

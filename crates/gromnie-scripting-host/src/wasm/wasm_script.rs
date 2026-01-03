@@ -277,7 +277,7 @@ fn client_event_to_wasm(event: &ClientEvent) -> gromnie::scripting::host::Script
 /// Convert Rust GameEvent to WIT GameEvent
 fn game_event_to_wasm(event: &GameEvent) -> gromnie::scripting::host::GameEvent {
     use gromnie::scripting::host::{
-        Account, CharacterError as WitCharacterError, CharacterListEntry, ChatMessage,
+        AccountData, CharacterError as WitCharacterError, CharacterInfo, ChatMessage,
         GameEvent as WitGameEvent, WorldObject,
     };
 
@@ -286,12 +286,12 @@ fn game_event_to_wasm(event: &GameEvent) -> gromnie::scripting::host::GameEvent 
             account,
             characters,
             num_slots,
-        } => WitGameEvent::CharacterListReceived(Account {
-            name: account.clone(),
-            num_slots: *num_slots as u8,
-            character_list: characters
+        } => WitGameEvent::CharacterListReceived(AccountData {
+            account: account.clone(),
+            num_slots: *num_slots,
+            characters: characters
                 .iter()
-                .map(|c| CharacterListEntry {
+                .map(|c| CharacterInfo {
                     id: c.id,
                     name: c.name.clone(),
                     delete_pending: c.delete_pending,

@@ -15,7 +15,7 @@ pub mod wasm;
 
 // Re-export commonly used types for host-side scripting
 pub use api::Script as ApiScript;
-pub use context::{ClientStateSnapshot, ScriptContext};
+pub use context::{ClientState, ClientStateSnapshot, ScriptContext};
 pub use reload::setup_reload_signal_handler;
 pub use script_runner::{ScriptConsumer, ScriptRunner, create_script_consumer};
 pub use timer::{TimerId, TimerManager};

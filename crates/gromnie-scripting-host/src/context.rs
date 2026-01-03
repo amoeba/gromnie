@@ -1,10 +1,20 @@
-use std::time::{Duration, Instant};
+use std::sync::Arc;
+use std::time::{Duration, SystemTime};
+use tokio::sync::RwLock;
 use tokio::sync::mpsc::UnboundedSender;
 
 use super::timer::TimerId;
+use gromnie_client::client::Client;
 use gromnie_events::SimpleClientAction;
 
-/// Snapshot of client state at the time of an event
+/// Client state snapshot for scripts (clones of session and scene state)
+#[derive(Debug, Clone)]
+pub struct ClientState {
+    pub session: gromnie_client::client::ClientSession,
+    pub scene: gromnie_client::client::Scene,
+}
+
+/// Snapshot of client state at the time of an event (deprecated - use ClientState instead)
 #[derive(Debug, Clone)]
 pub struct ClientStateSnapshot {
     /// Current character ID (if logged in)
@@ -37,12 +47,14 @@ impl Default for ClientStateSnapshot {
 
 /// Context provided to scripts for interacting with the client
 pub struct ScriptContext {
+    /// Shared reference to the client
+    client: Arc<RwLock<Client>>,
     /// Channel for sending client actions
     action_tx: UnboundedSender<SimpleClientAction>,
     /// Reference to the timer manager (will be updated by ScriptRunner)
     timer_manager: *mut super::timer::TimerManager,
     /// Timestamp when the current event occurred
-    event_time: Instant,
+    event_time: SystemTime,
 }
 
 impl ScriptContext {
@@ -51,14 +63,26 @@ impl ScriptContext {
     /// # Safety
     /// The timer_manager pointer must remain valid for the lifetime of this context
     pub(crate) unsafe fn new(
+        client: Arc<RwLock<Client>>,
         action_tx: UnboundedSender<SimpleClientAction>,
         timer_manager: *mut super::timer::TimerManager,
-        event_time: Instant,
+        event_time: SystemTime,
     ) -> Self {
         Self {
+            client,
             action_tx,
             timer_manager,
             event_time,
+        }
+    }
+
+    /// Get current client state (clones session and scene from the client)
+    pub fn client(&self) -> ClientState {
+        // This blocks but should be very fast since we're just cloning
+        let client_guard = self.client.blocking_read();
+        ClientState {
+            session: client_guard.session.clone(),
+            scene: client_guard.scene.clone(),
         }
     }
 
@@ -127,7 +151,7 @@ impl ScriptContext {
     }
 
     /// Get the timestamp when the current event occurred
-    pub fn event_time(&self) -> Instant {
+    pub fn event_time(&self) -> SystemTime {
         self.event_time
     }
 }
