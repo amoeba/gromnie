@@ -70,6 +70,16 @@ impl Script for TestScript {
                         account_data.name
                     ));
                 }
+                gromnie::GameEvent::CharacterError(error_data) => {
+                    self.last_event = Some(format!(
+                        "Game/CharacterError: code={}, msg={}",
+                        error_data.error_code, error_data.error_message
+                    ));
+                    log(&format!(
+                        "Character error: code={}, msg={}",
+                        error_data.error_code, error_data.error_message
+                    ));
+                }
                 gromnie::GameEvent::CreateObject(object_data) => {
                     self.last_event = Some(format!("Game/CreateObject: {}", object_data.name));
                     log(&format!(
