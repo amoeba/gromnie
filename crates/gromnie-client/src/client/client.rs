@@ -1007,7 +1007,7 @@ impl Client {
                         }
                     }
                     S2CMessage::LoginCreatePlayer => {
-                        dispatch_message::<acprotocol::messages::s2c::LoginLoginCharacterSet, _>(
+                        dispatch_message::<acprotocol::messages::s2c::LoginCreatePlayer, _>(
                             self, message, &event_tx,
                         )
                         .ok();
