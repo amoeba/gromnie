@@ -1,7 +1,5 @@
 // ============================================================================
 
-use crate::config::server_config::ReconnectConfig;
-
 /// Configuration for running a client
 #[derive(Clone, Debug)]
 pub struct ClientConfig {
@@ -9,7 +7,8 @@ pub struct ClientConfig {
     pub address: String,
     pub account_name: String,
     pub password: String,
-    pub reconnect: ReconnectConfig,
+    /// Enable automatic reconnection with exponential backoff
+    pub reconnect: bool,
     /// Optional character name to auto-login with after receiving character list
     pub character_name: Option<String>,
 }
@@ -22,13 +21,13 @@ impl ClientConfig {
             address,
             account_name,
             password,
-            reconnect: ReconnectConfig::default(),
+            reconnect: false,
             character_name: None,
         }
     }
 
-    /// Set the reconnection configuration
-    pub fn with_reconnect(mut self, reconnect: ReconnectConfig) -> Self {
+    /// Set the reconnection flag
+    pub fn with_reconnect(mut self, reconnect: bool) -> Self {
         self.reconnect = reconnect;
         self
     }

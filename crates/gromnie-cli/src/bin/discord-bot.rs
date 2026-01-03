@@ -218,7 +218,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         address: game_address,
         account_name: game_username,
         password: game_password,
-        reconnect: Default::default(),
+        reconnect: false,
         character_name: None,
     };
 

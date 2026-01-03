@@ -55,10 +55,6 @@ impl ReconnectConfig {
 pub struct ServerConfig {
     pub host: String,
     pub port: u16,
-
-    /// Reconnection configuration
-    #[serde(default)]
-    pub reconnect: ReconnectConfig,
 }
 
 impl std::fmt::Display for ServerConfig {

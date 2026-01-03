@@ -167,6 +167,14 @@ impl MessageHandler<acprotocol::messages::s2c::LoginLoginCharacterSet> for Clien
 
             // Clear cached DDD response since we successfully received character list
             self.ddd_response = None;
+
+            // Reset reconnect attempt counter on successful connection
+            if self.reconnect_attempt_count > 0 {
+                info!(target: "net", "Connection successful - resetting reconnect attempt counter from {} to 0",
+                    self.reconnect_attempt_count);
+                self.reconnect_attempt_count = 0;
+            }
+
             info!(target: "net", "State transition: Patching -> CharSelect");
         }
 

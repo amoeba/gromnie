@@ -15,6 +15,10 @@ pub struct GromnieConfig {
     /// Scripting configuration
     #[serde(default)]
     pub scripting: ScriptingConfig,
+
+    /// Enable automatic reconnection with exponential backoff
+    #[serde(default)]
+    pub reconnect: bool,
 }
 
 impl GromnieConfig {

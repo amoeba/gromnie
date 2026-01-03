@@ -293,6 +293,7 @@ impl ClientRunnerBuilder {
                             script_dir: None,
                             config: std::collections::HashMap::new(),
                         },
+                        reconnect: false,
                     }
                 })
             }
@@ -447,6 +448,7 @@ impl ClientRunner {
             config.password.clone(),
             config.character_name.clone(),
             raw_event_tx,
+            config.reconnect,
         )
         .await;
 

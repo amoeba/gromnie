@@ -26,8 +26,12 @@ pub struct Cli {
     password: String,
 
     /// Enable automatic reconnection on connection loss
-    #[arg(long)]
+    #[arg(long, conflicts_with = "no_reconnect")]
     reconnect: bool,
+
+    /// Disable automatic reconnection
+    #[arg(long)]
+    no_reconnect: bool,
 }
 
 #[tokio::main]
@@ -77,13 +81,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         address: cli.address,
         account_name: cli.username,
         password: cli.password,
-        reconnect: if cli.reconnect {
-            gromnie_client::config::ReconnectConfig {
-                enabled: true,
-                ..Default::default()
-            }
+        // --reconnect enables, --no-reconnect disables, default is false
+        reconnect: if cli.no_reconnect {
+            false
         } else {
-            Default::default()
+            cli.reconnect
         },
         character_name: None,
     };

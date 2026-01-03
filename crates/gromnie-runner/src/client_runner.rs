@@ -768,6 +768,7 @@ where
                 client_config.password.clone(),
                 client_config.character_name.clone(),
                 raw_event_tx,
+                client_config.reconnect,
             )
             .await;
 
@@ -940,6 +941,7 @@ where
                 client.password.clone(),
                 client.character_name.clone(),
                 raw_event_tx,
+                client.reconnect,
             )
             .await;
 
