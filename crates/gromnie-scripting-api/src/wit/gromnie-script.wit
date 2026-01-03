@@ -13,36 +13,108 @@ interface host {
     /// ===== Client Information =====
 
     /// Current client state snapshot
-    record client {
-        state: client-state,
-        account: option<account>,
-        character: option<world-object>,
+    record client-state {
+        session: client-session,
+        scene: scene,
     }
 
-    /// Client connection/session state
-    enum client-state {
-        /// Connecting to server
-        connecting,
-        /// Downloading patches/updates
-        patching,
-        /// At character selection screen
-        charselect,
-        /// In game with character
-        ingame,
+    /// Client session state (protocol state + metadata)
+    record client-session {
+        state: session-state,
     }
 
-    /// Account information with character list
-    record account {
-        name: string,
-        num-slots: u8,
-        character-list: list<character-list-entry>,
+    /// ACE protocol session states
+    enum session-state {
+        /// Sent LoginRequest, waiting for ConnectRequest
+        auth-login-request,
+        /// Received ConnectRequest, sent ConnectResponse
+        auth-connect-response,
+        /// Authenticated and connected
+        auth-connected,
+        /// Connected to world server
+        world-connected,
+        /// Termination started
+        termination-started,
     }
 
-    /// Character in the account's character list
-    record character-list-entry {
+    /// Scene-based UI state (what the user sees)
+    variant scene {
+        connecting(connecting-scene),
+        character-select(character-select-scene),
+        character-create(character-create-scene),
+        in-world(in-world-scene),
+        error(error-scene),
+    }
+
+    /// Connecting scene state
+    record connecting-scene {
+        connect-progress: connecting-progress,
+        patch-progress: patching-progress,
+    }
+
+    /// Connecting progress sub-state
+    enum connecting-progress {
+        initial,
+        login-request-sent,
+        connect-request-received,
+        connect-response-sent,
+    }
+
+    /// Patching progress sub-state
+    enum patching-progress {
+        not-started,
+        waiting-for-ddd,
+        received-ddd,
+        sent-ddd-response,
+        complete,
+    }
+
+    /// Character select scene state
+    record character-select-scene {
+        account-name: string,
+        characters: list<character-info>,
+        entering-world: option<entering-world-state>,
+    }
+
+    /// Character information
+    record character-info {
         id: u32,
         name: string,
         delete-pending: bool,
+    }
+
+    /// State for entering the world with a character
+    record entering-world-state {
+        character-id: u32,
+        character-name: string,
+        account: string,
+        login-complete: bool,
+    }
+
+    /// Character creation scene state
+    record character-create-scene {
+        // Stubbed for now
+    }
+
+    /// In-world scene state
+    record in-world-scene {
+        character-id: u32,
+        character-name: string,
+    }
+
+    /// Error scene state
+    record error-scene {
+        error: client-error,
+        can-retry: bool,
+    }
+
+    /// Client error types
+    variant client-error {
+        character-error(u32),
+        connection-failed(string),
+        patching-failed(string),
+        login-timeout,
+        patching-timeout,
     }
 
     /// ===== Events =====
@@ -53,10 +125,17 @@ interface host {
         error-message: string,
     }
 
+    /// Account information with character list (event payload)
+    record account-data {
+        account: string,
+        characters: list<character-info>,
+        num-slots: u32,
+    }
+
     /// Game events from the server
     variant game-event {
         /// Character list received from server
-        character-list-received(account),
+        character-list-received(account-data),
         /// Character error received from server
         character-error(character-error),
         /// Object created in game world
@@ -156,7 +235,7 @@ interface host {
     /// ===== State Access =====
 
     /// Get current client state
-    get-client-state: func() -> client;
+    get-client-state: func() -> client-state;
 
     /// Get current event time in milliseconds since epoch
     get-event-time-millis: func() -> u64;

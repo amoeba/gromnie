@@ -1,19 +1,38 @@
 // Integration tests for scripting system
 
+use gromnie_client::client::Client;
 use gromnie_events::SimpleGameEvent as GameEvent;
 use gromnie_scripting_host::ScriptRunner;
 use std::collections::HashMap;
 use std::path::Path;
+use std::sync::Arc;
 use std::time::{Duration, Instant};
-use tokio::sync::mpsc;
+use tokio::sync::{RwLock, mpsc};
+
+async fn create_mock_client() -> Arc<RwLock<Client>> {
+    let (client, _action_tx) = Client::new(
+        1,
+        "127.0.0.1:9000".to_string(),
+        "test_user".to_string(),
+        "test_pass".to_string(),
+        None,
+        mpsc::channel(100).0,
+        false,
+    )
+    .await;
+    Arc::new(RwLock::new(client))
+}
 
 #[tokio::test]
 async fn test_script_lifecycle() {
     // Create action channel
     let (action_tx, _action_rx) = mpsc::unbounded_channel();
 
+    // Create mock client
+    let client = create_mock_client().await;
+
     // Create script runner with WASM support
-    let runner = ScriptRunner::new_with_wasm(action_tx);
+    let runner = ScriptRunner::new_with_wasm(client, action_tx);
 
     // Check if WASM engine was initialized
     if !runner.has_wasm_engine() {
@@ -53,7 +72,8 @@ async fn test_script_lifecycle() {
 #[tokio::test]
 async fn test_event_handling() {
     let (action_tx, _action_rx) = mpsc::unbounded_channel();
-    let mut runner = ScriptRunner::new_with_wasm(action_tx);
+    let client = create_mock_client().await;
+    let mut runner = ScriptRunner::new_with_wasm(client, action_tx);
 
     // Load test scripts
     let test_scripts_dir = Path::new("../../../tests/scripting");
@@ -88,7 +108,8 @@ async fn test_event_handling() {
 #[tokio::test]
 async fn test_timer_functionality() {
     let (action_tx, _action_rx) = mpsc::unbounded_channel();
-    let mut runner = ScriptRunner::new_with_wasm(action_tx);
+    let client = create_mock_client().await;
+    let mut runner = ScriptRunner::new_with_wasm(client, action_tx);
 
     // Load test scripts
     let test_scripts_dir = Path::new("../../../tests/scripting");
@@ -119,7 +140,8 @@ async fn test_timer_functionality() {
 #[tokio::test]
 async fn test_script_reload() {
     let (action_tx, _action_rx) = mpsc::unbounded_channel();
-    let mut runner = ScriptRunner::new_with_wasm(action_tx);
+    let client = create_mock_client().await;
+    let mut runner = ScriptRunner::new_with_wasm(client, action_tx);
 
     let test_scripts_dir = Path::new("../../../tests/scripting");
 
@@ -141,7 +163,8 @@ async fn test_script_reload() {
 #[tokio::test]
 async fn test_host_function_calls() {
     let (action_tx, mut action_rx) = mpsc::unbounded_channel();
-    let mut runner = ScriptRunner::new_with_wasm(action_tx);
+    let client = create_mock_client().await;
+    let mut runner = ScriptRunner::new_with_wasm(client, action_tx);
 
     // Load test scripts
     let test_scripts_dir = Path::new("../../../tests/scripting");

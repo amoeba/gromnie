@@ -274,7 +274,7 @@ impl ClientRunnerBuilder {
     ///     .await;
     /// # }
     /// ```
-    pub fn build(mut self) -> Result<ClientRunner, BuildError> {
+    pub fn build(self) -> Result<ClientRunner, BuildError> {
         let mode = self.mode.ok_or(BuildError::MissingClientMode)?;
 
         // Load config from default location if not provided
@@ -289,17 +289,8 @@ impl ClientRunnerBuilder {
             }
         };
 
-        // Setup scripting if enabled in config
-        if config.scripting.enabled {
-            let scripting_config = config.scripting.clone();
-            self.consumers.push(Box::new(move |ctx: &ConsumerContext| {
-                let consumer = gromnie_scripting_host::create_script_consumer(
-                    ctx.action_tx.clone(),
-                    &scripting_config,
-                );
-                Box::new(consumer) as Box<dyn EventConsumer>
-            }));
-        }
+        // Note: Scripting consumer will be created separately after client creation
+        // because it needs Arc<RwLock<Client>> which isn't available in the factory pattern
 
         Ok(ClientRunner {
             mode,
@@ -442,6 +433,9 @@ impl ClientRunner {
         )
         .await;
 
+        // Wrap client in Arc<RwLock<>> for shared access
+        let client = Arc::new(tokio::sync::RwLock::new(client));
+
         // Send action_tx back if requested (for TUI)
         if let Some(ref sender) = self.action_channel {
             let _ = sender.send(action_tx.clone());
@@ -456,12 +450,24 @@ impl ClientRunner {
             action_tx: action_tx.clone(),
         };
 
-        // Create all consumers
-        let consumers: Vec<Box<dyn EventConsumer>> = self
+        // Create all consumers from factories
+        let mut consumers: Vec<Box<dyn EventConsumer>> = self
             .consumers
             .iter()
             .map(|factory| factory.create(&ctx))
             .collect();
+
+        // Add scripting consumer if enabled (needs Arc<RwLock<Client>>)
+        if let Some(ref app_config) = self.app_config
+            && app_config.scripting.enabled
+        {
+            let script_consumer = gromnie_scripting_host::create_script_consumer(
+                client.clone(),
+                action_tx.clone(),
+                &app_config.scripting,
+            );
+            consumers.push(Box::new(script_consumer));
+        }
 
         // Combine into composite consumer
         let event_consumer = if consumers.len() == 1 {

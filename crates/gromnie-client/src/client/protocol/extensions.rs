@@ -289,7 +289,7 @@ impl C2SPacketExt for C2SPacket {
             if self.flags.contains(PacketHeaderFlags::BLOB_FRAGMENTS)
                 && let Some(sess) = session
             {
-                let encryption_key = sess.send_generator.borrow_mut().get_send_key();
+                let encryption_key = sess.send_generator.lock().unwrap().get_send_key();
                 checksum_result ^= encryption_key;
             }
         }

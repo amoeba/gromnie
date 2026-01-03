@@ -1,7 +1,7 @@
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::time::{Duration, Instant};
-use tokio::sync::{broadcast, mpsc, watch};
+use tokio::sync::{RwLock, broadcast, mpsc, watch};
 use tracing::{error, info};
 
 use crate::event_bus::{EventBus, EventEnvelope};
@@ -316,6 +316,9 @@ pub async fn run_client<C, F>(
     )
     .await;
 
+    // Wrap client in Arc<RwLock<>> for shared access
+    let client = Arc::new(RwLock::new(client));
+
     // Create the event consumer with the action_tx
     let event_consumer = event_consumer_factory(action_tx);
 
@@ -358,6 +361,9 @@ pub async fn run_client_with_consumers<F>(
         config.reconnect,
     )
     .await;
+
+    // Wrap client in Arc<RwLock<>> for shared access
+    let client = Arc::new(RwLock::new(client));
 
     // Create all event consumers
     let mut consumers = consumers_factory(action_tx);
@@ -455,6 +461,9 @@ pub async fn run_client_with_action_channel<C, F>(
     )
     .await;
 
+    // Wrap client in Arc<RwLock<>> for shared access
+    let client = Arc::new(RwLock::new(client));
+
     // Send the action_tx channel back to the caller (e.g., TUI)
     let _ = action_tx_sender.send(action_tx.clone());
 
@@ -473,7 +482,7 @@ pub async fn run_client_with_action_channel<C, F>(
 
 /// Internal client runner implementation
 pub(crate) async fn run_client_internal(
-    client: Client,
+    client: Arc<RwLock<Client>>,
     mut event_rx: broadcast::Receiver<EventEnvelope>,
     mut event_consumer: Box<dyn EventConsumer>,
     shutdown_rx: Option<tokio::sync::watch::Receiver<bool>>,
@@ -521,12 +530,13 @@ pub(crate) async fn run_client_internal(
 
 /// Run the main client network loop
 async fn run_client_loop(
-    mut client: Client,
+    client: Arc<RwLock<Client>>,
     mut shutdown_rx: Option<tokio::sync::watch::Receiver<bool>>,
 ) {
     use tracing::error;
 
-    info!(target: "net", "Client {} network loop started", client.client_id());
+    let client_id = client.read().await.client_id();
+    info!(target: "net", "Client {} network loop started", client_id);
 
     // Note: We don't call client.connect() here anymore - the client starts in Connecting state
     // and we handle retries in the main loop below
@@ -538,7 +548,7 @@ async fn run_client_loop(
     .await;
 
     // Send initial LoginRequest
-    if let Err(e) = client.do_login().await {
+    if let Err(e) = client.write().await.do_login().await {
         error!("Failed to send initial LoginRequest: {}", e);
         panic!("Failed to send initial LoginRequest");
     }
@@ -558,19 +568,23 @@ async fn run_client_loop(
     loop {
         tokio::select! {
             // Add a timeout to recv_from so we can respond to shutdown signals
-            recv_result = tokio::time::timeout(tokio::time::Duration::from_millis(100), client.socket.recv_from(&mut buf)) => {
+            recv_result = async {
+                let client_guard = client.write().await;
+                tokio::time::timeout(tokio::time::Duration::from_millis(100), client_guard.socket.recv_from(&mut buf)).await
+            } => {
                 match recv_result {
                     Ok(Ok((size, peer))) => {
-                        client.process_packet(&buf[..size], size, &peer).await;
+                        let mut client_guard = client.write().await;
+                        client_guard.process_packet(&buf[..size], size, &peer).await;
 
-                        if client.has_messages() {
-                            client.process_messages();
+                        if client_guard.has_messages() {
+                            client_guard.process_messages();
                         }
 
-                        client.process_actions();
+                        client_guard.process_actions();
 
-                        if client.has_pending_outgoing_messages()
-                            && let Err(e) = client.send_pending_messages().await {
+                        if client_guard.has_pending_outgoing_messages()
+                            && let Err(e) = client_guard.send_pending_messages().await {
                             error!("Failed to send pending messages: {}", e);
                         }
                     }
@@ -578,7 +592,7 @@ async fn run_client_loop(
                         error!("Error in receive loop: {}", e);
                         // Always transition to disconnected state on socket error
                         // UDP socket errors are serious and indicate network problems
-                        client.enter_disconnected();
+                        client.write().await.enter_disconnected();
                     }
                     Err(_) => {
                         // Timeout - this is normal, just continue to check other branches
@@ -589,44 +603,47 @@ async fn run_client_loop(
                 last_tick = tokio::time::Instant::now();
 
                 // Check for state timeouts
-                if client.check_state_timeout() {
+                if client.write().await.check_state_timeout() {
                     error!("Client entered Failed state - shutting down");
                     break;
                 }
 
                 // Check if we should retry in current state
-                if client.should_retry() {
-                    use gromnie_client::client::Scene;
-                    match &client.scene {
-                        Scene::Connecting(_connecting) => {
-                            info!("Retrying LoginRequest...");
-                            if let Err(e) = client.do_login().await {
-                                error!("Failed to send LoginRequest retry: {}", e);
-                            }
-                            if let Some(connecting) = client.scene.as_connecting_mut() {
-                                connecting.update_retry_time();
-                            }
-                        }
-                        Scene::CharacterSelect(_) => {
-                            // In character select, no automatic retry for now
-                            // Waiting for character selection from user
-                        }
-                        Scene::InWorld(_) => {
-                            // Already in world, no retry needed
-                        }
-                        Scene::CharacterCreate(_) => {
-                            // Character creation in progress, no retry
-                        }
-                        Scene::Error(_) => {
-                            // In error state - check if we should attempt reconnection
-                            if client.should_reconnect() {
-                                if !client.start_reconnection() {
-                                    info!("Reconnection not available, exiting loop");
-                                    break;
+                {
+                    let mut client_guard = client.write().await;
+                    if client_guard.should_retry() {
+                        use gromnie_client::client::Scene;
+                        match &client_guard.scene {
+                            Scene::Connecting(_connecting) => {
+                                info!("Retrying LoginRequest...");
+                                if let Err(e) = client_guard.do_login().await {
+                                    error!("Failed to send LoginRequest retry: {}", e);
                                 }
-                                // Send initial LoginRequest for reconnection
-                                if let Err(e) = client.do_login().await {
-                                    error!("Failed to send LoginRequest for reconnection: {}", e);
+                                if let Some(connecting) = client_guard.scene.as_connecting_mut() {
+                                    connecting.update_retry_time();
+                                }
+                            }
+                            Scene::CharacterSelect(_) => {
+                                // In character select, no automatic retry for now
+                                // Waiting for character selection from user
+                            }
+                            Scene::InWorld(_) => {
+                                // Already in world, no retry needed
+                            }
+                            Scene::CharacterCreate(_) => {
+                                // Character creation in progress, no retry
+                            }
+                            Scene::Error(_) => {
+                                // In error state - check if we should attempt reconnection
+                                if client_guard.should_reconnect() {
+                                    if !client_guard.start_reconnection() {
+                                        info!("Reconnection not available, exiting loop");
+                                        break;
+                                    }
+                                    // Send initial LoginRequest for reconnection
+                                    if let Err(e) = client_guard.do_login().await {
+                                        error!("Failed to send LoginRequest for reconnection: {}", e);
+                                    }
                                 }
                             }
                         }
@@ -635,7 +652,7 @@ async fn run_client_loop(
 
                 // Send keepalive if needed
                 if last_keepalive.elapsed() >= keepalive_interval {
-                    if let Err(e) = client.send_keepalive().await {
+                    if let Err(e) = client.write().await.send_keepalive().await {
                         error!("Failed to send keep-alive: {}", e);
                     }
                     last_keepalive = tokio::time::Instant::now();
@@ -658,7 +675,8 @@ async fn run_client_loop(
         }
     }
 
-    info!("Client {} network loop stopped", client.client_id());
+    let client_id = client.read().await.client_id();
+    info!("Client {} network loop stopped", client_id);
     info!("Client task shutting down - cleaning up network connections...");
 }
 
@@ -768,6 +786,9 @@ where
                 client_config.reconnect,
             )
             .await;
+
+            // Wrap client in Arc<RwLock<>> for shared access
+            let client = Arc::new(RwLock::new(client));
 
             // Mark that we successfully spawned this client
             stats.spawned.fetch_add(1, Ordering::SeqCst);
@@ -941,6 +962,9 @@ where
                 client.reconnect,
             )
             .await;
+
+            // Wrap client in Arc<RwLock<>> for shared access
+            let client_obj = Arc::new(RwLock::new(client_obj));
 
             let event_consumer = consumer_builder.build(client.id, &client, action_tx);
 
