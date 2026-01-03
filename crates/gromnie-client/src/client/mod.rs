@@ -1,13 +1,11 @@
 // Re-export main types
-pub use self::client::{
-    Client,
-};
+pub use self::client::Client;
 pub use self::connection::ServerInfo;
 pub use self::constants::UI_DELAY_MS;
 pub use self::messages::{OutgoingMessage, OutgoingMessageContent};
 pub use self::protocol::{C2SPacketExt, CustomLoginRequest};
 pub use self::scene::{
-    CharacterCreateScene, CharacterSelectScene, ClientError, ConnectingScene, ConnectingProgress,
+    CharacterCreateScene, CharacterSelectScene, ClientError, ConnectingProgress, ConnectingScene,
     EnteringWorldState, ErrorScene, InWorldScene, PatchingProgress, Scene,
 };
 pub use self::session::{Account, ClientSession, ConnectionState, SessionState};

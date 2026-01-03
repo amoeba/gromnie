@@ -169,9 +169,7 @@ impl CharacterSelectScene {
 
 impl CharacterCreateScene {
     pub fn new() -> Self {
-        Self {
-            character: None,
-        }
+        Self { character: None }
     }
 }
 
@@ -186,10 +184,7 @@ impl InWorldScene {
 
 impl ErrorScene {
     pub fn new(error: ClientError, can_retry: bool) -> Self {
-        Self {
-            error,
-            can_retry,
-        }
+        Self { error, can_retry }
     }
 }
 

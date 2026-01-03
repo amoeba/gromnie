@@ -6,12 +6,12 @@
 
 use tracing::{error, info, warn};
 
+use crate::client::Client;
 use crate::client::constants::UI_DELAY_MS;
 use crate::client::message_handler::MessageHandler;
 use crate::client::messages::{OutgoingMessage, OutgoingMessageContent};
 use crate::client::scene::ClientError;
 use crate::client::{CharacterInfo, ClientEvent, GameEvent};
-use crate::client::Client;
 
 /// Handle LoginCreatePlayer messages
 impl MessageHandler<acprotocol::messages::s2c::LoginCreatePlayer> for Client {
@@ -23,12 +23,14 @@ impl MessageHandler<acprotocol::messages::s2c::LoginCreatePlayer> for Client {
         info!(target: "net", "Character in world: 0x{:08X}", character_id);
 
         // Check if we're in the process of entering the world
-        if let Some(entering) = self.scene.as_character_select()
+        if let Some(entering) = self
+            .scene
+            .as_character_select()
             .and_then(|scene| scene.entering_world.as_ref().cloned())
         {
             // Mark login as complete
             self.mark_login_complete();
-            
+
             // Send the login complete notification
             if !entering.login_complete {
                 self.send_login_complete_notification();
@@ -37,7 +39,7 @@ impl MessageHandler<acprotocol::messages::s2c::LoginCreatePlayer> for Client {
             // Transition to InWorld scene with the character info
             let char_name = entering.character_name.clone();
             self.transition_to_in_world(entering.character_id, entering.character_name);
-            
+
             info!(target: "net", "Character successfully entered world: {} (ID: 0x{:08X})", 
                   char_name, character_id);
         } else {

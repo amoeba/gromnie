@@ -3,8 +3,7 @@ use std::io::Cursor;
 use std::net::SocketAddr;
 
 use acprotocol::enums::{
-    AuthFlags, FragmentGroup, GameEvent as GameEventType, PacketHeaderFlags,
-    S2CMessage,
+    AuthFlags, FragmentGroup, GameEvent as GameEventType, PacketHeaderFlags, S2CMessage,
 };
 
 use acprotocol::gameactions::CharacterLoginCompleteNotification;
@@ -18,7 +17,11 @@ use tokio::sync::mpsc;
 use crate::client::connection::ServerInfo;
 use crate::client::messages::{OutgoingMessage, OutgoingMessageContent};
 use crate::client::protocol::{C2SPacketExt, CustomLoginRequest};
-use crate::client::scene::{ConnectingScene, Scene, ConnectingProgress as SceneConnectingProgress, PatchingProgress as ScenePatchingProgress, CharacterSelectScene, CharacterCreateScene, InWorldScene, ErrorScene, ClientError, EnteringWorldState};
+use crate::client::scene::{
+    CharacterCreateScene, CharacterSelectScene, ClientError,
+    ConnectingProgress as SceneConnectingProgress, ConnectingScene, EnteringWorldState, ErrorScene,
+    InWorldScene, PatchingProgress as ScenePatchingProgress, Scene,
+};
 use crate::client::session::{Account, ClientSession, ConnectionState, SessionState};
 
 use acprotocol::network::packet::PacketHeader;
@@ -60,8 +63,8 @@ pub struct Client {
     account: Account,
 
     // ========== Session-Based Architecture ==========
-    pub session: ClientSession,  // Protocol state + metadata
-    pub scene: Scene,            // UI state
+    pub session: ClientSession, // Protocol state + metadata
+    pub scene: Scene,           // UI state
 
     pub send_count: u32,
     pub recv_count: u32,
@@ -70,7 +73,7 @@ pub struct Client {
     fragment_sequence: u32,  // Counter for outgoing fragment sequences
     next_game_action_sequence: u32, // Sequence counter for GameAction messages
     pending_fragments: HashMap<u32, Fragment>, // Track incomplete fragment sequences
-    message_queue: VecDeque<RawMessage>,       // Queue of parsed messages to process
+    message_queue: VecDeque<RawMessage>, // Queue of parsed messages to process
     pub(crate) outgoing_message_queue: VecDeque<OutgoingMessage>, // Queue of messages to send with optional delays
     pub(crate) raw_event_tx: mpsc::Sender<ClientEvent>,           // Raw event sender to runner
     action_rx: mpsc::UnboundedReceiver<gromnie_events::SimpleClientAction>, // Receive actions from handlers
@@ -547,7 +550,8 @@ impl Client {
                     self.enter_disconnected();
                 } else {
                     // Initial connection attempt timeout or reconnection disabled - fail permanently
-                    let error = if matches!(connecting.patch_progress, PatchingProgress::NotStarted) {
+                    let error = if matches!(connecting.patch_progress, PatchingProgress::NotStarted)
+                    {
                         ClientError::LoginTimeout
                     } else {
                         ClientError::PatchingTimeout
@@ -602,7 +606,9 @@ impl Client {
         if !self.reconnect_config.enabled {
             info!(target: "net", "Reconnection disabled, entering Error state");
             self.scene = Scene::Error(ErrorScene::new(
-                ClientError::ConnectionFailed("Connection lost and reconnection disabled".to_string()),
+                ClientError::ConnectionFailed(
+                    "Connection lost and reconnection disabled".to_string(),
+                ),
                 false,
             ));
             return false;
@@ -649,10 +655,10 @@ impl Client {
 
         // Transition back to Connecting scene for reconnection attempt
         self.scene = Scene::Connecting(ConnectingScene::new());
-        
+
         // Clear reconnect_at since we're now reconnecting
         self.reconnect_at = None;
-        
+
         // Update timing to account for backoff delay
         if let Some(connecting) = self.scene.as_connecting_mut() {
             connecting.last_retry_at = std::time::Instant::now() + delay; // Don't retry until after the backoff delay
@@ -752,7 +758,7 @@ impl Client {
                     // Disconnect action - transition to Error state
                     self.scene = Scene::Error(ErrorScene::new(
                         ClientError::ConnectionFailed("Disconnected by client action".to_string()),
-                        true,  // Can retry
+                        true, // Can retry
                     ));
                 }
                 gromnie_events::SimpleClientAction::LoginCharacter {
@@ -849,7 +855,11 @@ impl Client {
 
         // Extract session values
         let (client_id, table) = {
-            let connection = self.session.connection.as_ref().expect("Session not established");
+            let connection = self
+                .session
+                .connection
+                .as_ref()
+                .expect("Session not established");
             (connection.client_id, connection.table)
         };
 
@@ -1177,7 +1187,9 @@ impl Client {
         info!(target: "net", "Received LoginEnterGameServerReady (0xF7DF) - Server ready for character login");
 
         // Check if we're in the right state and extract the values we need
-        if let Some(entering) = self.scene.as_character_select_mut()
+        if let Some(entering) = self
+            .scene
+            .as_character_select_mut()
             .and_then(|scene| scene.entering_world.as_ref().cloned())
         {
             let char_id = entering.character_id;
@@ -1335,7 +1347,8 @@ impl Client {
                 table: packet.iteration, // Use iteration from packet header as table value
                 send_generator: RefCell::new(CryptoSystem::new(connect_req_packet.incoming_seed)), // Client->Server seed
             });
-            self.session.transition_to(SessionState::AuthConnectResponse);
+            self.session
+                .transition_to(SessionState::AuthConnectResponse);
 
             // Emit authentication success system event
             let _ = self
@@ -1649,10 +1662,7 @@ impl Client {
     /// Transition to InWorld scene
     pub fn transition_to_in_world(&mut self, character_id: u32, character_name: String) {
         self.session.transition_to(SessionState::WorldConnected);
-        self.scene = Scene::InWorld(InWorldScene::new(
-            character_id,
-            character_name,
-        ));
+        self.scene = Scene::InWorld(InWorldScene::new(character_id, character_name));
         self.emit_scene_changed();
     }
 
@@ -1691,9 +1701,9 @@ impl Client {
                 ));
             }
             Scene::InWorld(_) => {
-                let _ = self.raw_event_tx.try_send(ClientEvent::State(
-                    crate::client::ClientStateEvent::InWorld,
-                ));
+                let _ = self
+                    .raw_event_tx
+                    .try_send(ClientEvent::State(crate::client::ClientStateEvent::InWorld));
             }
             Scene::Error(_) => {
                 let _ = self.raw_event_tx.try_send(ClientEvent::State(
