@@ -3,8 +3,7 @@ use std::io::Cursor;
 use std::net::SocketAddr;
 
 use acprotocol::enums::{
-    AuthFlags, CharacterErrorType, FragmentGroup, GameEvent as GameEventType, PacketHeaderFlags,
-    S2CMessage,
+    AuthFlags, FragmentGroup, GameEvent as GameEventType, PacketHeaderFlags, S2CMessage,
 };
 
 use acprotocol::gameactions::CharacterLoginCompleteNotification;
@@ -18,7 +17,12 @@ use tokio::sync::mpsc;
 use crate::client::connection::ServerInfo;
 use crate::client::messages::{OutgoingMessage, OutgoingMessageContent};
 use crate::client::protocol::{C2SPacketExt, CustomLoginRequest};
-use crate::client::session::{Account, SessionState};
+use crate::client::scene::{
+    CharacterCreateScene, CharacterSelectScene, ClientError,
+    ConnectingProgress as SceneConnectingProgress, ConnectingScene, EnteringWorldState, ErrorScene,
+    InWorldScene, PatchingProgress as ScenePatchingProgress, Scene,
+};
+use crate::client::session::{Account, ClientSession, ConnectionState, SessionState};
 
 use acprotocol::network::packet::PacketHeader;
 use acprotocol::network::{Fragment, RawMessage};
@@ -45,93 +49,9 @@ use std::cell::RefCell;
 /// Maximum number of packets we can send without receiving before considering connection dead
 const MAX_UNACKED_SENDS: u32 = 20;
 
-/// Sub-states for Connecting phase with progress tracking
-#[derive(Clone, Debug, PartialEq)]
-pub enum ConnectingProgress {
-    /// Initial state - 0%
-    Initial,
-    /// LoginRequest sent - 33%
-    LoginRequestSent,
-    /// ConnectRequest received - 66%
-    ConnectRequestReceived,
-    /// ConnectResponse sent - 100% (ready to transition)
-    ConnectResponseSent,
-}
-
-/// Sub-states for Patching phase with progress tracking
-#[derive(Clone, Debug, PartialEq)]
-pub enum PatchingProgress {
-    /// Initial state - 0%
-    Initial,
-    /// DDDInterrogationMessage received - 33%
-    DDDInterrogationReceived,
-    /// DDDInterrogationResponse sent - 66%
-    DDDResponseSent,
-}
-
-/// Top-level client state machine
-/// Connecting -> Patching -> CharSelect -> Ingame
-#[derive(Clone, Debug, PartialEq)]
-pub enum ClientState {
-    /// Creating UDP connection and authenticating with LoginRequest
-    /// Retry every 2s for 20s, then fail with LoginTimeout
-    Connecting {
-        started_at: std::time::Instant,
-        last_retry_at: std::time::Instant,
-        progress: ConnectingProgress,
-    },
-    /// Waiting for DDD and sending response, then waiting for character list
-    /// Timeout after 20s, then fail with PatchingTimeout
-    Patching {
-        started_at: std::time::Instant,
-        last_retry_at: std::time::Instant,
-        progress: PatchingProgress,
-    },
-    /// Character selection - waiting for user to select character
-    CharSelect,
-    /// In game world with a character
-    Ingame {
-        character_id: u32,
-        character_name: String,
-    },
-    /// The client received a CharacterError
-    CharacterError { reason: CharacterErrorType },
-    /// Disconnected - will attempt reconnection if enabled
-    Disconnected {
-        reconnect_attempt: u32,
-        reconnect_at: std::time::Instant,
-    },
-    /// Failed state with reason
-    Failed { reason: ClientFailureReason },
-}
-
-#[derive(Clone, Debug, PartialEq)]
-pub enum ClientFailureReason {
-    LoginTimeout,
-    LoginFailed(String),
-    PatchingTimeout,
-    PatchingFailed(String),
-}
-
-/// State machine for tracking character login attempts
-/// Used to ensure we only attempt to log in once
-#[derive(Clone, Debug, PartialEq)]
-pub enum CharacterLoginState {
-    /// No login attempt has been made yet
-    Idle,
-    /// Sent EnterWorldRequest (0xF7C8), waiting for ServerReady (0xF7DF)
-    WaitingForServerReady {
-        character_id: u32,
-        character_name: String,
-        account: String,
-    },
-    /// Received ServerReady, sent EnterWorld (0xF657), waiting for world data
-    LoadingWorld,
-    /// Login succeeded (received LoginComplete)
-    Succeeded,
-}
-
-// End state machine
+// NOTE: ConnectingProgress and PatchingProgress are now defined in scene.rs
+// Import them from there instead
+use crate::client::scene::{ConnectingProgress, PatchingProgress};
 
 // TODO: Don't require both bind_address and connect_address. I had to do this
 // to get things to work but I should be able to listen on any random port so
@@ -141,17 +61,19 @@ pub struct Client {
     pub server: ServerInfo,
     pub socket: UdpSocket,
     account: Account,
-    pub(crate) state: ClientState, // Top-level state machine
-    pub character_login_state: CharacterLoginState,
+
+    // ========== Session-Based Architecture ==========
+    pub session: ClientSession, // Protocol state + metadata
+    pub scene: Scene,           // UI state
+
     pub send_count: u32,
     pub recv_count: u32,
     last_ack_sent: u32,      // Track the last sequence we ACKed to the server
     unacked_send_count: u32, // Track how many sends we've done without receiving a packet
     fragment_sequence: u32,  // Counter for outgoing fragment sequences
     next_game_action_sequence: u32, // Sequence counter for GameAction messages
-    session: Option<SessionState>,
     pending_fragments: HashMap<u32, Fragment>, // Track incomplete fragment sequences
-    message_queue: VecDeque<RawMessage>,       // Queue of parsed messages to process
+    message_queue: VecDeque<RawMessage>, // Queue of parsed messages to process
     pub(crate) outgoing_message_queue: VecDeque<OutgoingMessage>, // Queue of messages to send with optional delays
     pub(crate) raw_event_tx: mpsc::Sender<ClientEvent>,           // Raw event sender to runner
     action_rx: mpsc::UnboundedReceiver<gromnie_events::SimpleClientAction>, // Receive actions from handlers
@@ -160,6 +82,7 @@ pub struct Client {
     // Reconnection state
     reconnect_config: crate::config::ReconnectConfig,
     pub(crate) reconnect_attempt_count: u32, // Track reconnection attempts across state transitions
+    pub(crate) reconnect_at: Option<std::time::Instant>, // When to attempt reconnection (None if not waiting)
     /// Optional character name to auto-login with after receiving character list
     pub(crate) character: Option<String>,
     /// Pending auto-login action to be processed after character list is received
@@ -223,25 +146,22 @@ impl Client {
             crate::config::ReconnectConfig::default()
         };
 
-        let now = std::time::Instant::now();
         let client = Client {
             id,
             server: ServerInfo::new(host, login_port),
             account: Account { name, password },
             socket: sok,
-            state: ClientState::Connecting {
-                started_at: now,
-                last_retry_at: now,
-                progress: ConnectingProgress::Initial,
-            },
-            character_login_state: CharacterLoginState::Idle,
+
+            // Initialize session-based architecture
+            session: ClientSession::new(SessionState::AuthLoginRequest),
+            scene: Scene::Connecting(ConnectingScene::new()),
+
             send_count: 0,
             recv_count: 0,
             last_ack_sent: 0,             // Initialize to 0
             unacked_send_count: 0,        // Initialize to 0
             fragment_sequence: 1,         // Start at 1 as per actestclient
             next_game_action_sequence: 0, // Start at 0 for GameAction sequences
-            session: None,
             pending_fragments: HashMap::new(),
             message_queue: VecDeque::new(),
             outgoing_message_queue: VecDeque::new(),
@@ -251,6 +171,7 @@ impl Client {
             known_characters: Vec::new(),
             reconnect_config,
             reconnect_attempt_count: 0,
+            reconnect_at: None,
             character,
             pending_auto_login: None,
         };
@@ -315,7 +236,7 @@ impl Client {
         // This affects checksum calculation!
 
         // Serialize with checksum (pass session for encryption key if fragmented)
-        let buffer = packet.serialize(self.session.as_ref())?;
+        let buffer = packet.serialize(self.session.connection.as_ref())?;
 
         // Determine destination address
         let dest_addr = if packet.flags.contains(PacketHeaderFlags::CONNECT_RESPONSE) {
@@ -379,7 +300,7 @@ impl Client {
     /// Send keep-alive packet (TimeSync) to maintain connection
     /// Note: ACKs should be piggybacked on outgoing packets, not sent standalone
     pub async fn send_keepalive(&mut self) -> Result<(), std::io::Error> {
-        if self.session.is_some() {
+        if self.session.connection.is_some() {
             debug!(target: "net", "Sending TimeSync keep-alive");
             self.send_timesync().await?;
         }
@@ -394,26 +315,19 @@ impl Client {
         character_name: String,
         account: String,
     ) -> Result<(), String> {
-        // Check that we're in CharSelect state
-        if !matches!(self.state, ClientState::CharSelect) {
+        // Check that we're in CharacterSelect scene
+        if self.scene.as_character_select().is_none() {
             return Err(format!(
-                "Cannot login: not in CharSelect state (current state: {:?})",
-                self.state
+                "Cannot login: not in CharacterSelect scene (current scene: {:?})",
+                self.scene
             ));
         }
 
         // Check if we've already attempted login
-        match &self.character_login_state {
-            CharacterLoginState::Idle => {
-                // OK to proceed
-            }
-            CharacterLoginState::WaitingForServerReady { .. }
-            | CharacterLoginState::LoadingWorld => {
-                return Err("Login already in progress".to_string());
-            }
-            CharacterLoginState::Succeeded => {
-                return Err("Login already succeeded".to_string());
-            }
+        if let Some(char_select) = self.scene.as_character_select()
+            && char_select.is_entering_world()
+        {
+            return Err("Login already in progress".to_string());
         }
 
         // Step 1: Send CharacterEnterWorldRequest (0xF7C8)
@@ -422,19 +336,10 @@ impl Client {
             OutgoingMessageContent::EnterWorldRequest,
         ));
 
-        // Update state to waiting for server ready
-        self.character_login_state = CharacterLoginState::WaitingForServerReady {
-            character_id,
-            character_name: character_name.clone(),
-            account: account.clone(),
-        };
-
-        // Transition from CharSelect to Ingame state
-        self.state = ClientState::Ingame {
-            character_id,
-            character_name: character_name.clone(),
-        };
-        info!(target: "net", "State transition: CharSelect -> Ingame");
+        // Update scene to begin entering world
+        if let Some(char_select) = self.scene.as_character_select_mut() {
+            char_select.begin_entering_world(character_id, character_name.clone(), account.clone());
+        }
 
         info!(target: "net", "Sent CharacterEnterWorldRequest for character: {} (ID: {})", character_name, character_id);
         Ok(())
@@ -442,8 +347,21 @@ impl Client {
 
     /// Send LoginComplete notification to server after receiving initial world state
     pub fn send_login_complete_notification(&mut self) {
-        // Only send once - check if we're already succeeded or in progress
-        if self.character_login_state == CharacterLoginState::Succeeded {
+        // Check if we're in CharacterSelect with entering_world state
+        let entering = if let Some(char_select) = self.scene.as_character_select() {
+            char_select.entering_world.clone()
+        } else {
+            None
+        };
+
+        let Some(entering) = entering else {
+            warn!(target: "net", "send_login_complete_notification: not in CharacterSelect or no entering_world state");
+            return;
+        };
+
+        // Only send once - check if we're already succeeded
+        if entering.login_complete {
+            info!(target: "net", "LoginComplete notification already sent");
             return;
         }
 
@@ -469,27 +387,25 @@ impl Client {
             OutgoingMessageContent::GameAction(message_data),
         ));
 
-        // Extract character info from current login state
-        let (character_id, character_name) = match &self.character_login_state {
-            CharacterLoginState::WaitingForServerReady {
-                character_id,
-                character_name,
-                ..
-            } => (*character_id, character_name.clone()),
-            CharacterLoginState::LoadingWorld => (0, String::new()),
-            _ => (0, String::new()),
-        };
+        let character_id = entering.character_id;
+        let character_name = entering.character_name.clone();
 
         // Emit LoginSucceeded event to update UI
         let game_event = GameEvent::LoginSucceeded {
             character_id,
-            character_name,
+            character_name: character_name.clone(),
         };
 
         let _ = self.raw_event_tx.try_send(ClientEvent::Game(game_event));
 
-        // Update state to succeeded
-        self.character_login_state = CharacterLoginState::Succeeded;
+        // Mark login as complete in scene
+        if let Some(char_select) = self.scene.as_character_select_mut() {
+            char_select.mark_login_complete();
+        }
+
+        // Transition to InWorld scene now that login is complete
+        self.scene = Scene::InWorld(InWorldScene::new(character_id, character_name));
+        info!(target: "net", "Scene transition: CharacterSelect -> InWorld");
 
         info!(target: "net", "LoginComplete notification queued and event emitted");
     }
@@ -556,11 +472,12 @@ impl Client {
     /// Uses includeSequence=false, incrementSequence=false (sequence will be 0)
     async fn send_timesync(&mut self) -> Result<(), std::io::Error> {
         let (client_id, table) = {
-            let session = self
+            let connection = self
                 .session
+                .connection
                 .as_ref()
                 .ok_or_else(|| std::io::Error::other("Session not established"))?;
-            (session.client_id, session.table)
+            (connection.client_id, connection.table)
         };
 
         // Get current time as Unix timestamp (seconds since epoch)
@@ -612,59 +529,44 @@ impl Client {
     pub fn check_state_timeout(&mut self) -> bool {
         const TIMEOUT_DURATION: std::time::Duration = std::time::Duration::from_secs(20);
 
-        match &self.state {
-            ClientState::Connecting {
-                started_at,
-                progress,
-                ..
-            } => {
-                if started_at.elapsed() >= TIMEOUT_DURATION {
-                    info!(target: "net", "LoginRequest timeout - no response after 20s (progress: {:?})", progress);
+        if let Some(connecting) = self.scene.as_connecting()
+            && connecting.has_timed_out(TIMEOUT_DURATION)
+        {
+            // Determine if we're in Connecting or Patching phase
+            let phase = if matches!(connecting.patch_progress, PatchingProgress::NotStarted) {
+                "LoginRequest"
+            } else {
+                "Patching"
+            };
 
-                    // Reconnection behavior on timeout:
-                    // - Initial connection attempts (reconnect_attempt_count == 0) always fail permanently
-                    //   to provide fast feedback when the server is genuinely unavailable
-                    // - Subsequent reconnection attempts (reconnect_attempt_count > 0) re-enter Disconnected
-                    //   state to retry with exponential backoff
-                    if self.reconnect_config.enabled && self.reconnect_attempt_count > 0 {
-                        info!(target: "net", "Reconnection attempt timed out - re-entering Disconnected state to retry");
-                        self.enter_disconnected();
-                    } else {
-                        // Initial connection attempt timeout or reconnection disabled - fail permanently
-                        self.state = ClientState::Failed {
-                            reason: ClientFailureReason::LoginTimeout,
-                        };
-                        // Emit authentication failed system event
-                        let _ = self.raw_event_tx.try_send(ClientEvent::System(
-                            ClientSystemEvent::AuthenticationFailed {
-                                reason: "Connection timeout - server not responding".to_string(),
-                            },
-                        ));
-                        return true;
-                    }
-                }
-            }
-            ClientState::Patching {
-                started_at,
-                progress,
-                ..
-            } => {
-                if started_at.elapsed() >= TIMEOUT_DURATION {
-                    info!(target: "net", "Patching timeout - no character list after 20s (progress: {:?})", progress);
+            info!(target: "net", "{} timeout - no response after 20s (patch_progress: {:?})", phase, connecting.patch_progress);
 
-                    // Same logic for Patching state
-                    if self.reconnect_config.enabled && self.reconnect_attempt_count > 0 {
-                        info!(target: "net", "Reconnection attempt timed out in Patching - re-entering Disconnected state to retry");
-                        self.enter_disconnected();
-                    } else {
-                        self.state = ClientState::Failed {
-                            reason: ClientFailureReason::PatchingTimeout,
-                        };
-                        return true;
-                    }
-                }
+            // Reconnection behavior on timeout:
+            // - Initial connection attempts (reconnect_attempt_count == 0) always fail permanently
+            //   to provide fast feedback when the server is genuinely unavailable
+            // - Subsequent reconnection attempts (reconnect_attempt_count > 0) re-enter Disconnected
+            //   state to retry with exponential backoff
+            if self.reconnect_config.enabled && self.reconnect_attempt_count > 0 {
+                info!(target: "net", "Reconnection attempt timed out - re-entering Disconnected state to retry");
+                self.enter_disconnected();
+            } else {
+                // Initial connection attempt timeout or reconnection disabled - fail permanently
+                let error = if matches!(connecting.patch_progress, PatchingProgress::NotStarted) {
+                    ClientError::LoginTimeout
+                } else {
+                    ClientError::PatchingTimeout
+                };
+
+                self.scene = Scene::Error(ErrorScene::new(error, false));
+
+                // Emit authentication failed system event
+                let _ = self.raw_event_tx.try_send(ClientEvent::System(
+                    ClientSystemEvent::AuthenticationFailed {
+                        reason: "Connection timeout - server not responding".to_string(),
+                    },
+                ));
+                return true;
             }
-            _ => {}
         }
         false
     }
@@ -673,39 +575,25 @@ impl Client {
     pub fn should_retry(&self) -> bool {
         const RETRY_INTERVAL: std::time::Duration = std::time::Duration::from_secs(2);
 
-        match &self.state {
-            ClientState::Connecting { last_retry_at, .. } => {
-                last_retry_at.elapsed() >= RETRY_INTERVAL
-            }
-            ClientState::Patching { last_retry_at, .. } => {
-                last_retry_at.elapsed() >= RETRY_INTERVAL
-            }
-            ClientState::Disconnected { reconnect_at, .. } => {
-                // Check if we've reached the reconnect time
-                std::time::Instant::now() >= *reconnect_at
-            }
-            _ => false,
+        if let Some(connecting) = self.scene.as_connecting() {
+            connecting.should_retry(RETRY_INTERVAL)
+        } else {
+            false
         }
     }
 
     /// Update last retry time for current state
     pub fn update_retry_time(&mut self) {
-        match &mut self.state {
-            ClientState::Connecting { last_retry_at, .. } => {
-                *last_retry_at = std::time::Instant::now();
-            }
-            ClientState::Patching { last_retry_at, .. } => {
-                *last_retry_at = std::time::Instant::now();
-            }
-            _ => {}
+        if let Some(connecting) = self.scene.as_connecting_mut() {
+            connecting.update_retry_time();
         }
     }
 
     /// Check if client should attempt to reconnect
     pub fn should_reconnect(&mut self) -> bool {
-        if let ClientState::Disconnected { reconnect_at, .. } = &self.state {
+        if let Some(reconnect_at) = self.reconnect_at {
             // Check if we've reached the reconnect time
-            return std::time::Instant::now() >= *reconnect_at;
+            return std::time::Instant::now() >= reconnect_at;
         }
         false
     }
@@ -715,12 +603,13 @@ impl Client {
     /// Transitions the client to Connecting state with an appropriate backoff delay
     pub fn start_reconnection(&mut self) -> bool {
         if !self.reconnect_config.enabled {
-            info!(target: "net", "Reconnection disabled, entering Failed state");
-            self.state = ClientState::Failed {
-                reason: ClientFailureReason::LoginFailed(
+            info!(target: "net", "Reconnection disabled, entering Error state");
+            self.scene = Scene::Error(ErrorScene::new(
+                ClientError::ConnectionFailed(
                     "Connection lost and reconnection disabled".to_string(),
                 ),
-            };
+                false,
+            ));
             return false;
         }
 
@@ -731,15 +620,16 @@ impl Client {
         {
             error!(
                 target: "net",
-                "Max reconnection attempts reached ({}), entering Failed state",
+                "Max reconnection attempts reached ({}), entering Error state",
                 self.reconnect_config.max_attempts
             );
-            self.state = ClientState::Failed {
-                reason: ClientFailureReason::LoginFailed(format!(
+            self.scene = Scene::Error(ErrorScene::new(
+                ClientError::ConnectionFailed(format!(
                     "Max reconnection attempts ({}) reached",
                     self.reconnect_config.max_attempts
                 )),
-            };
+                false,
+            ));
             return false;
         }
 
@@ -762,13 +652,16 @@ impl Client {
                 delay_secs,
             }));
 
-        // Transition back to Connecting state after delay
-        let now = std::time::Instant::now();
-        self.state = ClientState::Connecting {
-            started_at: now,
-            last_retry_at: now + delay, // Don't retry until after the backoff delay
-            progress: ConnectingProgress::Initial,
-        };
+        // Transition back to Connecting scene for reconnection attempt
+        self.scene = Scene::Connecting(ConnectingScene::new());
+
+        // Clear reconnect_at since we're now reconnecting
+        self.reconnect_at = None;
+
+        // Update timing to account for backoff delay
+        if let Some(connecting) = self.scene.as_connecting_mut() {
+            connecting.last_retry_at = std::time::Instant::now() + delay; // Don't retry until after the backoff delay
+        }
 
         true
     }
@@ -784,17 +677,15 @@ impl Client {
 
         info!(
             target: "net",
-            "Connection lost - entering Disconnected state (attempt {}, next retry in {:?})",
+            "Connection lost - waiting for reconnection (attempt {}, next retry in {:?})",
             self.reconnect_attempt_count, delay
         );
 
-        self.state = ClientState::Disconnected {
-            reconnect_attempt: self.reconnect_attempt_count,
-            reconnect_at: std::time::Instant::now() + delay,
-        };
+        // Set reconnect_at for later checking
+        self.reconnect_at = Some(std::time::Instant::now() + delay);
 
         // Clear session state
-        self.session = None;
+        self.session.connection = None;
         self.pending_fragments.clear();
 
         // Reset sequence counters for fresh connection
@@ -813,11 +704,6 @@ impl Client {
                 reconnect_attempt: self.reconnect_attempt_count,
                 delay_secs: delay.as_secs(),
             }));
-    }
-
-    /// Get current client state
-    pub fn get_state(&self) -> &ClientState {
-        &self.state
     }
 
     /// Get cached DDD response for retries
@@ -868,12 +754,11 @@ impl Client {
             match action {
                 gromnie_events::SimpleClientAction::Disconnect => {
                     info!(target: "events", "Action: Disconnecting");
-                    // Disconnect action - transition to Failed state
-                    self.state = ClientState::Failed {
-                        reason: ClientFailureReason::LoginFailed(
-                            "Disconnected by client action".to_string(),
-                        ),
-                    };
+                    // Disconnect action - transition to Error state
+                    self.scene = Scene::Error(ErrorScene::new(
+                        ClientError::ConnectionFailed("Disconnected by client action".to_string()),
+                        true, // Can retry
+                    ));
                 }
                 gromnie_events::SimpleClientAction::LoginCharacter {
                     character_id,
@@ -969,8 +854,12 @@ impl Client {
 
         // Extract session values
         let (client_id, table) = {
-            let session = self.session.as_ref().expect("Session not established");
-            (session.client_id, session.table)
+            let connection = self
+                .session
+                .connection
+                .as_ref()
+                .expect("Session not established");
+            (connection.client_id, connection.table)
         };
 
         // Increment send_count first, then use it (matches actestclient behavior)
@@ -1297,16 +1186,14 @@ impl Client {
         info!(target: "net", "Received LoginEnterGameServerReady (0xF7DF) - Server ready for character login");
 
         // Check if we're in the right state and extract the values we need
-        if let CharacterLoginState::WaitingForServerReady {
-            character_id,
-            character_name,
-            account,
-        } = &self.character_login_state
+        if let Some(entering) = self
+            .scene
+            .as_character_select_mut()
+            .and_then(|scene| scene.entering_world.as_ref().cloned())
         {
-            // Clone values we need before mutating state
-            let char_id = *character_id;
-            let char_name = character_name.clone();
-            let acc = account.clone();
+            let char_id = entering.character_id;
+            let char_name = entering.character_name;
+            let acc = entering.account;
 
             // Create the enter world message with character ID
             let enter_world = LoginSendEnterWorld {
@@ -1319,12 +1206,9 @@ impl Client {
                 OutgoingMessageContent::EnterWorld(enter_world),
             ));
 
-            // Update state to loading world
-            self.character_login_state = CharacterLoginState::LoadingWorld;
-
             info!(target: "net", "Queued EnterWorld (0xF657) for character: {} (ID: {})", char_name, char_id);
         } else {
-            warn!(target: "net", "Received ServerReady but not in WaitingForServerReady state! Current state: {:?}", self.character_login_state);
+            warn!(target: "net", "Received ServerReady but not in CharacterSelect with entering_world! Current scene: {:?}", self.scene);
         }
     }
 
@@ -1456,12 +1340,14 @@ impl Client {
             // Our session index is in the payload's net_id field
             debug!(target: "net", "🔑 Session established: client_id={}, table={}, server_id={}, cookie=0x{:016X}",
                 connect_req_packet.net_id, packet.iteration, packet.id, connect_req_packet.cookie);
-            self.session = Some(SessionState {
+            self.session.set_connection(ConnectionState {
                 cookie: connect_req_packet.cookie,
                 client_id: connect_req_packet.net_id as u16, // Use net_id from payload - this is our session index!
                 table: packet.iteration, // Use iteration from packet header as table value
                 send_generator: RefCell::new(CryptoSystem::new(connect_req_packet.incoming_seed)), // Client->Server seed
             });
+            self.session
+                .transition_to(SessionState::AuthConnectResponse);
 
             // Emit authentication success system event
             let _ = self
@@ -1474,13 +1360,8 @@ impl Client {
             info!(target: "net", "Authentication succeeded - received ConnectRequest from server");
 
             // Update progress to ConnectRequestReceived (66%)
-            if let ClientState::Connecting {
-                started_at: _,
-                last_retry_at: _,
-                progress,
-            } = &mut self.state
-            {
-                *progress = ConnectingProgress::ConnectRequestReceived;
+            if let Some(connecting) = self.scene.as_connecting_mut() {
+                connecting.connect_progress = ConnectingProgress::ConnectRequestReceived;
                 let game_event = GameEvent::ConnectingSetProgress { progress: 0.66 };
                 let _ = self.raw_event_tx.try_send(ClientEvent::Game(game_event));
                 info!(target: "net", "Progress: ConnectRequest received (66%)");
@@ -1492,18 +1373,15 @@ impl Client {
             // Send ConnectResponse
             let _ = self.do_connect_response().await;
 
-            // Update progress to ConnectResponseSent (100%) and transition to Patching
-            if matches!(self.state, ClientState::Connecting { .. }) {
-                let now = std::time::Instant::now();
-                self.state = ClientState::Patching {
-                    started_at: now,
-                    last_retry_at: now,
-                    progress: PatchingProgress::Initial,
-                };
+            // Update progress to ConnectResponseSent (100%) and transition to Patching phase
+            if let Some(connecting) = self.scene.as_connecting_mut() {
+                connecting.connect_progress = ConnectingProgress::ConnectResponseSent;
+                connecting.patch_progress = PatchingProgress::WaitingForDDD;
+                connecting.reset(); // Reset timing for patching phase
                 let game_event = GameEvent::ConnectingSetProgress { progress: 1.0 };
                 let _ = self.raw_event_tx.try_send(ClientEvent::Game(game_event));
                 info!(target: "net", "Progress: ConnectResponse sent (100%)");
-                info!(target: "net", "State transition: Connecting -> Patching");
+                info!(target: "net", "Scene transition: Connecting phase -> Patching phase");
             }
         }
 
@@ -1656,14 +1534,10 @@ impl Client {
         self.socket.send_to(&buffer, login_addr).await?;
 
         // Update progress to LoginRequestSent (33%)
-        if let ClientState::Connecting {
-            started_at: _,
-            last_retry_at: _,
-            progress,
-        } = &mut self.state
-            && *progress == ConnectingProgress::Initial
+        if let Some(connecting) = self.scene.as_connecting_mut()
+            && connecting.connect_progress == ConnectingProgress::Initial
         {
-            *progress = ConnectingProgress::LoginRequestSent;
+            connecting.connect_progress = ConnectingProgress::LoginRequestSent;
             let game_event = GameEvent::ConnectingSetProgress { progress: 0.33 };
             let _ = self.raw_event_tx.send(ClientEvent::Game(game_event)).await;
             info!(target: "net", "Progress: LoginRequest sent (33%)");
@@ -1674,14 +1548,15 @@ impl Client {
 
     pub async fn do_connect_response(&mut self) -> Result<(), std::io::Error> {
         // Get session data
-        let session = self
+        let connection = self
             .session
+            .connection
             .as_ref()
             .expect("Session not established - ConnectRequest not received yet");
 
-        let cookie = session.cookie;
-        let client_id = session.client_id;
-        let table = session.table;
+        let cookie = connection.cookie;
+        let client_id = connection.client_id;
+        let table = connection.table;
 
         // ConnectResponse payload: just a u64 cookie (8 bytes)
         let payload_size = 8;
@@ -1714,5 +1589,129 @@ impl Client {
 
         // ConnectResponse: includeSequence=false, incrementSequence=false (like actestclient line 558)
         self.send_packet(packet, false, false).await
+    }
+
+    // ========== Scene Transition Methods ==========
+
+    /// Get the current scene
+    pub fn get_scene(&self) -> &Scene {
+        &self.scene
+    }
+
+    /// Transition to Connecting scene
+    pub fn transition_to_connecting(&mut self) {
+        self.session = ClientSession::new(SessionState::AuthLoginRequest);
+        self.scene = Scene::Connecting(ConnectingScene::new());
+        self.emit_scene_changed();
+    }
+
+    /// Update connecting progress within the Connecting scene
+    pub fn update_connect_progress(&mut self, progress: SceneConnectingProgress) {
+        if let Scene::Connecting(ref mut scene) = self.scene {
+            scene.connect_progress = progress;
+        }
+    }
+
+    /// Start patching phase (called after ConnectResponse is sent)
+    pub fn start_patching(&mut self) {
+        self.session.transition_to(SessionState::AuthConnected);
+        if let Scene::Connecting(ref mut scene) = self.scene {
+            scene.patch_progress = ScenePatchingProgress::WaitingForDDD;
+        }
+    }
+
+    /// Update patching progress within the Connecting scene
+    pub fn update_patch_progress(&mut self, progress: ScenePatchingProgress) {
+        if let Scene::Connecting(ref mut scene) = self.scene {
+            scene.patch_progress = progress;
+        }
+    }
+
+    /// Transition to CharacterSelect scene
+    pub fn transition_to_char_select(&mut self, characters: Vec<crate::client::CharacterInfo>) {
+        // session.state should already be AuthConnected
+        self.scene = Scene::CharacterSelect(CharacterSelectScene::new(
+            self.account.name.clone(),
+            characters,
+        ));
+        self.emit_scene_changed();
+    }
+
+    /// Begin entering world process (called when EnterWorldRequest is sent)
+    pub fn begin_entering_world(&mut self, character_id: u32, character_name: String) {
+        if let Scene::CharacterSelect(ref mut scene) = self.scene {
+            scene.entering_world = Some(EnteringWorldState {
+                character_id,
+                character_name,
+                account: self.account.name.clone(),
+                login_complete: false,
+            });
+        }
+    }
+
+    /// Mark login as complete (called when Character_LoginCompleteNotification is received)
+    pub fn mark_login_complete(&mut self) {
+        if let Scene::CharacterSelect(ref mut scene) = self.scene
+            && let Some(ref mut entering) = scene.entering_world
+        {
+            entering.login_complete = true;
+        }
+    }
+
+    /// Transition to InWorld scene
+    pub fn transition_to_in_world(&mut self, character_id: u32, character_name: String) {
+        self.session.transition_to(SessionState::WorldConnected);
+        self.scene = Scene::InWorld(InWorldScene::new(character_id, character_name));
+        self.emit_scene_changed();
+    }
+
+    /// Transition to CharacterCreate scene
+    pub fn transition_to_char_create(&mut self) {
+        // session.state stays AuthConnected
+        self.scene = Scene::CharacterCreate(CharacterCreateScene::new());
+        self.emit_scene_changed();
+    }
+
+    /// Transition to Error scene
+    pub fn transition_to_error(&mut self, error: ClientError, can_retry: bool) {
+        self.scene = Scene::Error(ErrorScene::new(error, can_retry));
+        self.emit_scene_changed();
+    }
+
+    /// Retry from error scene (transition back to Connecting)
+    pub fn retry_from_error(&mut self) {
+        if self.scene.can_retry() {
+            self.transition_to_connecting();
+        }
+    }
+
+    /// Emit scene changed event
+    fn emit_scene_changed(&self) {
+        // Emit appropriate event based on new scene
+        match &self.scene {
+            Scene::Connecting(_) => {
+                let _ = self.raw_event_tx.try_send(ClientEvent::State(
+                    crate::client::ClientStateEvent::Connecting,
+                ));
+            }
+            Scene::CharacterSelect(_) => {
+                let _ = self.raw_event_tx.try_send(ClientEvent::State(
+                    crate::client::ClientStateEvent::CharacterSelect,
+                ));
+            }
+            Scene::InWorld(_) => {
+                let _ = self
+                    .raw_event_tx
+                    .try_send(ClientEvent::State(crate::client::ClientStateEvent::InWorld));
+            }
+            Scene::Error(_) => {
+                let _ = self.raw_event_tx.try_send(ClientEvent::State(
+                    crate::client::ClientStateEvent::CharacterError,
+                ));
+            }
+            Scene::CharacterCreate(_) => {
+                // No specific event for character create yet
+            }
+        }
     }
 }
