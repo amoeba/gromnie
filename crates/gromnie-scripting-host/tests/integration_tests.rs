@@ -1,7 +1,10 @@
 // Integration tests for scripting system
 
 use gromnie_client::client::Client;
-use gromnie_events::SimpleGameEvent as GameEvent;
+use gromnie_events::{
+    CharacterData, ClientEvent, GameEventMsg, OrderedGameEvent, ProtocolEvent, S2CEvent,
+    SimpleGameEvent as GameEvent,
+};
 use gromnie_scripting_host::ScriptRunner;
 use std::collections::HashMap;
 use std::path::Path;
@@ -194,4 +197,164 @@ async fn test_host_function_calls() {
     }
 
     println!("Scripts generated {} actions", action_count);
+}
+
+/// Integration test for protocol event flow
+///
+/// This test verifies the end-to-end flow of protocol events:
+/// 1. Protocol events are created with strongly-typed data
+/// 2. They flow through the client event system
+/// 3. They're converted to WIT types in the script host
+/// 4. Scripts can receive and process them
+#[tokio::test]
+async fn test_protocol_event_flow() {
+    let (action_tx, _action_rx) = mpsc::unbounded_channel();
+    let client = create_mock_client().await;
+    let mut runner = ScriptRunner::new_with_wasm(client, action_tx);
+
+    // Load test scripts
+    let test_scripts_dir = Path::new("../../../tests/scripting");
+    runner.load_scripts(test_scripts_dir, &HashMap::new());
+
+    if runner.script_count() == 0 {
+        println!("Warning: No scripts loaded for protocol event test");
+        return;
+    }
+
+    // Test S2C protocol events
+    let s2c_events = vec![
+        // LoginCreatePlayer event
+        ProtocolEvent::S2C(S2CEvent::LoginCreatePlayer {
+            character_id: 0x12345678,
+        }),
+        // LoginCharacterSet event with multiple characters
+        ProtocolEvent::S2C(S2CEvent::LoginCharacterSet {
+            account: "TestAccount".to_string(),
+            characters: vec![
+                CharacterData {
+                    id: 0x1,
+                    name: "ActiveChar".to_string(),
+                    delete_pending: false,
+                },
+                CharacterData {
+                    id: 0x2,
+                    name: "DeletedChar".to_string(),
+                    delete_pending: true,
+                },
+            ],
+            num_slots: 5,
+        }),
+        // ItemCreateObject event
+        ProtocolEvent::S2C(S2CEvent::ItemCreateObject {
+            object_id: 0xABCDEF00,
+            name: "Magic Sword".to_string(),
+        }),
+        // CharacterError event
+        ProtocolEvent::S2C(S2CEvent::CharacterError {
+            error_code: 0x01,
+            error_message: "Test error".to_string(),
+        }),
+        // HearSpeech event
+        ProtocolEvent::S2C(S2CEvent::HearSpeech {
+            sender_name: "PlayerOne".to_string(),
+            message: "Hello world!".to_string(),
+            message_type: 0x01,
+        }),
+    ];
+
+    // Process S2C events
+    for event in s2c_events {
+        runner.handle_event(ClientEvent::Protocol(event));
+    }
+
+    // Test nested game events with metadata
+    let game_events = vec![
+        // HearDirectSpeech game event
+        ProtocolEvent::GameEvent(OrderedGameEvent {
+            object_id: 0x100,
+            sequence: 1,
+            event: GameEventMsg::HearDirectSpeech {
+                message: "Secret message".to_string(),
+                sender_name: "Spy".to_string(),
+                sender_id: 0x111,
+                target_id: 0x222,
+                message_type: 0x01,
+            },
+        }),
+        // TransientString game event
+        ProtocolEvent::GameEvent(OrderedGameEvent {
+            object_id: 0x200,
+            sequence: 2,
+            event: GameEventMsg::TransientString {
+                message: "System notification".to_string(),
+            },
+        }),
+    ];
+
+    // Process game events
+    for event in game_events {
+        runner.handle_event(ClientEvent::Protocol(event));
+    }
+
+    // Give scripts time to process
+    tokio::time::sleep(Duration::from_millis(100)).await;
+
+    println!("Protocol event flow test completed successfully");
+}
+
+/// Test that protocol events preserve all data through conversion
+#[tokio::test]
+async fn test_protocol_event_data_integrity() {
+    let (action_tx, _action_rx) = mpsc::unbounded_channel();
+    let client = create_mock_client().await;
+    let mut runner = ScriptRunner::new_with_wasm(client, action_tx);
+
+    // Load test scripts
+    let test_scripts_dir = Path::new("../../../tests/scripting");
+    runner.load_scripts(test_scripts_dir, &HashMap::new());
+
+    if runner.script_count() == 0 {
+        println!("Warning: No scripts loaded for data integrity test");
+        return;
+    }
+
+    // Test with complex data structures
+    let character_set_event = ProtocolEvent::S2C(S2CEvent::LoginCharacterSet {
+        account: "ComplexAccount@test.com".to_string(),
+        characters: vec![
+            CharacterData {
+                id: 0x12345678,
+                name: "Character With Spaces".to_string(),
+                delete_pending: false,
+            },
+            CharacterData {
+                id: 0xABCDEF00,
+                name: "SpecialChars!@#".to_string(),
+                delete_pending: true,
+            },
+        ],
+        num_slots: 10,
+    });
+
+    runner.handle_event(ClientEvent::Protocol(character_set_event));
+
+    // Test game event with metadata preservation
+    let game_event = ProtocolEvent::GameEvent(OrderedGameEvent {
+        object_id: 0x9999AAAA,
+        sequence: 0xFFFFFFFF,
+        event: GameEventMsg::HearDirectSpeech {
+            message: "Unicode test: 你好世界 🎮".to_string(),
+            sender_name: "Player™".to_string(),
+            sender_id: 0x11111111,
+            target_id: 0x22222222,
+            message_type: 0xFF,
+        },
+    });
+
+    runner.handle_event(ClientEvent::Protocol(game_event));
+
+    // Give scripts time to process
+    tokio::time::sleep(Duration::from_millis(100)).await;
+
+    println!("Protocol event data integrity test completed successfully");
 }

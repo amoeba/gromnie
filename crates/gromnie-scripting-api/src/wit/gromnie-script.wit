@@ -142,12 +142,105 @@ interface host {
         create-object(world-object),
         /// Chat message received
         chat-message-received(chat-message),
+
+        /// Full protocol event access (new replacement for SimpleGameEvent)
+        protocol(protocol-event),
     }
 
     /// Chat message from the game
     record chat-message {
         channel: u8,
         message: string,
+    }
+
+    /// ===== Protocol Event Types (Full acprotocol access) =====
+
+    // ----- S2C Message Records -----
+
+    record login-create-player-msg {
+        character-id: u32,
+    }
+
+    record login-character-set-msg {
+        account: string,
+        characters: list<character-info>,
+        num-slots: u32,
+    }
+
+    record item-create-object-msg {
+        object-id: u32,
+        name: string,
+    }
+
+    record hear-speech-msg {
+        sender-name: string,
+        message: string,
+        message-type: u32,
+    }
+
+    record hear-ranged-speech-msg {
+        sender-name: string,
+        message: string,
+        message-type: u32,
+    }
+
+    record ddd-interrogation-msg {
+        language: string,
+        region: string,
+        product: string,
+    }
+
+    // ----- Game Event Records -----
+
+    record hear-direct-speech-msg {
+        message: string,
+        sender-name: string,
+        sender-id: u32,
+        target-id: u32,
+        message-type: u32,
+    }
+
+    record transient-string-msg {
+        message: string,
+    }
+
+    // ----- Top-level S2C Messages -----
+
+    /// Top-level server-to-client messages
+    variant s2c-event {
+        login-create-player(login-create-player-msg),
+        login-character-set(login-character-set-msg),
+        item-create-object(item-create-object-msg),
+        character-error(character-error),
+        hear-speech(hear-speech-msg),
+        hear-ranged-speech(hear-ranged-speech-msg),
+        ddd-interrogation(ddd-interrogation-msg),
+        chargen-verification-response,
+    }
+
+    // ----- Nested Game Events -----
+
+    /// Nested game events (from OrderedGameEvent wrapper)
+    variant game-event-msg {
+        hear-direct-speech(hear-direct-speech-msg),
+        transient-string(transient-string-msg),
+    }
+
+    // ----- Unified Protocol Event -----
+
+    /// Wrapper for ordered game events with metadata
+    record ordered-game-event {
+        object-id: u32,
+        sequence: u32,
+        event: game-event-msg,
+    }
+
+    /// Protocol event from server (unified wrapper)
+    variant protocol-event {
+        /// Top-level S2C message
+        s2c(s2c-event),
+        /// Nested game event with metadata
+        game-event(ordered-game-event),
     }
 
     /// Client state change events
