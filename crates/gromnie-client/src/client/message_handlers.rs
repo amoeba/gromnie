@@ -6,12 +6,12 @@
 
 use tracing::{error, info, warn};
 
-use crate::client::client::CharacterLoginState;
 use crate::client::constants::UI_DELAY_MS;
 use crate::client::message_handler::MessageHandler;
 use crate::client::messages::{OutgoingMessage, OutgoingMessageContent};
+use crate::client::scene::ClientError;
 use crate::client::{CharacterInfo, ClientEvent, GameEvent};
-use crate::client::{Client, ClientState, PatchingProgress};
+use crate::client::Client;
 
 /// Handle LoginCreatePlayer messages
 impl MessageHandler<acprotocol::messages::s2c::LoginCreatePlayer> for Client {
@@ -22,8 +22,26 @@ impl MessageHandler<acprotocol::messages::s2c::LoginCreatePlayer> for Client {
         let character_id = create_player.character_id.0;
         info!(target: "net", "Character in world: 0x{:08X}", character_id);
 
-        if self.character_login_state == CharacterLoginState::LoadingWorld {
-            self.send_login_complete_notification();
+        // Check if we're in the process of entering the world
+        if let Some(entering) = self.scene.as_character_select()
+            .and_then(|scene| scene.entering_world.as_ref().cloned())
+        {
+            // Mark login as complete
+            self.mark_login_complete();
+            
+            // Send the login complete notification
+            if !entering.login_complete {
+                self.send_login_complete_notification();
+            }
+
+            // Transition to InWorld scene with the character info
+            let char_name = entering.character_name.clone();
+            self.transition_to_in_world(entering.character_id, entering.character_name);
+            
+            info!(target: "net", "Character successfully entered world: {} (ID: 0x{:08X})", 
+                  char_name, character_id);
+        } else {
+            warn!(target: "net", "LoginCreatePlayer received but not in CharacterSelect with entering_world state");
         }
 
         Some(GameEvent::CreatePlayer { character_id })
@@ -99,10 +117,11 @@ impl MessageHandler<acprotocol::messages::s2c::CharacterCharacterError> for Clie
             warn!(target: "net", "ServerCrash received - entering Disconnected state for reconnection");
             self.enter_disconnected();
         } else {
-            // Other character errors are fatal - transition to CharacterError state
-            self.state = ClientState::CharacterError {
-                reason: char_error.reason.clone(),
-            };
+            // Other character errors are fatal - transition to Error scene
+            self.transition_to_error(
+                ClientError::CharacterError(char_error.reason.clone()),
+                true, // Can retry from character error
+            );
         }
 
         Some(GameEvent::CharacterError {
@@ -154,29 +173,27 @@ impl MessageHandler<acprotocol::messages::s2c::LoginLoginCharacterSet> for Clien
         // Store the character list for future reference
         self.known_characters = characters.clone();
 
-        // Transition from Patching to CharSelect state
-        if matches!(self.state, ClientState::Patching { .. }) {
-            // Update progress to 100% before transitioning
-            let progress_event = GameEvent::UpdatingSetProgress { progress: 1.0 };
-            let _ = self
-                .raw_event_tx
-                .try_send(ClientEvent::Game(progress_event));
-            info!(target: "net", "Progress: CharacterList received (100%)");
+        // Transition from Patching to CharSelect scene
+        self.transition_to_char_select(characters.clone());
 
-            let _old_state = std::mem::replace(&mut self.state, ClientState::CharSelect);
+        // Update progress to 100% after transitioning
+        let progress_event = GameEvent::UpdatingSetProgress { progress: 1.0 };
+        let _ = self
+            .raw_event_tx
+            .try_send(ClientEvent::Game(progress_event));
+        info!(target: "net", "Progress: CharacterList received (100%)");
 
-            // Clear cached DDD response since we successfully received character list
-            self.ddd_response = None;
+        // Clear cached DDD response since we successfully received character list
+        self.ddd_response = None;
 
-            // Reset reconnect attempt counter on successful connection
-            if self.reconnect_attempt_count > 0 {
-                info!(target: "net", "Connection successful - resetting reconnect attempt counter from {} to 0",
-                    self.reconnect_attempt_count);
-                self.reconnect_attempt_count = 0;
-            }
-
-            info!(target: "net", "State transition: Patching -> CharSelect");
+        // Reset reconnect attempt counter on successful connection
+        if self.reconnect_attempt_count > 0 {
+            info!(target: "net", "Connection successful - resetting reconnect attempt counter from {} to 0",
+                self.reconnect_attempt_count);
+            self.reconnect_attempt_count = 0;
         }
+
+        info!(target: "net", "Scene transition: Connecting (Patching) -> CharacterSelect");
 
         // Check if auto-login is configured
         if let Some(ref char_name) = self.character {
@@ -241,18 +258,12 @@ impl MessageHandler<acprotocol::messages::s2c::DDDInterrogationMessage> for Clie
         info!(target: "net", "Received DDD Interrogation - Language: {}, Region: {}, Product: {}",
             ddd_msg.name_rule_language, ddd_msg.servers_region, ddd_msg.product_id);
 
-        // Update progress to DDDInterrogationReceived (33%)
-        if let ClientState::Patching {
-            started_at: _,
-            last_retry_at: _,
-            progress,
-        } = &mut self.state
-        {
-            *progress = PatchingProgress::DDDInterrogationReceived;
-            let game_event = GameEvent::UpdatingSetProgress { progress: 0.33 };
-            let _ = self.raw_event_tx.try_send(ClientEvent::Game(game_event));
-            info!(target: "net", "Progress: DDDInterrogation received (33%)");
-        }
+        // Update progress to ReceivedDDD using new scene API
+        use crate::client::scene::PatchingProgress as ScenePatchingProgress;
+        self.update_patch_progress(ScenePatchingProgress::ReceivedDDD);
+        let game_event = GameEvent::UpdatingSetProgress { progress: 0.33 };
+        let _ = self.raw_event_tx.try_send(ClientEvent::Game(game_event));
+        info!(target: "net", "Progress: DDDInterrogation received (33%)");
 
         // Send static DDD response indicating client is up-to-date
         info!(target: "net", "Sending DDD Interrogation Response (up-to-date, no patches needed)");
