@@ -270,10 +270,10 @@ impl Client {
             let ack_seq = self.recv_count;
             packet = packet.with_ack_sequence(ack_seq); // Safely sets both field and flag
             self.last_ack_sent = ack_seq;
-            debug!(target: "net", "📤 Sending ACK for server seq={} in outgoing packet (send_count={})",
+            info!(target: "net", "📤 Sending ACK for server seq={} in outgoing packet (send_count={})",
                 ack_seq, self.send_count);
         } else if self.recv_count > 0 {
-            debug!(target: "net", "📤 No new ACK needed (recv_count={}, last_ack_sent={})",
+            info!(target: "net", "📤 No new ACK needed (recv_count={}, last_ack_sent={})",
                 self.recv_count, self.last_ack_sent);
         }
 
