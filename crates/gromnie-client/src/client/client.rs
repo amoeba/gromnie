@@ -43,6 +43,9 @@ use crate::crypto::magic_number::get_magic_number;
 
 use std::cell::RefCell;
 
+/// Maximum number of packets we can send without receiving before considering connection dead
+const MAX_UNACKED_SENDS: u32 = 20;
+
 /// Sub-states for Connecting phase with progress tracking
 #[derive(Clone, Debug, PartialEq)]
 pub enum ConnectingProgress {
@@ -144,6 +147,7 @@ pub struct Client {
     pub send_count: u32,
     pub recv_count: u32,
     last_ack_sent: u32,     // Track the last sequence we ACKed to the server
+    unacked_send_count: u32, // Track how many sends we've done without receiving a packet
     fragment_sequence: u32, // Counter for outgoing fragment sequences
     next_game_action_sequence: u32, // Sequence counter for GameAction messages
     session: Option<SessionState>,
@@ -224,6 +228,7 @@ impl Client {
             send_count: 0,
             recv_count: 0,
             last_ack_sent: 0,             // Initialize to 0
+            unacked_send_count: 0,         // Initialize to 0
             fragment_sequence: 1,         // Start at 1 as per actestclient
             next_game_action_sequence: 0, // Start at 0 for GameAction sequences
             session: None,
@@ -262,6 +267,23 @@ impl Client {
 
         // Set sequence based on include_sequence flag
         packet.sequence = if include_sequence { self.send_count } else { 0 };
+
+        // Track unacked sends - increment each time we send
+        self.unacked_send_count += 1;
+
+        // Check if we've sent too many packets without receiving a response
+        if self.unacked_send_count > MAX_UNACKED_SENDS {
+            error!(
+                target: "net",
+                "Sent {} packets without receiving from server - connection appears dead",
+                self.unacked_send_count
+            );
+            self.enter_disconnected();
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::ConnectionReset,
+                "Server not responding",
+            ));
+        }
 
         // CRITICAL: Automatically include ACK if we have received packets that need acknowledging
         // This matches actestclient behavior (NetworkManager.Send lines 266-270)
@@ -754,6 +776,7 @@ impl Client {
         self.send_count = 0;
         self.recv_count = 0;
         self.last_ack_sent = 0;
+        self.unacked_send_count = 0;
         self.fragment_sequence = 1;
         self.next_game_action_sequence = 0;
 
@@ -1421,9 +1444,14 @@ impl Client {
             debug!(target: "net", "📥 Received packet with seq={}, updating recv_count from {} to {}",
                 packet.sequence, self.recv_count, packet.sequence);
             self.recv_count = packet.sequence;
+            self.unacked_send_count = 0; // Reset unacked counter - server is responding
         } else if packet.sequence > 0 {
             debug!(target: "net", "📥 Received packet with seq={} (not newer than recv_count={})",
                 packet.sequence, self.recv_count);
+            self.unacked_send_count = 0; // Reset unacked counter - server is responding
+        } else {
+            // Non-sequenced packet, but server is still responding
+            self.unacked_send_count = 0;
         }
 
         let flags = packet.flags;
