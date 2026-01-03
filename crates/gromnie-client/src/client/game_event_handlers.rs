@@ -54,7 +54,9 @@ impl GameEventHandler<CommunicationHearDirectSpeech> for Client {
             sequence: self.current_game_event_sequence,
             event: event.into_game_event_msg(),
         });
-        let _ = self.raw_event_tx.try_send(crate::client::ClientEvent::Protocol(protocol_event));
+        let _ = self
+            .raw_event_tx
+            .try_send(crate::client::ClientEvent::Protocol(protocol_event));
 
         Some(GameEvent::ChatMessageReceived {
             message: chat_text,
@@ -88,7 +90,9 @@ impl GameEventHandler<CommunicationTransientString> for Client {
             sequence: self.current_game_event_sequence,
             event: event.into_game_event_msg(),
         });
-        let _ = self.raw_event_tx.try_send(crate::client::ClientEvent::Protocol(protocol_event));
+        let _ = self
+            .raw_event_tx
+            .try_send(crate::client::ClientEvent::Protocol(protocol_event));
 
         Some(GameEvent::ChatMessageReceived {
             message,

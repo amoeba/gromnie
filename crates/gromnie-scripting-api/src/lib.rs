@@ -75,4 +75,3 @@ pub trait WasmScript {
 }
 
 pub use WasmScript as Script;
-

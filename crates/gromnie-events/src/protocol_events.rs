@@ -22,7 +22,9 @@ pub enum ProtocolEvent {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[non_exhaustive]
 pub enum S2CEvent {
-    LoginCreatePlayer { character_id: u32 },
+    LoginCreatePlayer {
+        character_id: u32,
+    },
     LoginCharacterSet {
         account: String,
         characters: Vec<CharacterData>,

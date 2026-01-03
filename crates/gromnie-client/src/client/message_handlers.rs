@@ -26,7 +26,9 @@ impl MessageHandler<acprotocol::messages::s2c::LoginCreatePlayer> for Client {
 
         // Emit protocol event
         let protocol_event = ProtocolEvent::S2C((&create_player).to_s2c_event());
-        let _ = self.raw_event_tx.try_send(ClientEvent::Protocol(protocol_event));
+        let _ = self
+            .raw_event_tx
+            .try_send(ClientEvent::Protocol(protocol_event));
 
         // Check if we're in the process of entering the world
         if let Some(entering) = self
@@ -68,7 +70,9 @@ impl MessageHandler<acprotocol::messages::s2c::ItemCreateObject> for Client {
 
         // Emit protocol event
         let protocol_event = ProtocolEvent::S2C((&create_obj).to_s2c_event());
-        let _ = self.raw_event_tx.try_send(ClientEvent::Protocol(protocol_event));
+        let _ = self
+            .raw_event_tx
+            .try_send(ClientEvent::Protocol(protocol_event));
 
         Some(GameEvent::CreateObject {
             object_id,
@@ -90,7 +94,9 @@ impl MessageHandler<acprotocol::messages::s2c::CommunicationHearSpeech> for Clie
 
         // Emit protocol event
         let protocol_event = ProtocolEvent::S2C((&speech).to_s2c_event());
-        let _ = self.raw_event_tx.try_send(ClientEvent::Protocol(protocol_event));
+        let _ = self
+            .raw_event_tx
+            .try_send(ClientEvent::Protocol(protocol_event));
 
         Some(GameEvent::ChatMessageReceived {
             message: chat_text,
@@ -112,7 +118,9 @@ impl MessageHandler<acprotocol::messages::s2c::CommunicationHearRangedSpeech> fo
 
         // Emit protocol event
         let protocol_event = ProtocolEvent::S2C((&speech).to_s2c_event());
-        let _ = self.raw_event_tx.try_send(ClientEvent::Protocol(protocol_event));
+        let _ = self
+            .raw_event_tx
+            .try_send(ClientEvent::Protocol(protocol_event));
 
         Some(GameEvent::ChatMessageReceived {
             message: chat_text,
@@ -134,7 +142,9 @@ impl MessageHandler<acprotocol::messages::s2c::CharacterCharacterError> for Clie
 
         // Emit protocol event
         let protocol_event = ProtocolEvent::S2C((&char_error).to_s2c_event());
-        let _ = self.raw_event_tx.try_send(ClientEvent::Protocol(protocol_event));
+        let _ = self
+            .raw_event_tx
+            .try_send(ClientEvent::Protocol(protocol_event));
 
         // ServerCrash (0x0004) means the server is going down - trigger reconnection
         if error_code == 0x0004 {
@@ -184,7 +194,9 @@ impl MessageHandler<acprotocol::messages::s2c::LoginLoginCharacterSet> for Clien
 
         // Emit protocol event
         let protocol_event = ProtocolEvent::S2C((&char_list).to_s2c_event());
-        let _ = self.raw_event_tx.try_send(ClientEvent::Protocol(protocol_event));
+        let _ = self
+            .raw_event_tx
+            .try_send(ClientEvent::Protocol(protocol_event));
 
         // Create character info list
         let characters: Vec<CharacterInfo> = char_list
@@ -288,7 +300,9 @@ impl MessageHandler<acprotocol::messages::s2c::DDDInterrogationMessage> for Clie
 
         // Emit protocol event
         let protocol_event = ProtocolEvent::S2C((&ddd_msg).to_s2c_event());
-        let _ = self.raw_event_tx.try_send(ClientEvent::Protocol(protocol_event));
+        let _ = self
+            .raw_event_tx
+            .try_send(ClientEvent::Protocol(protocol_event));
 
         // Update progress to ReceivedDDD using new scene API
         use crate::client::scene::PatchingProgress as ScenePatchingProgress;
@@ -324,7 +338,9 @@ impl MessageHandler<acprotocol::messages::s2c::CharacterCharGenVerificationRespo
 
         // Emit protocol event
         let protocol_event = ProtocolEvent::S2C((&response).to_s2c_event());
-        let _ = self.raw_event_tx.try_send(ClientEvent::Protocol(protocol_event));
+        let _ = self
+            .raw_event_tx
+            .try_send(ClientEvent::Protocol(protocol_event));
 
         // Delay emitting CharacterListReceived event
         let game_event = GameEvent::CharacterListReceived {

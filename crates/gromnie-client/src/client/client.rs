@@ -1168,10 +1168,16 @@ impl Client {
         // Parse object_id and sequence from message header
         // OrderedGameEvent format: object_id (4 bytes) + sequence (4 bytes) + event_data
         let object_id = u32::from_le_bytes([
-            message.data[0], message.data[1], message.data[2], message.data[3]
+            message.data[0],
+            message.data[1],
+            message.data[2],
+            message.data[3],
         ]);
         let sequence = u32::from_le_bytes([
-            message.data[4], message.data[5], message.data[6], message.data[7]
+            message.data[4],
+            message.data[5],
+            message.data[6],
+            message.data[7],
         ]);
 
         // Store for handlers to use

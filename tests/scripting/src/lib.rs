@@ -119,8 +119,10 @@ impl Guest for TestScript {
 
         // Test client state access
         let state = host::get_client_state();
-        host::log(&format!("Client state: session={:?}, scene={:?}",
-            state.session.state, state.scene));
+        host::log(&format!(
+            "Client state: session={:?}, scene={:?}",
+            state.session.state, state.scene
+        ));
     }
 }
 

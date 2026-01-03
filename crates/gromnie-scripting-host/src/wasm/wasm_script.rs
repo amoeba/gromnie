@@ -1,16 +1,16 @@
 use anyhow::{Context, Result};
 use std::any::Any;
 use std::time::Duration;
+use tracing::warn;
 use wasmtime::component::{Component, Linker, ResourceTable};
 use wasmtime::{Engine, Store};
 use wasmtime_wasi::{WasiCtx, WasiView};
-use tracing::warn;
 
 use crate::Script as HostScript;
 use crate::{EventFilter, context::ScriptContext};
 use gromnie_events::{
     ClientEvent, ClientStateEvent, ClientSystemEvent, GameEventMsg, OrderedGameEvent,
-    ProtocolEvent, SimpleGameEvent as GameEvent, S2CEvent,
+    ProtocolEvent, S2CEvent, SimpleGameEvent as GameEvent,
 };
 
 // Generate bindings from WIT (use the canonical definition from gromnie-scripting-api)
@@ -269,11 +269,9 @@ fn client_event_to_wasm(event: &ClientEvent) -> gromnie::scripting::host::Script
 
     match event {
         ClientEvent::Game(game_event) => WitScriptEvent::Game(game_event_to_wasm(game_event)),
-        ClientEvent::Protocol(protocol_event) => {
-            WitScriptEvent::Game(gromnie::scripting::host::GameEvent::Protocol(
-                protocol_event_to_wit(protocol_event),
-            ))
-        }
+        ClientEvent::Protocol(protocol_event) => WitScriptEvent::Game(
+            gromnie::scripting::host::GameEvent::Protocol(protocol_event_to_wit(protocol_event)),
+        ),
         ClientEvent::State(state_event) => WitScriptEvent::State(state_event_to_wasm(state_event)),
         ClientEvent::System(system_event) => {
             WitScriptEvent::System(system_event_to_wasm(system_event))
@@ -398,25 +396,24 @@ fn system_event_to_wasm(event: &ClientSystemEvent) -> gromnie::scripting::host::
 
 /// Convert Rust ProtocolEvent to WIT ProtocolEvent
 fn protocol_event_to_wit(event: &ProtocolEvent) -> gromnie::scripting::host::ProtocolEvent {
-    use gromnie::scripting::host::{LoginCreatePlayerMsg, OrderedGameEvent as WitOrderedGameEvent, ProtocolEvent as WitProtocolEvent, S2cEvent as WitS2cEvent};
+    use gromnie::scripting::host::{
+        LoginCreatePlayerMsg, OrderedGameEvent as WitOrderedGameEvent,
+        ProtocolEvent as WitProtocolEvent, S2cEvent as WitS2cEvent,
+    };
 
     match event {
-        ProtocolEvent::S2C(s2c_event) => {
-            WitProtocolEvent::S2c(s2c_event_to_wit(s2c_event))
-        }
-        ProtocolEvent::GameEvent(game_event) => {
-            WitProtocolEvent::GameEvent(WitOrderedGameEvent {
-                object_id: game_event.object_id,
-                sequence: game_event.sequence,
-                event: game_event_msg_to_wit(&game_event.event),
-            })
-        }
+        ProtocolEvent::S2C(s2c_event) => WitProtocolEvent::S2c(s2c_event_to_wit(s2c_event)),
+        ProtocolEvent::GameEvent(game_event) => WitProtocolEvent::GameEvent(WitOrderedGameEvent {
+            object_id: game_event.object_id,
+            sequence: game_event.sequence,
+            event: game_event_msg_to_wit(&game_event.event),
+        }),
         // Ignore unknown protocol events (future variants added via #[non_exhaustive])
         _ => {
             warn!(target: "scripting", "Unknown protocol event variant, skipping");
             // Return a placeholder event - this will be filtered out before reaching scripts
             WitProtocolEvent::S2c(WitS2cEvent::LoginCreatePlayer(LoginCreatePlayerMsg {
-                character_id: 0
+                character_id: 0,
             }))
         }
     }
@@ -425,9 +422,8 @@ fn protocol_event_to_wit(event: &ProtocolEvent) -> gromnie::scripting::host::Pro
 /// Convert Rust S2CEvent to WIT S2CEvent
 fn s2c_event_to_wit(event: &S2CEvent) -> gromnie::scripting::host::S2cEvent {
     use gromnie::scripting::host::{
-        CharacterInfo as WitCharacterInfo, DddInterrogationMsg,
-        HearRangedSpeechMsg, HearSpeechMsg, ItemCreateObjectMsg, LoginCharacterSetMsg,
-        LoginCreatePlayerMsg, S2cEvent as WitS2cEvent,
+        CharacterInfo as WitCharacterInfo, DddInterrogationMsg, HearRangedSpeechMsg, HearSpeechMsg,
+        ItemCreateObjectMsg, LoginCharacterSetMsg, LoginCreatePlayerMsg, S2cEvent as WitS2cEvent,
     };
 
     match event {
@@ -436,20 +432,22 @@ fn s2c_event_to_wit(event: &S2CEvent) -> gromnie::scripting::host::S2cEvent {
                 character_id: *character_id,
             })
         }
-        S2CEvent::LoginCharacterSet { account, characters, num_slots } => {
-            WitS2cEvent::LoginCharacterSet(LoginCharacterSetMsg {
-                account: account.clone(),
-                characters: characters
-                    .iter()
-                    .map(|c| WitCharacterInfo {
-                        id: c.id,
-                        name: c.name.clone(),
-                        delete_pending: c.delete_pending,
-                    })
-                    .collect(),
-                num_slots: *num_slots,
-            })
-        }
+        S2CEvent::LoginCharacterSet {
+            account,
+            characters,
+            num_slots,
+        } => WitS2cEvent::LoginCharacterSet(LoginCharacterSetMsg {
+            account: account.clone(),
+            characters: characters
+                .iter()
+                .map(|c| WitCharacterInfo {
+                    id: c.id,
+                    name: c.name.clone(),
+                    delete_pending: c.delete_pending,
+                })
+                .collect(),
+            num_slots: *num_slots,
+        }),
         S2CEvent::ItemCreateObject { object_id, name } => {
             WitS2cEvent::ItemCreateObject(ItemCreateObjectMsg {
                 object_id: *object_id,
@@ -459,12 +457,10 @@ fn s2c_event_to_wit(event: &S2CEvent) -> gromnie::scripting::host::S2cEvent {
         S2CEvent::CharacterError {
             error_code,
             error_message,
-        } => {
-            WitS2cEvent::CharacterError(gromnie::scripting::host::CharacterError {
-                error_code: *error_code,
-                error_message: error_message.clone(),
-            })
-        }
+        } => WitS2cEvent::CharacterError(gromnie::scripting::host::CharacterError {
+            error_code: *error_code,
+            error_message: error_message.clone(),
+        }),
         S2CEvent::HearSpeech {
             sender_name,
             message,
@@ -492,9 +488,7 @@ fn s2c_event_to_wit(event: &S2CEvent) -> gromnie::scripting::host::S2cEvent {
             region: region.clone(),
             product: product.clone(),
         }),
-        S2CEvent::CharGenVerificationResponse => {
-            WitS2cEvent::ChargenVerificationResponse
-        }
+        S2CEvent::CharGenVerificationResponse => WitS2cEvent::ChargenVerificationResponse,
         // Ignore unknown S2C events (future variants added via #[non_exhaustive])
         _ => {
             warn!(target: "scripting", "Unknown S2C event variant, returning placeholder");

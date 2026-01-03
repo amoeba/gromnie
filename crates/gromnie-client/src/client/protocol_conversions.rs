@@ -24,11 +24,16 @@ impl ToS2CEvent for acprotocol::messages::s2c::LoginLoginCharacterSet {
     fn to_s2c_event(&self) -> S2CEvent {
         S2CEvent::LoginCharacterSet {
             account: self.account.clone(),
-            characters: self.characters.list.iter().map(|c| CharacterData {
-                id: c.character_id.0,
-                name: c.name.clone(),
-                delete_pending: c.seconds_greyed_out > 0,
-            }).collect(),
+            characters: self
+                .characters
+                .list
+                .iter()
+                .map(|c| CharacterData {
+                    id: c.character_id.0,
+                    name: c.name.clone(),
+                    delete_pending: c.seconds_greyed_out > 0,
+                })
+                .collect(),
             num_slots: self.num_allowed_characters,
         }
     }
@@ -92,7 +97,9 @@ impl ToS2CEvent for acprotocol::messages::s2c::CharacterCharGenVerificationRespo
 // Conversion from game event handler types
 // ============================================================================
 
-impl gromnie_events::IntoGameEventMsg for crate::client::game_event_handlers::CommunicationHearDirectSpeech {
+impl gromnie_events::IntoGameEventMsg
+    for crate::client::game_event_handlers::CommunicationHearDirectSpeech
+{
     fn into_game_event_msg(self) -> GameEventMsg {
         GameEventMsg::HearDirectSpeech {
             message: self.message,
