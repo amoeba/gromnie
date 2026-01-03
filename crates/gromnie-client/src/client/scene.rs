@@ -1,5 +1,5 @@
 use acprotocol::enums::CharacterErrorType;
-use gromnie_events::CharacterInfo;
+use acprotocol::types::CharacterIdentity;
 
 /// Sub-states for Connecting phase with progress tracking
 #[derive(Clone, Debug, PartialEq)]
@@ -59,13 +59,13 @@ pub struct ConnectingScene {
 #[derive(Clone, Debug)]
 pub struct CharacterSelectScene {
     pub account_name: String,
-    pub characters: Vec<CharacterInfo>,
+    pub characters: Vec<CharacterIdentity>,
     pub entering_world: Option<EnteringWorldState>,
 }
 
 #[derive(Clone, Debug)]
 pub struct CharacterCreateScene {
-    pub character: Option<CharacterInfo>, // Stubbed for now
+    pub character: Option<CharacterIdentity>, // Stubbed for now
 }
 
 #[derive(Clone, Debug)]
@@ -132,7 +132,7 @@ impl ConnectingScene {
 }
 
 impl CharacterSelectScene {
-    pub fn new(account_name: String, characters: Vec<CharacterInfo>) -> Self {
+    pub fn new(account_name: String, characters: Vec<CharacterIdentity>) -> Self {
         Self {
             account_name,
             characters,

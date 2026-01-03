@@ -4,6 +4,7 @@
 //! Each handler focuses on business logic only - parsing and error handling
 //! are centralized in the message_handler module.
 
+use acprotocol::types::CharacterIdentity;
 use tracing::{error, info, warn};
 
 use crate::client::Client;
@@ -12,7 +13,7 @@ use crate::client::message_handler::MessageHandler;
 use crate::client::messages::{OutgoingMessage, OutgoingMessageContent};
 use crate::client::protocol_conversions::ToProtocolEvent;
 use crate::client::scene::ClientError;
-use crate::client::{CharacterInfo, ClientEvent, GameEvent};
+use crate::client::{ClientEvent, GameEvent};
 use gromnie_events::ProtocolEvent;
 
 /// Handle LoginCreatePlayer messages
@@ -198,17 +199,8 @@ impl MessageHandler<acprotocol::messages::s2c::LoginLoginCharacterSet> for Clien
             .raw_event_tx
             .try_send(ClientEvent::Protocol(protocol_event));
 
-        // Create character info list
-        let characters: Vec<CharacterInfo> = char_list
-            .characters
-            .list
-            .iter()
-            .map(|c| CharacterInfo {
-                name: c.name.clone(),
-                id: c.character_id.0,
-                delete_pending: c.seconds_greyed_out > 0,
-            })
-            .collect();
+        // Use characters directly from acprotocol message
+        let characters = char_list.characters.list.clone();
 
         // Store the character list for future reference
         self.known_characters = characters.clone();
@@ -244,12 +236,12 @@ impl MessageHandler<acprotocol::messages::s2c::LoginLoginCharacterSet> for Clien
                 .find(|c| c.name.eq_ignore_ascii_case(char_name) && !c.delete_pending);
 
             if let Some(character) = found_char {
-                info!(target: "net", "Auto-login enabled, queuing login for character: {} (ID: {})", character.name, character.id);
+                info!(target: "net", "Auto-login enabled, queuing login for character: {} (ID: {})", character.name, character.character_id.0);
 
                 // Store the pending auto-login action to be processed in the main loop
                 self.pending_auto_login =
                     Some(gromnie_events::SimpleClientAction::LoginCharacter {
-                        character_id: character.id,
+                        character_id: character.character_id.0,
                         character_name: character.name.clone(),
                         account: char_list.account.clone(),
                     });
@@ -257,7 +249,7 @@ impl MessageHandler<acprotocol::messages::s2c::LoginLoginCharacterSet> for Clien
                 let available_names: Vec<&str> = self
                     .known_characters
                     .iter()
-                    .filter(|c| !c.delete_pending)
+                    .filter(|c| c.seconds_greyed_out == 0)
                     .map(|c| c.name.as_str())
                     .collect();
 

@@ -72,15 +72,15 @@ interface host {
     /// Character select scene state
     record character-select-scene {
         account-name: string,
-        characters: list<character-info>,
+        characters: list<character-identity>,
         entering-world: option<entering-world-state>,
     }
 
-    /// Character information
-    record character-info {
-        id: u32,
+    /// Character information (matches acprotocol CharacterIdentity)
+    record character-identity {
+        character-id: u32,
         name: string,
-        delete-pending: bool,
+        seconds-greyed-out: u32,
     }
 
     /// State for entering the world with a character
@@ -128,7 +128,7 @@ interface host {
     /// Account information with character list (event payload)
     record account-data {
         account: string,
-        characters: list<character-info>,
+        characters: list<character-identity>,
         num-slots: u32,
     }
 
@@ -163,7 +163,7 @@ interface host {
 
     record login-character-set-msg {
         account: string,
-        characters: list<character-info>,
+        characters: list<character-identity>,
         num-slots: u32,
     }
 

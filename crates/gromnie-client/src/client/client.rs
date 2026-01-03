@@ -77,7 +77,7 @@ pub struct Client {
     pub(crate) raw_event_tx: mpsc::Sender<ClientEvent>,           // Raw event sender to runner
     action_rx: mpsc::UnboundedReceiver<gromnie_events::SimpleClientAction>, // Receive actions from handlers
     pub(crate) ddd_response: Option<OutgoingMessageContent>, // Cached DDD response for retries
-    pub(crate) known_characters: Vec<crate::client::CharacterInfo>, // Track characters from list and creation
+    pub(crate) known_characters: Vec<acprotocol::types::CharacterIdentity>, // Track characters from list and creation
     // Reconnection state
     reconnect_config: crate::config::ReconnectConfig,
     pub(crate) reconnect_attempt_count: u32, // Track reconnection attempts across state transitions

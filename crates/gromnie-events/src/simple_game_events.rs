@@ -1,19 +1,11 @@
 use serde::{Deserialize, Serialize};
 
-/// Character information
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct CharacterInfo {
-    pub name: String,
-    pub id: u32,
-    pub delete_pending: bool,
-}
-
 /// Simplified versions of acprotocol GameEvent/OrderedGameEvent
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum SimpleGameEvent {
     CharacterListReceived {
         account: String,
-        characters: Vec<CharacterInfo>,
+        characters: Vec<acprotocol::types::CharacterIdentity>,
         num_slots: u32,
     },
     /// Character login succeeded - received LoginComplete notification
