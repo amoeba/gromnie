@@ -89,6 +89,12 @@ pub enum ClientError {
     PatchingTimeout,
 }
 
+impl Default for ConnectingScene {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl ConnectingScene {
     pub fn new() -> Self {
         let now = std::time::Instant::now();
@@ -164,6 +170,12 @@ impl CharacterSelectScene {
     /// Clear entering_world state (e.g., on error or disconnect)
     pub fn clear_entering_world(&mut self) {
         self.entering_world = None;
+    }
+}
+
+impl Default for CharacterCreateScene {
+    fn default() -> Self {
+        Self::new()
     }
 }
 

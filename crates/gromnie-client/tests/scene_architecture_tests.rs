@@ -324,22 +324,22 @@ mod scene_tests {
 
         // Verify they are different variants
         match conn_failed {
-            ClientError::ConnectionFailed(_) => assert!(true),
+            ClientError::ConnectionFailed(_) => {},
             _ => panic!("Expected ConnectionFailed variant"),
         }
 
         match patch_failed {
-            ClientError::PatchingFailed(_) => assert!(true),
+            ClientError::PatchingFailed(_) => {},
             _ => panic!("Expected PatchingFailed variant"),
         }
 
         match login_timeout {
-            ClientError::LoginTimeout => assert!(true),
+            ClientError::LoginTimeout => {},
             _ => panic!("Expected LoginTimeout variant"),
         }
 
         match patch_timeout {
-            ClientError::PatchingTimeout => assert!(true),
+            ClientError::PatchingTimeout => {},
             _ => panic!("Expected PatchingTimeout variant"),
         }
     }
@@ -376,8 +376,7 @@ mod session_tests {
         let _world_connected = SessionState::WorldConnected;
         let _termination = SessionState::TerminationStarted;
 
-        // Just verify they can be created
-        assert!(true);
+        // Just verify they can be created (all variants initialized above)
     }
 
     #[test]

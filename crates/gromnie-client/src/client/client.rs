@@ -324,10 +324,10 @@ impl Client {
         }
 
         // Check if we've already attempted login
-        if let Some(char_select) = self.scene.as_character_select() {
-            if char_select.is_entering_world() {
-                return Err("Login already in progress".to_string());
-            }
+        if let Some(char_select) = self.scene.as_character_select()
+            && char_select.is_entering_world()
+        {
+            return Err("Login already in progress".to_string());
         }
 
         // Step 1: Send CharacterEnterWorldRequest (0xF7C8)
@@ -529,44 +529,44 @@ impl Client {
     pub fn check_state_timeout(&mut self) -> bool {
         const TIMEOUT_DURATION: std::time::Duration = std::time::Duration::from_secs(20);
 
-        if let Some(connecting) = self.scene.as_connecting() {
-            if connecting.has_timed_out(TIMEOUT_DURATION) {
-                // Determine if we're in Connecting or Patching phase
-                let phase = if matches!(connecting.patch_progress, PatchingProgress::NotStarted) {
-                    "LoginRequest"
+        if let Some(connecting) = self.scene.as_connecting()
+            && connecting.has_timed_out(TIMEOUT_DURATION)
+        {
+            // Determine if we're in Connecting or Patching phase
+            let phase = if matches!(connecting.patch_progress, PatchingProgress::NotStarted) {
+                "LoginRequest"
+            } else {
+                "Patching"
+            };
+
+            info!(target: "net", "{} timeout - no response after 20s (patch_progress: {:?})", phase, connecting.patch_progress);
+
+            // Reconnection behavior on timeout:
+            // - Initial connection attempts (reconnect_attempt_count == 0) always fail permanently
+            //   to provide fast feedback when the server is genuinely unavailable
+            // - Subsequent reconnection attempts (reconnect_attempt_count > 0) re-enter Disconnected
+            //   state to retry with exponential backoff
+            if self.reconnect_config.enabled && self.reconnect_attempt_count > 0 {
+                info!(target: "net", "Reconnection attempt timed out - re-entering Disconnected state to retry");
+                self.enter_disconnected();
+            } else {
+                // Initial connection attempt timeout or reconnection disabled - fail permanently
+                let error = if matches!(connecting.patch_progress, PatchingProgress::NotStarted)
+                {
+                    ClientError::LoginTimeout
                 } else {
-                    "Patching"
+                    ClientError::PatchingTimeout
                 };
 
-                info!(target: "net", "{} timeout - no response after 20s (patch_progress: {:?})", phase, connecting.patch_progress);
+                self.scene = Scene::Error(ErrorScene::new(error, false));
 
-                // Reconnection behavior on timeout:
-                // - Initial connection attempts (reconnect_attempt_count == 0) always fail permanently
-                //   to provide fast feedback when the server is genuinely unavailable
-                // - Subsequent reconnection attempts (reconnect_attempt_count > 0) re-enter Disconnected
-                //   state to retry with exponential backoff
-                if self.reconnect_config.enabled && self.reconnect_attempt_count > 0 {
-                    info!(target: "net", "Reconnection attempt timed out - re-entering Disconnected state to retry");
-                    self.enter_disconnected();
-                } else {
-                    // Initial connection attempt timeout or reconnection disabled - fail permanently
-                    let error = if matches!(connecting.patch_progress, PatchingProgress::NotStarted)
-                    {
-                        ClientError::LoginTimeout
-                    } else {
-                        ClientError::PatchingTimeout
-                    };
-
-                    self.scene = Scene::Error(ErrorScene::new(error, false));
-
-                    // Emit authentication failed system event
-                    let _ = self.raw_event_tx.try_send(ClientEvent::System(
-                        ClientSystemEvent::AuthenticationFailed {
-                            reason: "Connection timeout - server not responding".to_string(),
-                        },
-                    ));
-                    return true;
-                }
+                // Emit authentication failed system event
+                let _ = self.raw_event_tx.try_send(ClientEvent::System(
+                    ClientSystemEvent::AuthenticationFailed {
+                        reason: "Connection timeout - server not responding".to_string(),
+                    },
+                ));
+                return true;
             }
         }
         false
@@ -1535,13 +1535,13 @@ impl Client {
         self.socket.send_to(&buffer, login_addr).await?;
 
         // Update progress to LoginRequestSent (33%)
-        if let Some(connecting) = self.scene.as_connecting_mut() {
-            if connecting.connect_progress == ConnectingProgress::Initial {
-                connecting.connect_progress = ConnectingProgress::LoginRequestSent;
-                let game_event = GameEvent::ConnectingSetProgress { progress: 0.33 };
-                let _ = self.raw_event_tx.send(ClientEvent::Game(game_event)).await;
-                info!(target: "net", "Progress: LoginRequest sent (33%)");
-            }
+        if let Some(connecting) = self.scene.as_connecting_mut()
+            && connecting.connect_progress == ConnectingProgress::Initial
+        {
+            connecting.connect_progress = ConnectingProgress::LoginRequestSent;
+            let game_event = GameEvent::ConnectingSetProgress { progress: 0.33 };
+            let _ = self.raw_event_tx.send(ClientEvent::Game(game_event)).await;
+            info!(target: "net", "Progress: LoginRequest sent (33%)");
         }
 
         Ok(())
@@ -1652,10 +1652,10 @@ impl Client {
 
     /// Mark login as complete (called when Character_LoginCompleteNotification is received)
     pub fn mark_login_complete(&mut self) {
-        if let Scene::CharacterSelect(ref mut scene) = self.scene {
-            if let Some(ref mut entering) = scene.entering_world {
-                entering.login_complete = true;
-            }
+        if let Scene::CharacterSelect(ref mut scene) = self.scene
+            && let Some(ref mut entering) = scene.entering_world
+        {
+            entering.login_complete = true;
         }
     }
 
