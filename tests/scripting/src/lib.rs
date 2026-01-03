@@ -1,8 +1,18 @@
 // Test script that exercises all major scripting functionality
 // This will be compiled to WASM for testing the scripting host
 
-use gromnie::*;
-use gromnie_scripting_api as gromnie;
+// Generate bindings from WIT
+wit_bindgen::generate!({
+    path: "../../crates/gromnie-scripting-api/src/wit",
+    world: "script",
+});
+
+// Import the generated bindings and host functions
+use exports::gromnie::scripting::guest::Guest;
+
+// The wit_bindgen::generate! macro generates a `gromnie` module
+// with all the host functions
+use gromnie::scripting::host;
 
 #[derive(Default)]
 pub struct TestScript {
@@ -19,134 +29,99 @@ impl TestScript {
     }
 }
 
-impl Script for TestScript {
-    fn new() -> Self {
-        TestScript::new()
+// Implement the Guest trait as required by WIT
+impl Guest for TestScript {
+    fn init() {
+        // Initialize the script (called first)
+        host::log("Test script initialized");
     }
 
-    fn id(&self) -> &str {
-        "test_script"
+    fn get_id() -> String {
+        "test_script".to_string()
     }
 
-    fn name(&self) -> &str {
-        "Test Script"
+    fn get_name() -> String {
+        "Test Script".to_string()
     }
 
-    fn description(&self) -> &str {
-        "Comprehensive test script for scripting system"
+    fn get_description() -> String {
+        "Comprehensive test script for scripting system".to_string()
     }
 
-    fn on_load(&mut self) {
-        self.load_called = true;
-        log("Test script loaded successfully");
-
-        // Test basic host functions
-        log("Test script loaded successfully");
-        send_chat("Hello from test script!");
+    fn on_load() {
+        host::log("Test script loaded successfully");
+        host::send_chat("Hello from test script!");
     }
 
-    fn on_unload(&mut self) {
-        self.unload_called = true;
-        log("Test script unloaded successfully");
+    fn on_unload() {
+        host::log("Test script unloaded successfully");
     }
 
-    fn subscribed_events(&self) -> Vec<u32> {
+    fn subscribed_events() -> Vec<u32> {
         // Subscribe to all event types for testing
-        vec![gromnie::events::EVENT_ALL] // All events
+        vec![0xFFFFFFFF] // All events
     }
 
-    fn on_event(&mut self, event: gromnie::ScriptEvent) {
-        self.event_count += 1;
+    fn on_event(event: host::ScriptEvent) {
+        host::log(&format!("Received event: {:?}", event));
 
         match event {
-            gromnie::ScriptEvent::Game(game_event) => match game_event {
-                gromnie::GameEvent::CharacterListReceived(account_data) => {
-                    self.last_event = Some(format!(
-                        "Game/CharacterList: {} chars",
-                        account_data.character_list.len()
-                    ));
-                    log(&format!(
-                        "Received character list for account: {}",
-                        account_data.name
+            host::ScriptEvent::Game(game_event) => match game_event {
+                host::GameEvent::CharacterListReceived(account_data) => {
+                    host::log(&format!(
+                        "Character list received for account: {} with {} characters",
+                        account_data.account,
+                        account_data.characters.len()
                     ));
                 }
-                gromnie::GameEvent::CharacterError(error_data) => {
-                    self.last_event = Some(format!(
-                        "Game/CharacterError: code={}, msg={}",
-                        error_data.error_code, error_data.error_message
-                    ));
-                    log(&format!(
+                host::GameEvent::CharacterError(error_data) => {
+                    host::log(&format!(
                         "Character error: code={}, msg={}",
                         error_data.error_code, error_data.error_message
                     ));
                 }
-                gromnie::GameEvent::CreateObject(object_data) => {
-                    self.last_event = Some(format!("Game/CreateObject: {}", object_data.name));
-                    log(&format!(
+                host::GameEvent::CreateObject(object_data) => {
+                    host::log(&format!(
                         "Object created: {} (ID: {})",
                         object_data.name, object_data.id
                     ));
                 }
-                gromnie::GameEvent::ChatMessageReceived(chat_data) => {
-                    self.last_event = Some(format!("Game/Chat: {}", chat_data.message));
-                    log(&format!("Chat message: {}", chat_data.message));
+                host::GameEvent::ChatMessageReceived(chat_data) => {
+                    host::log(&format!("Chat message: {}", chat_data.message));
+                }
+                host::GameEvent::Protocol(protocol_event) => {
+                    host::log(&format!("Protocol event received"));
                 }
             },
-            gromnie::ScriptEvent::State(state_event) => match state_event {
-                gromnie::StateEvent::Connecting => {
-                    self.last_event = Some("State/Connecting".to_string());
-                    log("State: Connecting");
+            host::ScriptEvent::State(state_event) => {
+                host::log(&format!("State event: {:?}", state_event));
+            }
+            host::ScriptEvent::System(system_event) => match system_event {
+                host::SystemEvent::AuthenticationSucceeded => {
+                    host::log("System: AuthenticationSucceeded");
                 }
-                gromnie::StateEvent::Connected => {
-                    self.last_event = Some("State/Connected".to_string());
-                    log("State: Connected");
-                }
-                gromnie::StateEvent::InWorld => {
-                    self.last_event = Some("State/InWorld".to_string());
-                    log("State: InWorld");
-                }
-                _ => {
-                    self.last_event = Some(format!("State/Other: {:?}", state_event));
-                    log(&format!("State event: {:?}", state_event));
-                }
-            },
-            gromnie::ScriptEvent::System(system_event) => match system_event {
-                gromnie::SystemEvent::AuthenticationSucceeded => {
-                    self.last_event = Some("System/AuthSucceeded".to_string());
-                    log("System: AuthenticationSucceeded");
-                }
-                gromnie::SystemEvent::LoginSucceeded(login_info) => {
-                    self.last_event = Some(format!("System/Login: {}", login_info.character_name));
-                    log(&format!(
+                host::SystemEvent::LoginSucceeded(login_info) => {
+                    host::log(&format!(
                         "System: LoginSucceeded - {} (ID: {})",
                         login_info.character_name, login_info.character_id
                     ));
                 }
                 _ => {
-                    self.last_event = Some(format!("System/Other: {:?}", system_event));
-                    log(&format!("System event: {:?}", system_event));
+                    host::log(&format!("System event: {:?}", system_event));
                 }
             },
         }
     }
 
-    fn on_tick(&mut self, _delta_millis: u64) {
-        self.tick_count += 1;
+    fn on_tick(delta_millis: u64) {
+        // Test periodic functionality
+        host::log(&format!("Tick: {}ms", delta_millis));
 
-        // Every 10 ticks, test some functionality
-        if self.tick_count.is_multiple_of(10) {
-            // Test client state access
-            let state = get_client_state();
-            log(&format!(
-                "Tick {} - Client state: {:?}",
-                self.tick_count, state
-            ));
-
-            // Simple test every 10 ticks
-            log(&format!("Tick count: {}", self.tick_count));
-        }
+        // Test client state access
+        let state = host::get_client_state();
+        host::log(&format!("Client state: session={:?}, scene={:?}",
+            state.session.state, state.scene));
     }
 }
 
-// Register the script
-register_script!(TestScript);
+export!(TestScript);

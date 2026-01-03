@@ -85,6 +85,9 @@ pub struct Client {
     pub(crate) character: Option<String>,
     /// Pending auto-login action to be processed after character list is received
     pub(crate) pending_auto_login: Option<gromnie_events::SimpleClientAction>,
+    // Game event metadata for protocol events
+    pub(crate) current_game_event_object_id: u32,
+    pub(crate) current_game_event_sequence: u32,
 }
 
 impl Client {
@@ -172,6 +175,8 @@ impl Client {
             reconnect_at: None,
             character,
             pending_auto_login: None,
+            current_game_event_object_id: 0,
+            current_game_event_sequence: 0,
         };
 
         (client, action_tx)
@@ -1152,7 +1157,28 @@ impl Client {
         info!(target: "net", "Processing OrderedGameEvent message, data len={}", message.data.len());
         debug!(target: "net", "Game event type: {:?}", event_type);
 
-        let mut cursor = Cursor::new(&message.data[8..]); // Skip opcode (4) + sequence (4)
+        // Validate minimum packet length
+        if message.data.len() < 8 {
+            warn!(target: "net",
+                  "OrderedGameEvent message too short: {} bytes (expected at least 8)",
+                  message.data.len());
+            return;
+        }
+
+        // Parse object_id and sequence from message header
+        // OrderedGameEvent format: object_id (4 bytes) + sequence (4 bytes) + event_data
+        let object_id = u32::from_le_bytes([
+            message.data[0], message.data[1], message.data[2], message.data[3]
+        ]);
+        let sequence = u32::from_le_bytes([
+            message.data[4], message.data[5], message.data[6], message.data[7]
+        ]);
+
+        // Store for handlers to use
+        self.current_game_event_object_id = object_id;
+        self.current_game_event_sequence = sequence;
+
+        let mut cursor = Cursor::new(&message.data[8..]); // Skip object_id (4) + sequence (4)
 
         let event_tx = self.raw_event_tx.clone();
         match event_type {
@@ -1176,6 +1202,10 @@ impl Client {
                 debug!(target: "net", "Unhandled GameEvent: {:?}", event_type);
             }
         }
+
+        // Clear metadata after handling to prevent stale values in next event
+        self.current_game_event_object_id = 0;
+        self.current_game_event_sequence = 0;
     }
 
     /// Handle LoginEnterGameServerReady (0xF7DF) - Step 2 of character login

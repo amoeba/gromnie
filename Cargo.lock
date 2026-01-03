@@ -1263,6 +1263,7 @@ name = "gromnie-test-script"
 version = "0.1.0"
 dependencies = [
  "gromnie-scripting-api",
+ "wit-bindgen 0.36.0",
 ]
 
 [[package]]

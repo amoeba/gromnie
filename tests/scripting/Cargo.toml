@@ -9,6 +9,7 @@ path = "src/lib.rs"
 
 [dependencies]
 gromnie-scripting-api = { path = "../../crates/gromnie-scripting-api" }
+wit-bindgen = { version = "0.36", default-features = false }
 
 [package.metadata.wasm-pack.profile.release]
 wasm-opt = false

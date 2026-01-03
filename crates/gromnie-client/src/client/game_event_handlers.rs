@@ -10,6 +10,7 @@ use crate::client::Client;
 use crate::client::GameEvent;
 use crate::client::game_event_handler::GameEventHandler;
 use acprotocol::readers::{ACDataType, ACReader};
+use gromnie_events::{IntoGameEventMsg, OrderedGameEvent, ProtocolEvent};
 
 /// Communication_HearDirectSpeech game event (tell messages)
 /// Format: Message, SenderName, SenderId, TargetId, Type, SecretFlags
@@ -43,12 +44,21 @@ impl ACDataType for CommunicationHearDirectSpeech {
 impl GameEventHandler<CommunicationHearDirectSpeech> for Client {
     fn handle(&mut self, event: CommunicationHearDirectSpeech) -> Option<GameEvent> {
         let chat_text = format!("{} tells you, \"{}\"", event.sender_name, event.message);
+        let message_type = event.message_type;
 
-        info!(target: "net", "Direct speech received - Type: {}, Text: {}", event.message_type, chat_text);
+        info!(target: "net", "Direct speech received - Type: {}, Text: {}", message_type, chat_text);
+
+        // Emit protocol event with metadata
+        let protocol_event = ProtocolEvent::GameEvent(OrderedGameEvent {
+            object_id: self.current_game_event_object_id,
+            sequence: self.current_game_event_sequence,
+            event: event.into_game_event_msg(),
+        });
+        let _ = self.raw_event_tx.try_send(crate::client::ClientEvent::Protocol(protocol_event));
 
         Some(GameEvent::ChatMessageReceived {
             message: chat_text,
-            message_type: event.message_type,
+            message_type,
         })
     }
 }
@@ -69,10 +79,19 @@ impl ACDataType for CommunicationTransientString {
 /// Handle Communication_TransientString game events
 impl GameEventHandler<CommunicationTransientString> for Client {
     fn handle(&mut self, event: CommunicationTransientString) -> Option<GameEvent> {
-        info!(target: "net", "Transient string: {}", event.message);
+        let message = event.message.clone();
+        info!(target: "net", "Transient string: {}", message);
+
+        // Emit protocol event with metadata
+        let protocol_event = ProtocolEvent::GameEvent(OrderedGameEvent {
+            object_id: self.current_game_event_object_id,
+            sequence: self.current_game_event_sequence,
+            event: event.into_game_event_msg(),
+        });
+        let _ = self.raw_event_tx.try_send(crate::client::ClientEvent::Protocol(protocol_event));
 
         Some(GameEvent::ChatMessageReceived {
-            message: event.message,
+            message,
             message_type: 0x05, // System message type
         })
     }

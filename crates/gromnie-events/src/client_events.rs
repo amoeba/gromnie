@@ -1,9 +1,11 @@
+use crate::protocol_events::ProtocolEvent;
 use crate::simple_game_events::SimpleGameEvent;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone)]
 pub enum ClientEvent {
     Game(SimpleGameEvent),
+    Protocol(ProtocolEvent),
     State(ClientStateEvent),
     System(ClientSystemEvent),
 }
