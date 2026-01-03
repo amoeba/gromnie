@@ -25,7 +25,7 @@ impl MessageHandler<acprotocol::messages::s2c::LoginCreatePlayer> for Client {
         info!(target: "net", "Character in world: 0x{:08X}", character_id);
 
         // Emit protocol event
-        let protocol_event = ProtocolEvent::S2C((&create_player).to_s2c_event());
+        let protocol_event = ProtocolEvent::S2C(create_player.to_s2c_event());
         let _ = self
             .raw_event_tx
             .try_send(ClientEvent::Protocol(protocol_event));
@@ -69,7 +69,7 @@ impl MessageHandler<acprotocol::messages::s2c::ItemCreateObject> for Client {
         info!(target: "net", "Object created in world: {} (ID: 0x{:08X})", object_name, object_id);
 
         // Emit protocol event
-        let protocol_event = ProtocolEvent::S2C((&create_obj).to_s2c_event());
+        let protocol_event = ProtocolEvent::S2C(create_obj.to_s2c_event());
         let _ = self
             .raw_event_tx
             .try_send(ClientEvent::Protocol(protocol_event));
@@ -93,7 +93,7 @@ impl MessageHandler<acprotocol::messages::s2c::CommunicationHearSpeech> for Clie
         info!(target: "net", "Hear speech received - Type: {}, Text: {}", message_type, chat_text);
 
         // Emit protocol event
-        let protocol_event = ProtocolEvent::S2C((&speech).to_s2c_event());
+        let protocol_event = ProtocolEvent::S2C(speech.to_s2c_event());
         let _ = self
             .raw_event_tx
             .try_send(ClientEvent::Protocol(protocol_event));
@@ -117,7 +117,7 @@ impl MessageHandler<acprotocol::messages::s2c::CommunicationHearRangedSpeech> fo
         info!(target: "net", "Hear ranged speech received - Type: {}, Text: {}", message_type, chat_text);
 
         // Emit protocol event
-        let protocol_event = ProtocolEvent::S2C((&speech).to_s2c_event());
+        let protocol_event = ProtocolEvent::S2C(speech.to_s2c_event());
         let _ = self
             .raw_event_tx
             .try_send(ClientEvent::Protocol(protocol_event));
@@ -141,7 +141,7 @@ impl MessageHandler<acprotocol::messages::s2c::CharacterCharacterError> for Clie
         error!(target: "net", "Character error received - Code: 0x{:04X} ({})", error_code, error_message);
 
         // Emit protocol event
-        let protocol_event = ProtocolEvent::S2C((&char_error).to_s2c_event());
+        let protocol_event = ProtocolEvent::S2C(char_error.to_s2c_event());
         let _ = self
             .raw_event_tx
             .try_send(ClientEvent::Protocol(protocol_event));
@@ -193,7 +193,7 @@ impl MessageHandler<acprotocol::messages::s2c::LoginLoginCharacterSet> for Clien
             char_list.account, char_list.num_allowed_characters, chars);
 
         // Emit protocol event
-        let protocol_event = ProtocolEvent::S2C((&char_list).to_s2c_event());
+        let protocol_event = ProtocolEvent::S2C(char_list.to_s2c_event());
         let _ = self
             .raw_event_tx
             .try_send(ClientEvent::Protocol(protocol_event));
@@ -299,7 +299,7 @@ impl MessageHandler<acprotocol::messages::s2c::DDDInterrogationMessage> for Clie
             ddd_msg.name_rule_language, ddd_msg.servers_region, ddd_msg.product_id);
 
         // Emit protocol event
-        let protocol_event = ProtocolEvent::S2C((&ddd_msg).to_s2c_event());
+        let protocol_event = ProtocolEvent::S2C(ddd_msg.to_s2c_event());
         let _ = self
             .raw_event_tx
             .try_send(ClientEvent::Protocol(protocol_event));
@@ -337,7 +337,7 @@ impl MessageHandler<acprotocol::messages::s2c::CharacterCharGenVerificationRespo
         info!(target: "net", "Character creation verification response received");
 
         // Emit protocol event
-        let protocol_event = ProtocolEvent::S2C((&response).to_s2c_event());
+        let protocol_event = ProtocolEvent::S2C(response.to_s2c_event());
         let _ = self
             .raw_event_tx
             .try_send(ClientEvent::Protocol(protocol_event));
