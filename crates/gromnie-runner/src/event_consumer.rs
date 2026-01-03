@@ -56,7 +56,7 @@ impl EventConsumer for LoggingConsumer {
                 } => {
                     let names = characters
                         .iter()
-                        .map(|c| format!("{} ({})", c.name, c.id))
+                        .map(|c| format!("{} ({})", c.name, c.character_id.0))
                         .collect::<Vec<_>>()
                         .join(", ");
                     info!(target: "events", "CharacterList -- Account: {}, Slots: {}, Number of Chars: {}, Chars: {}", account, num_slots, characters.len(), names);
@@ -335,7 +335,7 @@ impl EventConsumer for DiscordConsumer {
                     } => {
                         let names = characters
                             .iter()
-                            .map(|c| format!("{} ({})", c.name, c.id))
+                            .map(|c| format!("{} ({})", c.name, c.character_id.0))
                             .collect::<Vec<_>>()
                             .join(", ");
                         info!(target: "events", "CharacterList -- Account: {}, Slots: {}, Number of Chars: {}, Chars: {}", account, num_slots, characters.len(), names);
@@ -691,13 +691,13 @@ impl EventConsumer for AutoLoginConsumer {
                         if self.verbose {
                             info!(
                                 "[Client {}] Found character: {} (ID: {})",
-                                self.client_id, char_info.name, char_info.id
+                                self.client_id, char_info.name, char_info.character_id.0
                             );
                         }
                         // Update state and proceed to login
                         self.state = AutoLoginState::CharacterFound;
                         if let Err(e) = self.action_tx.send(SimpleClientAction::LoginCharacter {
-                            character_id: char_info.id,
+                            character_id: char_info.character_id.0,
                             character_name: char_info.name.clone(),
                             account: account.clone(),
                         }) {

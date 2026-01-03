@@ -1,5 +1,6 @@
 use crate::app::{App, GameScene};
-use gromnie_events::{CharacterInfo, SimpleClientAction};
+use acprotocol::types::CharacterIdentity;
+use gromnie_events::SimpleClientAction;
 
 // Character selection functions that belong with the character selection view
 impl App {
@@ -23,7 +24,7 @@ impl App {
     }
 
     /// Get the currently selected character, if any
-    pub fn get_selected_character(&self) -> Option<&CharacterInfo> {
+    pub fn get_selected_character(&self) -> Option<&CharacterIdentity> {
         self.client_status
             .characters
             .get(self.selected_character_index)
@@ -34,7 +35,7 @@ impl App {
         // Get character info first to avoid borrow conflicts
         let (character_id, character_name) = if let Some(character) = self.get_selected_character()
         {
-            (character.id, character.name.clone())
+            (character.character_id.0, character.name.clone())
         } else {
             return Err("No character selected".to_string());
         };

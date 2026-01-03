@@ -1,4 +1,5 @@
-use gromnie_events::{CharacterInfo, ClientStateEvent, SimpleClientAction, SimpleGameEvent};
+use acprotocol::types::CharacterIdentity;
+use gromnie_events::{ClientStateEvent, SimpleClientAction, SimpleGameEvent};
 
 // Type alias for backward compatibility
 pub type GameEvent = SimpleGameEvent;
@@ -100,7 +101,7 @@ pub enum GameWorldTab {
 pub struct ClientStatus {
     pub account_name: String,
     pub current_character: Option<String>,
-    pub characters: Vec<CharacterInfo>,
+    pub characters: Vec<CharacterIdentity>,
     /// Session state from the client (protocol-level state)
     pub session_state: SessionState,
     /// Scene state from the client (UI-level state)

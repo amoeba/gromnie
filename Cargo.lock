@@ -1216,6 +1216,7 @@ dependencies = [
 name = "gromnie-events"
 version = "0.1.0"
 dependencies = [
+ "acprotocol",
  "serde",
  "tokio",
 ]
@@ -1246,6 +1247,7 @@ dependencies = [
 name = "gromnie-scripting-host"
 version = "0.1.0"
 dependencies = [
+ "acprotocol",
  "anyhow",
  "directories",
  "gromnie-client",
@@ -1270,6 +1272,7 @@ dependencies = [
 name = "gromnie-tui"
 version = "0.1.0"
 dependencies = [
+ "acprotocol",
  "chrono",
  "clap",
  "crossterm",

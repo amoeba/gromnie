@@ -1,8 +1,9 @@
 // Integration tests for scripting system
 
+use acprotocol::types::{CharacterIdentity, ObjectId};
 use gromnie_client::client::Client;
 use gromnie_events::{
-    CharacterData, ClientEvent, GameEventMsg, OrderedGameEvent, ProtocolEvent, S2CEvent,
+    ClientEvent, GameEventMsg, OrderedGameEvent, ProtocolEvent, S2CEvent,
     SimpleGameEvent as GameEvent,
 };
 use gromnie_scripting_host::ScriptRunner;
@@ -231,15 +232,15 @@ async fn test_protocol_event_flow() {
         ProtocolEvent::S2C(S2CEvent::LoginCharacterSet {
             account: "TestAccount".to_string(),
             characters: vec![
-                CharacterData {
-                    id: 0x1,
+                CharacterIdentity {
+                    character_id: ObjectId(0x1),
                     name: "ActiveChar".to_string(),
-                    delete_pending: false,
+                    seconds_greyed_out: 0,
                 },
-                CharacterData {
-                    id: 0x2,
+                CharacterIdentity {
+                    character_id: ObjectId(0x2),
                     name: "DeletedChar".to_string(),
-                    delete_pending: true,
+                    seconds_greyed_out: 3600,
                 },
             ],
             num_slots: 5,
@@ -322,15 +323,15 @@ async fn test_protocol_event_data_integrity() {
     let character_set_event = ProtocolEvent::S2C(S2CEvent::LoginCharacterSet {
         account: "ComplexAccount@test.com".to_string(),
         characters: vec![
-            CharacterData {
-                id: 0x12345678,
+            CharacterIdentity {
+                character_id: ObjectId(0x12345678),
                 name: "Character With Spaces".to_string(),
-                delete_pending: false,
+                seconds_greyed_out: 0,
             },
-            CharacterData {
-                id: 0xABCDEF00,
+            CharacterIdentity {
+                character_id: ObjectId(0xABCDEF00),
                 name: "SpecialChars!@#".to_string(),
-                delete_pending: true,
+                seconds_greyed_out: 7200,
             },
         ],
         num_slots: 10,

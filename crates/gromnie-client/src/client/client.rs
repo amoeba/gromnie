@@ -1661,7 +1661,10 @@ impl Client {
     }
 
     /// Transition to CharacterSelect scene
-    pub fn transition_to_char_select(&mut self, characters: Vec<crate::client::CharacterInfo>) {
+    pub fn transition_to_char_select(
+        &mut self,
+        characters: Vec<acprotocol::types::CharacterIdentity>,
+    ) {
         // session.state should already be AuthConnected
         self.scene = Scene::CharacterSelect(CharacterSelectScene::new(
             self.account.name.clone(),
