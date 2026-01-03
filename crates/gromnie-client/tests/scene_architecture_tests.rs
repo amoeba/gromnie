@@ -324,22 +324,22 @@ mod scene_tests {
 
         // Verify they are different variants
         match conn_failed {
-            ClientError::ConnectionFailed(_) => {},
+            ClientError::ConnectionFailed(_) => {}
             _ => panic!("Expected ConnectionFailed variant"),
         }
 
         match patch_failed {
-            ClientError::PatchingFailed(_) => {},
+            ClientError::PatchingFailed(_) => {}
             _ => panic!("Expected PatchingFailed variant"),
         }
 
         match login_timeout {
-            ClientError::LoginTimeout => {},
+            ClientError::LoginTimeout => {}
             _ => panic!("Expected LoginTimeout variant"),
         }
 
         match patch_timeout {
-            ClientError::PatchingTimeout => {},
+            ClientError::PatchingTimeout => {}
             _ => panic!("Expected PatchingTimeout variant"),
         }
     }

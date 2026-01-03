@@ -551,8 +551,7 @@ impl Client {
                 self.enter_disconnected();
             } else {
                 // Initial connection attempt timeout or reconnection disabled - fail permanently
-                let error = if matches!(connecting.patch_progress, PatchingProgress::NotStarted)
-                {
+                let error = if matches!(connecting.patch_progress, PatchingProgress::NotStarted) {
                     ClientError::LoginTimeout
                 } else {
                     ClientError::PatchingTimeout
