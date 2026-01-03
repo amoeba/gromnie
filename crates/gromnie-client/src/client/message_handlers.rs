@@ -4,7 +4,7 @@
 //! Each handler focuses on business logic only - parsing and error handling
 //! are centralized in the message_handler module.
 
-use tracing::{error, info};
+use tracing::{error, info, warn};
 
 use crate::client::client::CharacterLoginState;
 use crate::client::constants::UI_DELAY_MS;
@@ -94,10 +94,16 @@ impl MessageHandler<acprotocol::messages::s2c::CharacterCharacterError> for Clie
 
         error!(target: "net", "Character error received - Code: 0x{:04X} ({})", error_code, error_message);
 
-        // Transition to CharacterError state (fatal error)
-        self.state = ClientState::CharacterError {
-            reason: char_error.reason.clone(),
-        };
+        // ServerCrash (0x0004) means the server is going down - trigger reconnection
+        if error_code == 0x0004 {
+            warn!(target: "net", "ServerCrash received - entering Disconnected state for reconnection");
+            self.enter_disconnected();
+        } else {
+            // Other character errors are fatal - transition to CharacterError state
+            self.state = ClientState::CharacterError {
+                reason: char_error.reason.clone(),
+            };
+        }
 
         Some(GameEvent::CharacterError {
             error_code,
