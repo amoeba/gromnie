@@ -596,31 +596,29 @@ async fn run_client_loop(
 
                 // Check if we should retry in current state
                 if client.should_retry() {
-                    use gromnie_client::client::ClientState;
-                    match client.get_state() {
-                        ClientState::Connecting { .. } => {
+                    use gromnie_client::client::Scene;
+                    match &client.scene {
+                        Scene::Connecting(_connecting) => {
                             info!("Retrying LoginRequest...");
                             if let Err(e) = client.do_login().await {
                                 error!("Failed to send LoginRequest retry: {}", e);
                             }
-                            client.update_retry_time();
-                        }
-                        ClientState::Patching { progress, .. } => {
-                            // Only retry if we've already sent the DDD response and are waiting for character list
-                            // (i.e., we're in DDDResponseSent state)
-                            if matches!(progress, gromnie_client::client::PatchingProgress::DDDResponseSent)
-                                && client.get_ddd_response().is_some()
-                            {
-                                info!("Retrying DDDInterrogationResponse...");
-                                if let Err(e) = client.retry_ddd_response().await {
-                                    error!("Failed to retry DDDInterrogationResponse: {}", e);
-                                }
+                            if let Some(connecting) = client.scene.as_connecting_mut() {
+                                connecting.update_retry_time();
                             }
-                            // If we're still waiting for DDDInterrogation, just wait (no retry)
-                            client.update_retry_time();
                         }
-                        ClientState::Disconnected { .. } => {
-                            // Check if we should attempt reconnection
+                        Scene::CharacterSelect(_) => {
+                            // In character select, no automatic retry for now
+                            // Waiting for character selection from user
+                        }
+                        Scene::InWorld(_) => {
+                            // Already in world, no retry needed
+                        }
+                        Scene::CharacterCreate(_) => {
+                            // Character creation in progress, no retry
+                        }
+                        Scene::Error(_) => {
+                            // In error state - check if we should attempt reconnection
                             if client.should_reconnect() {
                                 if !client.start_reconnection() {
                                     info!("Reconnection not available, exiting loop");
@@ -632,7 +630,6 @@ async fn run_client_loop(
                                 }
                             }
                         }
-                        _ => {}
                     }
                 }
 

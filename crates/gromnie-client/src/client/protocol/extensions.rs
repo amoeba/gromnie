@@ -5,13 +5,13 @@ use acprotocol::packets::c2s_packet::C2SPacket;
 use acprotocol::writers::ACWritable;
 
 use crate::client::constants::*;
-use crate::client::session::SessionState;
+use crate::client::session::ConnectionState;
 use crate::crypto::magic_number::get_magic_number;
 
 /// Extension trait for C2SPacket to add serialization with checksum
 /// TODO: Consider putting this in acprotocol
 pub trait C2SPacketExt {
-    fn serialize(&self, session: Option<&SessionState>) -> Result<Vec<u8>, std::io::Error>;
+    fn serialize(&self, session: Option<&ConnectionState>) -> Result<Vec<u8>, std::io::Error>;
     fn calculate_option_size(&self) -> usize;
 
     /// Safely set the ACK sequence, ensuring both the field and flag are set together.
@@ -224,7 +224,7 @@ impl C2SPacketExt for C2SPacket {
         Ok(())
     }
 
-    fn serialize(&self, session: Option<&SessionState>) -> Result<Vec<u8>, std::io::Error> {
+    fn serialize(&self, session: Option<&ConnectionState>) -> Result<Vec<u8>, std::io::Error> {
         // Validate packet before serialization (debug only - catches programming errors)
         debug_assert!(
             self.validate().is_ok(),
