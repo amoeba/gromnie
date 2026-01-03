@@ -203,7 +203,7 @@ impl Client {
         self.unacked_send_count += 1;
 
         // Check if we've sent too many packets without receiving a response
-        if self.unacked_send_count > MAX_UNACKED_SENDS {
+        if self.unacked_send_count >= MAX_UNACKED_SENDS {
             error!(
                 target: "net",
                 "Sent {} packets without receiving from server - connection appears dead",
