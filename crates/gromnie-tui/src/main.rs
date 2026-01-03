@@ -28,7 +28,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Load configuration - require config file like the CLI does
     let config = match GromnieConfig::load() {
         Ok(cfg) => {
-            info!("Loaded config from {}", GromnieConfig::config_path().display());
+            info!(
+                "Loaded config from {}",
+                GromnieConfig::config_path().display()
+            );
             cfg
         }
         Err(_) => {
@@ -70,13 +73,29 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Resolve server and account from CLI args
     let server = config.servers.get(&cli.server).ok_or_else(|| {
-        let available = config.servers.keys().cloned().collect::<Vec<_>>().join(", ");
-        format!("Server '{}' not found. Available: {}", cli.server, available)
+        let available = config
+            .servers
+            .keys()
+            .cloned()
+            .collect::<Vec<_>>()
+            .join(", ");
+        format!(
+            "Server '{}' not found. Available: {}",
+            cli.server, available
+        )
     })?;
 
     let account = config.accounts.get(&cli.account).ok_or_else(|| {
-        let available = config.accounts.keys().cloned().collect::<Vec<_>>().join(", ");
-        format!("Account '{}' not found. Available: {}", cli.account, available)
+        let available = config
+            .accounts
+            .keys()
+            .cloned()
+            .collect::<Vec<_>>()
+            .join(", ");
+        format!(
+            "Account '{}' not found. Available: {}",
+            cli.account, available
+        )
     })?;
 
     let address = format!("{}:{}", server.host, server.port);
