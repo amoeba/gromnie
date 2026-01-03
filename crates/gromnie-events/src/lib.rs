@@ -7,6 +7,7 @@ use std::time::Instant;
 use tokio::sync::mpsc::UnboundedSender;
 
 pub mod client_events;
+pub mod protocol_events;
 pub mod script_events;
 pub mod simple_client_actions;
 pub mod simple_game_events;
@@ -14,6 +15,9 @@ pub mod system_events;
 
 // Re-export key types for convenience
 pub use client_events::{ClientEvent, ClientStateEvent, ClientSystemEvent};
+pub use protocol_events::{
+    CharacterData, GameEventMsg, IntoGameEventMsg, OrderedGameEvent, ProtocolEvent, S2CEvent,
+};
 pub use script_events::ScriptEventType;
 pub use simple_client_actions::SimpleClientAction;
 pub use simple_game_events::{CharacterInfo, SimpleGameEvent};

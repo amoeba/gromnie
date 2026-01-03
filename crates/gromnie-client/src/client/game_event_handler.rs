@@ -3,6 +3,7 @@ use tokio::sync::mpsc;
 use tracing::error;
 
 use crate::client::{ClientEvent, GameEvent};
+use gromnie_events::{OrderedGameEvent, ProtocolEvent};
 
 /// Trait for handling a specific parsed game event type.
 ///
@@ -17,7 +18,7 @@ use crate::client::{ClientEvent, GameEvent};
 ///         let text = format!("{} tells you, \"{}\"", event.sender_name, event.message);
 ///         Some(GameEvent::ChatMessageReceived {
 ///             message: text,
-///             message_type: event.type_ as u32,
+///             message_type: event.message_type,
 ///         })
 ///     }
 /// }
@@ -29,20 +30,25 @@ pub trait GameEventHandler<T: ACDataType> {
     /// or when the event is sent asynchronously).
     ///
     /// Mutate self for state updates as needed.
+    ///
+    /// # Arguments
+    ///
+    /// * `parsed` - The parsed event data
     fn handle(&mut self, parsed: T) -> Option<GameEvent>;
 }
 
-/// Dispatch a game event: parse → handle → emit event.
+/// Dispatch a game event: parse → emit protocol event → handle → emit game event.
 ///
 /// Centralizes the repetitive pattern across all game event handlers:
 /// 1. Parse the cursor data into the specific event type T
 /// 2. Handle parse errors by logging (non-fatal)
-/// 3. Call the handler's handle() method with the parsed data
-/// 4. Emit the resulting GameEvent to the event bus (if any)
+/// 3. Emit the ProtocolEvent automatically (infrastructure)
+/// 4. Call the handler's handle() method with the parsed data (business logic)
+/// 5. Emit the resulting GameEvent to the event bus (if any)
 ///
 /// # Type Parameters
 ///
-/// - `T`: The parsed game event type (must implement ACDataType)
+/// - `T`: The parsed game event type (must implement ACDataType + Clone)
 /// - `H`: The handler type (must implement GameEventHandler<T>)
 ///
 /// # Arguments
@@ -50,18 +56,25 @@ pub trait GameEventHandler<T: ACDataType> {
 /// - `handler`: The client or handler instance
 /// - `cursor`: Cursor positioned after the event opcode
 /// - `event_tx`: Channel to send events to
+/// - `object_id`: The object ID from the OrderedGameEvent wrapper
+/// - `sequence`: The sequence number from the OrderedGameEvent wrapper
+/// - `to_game_event_msg`: Function to convert T into GameEventMsg
 ///
 /// # Returns
 ///
 /// Ok(()) if parsing and handling succeeded, Err with error message if parsing failed.
-pub fn dispatch_game_event<T, H>(
+pub fn dispatch_game_event<T, H, F>(
     handler: &mut H,
     cursor: &mut dyn ACReader,
     event_tx: &mpsc::Sender<ClientEvent>,
+    object_id: u32,
+    sequence: u32,
+    to_game_event_msg: F,
 ) -> Result<(), String>
 where
-    T: ACDataType,
+    T: ACDataType + Clone,
     H: GameEventHandler<T>,
+    F: FnOnce(T) -> gromnie_events::GameEventMsg,
 {
     // Parse game event data
     let parsed = match T::read(cursor) {
@@ -72,7 +85,15 @@ where
         }
     };
 
-    // Handle and optionally emit event
+    // Emit protocol event (infrastructure - happens automatically for all game events)
+    let protocol_event = ProtocolEvent::GameEvent(OrderedGameEvent {
+        object_id,
+        sequence,
+        event: to_game_event_msg(parsed.clone()),
+    });
+    let _ = event_tx.try_send(ClientEvent::Protocol(protocol_event));
+
+    // Handle and optionally emit game event (business logic)
     if let Some(game_event) = handler.handle(parsed) {
         let _ = event_tx.try_send(ClientEvent::Game(game_event));
     }

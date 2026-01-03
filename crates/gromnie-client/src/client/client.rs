@@ -36,13 +36,14 @@ use tracing::{debug, error, info, warn};
 
 use crate::client::constants::*;
 use crate::client::game_event_handler::dispatch_game_event;
-use crate::client::game_event_handlers::{
-    CommunicationHearDirectSpeech, CommunicationTransientString,
-};
 use crate::client::message_handler::dispatch_message;
+use crate::client::protocol_conversions::{
+    hear_direct_speech_to_game_event_msg, transient_string_to_game_event_msg,
+};
 use crate::client::{ClientEvent, ClientSystemEvent, GameEvent};
 use crate::crypto::crypto_system::CryptoSystem;
 use crate::crypto::magic_number::get_magic_number;
+use acprotocol::gameevents::{CommunicationHearDirectSpeech, CommunicationTransientString};
 
 /// Maximum number of packets we can send without receiving before considering connection dead
 const MAX_UNACKED_SENDS: u32 = 20;
@@ -1152,23 +1153,55 @@ impl Client {
         info!(target: "net", "Processing OrderedGameEvent message, data len={}", message.data.len());
         debug!(target: "net", "Game event type: {:?}", event_type);
 
-        let mut cursor = Cursor::new(&message.data[8..]); // Skip opcode (4) + sequence (4)
+        // Validate minimum packet length
+        if message.data.len() < 8 {
+            warn!(target: "net",
+                  "OrderedGameEvent message too short: {} bytes (expected at least 8)",
+                  message.data.len());
+            return;
+        }
+
+        // Parse object_id and sequence from message header using acprotocol parsing
+        // OrderedGameEvent format: object_id (4 bytes) + sequence (4 bytes) + event_data
+        let mut cursor = Cursor::new(&message.data);
+
+        let object_id = match u32::read(&mut cursor) {
+            Ok(id) => id,
+            Err(e) => {
+                error!(target: "net", "Failed to read object_id from OrderedGameEvent: {}", e);
+                return;
+            }
+        };
+
+        let sequence = match u32::read(&mut cursor) {
+            Ok(seq) => seq,
+            Err(e) => {
+                error!(target: "net", "Failed to read sequence from OrderedGameEvent: {}", e);
+                return;
+            }
+        };
 
         let event_tx = self.raw_event_tx.clone();
         match event_type {
             GameEventType::CommunicationHearDirectSpeech => {
-                dispatch_game_event::<CommunicationHearDirectSpeech, _>(
+                dispatch_game_event::<CommunicationHearDirectSpeech, _, _>(
                     self,
                     &mut cursor,
                     &event_tx,
+                    object_id,
+                    sequence,
+                    hear_direct_speech_to_game_event_msg,
                 )
                 .ok();
             }
             GameEventType::CommunicationTransientString => {
-                dispatch_game_event::<CommunicationTransientString, _>(
+                dispatch_game_event::<CommunicationTransientString, _, _>(
                     self,
                     &mut cursor,
                     &event_tx,
+                    object_id,
+                    sequence,
+                    transient_string_to_game_event_msg,
                 )
                 .ok();
             }
@@ -1713,5 +1746,45 @@ impl Client {
                 // No specific event for character create yet
             }
         }
+    }
+}
+
+// ============================================================================
+// GameEventHandler implementations
+// ============================================================================
+
+use crate::client::game_event_handler::GameEventHandler;
+
+/// Handle Communication_HearDirectSpeech game events
+impl GameEventHandler<acprotocol::gameevents::CommunicationHearDirectSpeech> for Client {
+    fn handle(
+        &mut self,
+        event: acprotocol::gameevents::CommunicationHearDirectSpeech,
+    ) -> Option<GameEvent> {
+        let chat_text = format!("{} tells you, \"{}\"", event.sender_name, event.message);
+        let message_type = event.type_ as u32;
+
+        info!(target: "net", "Direct speech received - Type: {}, Text: {}", message_type, chat_text);
+
+        Some(GameEvent::ChatMessageReceived {
+            message: chat_text,
+            message_type,
+        })
+    }
+}
+
+/// Handle Communication_TransientString game events
+impl GameEventHandler<acprotocol::gameevents::CommunicationTransientString> for Client {
+    fn handle(
+        &mut self,
+        event: acprotocol::gameevents::CommunicationTransientString,
+    ) -> Option<GameEvent> {
+        let message = event.message;
+        info!(target: "net", "Transient string: {}", message);
+
+        Some(GameEvent::ChatMessageReceived {
+            message,
+            message_type: 0x05, // System message type
+        })
     }
 }

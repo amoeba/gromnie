@@ -10,8 +10,10 @@ use crate::client::Client;
 use crate::client::constants::UI_DELAY_MS;
 use crate::client::message_handler::MessageHandler;
 use crate::client::messages::{OutgoingMessage, OutgoingMessageContent};
+use crate::client::protocol_conversions::ToProtocolEvent;
 use crate::client::scene::ClientError;
 use crate::client::{CharacterInfo, ClientEvent, GameEvent};
+use gromnie_events::ProtocolEvent;
 
 /// Handle LoginCreatePlayer messages
 impl MessageHandler<acprotocol::messages::s2c::LoginCreatePlayer> for Client {
@@ -21,6 +23,12 @@ impl MessageHandler<acprotocol::messages::s2c::LoginCreatePlayer> for Client {
     ) -> Option<GameEvent> {
         let character_id = create_player.character_id.0;
         info!(target: "net", "Character in world: 0x{:08X}", character_id);
+
+        // Emit protocol event
+        let protocol_event = ProtocolEvent::S2C(create_player.to_protocol_event());
+        let _ = self
+            .raw_event_tx
+            .try_send(ClientEvent::Protocol(protocol_event));
 
         // Check if we're in the process of entering the world
         if let Some(entering) = self
@@ -40,7 +48,7 @@ impl MessageHandler<acprotocol::messages::s2c::LoginCreatePlayer> for Client {
             let char_name = entering.character_name.clone();
             self.transition_to_in_world(entering.character_id, entering.character_name);
 
-            info!(target: "net", "Character successfully entered world: {} (ID: 0x{:08X})", 
+            info!(target: "net", "Character successfully entered world: {} (ID: 0x{:08X})",
                   char_name, character_id);
         } else {
             warn!(target: "net", "LoginCreatePlayer received but not in CharacterSelect with entering_world state");
@@ -60,6 +68,12 @@ impl MessageHandler<acprotocol::messages::s2c::ItemCreateObject> for Client {
 
         info!(target: "net", "Object created in world: {} (ID: 0x{:08X})", object_name, object_id);
 
+        // Emit protocol event
+        let protocol_event = ProtocolEvent::S2C(create_obj.to_protocol_event());
+        let _ = self
+            .raw_event_tx
+            .try_send(ClientEvent::Protocol(protocol_event));
+
         Some(GameEvent::CreateObject {
             object_id,
             object_name,
@@ -74,9 +88,15 @@ impl MessageHandler<acprotocol::messages::s2c::CommunicationHearSpeech> for Clie
         speech: acprotocol::messages::s2c::CommunicationHearSpeech,
     ) -> Option<GameEvent> {
         let chat_text = format!("{} says, \"{}\"", speech.sender_name, speech.message);
-        let message_type = speech.type_ as u32;
+        let message_type = speech.type_.clone() as u32;
 
         info!(target: "net", "Hear speech received - Type: {}, Text: {}", message_type, chat_text);
+
+        // Emit protocol event
+        let protocol_event = ProtocolEvent::S2C(speech.to_protocol_event());
+        let _ = self
+            .raw_event_tx
+            .try_send(ClientEvent::Protocol(protocol_event));
 
         Some(GameEvent::ChatMessageReceived {
             message: chat_text,
@@ -92,9 +112,15 @@ impl MessageHandler<acprotocol::messages::s2c::CommunicationHearRangedSpeech> fo
         speech: acprotocol::messages::s2c::CommunicationHearRangedSpeech,
     ) -> Option<GameEvent> {
         let chat_text = format!("{} says, \"{}\"", speech.sender_name, speech.message);
-        let message_type = speech.type_ as u32;
+        let message_type = speech.type_.clone() as u32;
 
         info!(target: "net", "Hear ranged speech received - Type: {}, Text: {}", message_type, chat_text);
+
+        // Emit protocol event
+        let protocol_event = ProtocolEvent::S2C(speech.to_protocol_event());
+        let _ = self
+            .raw_event_tx
+            .try_send(ClientEvent::Protocol(protocol_event));
 
         Some(GameEvent::ChatMessageReceived {
             message: chat_text,
@@ -113,6 +139,12 @@ impl MessageHandler<acprotocol::messages::s2c::CharacterCharacterError> for Clie
         let error_message = format!("{}", char_error.reason);
 
         error!(target: "net", "Character error received - Code: 0x{:04X} ({})", error_code, error_message);
+
+        // Emit protocol event
+        let protocol_event = ProtocolEvent::S2C(char_error.to_protocol_event());
+        let _ = self
+            .raw_event_tx
+            .try_send(ClientEvent::Protocol(protocol_event));
 
         // ServerCrash (0x0004) means the server is going down - trigger reconnection
         if error_code == 0x0004 {
@@ -159,6 +191,12 @@ impl MessageHandler<acprotocol::messages::s2c::LoginLoginCharacterSet> for Clien
 
         info!(target: "net", "CharacterList -- Account: {}, Slots: {}, Characters: [{}]",
             char_list.account, char_list.num_allowed_characters, chars);
+
+        // Emit protocol event
+        let protocol_event = ProtocolEvent::S2C(char_list.to_protocol_event());
+        let _ = self
+            .raw_event_tx
+            .try_send(ClientEvent::Protocol(protocol_event));
 
         // Create character info list
         let characters: Vec<CharacterInfo> = char_list
@@ -260,6 +298,12 @@ impl MessageHandler<acprotocol::messages::s2c::DDDInterrogationMessage> for Clie
         info!(target: "net", "Received DDD Interrogation - Language: {}, Region: {}, Product: {}",
             ddd_msg.name_rule_language, ddd_msg.servers_region, ddd_msg.product_id);
 
+        // Emit protocol event
+        let protocol_event = ProtocolEvent::S2C(ddd_msg.to_protocol_event());
+        let _ = self
+            .raw_event_tx
+            .try_send(ClientEvent::Protocol(protocol_event));
+
         // Update progress to ReceivedDDD using new scene API
         use crate::client::scene::PatchingProgress as ScenePatchingProgress;
         self.update_patch_progress(ScenePatchingProgress::ReceivedDDD);
@@ -288,9 +332,15 @@ impl MessageHandler<acprotocol::messages::s2c::DDDInterrogationMessage> for Clie
 impl MessageHandler<acprotocol::messages::s2c::CharacterCharGenVerificationResponse> for Client {
     fn handle(
         &mut self,
-        _response: acprotocol::messages::s2c::CharacterCharGenVerificationResponse,
+        response: acprotocol::messages::s2c::CharacterCharGenVerificationResponse,
     ) -> Option<GameEvent> {
         info!(target: "net", "Character creation verification response received");
+
+        // Emit protocol event
+        let protocol_event = ProtocolEvent::S2C(response.to_protocol_event());
+        let _ = self
+            .raw_event_tx
+            .try_send(ClientEvent::Protocol(protocol_event));
 
         // Delay emitting CharacterListReceived event
         let game_event = GameEvent::CharacterListReceived {
