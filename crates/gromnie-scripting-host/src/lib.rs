@@ -69,6 +69,8 @@ pub enum EventFilter {
     // Game events
     /// Character list received from server
     CharacterListReceived,
+    /// Character error received from server
+    CharacterError,
     /// Object created in game world
     CreateObject,
     /// Chat message received
@@ -133,6 +135,9 @@ impl EventFilter {
                     event,
                     ClientEvent::Game(GameEvent::CharacterListReceived { .. })
                 )
+            }
+            EventFilter::CharacterError => {
+                matches!(event, ClientEvent::Game(GameEvent::CharacterError { .. }))
             }
             EventFilter::CreateObject => {
                 matches!(event, ClientEvent::Game(GameEvent::CreateObject { .. }))
@@ -250,8 +255,9 @@ impl EventFilter {
             0 => Some(EventFilter::All),
             // Game events (1-99)
             1 => Some(EventFilter::CharacterListReceived),
-            2 => Some(EventFilter::CreateObject),
-            3 => Some(EventFilter::ChatMessageReceived),
+            2 => Some(EventFilter::CharacterError),
+            3 => Some(EventFilter::CreateObject),
+            4 => Some(EventFilter::ChatMessageReceived),
             // State events (100-199)
             100 => Some(EventFilter::StateConnecting),
             101 => Some(EventFilter::StateConnected),
@@ -284,8 +290,9 @@ impl EventFilter {
             EventFilter::All => 0,
             // Game events (1-99)
             EventFilter::CharacterListReceived => 1,
-            EventFilter::CreateObject => 2,
-            EventFilter::ChatMessageReceived => 3,
+            EventFilter::CharacterError => 2,
+            EventFilter::CreateObject => 3,
+            EventFilter::ChatMessageReceived => 4,
             // State events (100-199)
             EventFilter::StateConnecting => 100,
             EventFilter::StateConnected => 101,
