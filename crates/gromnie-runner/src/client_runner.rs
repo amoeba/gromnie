@@ -312,7 +312,7 @@ pub async fn run_client<C, F>(
         config.password.clone(),
         config.character_name.clone(),
         raw_event_tx,
-        config.reconnect.clone(),
+        config.reconnect,
     )
     .await;
 
@@ -355,7 +355,7 @@ pub async fn run_client_with_consumers<F>(
         config.password.clone(),
         config.character_name.clone(),
         raw_event_tx,
-        config.reconnect.clone(),
+        config.reconnect,
     )
     .await;
 
@@ -451,7 +451,7 @@ pub async fn run_client_with_action_channel<C, F>(
         config.password.clone(),
         config.character_name.clone(),
         raw_event_tx,
-        config.reconnect.clone(),
+        config.reconnect,
     )
     .await;
 
