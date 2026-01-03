@@ -10,8 +10,7 @@ use acprotocol::enums::{
 use acprotocol::gameactions::CharacterLoginCompleteNotification;
 use acprotocol::message::{C2SMessage, GameActionMessage};
 use acprotocol::messages::c2s::{
-    CharacterSendCharGenResult, DDDInterrogationResponseMessage, LoginSendEnterWorld,
-    LoginSendEnterWorldRequest,
+    CharacterSendCharGenResult, LoginSendEnterWorld, LoginSendEnterWorldRequest,
 };
 use tokio::sync::mpsc;
 
@@ -721,9 +720,6 @@ impl Client {
         message: OutgoingMessageContent,
     ) -> Result<(), std::io::Error> {
         match message {
-            OutgoingMessageContent::DDDInterrogationResponse(response) => {
-                self.send_ddd_response_internal(response).await
-            }
             OutgoingMessageContent::CharacterCreation(char_gen) => {
                 self.send_character_creation_internal(char_gen).await
             }
@@ -868,46 +864,6 @@ impl Client {
         debug!(target: "net", "Sending fragmented message to login server at {}", login_addr);
         self.socket.send_to(&buffer, login_addr).await?;
         Ok(())
-    }
-
-    /// Send a DDD interrogation response to the login server
-    async fn send_ddd_response_internal(
-        &mut self,
-        response: DDDInterrogationResponseMessage,
-    ) -> Result<(), std::io::Error> {
-        info!(target: "net", "Sending DDD Interrogation Response - Language: {}, Files: {:?}",
-            response.language, response.files.list);
-
-        // Serialize the message using acprotocol's C2SMessage wrapper (handles opcode automatically)
-        let mut message_data = Vec::new();
-        {
-            let mut cursor = Cursor::new(&mut message_data);
-            C2SMessage::DDDInterrogationResponseMessage(response)
-                .write(&mut cursor)
-                .map_err(|e| std::io::Error::other(format!("Write error: {}", e)))?;
-        }
-
-        // Send as a proper fragmented packet
-        let result = self
-            .send_fragmented_message(message_data, FragmentGroup::Object)
-            .await;
-
-        // Update progress to DDDResponseSent (66%)
-        if result.is_ok()
-            && let ClientState::Patching {
-                started_at: _,
-                last_retry_at: _,
-                progress,
-            } = &mut self.state
-            && *progress == PatchingProgress::DDDInterrogationReceived
-        {
-            *progress = PatchingProgress::DDDResponseSent;
-            let game_event = GameEvent::UpdatingSetProgress { progress: 0.66 };
-            let _ = self.raw_event_tx.send(ClientEvent::Game(game_event)).await;
-            info!(target: "net", "Progress: DDDResponse sent (66%)");
-        }
-
-        result
     }
 
     /// Send character creation request to the login server
