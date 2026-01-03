@@ -42,6 +42,9 @@ use crate::crypto::magic_number::get_magic_number;
 
 use std::cell::RefCell;
 
+/// Maximum number of packets we can send without receiving before considering connection dead
+const MAX_UNACKED_SENDS: u32 = 20;
+
 /// Sub-states for Connecting phase with progress tracking
 #[derive(Clone, Debug, PartialEq)]
 pub enum ConnectingProgress {
@@ -93,6 +96,11 @@ pub enum ClientState {
     },
     /// The client received a CharacterError
     CharacterError { reason: CharacterErrorType },
+    /// Disconnected - will attempt reconnection if enabled
+    Disconnected {
+        reconnect_attempt: u32,
+        reconnect_at: std::time::Instant,
+    },
     /// Failed state with reason
     Failed { reason: ClientFailureReason },
 }
@@ -137,8 +145,9 @@ pub struct Client {
     pub character_login_state: CharacterLoginState,
     pub send_count: u32,
     pub recv_count: u32,
-    last_ack_sent: u32,     // Track the last sequence we ACKed to the server
-    fragment_sequence: u32, // Counter for outgoing fragment sequences
+    last_ack_sent: u32,      // Track the last sequence we ACKed to the server
+    unacked_send_count: u32, // Track how many sends we've done without receiving a packet
+    fragment_sequence: u32,  // Counter for outgoing fragment sequences
     next_game_action_sequence: u32, // Sequence counter for GameAction messages
     session: Option<SessionState>,
     pending_fragments: HashMap<u32, Fragment>, // Track incomplete fragment sequences
@@ -148,6 +157,9 @@ pub struct Client {
     action_rx: mpsc::UnboundedReceiver<gromnie_events::SimpleClientAction>, // Receive actions from handlers
     pub(crate) ddd_response: Option<OutgoingMessageContent>, // Cached DDD response for retries
     pub(crate) known_characters: Vec<crate::client::CharacterInfo>, // Track characters from list and creation
+    // Reconnection state
+    reconnect_config: crate::config::ReconnectConfig,
+    pub(crate) reconnect_attempt_count: u32, // Track reconnection attempts across state transitions
     /// Optional character name to auto-login with after receiving character list
     pub(crate) character: Option<String>,
     /// Pending auto-login action to be processed after character list is received
@@ -162,6 +174,31 @@ impl Client {
         password: String,
         character: Option<String>,
         raw_event_tx: mpsc::Sender<ClientEvent>, // Raw event sender to runner
+        reconnect: bool,
+    ) -> (
+        Client,
+        mpsc::UnboundedSender<gromnie_events::SimpleClientAction>,
+    ) {
+        Self::new_with_reconnect(
+            id,
+            address,
+            name,
+            password,
+            character,
+            raw_event_tx,
+            reconnect,
+        )
+        .await
+    }
+
+    pub async fn new_with_reconnect(
+        id: u32,
+        address: String,
+        name: String,
+        password: String,
+        character: Option<String>,
+        raw_event_tx: mpsc::Sender<ClientEvent>, // Raw event sender to runner
+        reconnect_enabled: bool,
     ) -> (
         Client,
         mpsc::UnboundedSender<gromnie_events::SimpleClientAction>,
@@ -175,6 +212,16 @@ impl Client {
 
         // Action channel: Handlers send actions back to client
         let (action_tx, action_rx) = mpsc::unbounded_channel();
+
+        // Build reconnect config from bool
+        let reconnect_config = if reconnect_enabled {
+            crate::config::ReconnectConfig {
+                enabled: true,
+                ..Default::default()
+            }
+        } else {
+            crate::config::ReconnectConfig::default()
+        };
 
         let now = std::time::Instant::now();
         let client = Client {
@@ -191,6 +238,7 @@ impl Client {
             send_count: 0,
             recv_count: 0,
             last_ack_sent: 0,             // Initialize to 0
+            unacked_send_count: 0,        // Initialize to 0
             fragment_sequence: 1,         // Start at 1 as per actestclient
             next_game_action_sequence: 0, // Start at 0 for GameAction sequences
             session: None,
@@ -201,6 +249,8 @@ impl Client {
             action_rx,
             ddd_response: None,
             known_characters: Vec::new(),
+            reconnect_config,
+            reconnect_attempt_count: 0,
             character,
             pending_auto_login: None,
         };
@@ -227,6 +277,23 @@ impl Client {
 
         // Set sequence based on include_sequence flag
         packet.sequence = if include_sequence { self.send_count } else { 0 };
+
+        // Track unacked sends - increment each time we send
+        self.unacked_send_count += 1;
+
+        // Check if we've sent too many packets without receiving a response
+        if self.unacked_send_count > MAX_UNACKED_SENDS {
+            error!(
+                target: "net",
+                "Sent {} packets without receiving from server - connection appears dead",
+                self.unacked_send_count
+            );
+            self.enter_disconnected();
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::ConnectionReset,
+                "Server not responding",
+            ));
+        }
 
         // CRITICAL: Automatically include ACK if we have received packets that need acknowledging
         // This matches actestclient behavior (NetworkManager.Send lines 266-270)
@@ -553,17 +620,28 @@ impl Client {
             } => {
                 if started_at.elapsed() >= TIMEOUT_DURATION {
                     info!(target: "net", "LoginRequest timeout - no response after 20s (progress: {:?})", progress);
-                    self.state = ClientState::Failed {
-                        reason: ClientFailureReason::LoginTimeout,
-                    };
-                    // Emit authentication failed system event
-                    let _ = self.raw_event_tx.try_send(ClientEvent::System(
-                        ClientSystemEvent::AuthenticationFailed {
-                            reason: "Connection timeout - server not responding".to_string(),
-                        },
-                    ));
 
-                    return true;
+                    // Reconnection behavior on timeout:
+                    // - Initial connection attempts (reconnect_attempt_count == 0) always fail permanently
+                    //   to provide fast feedback when the server is genuinely unavailable
+                    // - Subsequent reconnection attempts (reconnect_attempt_count > 0) re-enter Disconnected
+                    //   state to retry with exponential backoff
+                    if self.reconnect_config.enabled && self.reconnect_attempt_count > 0 {
+                        info!(target: "net", "Reconnection attempt timed out - re-entering Disconnected state to retry");
+                        self.enter_disconnected();
+                    } else {
+                        // Initial connection attempt timeout or reconnection disabled - fail permanently
+                        self.state = ClientState::Failed {
+                            reason: ClientFailureReason::LoginTimeout,
+                        };
+                        // Emit authentication failed system event
+                        let _ = self.raw_event_tx.try_send(ClientEvent::System(
+                            ClientSystemEvent::AuthenticationFailed {
+                                reason: "Connection timeout - server not responding".to_string(),
+                            },
+                        ));
+                        return true;
+                    }
                 }
             }
             ClientState::Patching {
@@ -573,10 +651,17 @@ impl Client {
             } => {
                 if started_at.elapsed() >= TIMEOUT_DURATION {
                     info!(target: "net", "Patching timeout - no character list after 20s (progress: {:?})", progress);
-                    self.state = ClientState::Failed {
-                        reason: ClientFailureReason::PatchingTimeout,
-                    };
-                    return true;
+
+                    // Same logic for Patching state
+                    if self.reconnect_config.enabled && self.reconnect_attempt_count > 0 {
+                        info!(target: "net", "Reconnection attempt timed out in Patching - re-entering Disconnected state to retry");
+                        self.enter_disconnected();
+                    } else {
+                        self.state = ClientState::Failed {
+                            reason: ClientFailureReason::PatchingTimeout,
+                        };
+                        return true;
+                    }
                 }
             }
             _ => {}
@@ -595,6 +680,10 @@ impl Client {
             ClientState::Patching { last_retry_at, .. } => {
                 last_retry_at.elapsed() >= RETRY_INTERVAL
             }
+            ClientState::Disconnected { reconnect_at, .. } => {
+                // Check if we've reached the reconnect time
+                std::time::Instant::now() >= *reconnect_at
+            }
             _ => false,
         }
     }
@@ -610,6 +699,120 @@ impl Client {
             }
             _ => {}
         }
+    }
+
+    /// Check if client should attempt to reconnect
+    pub fn should_reconnect(&mut self) -> bool {
+        if let ClientState::Disconnected { reconnect_at, .. } = &self.state {
+            // Check if we've reached the reconnect time
+            return std::time::Instant::now() >= *reconnect_at;
+        }
+        false
+    }
+
+    /// Initiate reconnection attempt
+    /// Returns true if reconnection is being attempted, false if disabled or max retries reached
+    /// Transitions the client to Connecting state with an appropriate backoff delay
+    pub fn start_reconnection(&mut self) -> bool {
+        if !self.reconnect_config.enabled {
+            info!(target: "net", "Reconnection disabled, entering Failed state");
+            self.state = ClientState::Failed {
+                reason: ClientFailureReason::LoginFailed(
+                    "Connection lost and reconnection disabled".to_string(),
+                ),
+            };
+            return false;
+        }
+
+        // Check if we've exceeded max retry attempts
+        if !self
+            .reconnect_config
+            .should_attempt_reconnect(self.reconnect_attempt_count)
+        {
+            error!(
+                target: "net",
+                "Max reconnection attempts reached ({}), entering Failed state",
+                self.reconnect_config.max_attempts
+            );
+            self.state = ClientState::Failed {
+                reason: ClientFailureReason::LoginFailed(format!(
+                    "Max reconnection attempts ({}) reached",
+                    self.reconnect_config.max_attempts
+                )),
+            };
+            return false;
+        }
+
+        let delay = self
+            .reconnect_config
+            .delay_for_attempt(self.reconnect_attempt_count);
+
+        info!(
+            target: "net",
+            "Starting reconnection attempt {} (waiting {:?} before reconnecting)",
+            self.reconnect_attempt_count, delay
+        );
+
+        // Emit reconnection event
+        let delay_secs: u64 = delay.as_secs();
+        let _ = self
+            .raw_event_tx
+            .try_send(ClientEvent::System(ClientSystemEvent::Reconnecting {
+                attempt: self.reconnect_attempt_count,
+                delay_secs,
+            }));
+
+        // Transition back to Connecting state after delay
+        let now = std::time::Instant::now();
+        self.state = ClientState::Connecting {
+            started_at: now,
+            last_retry_at: now + delay, // Don't retry until after the backoff delay
+            progress: ConnectingProgress::Initial,
+        };
+
+        true
+    }
+
+    /// Enter disconnected state and prepare for potential reconnection
+    pub fn enter_disconnected(&mut self) {
+        // Increment attempt counter (stored separately from state to survive transitions)
+        self.reconnect_attempt_count += 1;
+
+        let delay = self
+            .reconnect_config
+            .delay_for_attempt(self.reconnect_attempt_count);
+
+        info!(
+            target: "net",
+            "Connection lost - entering Disconnected state (attempt {}, next retry in {:?})",
+            self.reconnect_attempt_count, delay
+        );
+
+        self.state = ClientState::Disconnected {
+            reconnect_attempt: self.reconnect_attempt_count,
+            reconnect_at: std::time::Instant::now() + delay,
+        };
+
+        // Clear session state
+        self.session = None;
+        self.pending_fragments.clear();
+
+        // Reset sequence counters for fresh connection
+        self.send_count = 0;
+        self.recv_count = 0;
+        self.last_ack_sent = 0;
+        self.unacked_send_count = 0;
+        self.fragment_sequence = 1;
+        self.next_game_action_sequence = 0;
+
+        // Emit disconnected event
+        let _ = self
+            .raw_event_tx
+            .try_send(ClientEvent::System(ClientSystemEvent::Disconnected {
+                will_reconnect: self.reconnect_config.enabled,
+                reconnect_attempt: self.reconnect_attempt_count,
+                delay_secs: delay.as_secs(),
+            }));
     }
 
     /// Get current client state
@@ -1223,9 +1426,14 @@ impl Client {
             debug!(target: "net", "📥 Received packet with seq={}, updating recv_count from {} to {}",
                 packet.sequence, self.recv_count, packet.sequence);
             self.recv_count = packet.sequence;
+            self.unacked_send_count = 0; // Reset unacked counter - server is responding
         } else if packet.sequence > 0 {
             debug!(target: "net", "📥 Received packet with seq={} (not newer than recv_count={})",
                 packet.sequence, self.recv_count);
+            self.unacked_send_count = 0; // Reset unacked counter - server is responding
+        } else {
+            // Non-sequenced packet, but server is still responding
+            self.unacked_send_count = 0;
         }
 
         let flags = packet.flags;

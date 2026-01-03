@@ -417,6 +417,24 @@ impl EventConsumer for ScriptConsumer {
                         character_id,
                         character_name,
                     }),
+                    gromnie_events::SystemEvent::Disconnected {
+                        will_reconnect,
+                        reconnect_attempt,
+                        delay_secs,
+                        ..
+                    } => ClientEvent::System(ClientSystemEvent::Disconnected {
+                        will_reconnect,
+                        reconnect_attempt,
+                        delay_secs,
+                    }),
+                    gromnie_events::SystemEvent::Reconnecting {
+                        attempt,
+                        delay_secs,
+                        ..
+                    } => ClientEvent::System(ClientSystemEvent::Reconnecting {
+                        attempt,
+                        delay_secs,
+                    }),
                     // These events don't have ClientSystemEvent equivalents
                     gromnie_events::SystemEvent::ReloadScripts { .. }
                     | gromnie_events::SystemEvent::LogScriptMessage { .. }

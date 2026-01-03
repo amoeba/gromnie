@@ -21,6 +21,10 @@ pub struct Cli {
     /// Account to use (name from config)
     #[arg(short, long)]
     account: String,
+
+    /// Enable automatic reconnection on connection loss
+    #[arg(long)]
+    reconnect: bool,
 }
 
 #[tokio::main]
@@ -130,6 +134,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         address,
         account_name: account.username.clone(),
         password: account.password.clone(),
+        // CLI flag overrides config file
+        reconnect: cli.reconnect || config.reconnect,
         character_name: account.character.clone(),
     };
 

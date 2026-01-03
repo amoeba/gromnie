@@ -21,6 +21,19 @@ pub enum SystemEvent {
         character_id: u32,
         character_name: String,
     },
+    /// Client was disconnected from the server
+    Disconnected {
+        client_id: u32,
+        will_reconnect: bool,
+        reconnect_attempt: u32,
+        delay_secs: u64,
+    },
+    /// Client is attempting to reconnect
+    Reconnecting {
+        client_id: u32,
+        attempt: u32,
+        delay_secs: u64,
+    },
     /// System shutdown requested
     Shutdown,
 }

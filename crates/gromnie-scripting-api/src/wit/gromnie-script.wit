@@ -102,6 +102,10 @@ interface host {
         updating-done,
         /// Login succeeded
         login-succeeded(login-info),
+        /// Connection was lost
+        disconnected,
+        /// Attempting to reconnect
+        reconnecting,
         /// Script reload requested
         reload-scripts,
         /// System shutdown requested

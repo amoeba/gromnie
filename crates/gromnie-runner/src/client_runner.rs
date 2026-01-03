@@ -305,13 +305,14 @@ pub async fn run_client<C, F>(
     // Subscribe to the event bus for the consumer
     let event_rx = event_bus_manager.subscribe();
 
-    let (client, action_tx) = Client::new(
+    let (client, action_tx) = Client::new_with_reconnect(
         config.id,
         config.address.clone(),
         config.account_name.clone(),
         config.password.clone(),
         config.character_name.clone(),
         raw_event_tx,
+        config.reconnect,
     )
     .await;
 
@@ -347,13 +348,14 @@ pub async fn run_client_with_consumers<F>(
         event_wrapper.run(raw_event_rx).await;
     });
 
-    let (client, action_tx) = Client::new(
+    let (client, action_tx) = Client::new_with_reconnect(
         config.id,
         config.address.clone(),
         config.account_name.clone(),
         config.password.clone(),
         config.character_name.clone(),
         raw_event_tx,
+        config.reconnect,
     )
     .await;
 
@@ -442,13 +444,14 @@ pub async fn run_client_with_action_channel<C, F>(
     // Subscribe to the event bus for the consumer
     let event_rx = event_bus_manager.subscribe();
 
-    let (client, action_tx) = Client::new(
+    let (client, action_tx) = Client::new_with_reconnect(
         config.id,
         config.address.clone(),
         config.account_name.clone(),
         config.password.clone(),
         config.character_name.clone(),
         raw_event_tx,
+        config.reconnect,
     )
     .await;
 
@@ -573,7 +576,9 @@ async fn run_client_loop(
                     }
                     Ok(Err(e)) => {
                         error!("Error in receive loop: {}", e);
-                        break;
+                        // Always transition to disconnected state on socket error
+                        // UDP socket errors are serious and indicate network problems
+                        client.enter_disconnected();
                     }
                     Err(_) => {
                         // Timeout - this is normal, just continue to check other branches
@@ -613,6 +618,19 @@ async fn run_client_loop(
                             }
                             // If we're still waiting for DDDInterrogation, just wait (no retry)
                             client.update_retry_time();
+                        }
+                        ClientState::Disconnected { .. } => {
+                            // Check if we should attempt reconnection
+                            if client.should_reconnect() {
+                                if !client.start_reconnection() {
+                                    info!("Reconnection not available, exiting loop");
+                                    break;
+                                }
+                                // Send initial LoginRequest for reconnection
+                                if let Err(e) = client.do_login().await {
+                                    error!("Failed to send LoginRequest for reconnection: {}", e);
+                                }
+                            }
                         }
                         _ => {}
                     }
@@ -750,6 +768,7 @@ where
                 client_config.password.clone(),
                 client_config.character_name.clone(),
                 raw_event_tx,
+                client_config.reconnect,
             )
             .await;
 
@@ -922,6 +941,7 @@ where
                 client.password.clone(),
                 client.character_name.clone(),
                 raw_event_tx,
+                client.reconnect,
             )
             .await;
 
@@ -976,6 +996,7 @@ where
                             format!("client_{}", id),
                             format!("client_{}", id),
                         )
+                        .with_reconnect(Default::default())
                     };
                     run_multi_client(multi_config, Arc::new(factory), default_gen, shutdown_rx)
                         .await

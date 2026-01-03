@@ -384,5 +384,7 @@ fn system_event_to_wasm(event: &ClientSystemEvent) -> gromnie::scripting::host::
             character_id: *character_id,
             character_name: character_name.clone(),
         }),
+        ClientSystemEvent::Disconnected { .. } => WitSystemEvent::Disconnected,
+        ClientSystemEvent::Reconnecting { .. } => WitSystemEvent::Reconnecting,
     }
 }

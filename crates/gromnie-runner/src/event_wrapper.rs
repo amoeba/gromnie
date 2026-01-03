@@ -86,6 +86,24 @@ impl EventWrapper {
                 character_id,
                 character_name,
             },
+            ClientSystemEvent::Disconnected {
+                will_reconnect,
+                reconnect_attempt,
+                delay_secs,
+            } => SystemEvent::Disconnected {
+                client_id: self.client_id,
+                will_reconnect,
+                reconnect_attempt,
+                delay_secs,
+            },
+            ClientSystemEvent::Reconnecting {
+                attempt,
+                delay_secs,
+            } => SystemEvent::Reconnecting {
+                client_id: self.client_id,
+                attempt,
+                delay_secs,
+            },
         }
     }
 }

@@ -79,6 +79,7 @@ impl ConfigWizard {
             servers,
             accounts,
             scripting: Default::default(),
+            reconnect: false,
         }
     }
 }
