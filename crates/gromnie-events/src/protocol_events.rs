@@ -27,7 +27,7 @@ pub enum S2CEvent {
     },
     LoginCharacterSet {
         account: String,
-        characters: Vec<CharacterData>,
+        characters: Vec<acprotocol::types::CharacterIdentity>,
         num_slots: u32,
     },
     ItemCreateObject {
@@ -82,14 +82,6 @@ pub enum GameEventMsg {
     TransientString {
         message: String,
     },
-}
-
-/// Character information for character list
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct CharacterData {
-    pub id: u32,
-    pub name: String,
-    pub delete_pending: bool,
 }
 
 // ============================================================================

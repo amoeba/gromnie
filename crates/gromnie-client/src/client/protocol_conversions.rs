@@ -5,7 +5,7 @@
 //! (instead of gromnie-events) to avoid circular dependencies, since only
 //! gromnie-client depends on acprotocol.
 
-use gromnie_events::{CharacterData, GameEventMsg, S2CEvent};
+use gromnie_events::{GameEventMsg, S2CEvent};
 
 /// Helper trait for converting acprotocol S2C message types to ProtocolEvent-compatible types
 pub trait ToProtocolEvent {
@@ -24,16 +24,7 @@ impl ToProtocolEvent for acprotocol::messages::s2c::LoginLoginCharacterSet {
     fn to_protocol_event(&self) -> S2CEvent {
         S2CEvent::LoginCharacterSet {
             account: self.account.clone(),
-            characters: self
-                .characters
-                .list
-                .iter()
-                .map(|c| CharacterData {
-                    id: c.character_id.0,
-                    name: c.name.clone(),
-                    delete_pending: c.seconds_greyed_out > 0,
-                })
-                .collect(),
+            characters: self.characters.list.clone(),
             num_slots: self.num_allowed_characters,
         }
     }
@@ -270,15 +261,15 @@ mod tests {
                 assert_eq!(num_slots, 5);
                 assert_eq!(characters.len(), 2);
 
-                // Active character should not be delete_pending
-                assert_eq!(characters[0].id, 0x1);
+                // Active character should have seconds_greyed_out = 0
+                assert_eq!(characters[0].character_id.0, 0x1);
                 assert_eq!(characters[0].name, "ActiveChar");
-                assert!(!characters[0].delete_pending);
+                assert_eq!(characters[0].seconds_greyed_out, 0);
 
-                // Character with seconds_greyed_out > 0 should be delete_pending
-                assert_eq!(characters[1].id, 0x2);
+                // Character with seconds_greyed_out > 0 should have the value preserved
+                assert_eq!(characters[1].character_id.0, 0x2);
                 assert_eq!(characters[1].name, "DeletedChar");
-                assert!(characters[1].delete_pending);
+                assert_eq!(characters[1].seconds_greyed_out, 86400);
             }
             _ => panic!("Expected LoginCharacterSet variant"),
         }
