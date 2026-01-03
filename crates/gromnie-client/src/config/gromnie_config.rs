@@ -7,9 +7,11 @@ use crate::config::{
     account_config::AccountConfig, scripting_config::ScriptingConfig, server_config::ServerConfig,
 };
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct GromnieConfig {
+    #[serde(default)]
     pub servers: BTreeMap<String, ServerConfig>,
+    #[serde(default)]
     pub accounts: BTreeMap<String, AccountConfig>,
 
     /// Scripting configuration
