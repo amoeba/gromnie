@@ -104,7 +104,7 @@ pub struct TestScript;
 
 impl TestScript {
     pub fn new() -> Self {
-        Self::default()
+        Self
     }
 }
 
