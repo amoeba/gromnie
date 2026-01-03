@@ -43,7 +43,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             eprintln!("[servers.local]");
             eprintln!("host = \"localhost\"");
             eprintln!("port = 9000");
-            eprintln!("");
+            eprintln!();
             eprintln!("[accounts.testing]");
             eprintln!("username = \"testing\"");
             eprintln!("password = \"testing\"");
