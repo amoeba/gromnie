@@ -47,10 +47,18 @@ interface host {
 
     /// ===== Events =====
 
+    /// Character error from the server
+    record character-error {
+        error-code: u32,
+        error-message: string,
+    }
+
     /// Game events from the server
     variant game-event {
         /// Character list received from server
         character-list-received(account),
+        /// Character error received from server
+        character-error(character-error),
         /// Object created in game world
         create-object(world-object),
         /// Chat message received

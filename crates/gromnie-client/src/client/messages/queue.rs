@@ -1,13 +1,10 @@
 use std::time::Instant;
 
-use acprotocol::messages::c2s::{
-    CharacterSendCharGenResult, DDDInterrogationResponseMessage, LoginSendEnterWorld,
-};
+use acprotocol::messages::c2s::{CharacterSendCharGenResult, LoginSendEnterWorld};
 
 /// Enum for outgoing messages to be sent in the network loop
 #[derive(Debug, Clone)]
 pub enum OutgoingMessageContent {
-    DDDInterrogationResponse(DDDInterrogationResponseMessage),
     CharacterCreation(CharacterSendCharGenResult),
     // ACE-compatible character creation (uses custom serialization format)
     CharacterCreationAce(String, crate::client::ace_protocol::AceCharGenResult),
@@ -16,6 +13,7 @@ pub enum OutgoingMessageContent {
     // Character login - sent when selecting a character to enter the game world (after server ready)
     EnterWorld(LoginSendEnterWorld),
     // GameAction message (raw bytes including opcode)
+    // Used for DDD response and other messages that need custom serialization
     GameAction(Vec<u8>),
 }
 

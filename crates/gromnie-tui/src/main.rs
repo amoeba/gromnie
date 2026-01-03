@@ -2,6 +2,7 @@ use clap::Parser;
 use tracing::{error, info};
 use tracing_subscriber::EnvFilter;
 
+use gromnie_client::config::GromnieConfig;
 use gromnie_events::SimpleClientAction;
 use gromnie_runner::{ClientConfig, ClientRunner, TuiConsumer, TuiEvent};
 use gromnie_tui::{App, event_handler::EventHandler, ui::try_init_tui};
@@ -13,29 +14,47 @@ pub struct Cli {
     #[arg(short, long, action = clap::ArgAction::Count)]
     debug: u8,
 
-    /// Address to connect to in host:port syntax
-    #[arg(short, long, value_name = "ADDRESS", default_value = "localhost:9000")]
-    address: String,
+    /// Server to connect to (name from config)
+    #[arg(short, long)]
+    server: String,
 
-    /// Account name
-    #[arg(short, long, value_name = "USERNAME", default_value = "testing")]
-    username: String,
-
-    /// Password
-    #[arg(short, long, value_name = "PASSWORD", default_value = "testing")]
-    password: String,
+    /// Account to use (name from config)
+    #[arg(short, long)]
+    account: String,
 
     /// Enable automatic reconnection on connection loss
-    #[arg(long, conflicts_with = "no_reconnect")]
-    reconnect: bool,
-
-    /// Disable automatic reconnection
     #[arg(long)]
-    no_reconnect: bool,
+    reconnect: bool,
 }
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    // Load configuration - require config file like the CLI does
+    let config = match GromnieConfig::load() {
+        Ok(cfg) => {
+            info!(
+                "Loaded config from {}",
+                GromnieConfig::config_path().display()
+            );
+            cfg
+        }
+        Err(_) => {
+            eprintln!(
+                "Config file not found at {}. Please create it with servers and accounts.",
+                GromnieConfig::config_path().display()
+            );
+            eprintln!("Example config:");
+            eprintln!("[servers.local]");
+            eprintln!("host = \"localhost\"");
+            eprintln!("port = 9000");
+            eprintln!();
+            eprintln!("[accounts.testing]");
+            eprintln!("username = \"testing\"");
+            eprintln!("password = \"testing\"");
+            return Err("Config file not found".into());
+        }
+    };
+
     // Initialize tracing subscriber with file logging for debugging
     // Log progress and event flow to file in current directory, but keep console clean for TUI
     let log_file = std::fs::OpenOptions::new()
@@ -55,6 +74,40 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .init();
 
     let cli = Cli::parse();
+
+    // Resolve server and account from CLI args
+    let server = config.servers.get(&cli.server).ok_or_else(|| {
+        let available = config
+            .servers
+            .keys()
+            .cloned()
+            .collect::<Vec<_>>()
+            .join(", ");
+        format!(
+            "Server '{}' not found. Available: {}",
+            cli.server, available
+        )
+    })?;
+
+    let account = config.accounts.get(&cli.account).ok_or_else(|| {
+        let available = config
+            .accounts
+            .keys()
+            .cloned()
+            .collect::<Vec<_>>()
+            .join(", ");
+        format!(
+            "Account '{}' not found. Available: {}",
+            cli.account, available
+        )
+    })?;
+
+    let address = format!("{}:{}", server.host, server.port);
+
+    info!(
+        "Connecting to server '{}' with account '{}'",
+        cli.server, cli.account
+    );
 
     // Initialize TUI
     let mut tui = try_init_tui()?;
@@ -76,26 +129,23 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let (shutdown_tx, shutdown_rx) = tokio::sync::watch::channel(false);
 
     // Create client configuration
-    let config = ClientConfig {
+    let client_config = ClientConfig {
         id: 0,
-        address: cli.address,
-        account_name: cli.username,
-        password: cli.password,
-        // --reconnect enables, --no-reconnect disables, default is false
-        reconnect: if cli.no_reconnect {
-            false
-        } else {
-            cli.reconnect
-        },
-        character_name: None,
+        address,
+        account_name: account.username.clone(),
+        password: account.password.clone(),
+        // CLI flag overrides config file
+        reconnect: cli.reconnect || config.reconnect,
+        character_name: account.character.clone(),
     };
 
     // Spawn client task using the runner module
     let runner = ClientRunner::builder()
-        .with_clients(config)
+        .with_clients(client_config)
         .with_consumer(TuiConsumer::from_factory(client_event_tx))
         .with_action_channel(action_tx_channel)
         .with_shutdown(shutdown_rx)
+        .with_config(config)
         .build()
         .expect("Failed to build client runner");
 

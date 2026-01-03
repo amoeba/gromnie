@@ -238,9 +238,6 @@ impl MessageHandler<acprotocol::messages::s2c::DDDInterrogationMessage> for Clie
         &mut self,
         ddd_msg: acprotocol::messages::s2c::DDDInterrogationMessage,
     ) -> Option<GameEvent> {
-        use acprotocol::messages::c2s::DDDInterrogationResponseMessage;
-        use acprotocol::types::PackableList;
-
         info!(target: "net", "Received DDD Interrogation - Language: {}, Region: {}, Product: {}",
             ddd_msg.name_rule_language, ddd_msg.servers_region, ddd_msg.product_id);
 
@@ -257,18 +254,12 @@ impl MessageHandler<acprotocol::messages::s2c::DDDInterrogationMessage> for Clie
             info!(target: "net", "Progress: DDDInterrogation received (33%)");
         }
 
-        // Prepare response with language 1 and the file list from the pcap
-        let files = vec![4294967296, -8899172235240, 4294967297];
-        let response = DDDInterrogationResponseMessage {
-            language: 1,
-            files: PackableList {
-                count: files.len() as u32,
-                list: files,
-            },
-        };
+        // Send static DDD response indicating client is up-to-date
+        info!(target: "net", "Sending DDD Interrogation Response (up-to-date, no patches needed)");
 
-        // Cache the response for retries
-        let response_content = OutgoingMessageContent::DDDInterrogationResponse(response);
+        let response_content = OutgoingMessageContent::GameAction(
+            crate::client::constants::DDD_RESPONSE_UP_TO_DATE.to_vec(),
+        );
         self.ddd_response = Some(response_content.clone());
 
         // Queue the response with delay (to make UI progress visible)

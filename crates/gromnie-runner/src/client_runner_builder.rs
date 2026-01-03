@@ -6,7 +6,6 @@ use std::sync::Arc;
 use tokio::sync::{mpsc, watch};
 
 use crate::event_consumer::EventConsumer;
-use gromnie_client::config::scripting_config::ScriptingConfig;
 use gromnie_events::SimpleClientAction;
 
 // Re-export types
@@ -285,16 +284,7 @@ impl ClientRunnerBuilder {
                 // Try to load from default location, or create minimal config if not found
                 gromnie_client::config::GromnieConfig::load().unwrap_or_else(|_| {
                     // Create minimal default config with scripting disabled
-                    gromnie_client::config::GromnieConfig {
-                        servers: std::collections::BTreeMap::new(),
-                        accounts: std::collections::BTreeMap::new(),
-                        scripting: ScriptingConfig {
-                            enabled: false,
-                            script_dir: None,
-                            config: std::collections::HashMap::new(),
-                        },
-                        reconnect: false,
-                    }
+                    gromnie_client::config::GromnieConfig::default()
                 })
             }
         };
