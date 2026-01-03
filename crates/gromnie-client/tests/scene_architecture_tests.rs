@@ -5,11 +5,11 @@
 
 #[cfg(test)]
 mod scene_tests {
+    use acprotocol::types::CharacterIdentity;
     use gromnie_client::client::{
         CharacterSelectScene, ClientError, ConnectingProgress, ConnectingScene, EnteringWorldState,
         ErrorScene, InWorldScene, PatchingProgress, Scene,
     };
-    use gromnie_events::CharacterInfo;
 
     // ============ ConnectingScene Tests ============
 
@@ -126,15 +126,15 @@ mod scene_tests {
     fn test_character_select_scene_creation() {
         let account_name = "TestAccount".to_string();
         let characters = vec![
-            CharacterInfo {
+            CharacterIdentity {
                 name: "Char1".to_string(),
-                id: 1,
-                delete_pending: false,
+                character_id: acprotocol::types::ObjectId(1),
+                seconds_greyed_out: 0,
             },
-            CharacterInfo {
+            CharacterIdentity {
                 name: "Char2".to_string(),
-                id: 2,
-                delete_pending: false,
+                character_id: acprotocol::types::ObjectId(2),
+                seconds_greyed_out: 0,
             },
         ];
 
@@ -410,11 +410,11 @@ mod session_tests {
 
 #[cfg(test)]
 mod transition_flow_tests {
+    use acprotocol::types::CharacterIdentity;
     use gromnie_client::client::{
         CharacterSelectScene, ClientSession, ConnectingProgress, ConnectingScene, InWorldScene,
         PatchingProgress, Scene, SessionState,
     };
-    use gromnie_events::CharacterInfo;
 
     #[test]
     fn test_full_login_flow_transitions() {
@@ -455,10 +455,10 @@ mod transition_flow_tests {
         }
 
         // Step 7: Receive character list - transition to CharacterSelect scene
-        let characters = vec![CharacterInfo {
+        let characters = vec![CharacterIdentity {
             name: "TestChar".to_string(),
-            id: 1,
-            delete_pending: false,
+            character_id: acprotocol::types::ObjectId(1),
+            seconds_greyed_out: 0,
         }];
         scene = Scene::CharacterSelect(CharacterSelectScene::new(
             "TestAccount".to_string(),

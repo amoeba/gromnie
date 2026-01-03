@@ -182,10 +182,10 @@ fn convert_scene_to_wit(scene: &gromnie_client::client::Scene) -> gromnie::scrip
             let characters = char_select
                 .characters
                 .iter()
-                .map(|c| gromnie::scripting::host::CharacterInfo {
-                    id: c.id,
+                .map(|c| gromnie::scripting::host::CharacterIdentity {
+                    character_id: c.character_id.0,
                     name: c.name.clone(),
-                    delete_pending: c.delete_pending,
+                    seconds_greyed_out: c.seconds_greyed_out,
                 })
                 .collect();
 

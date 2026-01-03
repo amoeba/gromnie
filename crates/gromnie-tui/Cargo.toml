@@ -12,6 +12,7 @@ name = "tui"
 path = "src/main.rs"
 
 [dependencies]
+acprotocol.workspace = true
 chrono.workspace = true
 clap.workspace = true
 crossterm.workspace = true

@@ -282,7 +282,7 @@ fn client_event_to_wasm(event: &ClientEvent) -> gromnie::scripting::host::Script
 /// Convert Rust GameEvent to WIT GameEvent
 fn game_event_to_wasm(event: &GameEvent) -> gromnie::scripting::host::GameEvent {
     use gromnie::scripting::host::{
-        AccountData, CharacterError as WitCharacterError, CharacterInfo, ChatMessage,
+        AccountData, CharacterError as WitCharacterError, CharacterIdentity, ChatMessage,
         GameEvent as WitGameEvent, WorldObject,
     };
 
@@ -296,10 +296,10 @@ fn game_event_to_wasm(event: &GameEvent) -> gromnie::scripting::host::GameEvent 
             num_slots: *num_slots,
             characters: characters
                 .iter()
-                .map(|c| CharacterInfo {
-                    id: c.id,
+                .map(|c| CharacterIdentity {
+                    character_id: c.character_id.0,
                     name: c.name.clone(),
-                    delete_pending: c.delete_pending,
+                    seconds_greyed_out: c.seconds_greyed_out,
                 })
                 .collect(),
         }),
@@ -422,7 +422,7 @@ fn protocol_event_to_wit(event: &ProtocolEvent) -> gromnie::scripting::host::Pro
 /// Convert Rust S2CEvent to WIT S2CEvent
 fn s2c_event_to_wit(event: &S2CEvent) -> gromnie::scripting::host::S2cEvent {
     use gromnie::scripting::host::{
-        CharacterInfo as WitCharacterInfo, DddInterrogationMsg, HearRangedSpeechMsg, HearSpeechMsg,
+        CharacterIdentity, DddInterrogationMsg, HearRangedSpeechMsg, HearSpeechMsg,
         ItemCreateObjectMsg, LoginCharacterSetMsg, LoginCreatePlayerMsg, S2cEvent as WitS2cEvent,
     };
 
@@ -440,10 +440,10 @@ fn s2c_event_to_wit(event: &S2CEvent) -> gromnie::scripting::host::S2cEvent {
             account: account.clone(),
             characters: characters
                 .iter()
-                .map(|c| WitCharacterInfo {
-                    id: c.id,
+                .map(|c| CharacterIdentity {
+                    character_id: c.character_id.0,
                     name: c.name.clone(),
-                    delete_pending: c.delete_pending,
+                    seconds_greyed_out: c.seconds_greyed_out,
                 })
                 .collect(),
             num_slots: *num_slots,

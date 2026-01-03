@@ -12,7 +12,7 @@ fn render_character_list(frame: &mut Frame, area: Rect, app: &App) {
 
     for (index, character) in app.client_status.characters.iter().enumerate() {
         let is_selected = index == app.selected_character_index;
-        let delete_indicator = if character.delete_pending {
+        let delete_indicator = if character.seconds_greyed_out > 0 {
             " [PENDING DELETION]"
         } else {
             ""
@@ -20,7 +20,7 @@ fn render_character_list(frame: &mut Frame, area: Rect, app: &App) {
 
         let character_text = format!(
             "  {} (ID: {}){}",
-            character.name, character.id, delete_indicator
+            character.name, character.character_id.0, delete_indicator
         );
 
         if is_selected {

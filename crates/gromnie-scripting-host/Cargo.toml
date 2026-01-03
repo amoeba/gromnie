@@ -12,6 +12,7 @@ name = "gromnie_scripting_host"
 path = "src/lib.rs"
 
 [dependencies]
+acprotocol.workspace = true
 gromnie-scripting-api = { path = "../gromnie-scripting-api" }
 gromnie-client = { path = "../gromnie-client" }
 gromnie-events = { path = "../gromnie-events" }

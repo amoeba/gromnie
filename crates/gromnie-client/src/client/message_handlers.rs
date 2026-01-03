@@ -4,7 +4,6 @@
 //! Each handler focuses on business logic only - parsing and error handling
 //! are centralized in the message_handler module.
 
-use acprotocol::types::CharacterIdentity;
 use tracing::{error, info, warn};
 
 use crate::client::Client;
@@ -233,7 +232,7 @@ impl MessageHandler<acprotocol::messages::s2c::LoginLoginCharacterSet> for Clien
             let found_char = self
                 .known_characters
                 .iter()
-                .find(|c| c.name.eq_ignore_ascii_case(char_name) && !c.delete_pending);
+                .find(|c| c.name.eq_ignore_ascii_case(char_name) && c.seconds_greyed_out == 0);
 
             if let Some(character) = found_char {
                 info!(target: "net", "Auto-login enabled, queuing login for character: {} (ID: {})", character.name, character.character_id.0);
