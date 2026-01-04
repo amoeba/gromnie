@@ -8,8 +8,8 @@ impl App {
         self.game_world_tab = match self.game_world_tab {
             GameWorldTab::World => GameWorldTab::Chat,
             GameWorldTab::Chat => GameWorldTab::Map,
-            GameWorldTab::Map => GameWorldTab::Inventory,
-            GameWorldTab::Inventory => GameWorldTab::World,
+            GameWorldTab::Map => GameWorldTab::Objects,
+            GameWorldTab::Objects => GameWorldTab::World,
         };
         // Don't auto-focus chat input when switching tabs
         // Chat input is only active when explicitly activated by Enter
@@ -18,10 +18,10 @@ impl App {
     /// Switch to the previous tab
     pub fn previous_tab(&mut self) {
         self.game_world_tab = match self.game_world_tab {
-            GameWorldTab::World => GameWorldTab::Inventory,
+            GameWorldTab::World => GameWorldTab::Objects,
             GameWorldTab::Chat => GameWorldTab::World,
             GameWorldTab::Map => GameWorldTab::Chat,
-            GameWorldTab::Inventory => GameWorldTab::Map,
+            GameWorldTab::Objects => GameWorldTab::Map,
         };
         // Don't auto-focus chat input when switching tabs
         // Chat input is only active when explicitly activated by Enter
@@ -63,15 +63,15 @@ pub fn render_game_world_view(
         GameWorldTab::Map => {
             render_map_tab(frame, chunks[1]);
         }
-        GameWorldTab::Inventory => {
-            render_inventory_tab(frame, chunks[1]);
+        GameWorldTab::Objects => {
+            render_objects_tab(frame, chunks[1], app);
         }
     }
 }
 
-/// Render the scene tabs for GameWorld (World, Chat, Map, Inventory)
+/// Render the scene tabs for GameWorld (World, Chat, Map, Objects)
 fn render_scene_tabs(frame: &mut Frame, area: Rect, app: &App) {
-    let tabs = ["World", "Chat", "Map", "Inventory"];
+    let tabs = ["World", "Chat", "Map", "Objects"];
     let mut spans = vec![];
 
     for (idx, tab_name) in tabs.iter().enumerate() {
@@ -79,7 +79,7 @@ fn render_scene_tabs(frame: &mut Frame, area: Rect, app: &App) {
             0 => GameWorldTab::World,
             1 => GameWorldTab::Chat,
             2 => GameWorldTab::Map,
-            3 => GameWorldTab::Inventory,
+            3 => GameWorldTab::Objects,
             _ => unreachable!(),
         };
 
@@ -210,12 +210,69 @@ fn render_map_tab(frame: &mut Frame, area: Rect) {
 }
 
 /// Render the Inventory tab
-/// TODO: Implement inventory rendering
-fn render_inventory_tab(frame: &mut Frame, area: Rect) {
-    let paragraph = Paragraph::new("TODO: Inventory view")
-        .block(Block::default().title("Inventory").borders(Borders::ALL))
-        .alignment(Alignment::Center)
-        .style(Style::default().fg(Color::Gray));
+/// Render the Objects tab - displays all tracked objects from ObjectTracker
+fn render_objects_tab(frame: &mut Frame, area: Rect, app: &App) {
+    let object_count = app.object_tracker.object_count();
 
-    frame.render_widget(paragraph, area);
+    // Collect and sort objects by ID
+    let mut objects: Vec<_> = app.object_tracker.objects.values().collect();
+    objects.sort_by_key(|obj| obj.object_id);
+
+    // Create rows for each object
+    let rows: Vec<Row> = objects
+        .into_iter()
+        .map(|obj| {
+            let container_str = obj
+                .container_id
+                .map(|id| {
+                    // Check if container is the player
+                    if Some(id) == app.object_tracker.player_id {
+                        // Look up player's name from tracker, fallback to account name
+                        app.object_tracker
+                            .get_object(id)
+                            .map(|player| player.name.clone())
+                            .unwrap_or_else(|| app.client_status.account_name.clone())
+                    } else {
+                        // Look up container object in the tracker to get its name
+                        app.object_tracker
+                            .get_object(id)
+                            .map(|container| container.name.clone())
+                            .unwrap_or_else(|| id.to_string())
+                    }
+                })
+                .unwrap_or_else(|| "World".to_string());
+
+            Row::new(vec![
+                obj.object_id.to_string(),
+                obj.name.clone(),
+                obj.object_type.clone(),
+                container_str,
+                obj.burden.to_string(),
+            ])
+        })
+        .collect();
+
+    // Create table with header
+    let header = Row::new(vec!["ObjectId", "Name", "Type", "Container", "Burden"])
+        .style(Style::default().fg(Color::Yellow).bold());
+
+    let table = Table::new(
+        rows,
+        [
+            Constraint::Max(12),
+            Constraint::Max(30),
+            Constraint::Max(20),
+            Constraint::Max(12),
+            Constraint::Max(10),
+        ],
+    )
+    .header(header)
+    .block(
+        Block::default()
+            .title(format!("Objects [Total: {}]", object_count))
+            .borders(Borders::ALL),
+    )
+    .style(Style::default().fg(Color::White));
+
+    frame.render_widget(table, area);
 }

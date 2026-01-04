@@ -74,9 +74,21 @@ impl MessageHandler<acprotocol::messages::s2c::ItemCreateObject> for Client {
             .raw_event_tx
             .try_send(ClientEvent::Protocol(protocol_event));
 
-        Some(GameEvent::CreateObject {
+        Some(GameEvent::ItemCreateObject {
             object_id,
-            object_name,
+            name: object_name,
+            item_type: format!("{:?}", create_obj.weenie_description.type_),
+            container_id: create_obj.weenie_description.container_id.map(|id| id.0),
+            burden: create_obj.weenie_description.burden.unwrap_or(0) as u32,
+            value: create_obj.weenie_description.value.unwrap_or(0),
+            items_capacity: create_obj
+                .weenie_description
+                .items_capacity
+                .map(|c| c as u32),
+            container_capacity: create_obj
+                .weenie_description
+                .container_capacity
+                .map(|c| c as u32),
         })
     }
 }
@@ -351,5 +363,44 @@ impl MessageHandler<acprotocol::messages::s2c::CharacterCharGenVerificationRespo
         });
 
         None
+    }
+}
+
+/// Handle ItemSetState messages
+impl MessageHandler<acprotocol::messages::s2c::ItemSetState> for Client {
+    fn handle(&mut self, state_msg: acprotocol::messages::s2c::ItemSetState) -> Option<GameEvent> {
+        let object_id = state_msg.object_id.0;
+        let new_state = format!("{:?}", state_msg.new_state);
+
+        info!(target: "net", "ItemSetState: Object {} state changed to {}", object_id, new_state);
+
+        // For now, we'll just emit as a generic state property update
+        Some(GameEvent::ItemSetState {
+            object_id,
+            property_name: "State".to_string(),
+            value: 0, // State is a bitfield, not a simple int
+        })
+    }
+}
+
+/// Handle QualitiesPrivateUpdateInt messages
+impl MessageHandler<acprotocol::messages::s2c::QualitiesPrivateUpdateInt> for Client {
+    fn handle(
+        &mut self,
+        quality_msg: acprotocol::messages::s2c::QualitiesPrivateUpdateInt,
+    ) -> Option<GameEvent> {
+        let property_name = format!("{:?}", quality_msg.key);
+        let value = quality_msg.value as i32;
+
+        info!(target: "net", "QualitiesPrivateUpdateInt: Property {} = {}", property_name, value);
+
+        // This is a global quality update, not tied to a specific object
+        // For now we'll emit with object_id 0 (or handle this differently)
+        // In reality, this might update the player or a specific object
+        Some(GameEvent::QualitiesPrivateUpdateInt {
+            object_id: 0, // TODO: determine which object this applies to
+            property_name,
+            value,
+        })
     }
 }

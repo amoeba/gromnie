@@ -35,6 +35,12 @@ impl ToProtocolEvent for acprotocol::messages::s2c::ItemCreateObject {
         S2CEvent::ItemCreateObject {
             object_id: self.object_id.0,
             name: self.weenie_description.name.clone(),
+            item_type: format!("{:?}", self.weenie_description.type_),
+            container_id: self.weenie_description.container_id.map(|id| id.0),
+            burden: self.weenie_description.burden.unwrap_or(0) as u32,
+            value: self.weenie_description.value.unwrap_or(0),
+            items_capacity: self.weenie_description.items_capacity.map(|c| c as u32),
+            container_capacity: self.weenie_description.container_capacity.map(|c| c as u32),
         }
     }
 }
@@ -81,6 +87,24 @@ impl ToProtocolEvent for acprotocol::messages::s2c::DDDInterrogationMessage {
 impl ToProtocolEvent for acprotocol::messages::s2c::CharacterCharGenVerificationResponse {
     fn to_protocol_event(&self) -> S2CEvent {
         S2CEvent::CharGenVerificationResponse
+    }
+}
+
+impl ToProtocolEvent for acprotocol::messages::s2c::ItemSetState {
+    fn to_protocol_event(&self) -> S2CEvent {
+        S2CEvent::ItemSetState {
+            object_id: self.object_id.0,
+            state: format!("{:?}", self.new_state),
+        }
+    }
+}
+
+impl ToProtocolEvent for acprotocol::messages::s2c::QualitiesPrivateUpdateInt {
+    fn to_protocol_event(&self) -> S2CEvent {
+        S2CEvent::QualitiesPrivateUpdateInt {
+            property: format!("{:?}", self.key),
+            value: self.value as i32,
+        }
     }
 }
 

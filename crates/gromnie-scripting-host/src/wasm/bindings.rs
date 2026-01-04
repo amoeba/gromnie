@@ -207,9 +207,7 @@ fn convert_scene_to_wit(scene: &gromnie_client::client::Scene) -> gromnie::scrip
             )
         }
         Scene::CharacterCreate(_) => gromnie::scripting::host::Scene::CharacterCreate(
-            gromnie::scripting::host::CharacterCreateScene {
-                placeholder: false,
-            },
+            gromnie::scripting::host::CharacterCreateScene { placeholder: false },
         ),
         Scene::InWorld(in_world) => {
             gromnie::scripting::host::Scene::InWorld(gromnie::scripting::host::InWorldScene {
