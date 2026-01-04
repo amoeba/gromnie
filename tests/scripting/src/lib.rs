@@ -1,8 +1,8 @@
 // Test script that exercises all major scripting functionality
 // This will be compiled to WASM for testing the scripting host
 
-use gromnie_scripting_api as gromnie;
 use gromnie::ScriptEvent;
+use gromnie_scripting_api as gromnie;
 
 /// Helper function to handle protocol events with detailed pattern matching
 /// This demonstrates how scripts can access strongly-typed protocol events
@@ -68,7 +68,9 @@ fn handle_protocol_event(protocol_event: gromnie::ProtocolEvent) {
                 ));
             }
             S2cEvent::ChargenVerificationResponse => {
-                gromnie::log("[Protocol] CharGenVerificationResponse - Character creation verified");
+                gromnie::log(
+                    "[Protocol] CharGenVerificationResponse - Character creation verified",
+                );
             }
         },
         // Nested game events with metadata
