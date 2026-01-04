@@ -129,8 +129,7 @@ mod script_impl {
 
     // This function is defined by the register_script! macro
     // It will be defined in user code and linked into the WASM module
-    #[expect(improper_ctypes)]
-    unsafe extern "C" {
+    unsafe extern "Rust" {
         fn __gromnie_script_constructor() -> Box<dyn WasmScript>;
     }
 
@@ -236,7 +235,7 @@ macro_rules! register_script {
     ($script_type:ty) => {
         #[doc(hidden)]
         #[unsafe(no_mangle)]
-        pub extern "C" fn __gromnie_script_constructor() -> ::std::boxed::Box<dyn $crate::WasmScript>
+        pub fn __gromnie_script_constructor() -> ::std::boxed::Box<dyn $crate::WasmScript>
         {
             ::std::boxed::Box::new(<$script_type as $crate::WasmScript>::new())
         }
