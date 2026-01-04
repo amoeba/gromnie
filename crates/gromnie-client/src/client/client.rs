@@ -1418,9 +1418,9 @@ impl Client {
             }
 
             // Emit Connected event to notify UI/scripts that connection is established
-            let _ = self
-                .raw_event_tx
-                .try_send(ClientEvent::State(crate::client::ClientStateEvent::Connected));
+            let _ = self.raw_event_tx.try_send(ClientEvent::State(
+                crate::client::ClientStateEvent::Connected,
+            ));
             info!(target: "net", "Emitted Connected event - connection handshake complete");
         }
 
