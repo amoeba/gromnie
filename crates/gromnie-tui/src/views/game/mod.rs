@@ -1,10 +1,12 @@
 pub mod character_select;
 pub mod connecting;
+pub mod error;
 pub mod world;
 
 // Re-export the game view rendering functions
 pub use character_select::render_character_select_view;
 pub use connecting::render_connecting_view;
+pub use error::render_error_view;
 pub use world::render_game_world_view;
 
 use crate::app::{App, GameScene};
@@ -46,6 +48,9 @@ pub fn render_game_view(frame: &mut Frame, app: &App) {
             created_objects,
         } => {
             render_game_world_view(frame, chunks[1], app, state, created_objects);
+        }
+        GameScene::Error(message) => {
+            render_error_view(frame, chunks[1], app, message);
         }
     }
 
