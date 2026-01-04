@@ -1,9 +1,9 @@
 // Test script that exercises all major scripting functionality
 // This will be compiled to WASM for testing the scripting host
 
+use gromnie::host_interface::ProtocolEvent;
 use gromnie::ScriptEvent;
 use gromnie_scripting_api as gromnie;
-use gromnie::host_interface::ProtocolEvent;
 
 /// Helper function to handle protocol events with detailed pattern matching
 /// This demonstrates how scripts can access strongly-typed protocol events
