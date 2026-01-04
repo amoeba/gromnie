@@ -575,7 +575,11 @@ impl App {
                 }
 
                 // Also track in object tracker
-                let mut obj = crate::object_tracker::WorldObject::new(object_id, name.clone(), item_type.clone());
+                let mut obj = crate::object_tracker::WorldObject::new(
+                    object_id,
+                    name.clone(),
+                    item_type.clone(),
+                );
                 obj.container_id = container_id;
                 obj.burden = burden;
                 obj.value = value;
