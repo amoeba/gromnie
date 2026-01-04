@@ -12,6 +12,8 @@ pub const WIT_CONTENT: &str = include_str!("wit/gromnie-script.wit");
 pub use wit_bindgen;
 
 // Generate bindings from WIT at compile time for script use
+// This generates unsafe functions that require unsafe blocks in Rust 2024
+#[expect(unsafe_op_in_unsafe_fn)]
 wit_bindgen::generate!({
     path: "src/wit",
     world: "script",
