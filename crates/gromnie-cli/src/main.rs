@@ -8,7 +8,7 @@ use tracing::info;
 use tracing_subscriber::EnvFilter;
 
 use gromnie_cli::{app::App, run as cli_run};
-use gromnie_client::config::GromnieConfig;
+use gromnie_client::config::{ConfigLoadError, GromnieConfig};
 
 #[derive(Parser)]
 #[command(version, about, long_about = None)]
@@ -36,6 +36,11 @@ pub struct Cli {
 
 fn create_example_config() -> Result<(), Box<dyn Error>> {
     let config_path = GromnieConfig::config_path();
+
+    // Never overwrite an existing config file
+    if config_path.exists() {
+        return Err("Config file already exists at {}. Please edit it manually or delete it to create a new one.".into());
+    }
 
     // Create parent directories if they don't exist
     if let Some(parent) = config_path.parent() {
@@ -84,10 +89,13 @@ async fn main() -> Result<(), Box<dyn Error>> {
             info!("Loaded existing config");
             cfg
         }
-        Err(_) => {
+        Err(ConfigLoadError::NotFound) => {
             info!("No config found, creating example config");
             create_example_config()?;
             return Ok(());
+        }
+        Err(err) => {
+            return Err(format!("Failed to load config: {}", err).into());
         }
     };
 
