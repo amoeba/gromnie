@@ -1416,6 +1416,12 @@ impl Client {
                 info!(target: "net", "Progress: ConnectResponse sent (100%)");
                 info!(target: "net", "Scene transition: Connecting phase -> Patching phase");
             }
+
+            // Emit Connected event to notify UI/scripts that connection is established
+            let _ = self.raw_event_tx.try_send(ClientEvent::State(
+                crate::client::ClientStateEvent::Connected,
+            ));
+            info!(target: "net", "Emitted Connected event - connection handshake complete");
         }
 
         if flags.contains(PacketHeaderFlags::ACK_SEQUENCE) {
