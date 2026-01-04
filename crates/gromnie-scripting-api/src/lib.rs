@@ -117,6 +117,7 @@ pub use WasmScript as Script;
 // Only compile this code when building for WASM targets or running tests
 // This prevents linker errors when this crate is used as a dependency in non-WASM builds
 #[cfg(any(target_family = "wasm", test))]
+#[expect(unsafe_op_in_unsafe_fn)]
 mod script_impl {
     use super::*;
 
@@ -126,6 +127,7 @@ mod script_impl {
 
     // This function is defined by the register_script! macro
     // It will be defined in user code and linked into the WASM module
+    #[expect(improper_ctypes)]
     unsafe extern "C" {
         fn __gromnie_script_constructor() -> Box<dyn WasmScript>;
     }
