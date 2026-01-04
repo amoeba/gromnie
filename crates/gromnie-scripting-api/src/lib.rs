@@ -125,9 +125,10 @@ pub trait WasmScript {
 
 pub use WasmScript as Script;
 
-// Only compile this code when building for WASM targets or running tests
+// Only compile this code when building for WASM targets
 // This prevents linker errors when this crate is used as a dependency in non-WASM builds
-#[cfg(any(target_family = "wasm", test))]
+// or when running tests on this crate itself
+#[cfg(target_family = "wasm")]
 mod script_impl {
     use super::*;
 
@@ -164,15 +165,15 @@ mod script_impl {
     }
 }
 
-#[cfg(any(target_family = "wasm", test))]
+#[cfg(target_family = "wasm")]
 use script_impl::{ensure_initialized, script};
 
 // Implement Guest trait to bridge to user's Script
-// Only export this when building for WASM or tests
-#[cfg(any(target_family = "wasm", test))]
+// Only export this when building for WASM targets
+#[cfg(target_family = "wasm")]
 export!(ScriptComponent);
 
-#[cfg(any(target_family = "wasm", test))]
+#[cfg(target_family = "wasm")]
 struct ScriptComponent;
 
 // The export! macro above generates CABI wrappers that call unsafe functions without unsafe blocks.
@@ -182,7 +183,7 @@ struct ScriptComponent;
 // 3. The unsafe requirements come from Rust 2024 edition's stricter unsafe rules
 //
 // We suppress the unsafe_op_in_unsafe_fn lint at the crate level (in lib.rs) to allow this.
-#[cfg(any(target_family = "wasm", test))]
+#[cfg(target_family = "wasm")]
 impl Guest for ScriptComponent {
     fn init() {
         ensure_initialized();
