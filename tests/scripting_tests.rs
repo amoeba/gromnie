@@ -53,10 +53,6 @@ async fn test_event_handling() {
             message: "Hello World".to_string(),
             message_type: 1,
         },
-        GameEvent::CreateObject {
-            object_id: 123,
-            object_name: "Test Object".to_string(),
-        },
     ];
     
     // Process events

@@ -33,6 +33,20 @@ pub enum S2CEvent {
     ItemCreateObject {
         object_id: u32,
         name: String,
+        item_type: String,
+        container_id: Option<u32>,
+        burden: u32,
+        value: u32,
+        items_capacity: Option<u32>,
+        container_capacity: Option<u32>,
+    },
+    ItemOnViewContents {
+        container_id: u32,
+        items: Vec<u32>,
+    },
+    PlayerContainersReceived {
+        player_id: u32,
+        containers: Vec<u32>,
     },
     CharacterError {
         error_code: u32,
@@ -54,6 +68,14 @@ pub enum S2CEvent {
         product: String,
     },
     CharGenVerificationResponse,
+    ItemSetState {
+        object_id: u32,
+        state: String,
+    },
+    QualitiesPrivateUpdateInt {
+        property: String,
+        value: i32,
+    },
 }
 
 /// Nested game events with OrderedGameEvent metadata

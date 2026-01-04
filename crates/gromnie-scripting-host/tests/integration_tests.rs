@@ -89,16 +89,10 @@ async fn test_event_handling() {
     }
 
     // Create test events
-    let test_events = vec![
-        GameEvent::ChatMessageReceived {
-            message: "Hello World".to_string(),
-            message_type: 1,
-        },
-        GameEvent::CreateObject {
-            object_id: 123,
-            object_name: "Test Object".to_string(),
-        },
-    ];
+    let test_events = vec![GameEvent::ChatMessageReceived {
+        message: "Hello World".to_string(),
+        message_type: 1,
+    }];
 
     // Process events
     for event in test_events {
@@ -249,6 +243,12 @@ async fn test_protocol_event_flow() {
         ProtocolEvent::S2C(S2CEvent::ItemCreateObject {
             object_id: 0xABCDEF00,
             name: "Magic Sword".to_string(),
+            item_type: "MISSILE_WEAPON".to_string(),
+            container_id: Some(0x50000001),
+            burden: 980,
+            value: 2000,
+            items_capacity: None,
+            container_capacity: None,
         }),
         // CharacterError event
         ProtocolEvent::S2C(S2CEvent::CharacterError {

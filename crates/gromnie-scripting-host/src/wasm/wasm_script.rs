@@ -283,7 +283,7 @@ fn client_event_to_wasm(event: &ClientEvent) -> gromnie::scripting::host::Script
 fn game_event_to_wasm(event: &GameEvent) -> gromnie::scripting::host::GameEvent {
     use gromnie::scripting::host::{
         AccountData, CharacterError as WitCharacterError, CharacterIdentity, ChatMessage,
-        GameEvent as WitGameEvent, WorldObject,
+        GameEvent as WitGameEvent,
     };
 
     match event {
@@ -310,14 +310,6 @@ fn game_event_to_wasm(event: &GameEvent) -> gromnie::scripting::host::GameEvent 
         } => WitGameEvent::CharacterError(WitCharacterError {
             error_code: *error_code,
             error_message: error_message.clone(),
-        }),
-
-        GameEvent::CreateObject {
-            object_id,
-            object_name,
-        } => WitGameEvent::CreateObject(WorldObject {
-            id: *object_id,
-            name: object_name.clone(),
         }),
 
         GameEvent::ChatMessageReceived {
@@ -448,12 +440,12 @@ fn s2c_event_to_wit(event: &S2CEvent) -> gromnie::scripting::host::S2cEvent {
                 .collect(),
             num_slots: *num_slots,
         }),
-        S2CEvent::ItemCreateObject { object_id, name } => {
-            WitS2cEvent::ItemCreateObject(ItemCreateObjectMsg {
-                object_id: *object_id,
-                name: name.clone(),
-            })
-        }
+        S2CEvent::ItemCreateObject {
+            object_id, name, ..
+        } => WitS2cEvent::ItemCreateObject(ItemCreateObjectMsg {
+            object_id: *object_id,
+            name: name.clone(),
+        }),
         S2CEvent::CharacterError {
             error_code,
             error_message,

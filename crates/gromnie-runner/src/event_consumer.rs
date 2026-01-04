@@ -70,12 +70,6 @@ impl EventConsumer for LoggingConsumer {
                 GameEvent::LoginFailed { reason } => {
                     error!(target: "events", "LoginFailed -- Reason: {}", reason);
                 }
-                GameEvent::CreateObject {
-                    object_id,
-                    object_name,
-                } => {
-                    info!(target: "events", "CREATE OBJECT: {} (0x{:08X})", object_name, object_id);
-                }
                 GameEvent::ChatMessageReceived {
                     message,
                     message_type,
@@ -96,6 +90,54 @@ impl EventConsumer for LoggingConsumer {
                 }
                 GameEvent::CreatePlayer { character_id } => {
                     info!(target: "events", "CREATE PLAYER: Character ID {}", character_id);
+                }
+                GameEvent::ItemCreateObject {
+                    object_id,
+                    name,
+                    item_type,
+                    container_id,
+                    burden,
+                    value,
+                    items_capacity: _,
+                    container_capacity: _,
+                } => {
+                    info!(target: "events", "ITEM CREATE: {} (ID: {}, Type: {}, Container: {:?}, Burden: {}, Value: {})",
+                        name, object_id, item_type, container_id, burden, value);
+                }
+                GameEvent::ItemOnViewContents {
+                    container_id,
+                    items,
+                } => {
+                    info!(target: "events", "ITEM VIEW CONTENTS: Container {} has {} items", container_id, items.len());
+                }
+                GameEvent::PlayerContainersReceived {
+                    player_id,
+                    containers,
+                } => {
+                    info!(target: "events", "PLAYER CONTAINERS: Player {} has {} containers", player_id, containers.len());
+                }
+                GameEvent::ItemDeleteObject { object_id } => {
+                    info!(target: "events", "ITEM DELETE: Object ID {}", object_id);
+                }
+                GameEvent::ItemMovedObject {
+                    object_id,
+                    new_container_id,
+                } => {
+                    info!(target: "events", "ITEM MOVED: Object {} moved to container {}", object_id, new_container_id);
+                }
+                GameEvent::QualitiesPrivateUpdateInt {
+                    object_id,
+                    property_name,
+                    value,
+                } => {
+                    info!(target: "events", "QUALITY UPDATE: Object {} property {} = {}", object_id, property_name, value);
+                }
+                GameEvent::ItemSetState {
+                    object_id,
+                    property_name,
+                    value,
+                } => {
+                    info!(target: "events", "ITEM SET STATE: Object {} property {} = {}", object_id, property_name, value);
                 }
             },
             EventType::State(state_event) => {
@@ -398,12 +440,6 @@ impl EventConsumer for DiscordConsumer {
                     GameEvent::LoginFailed { reason } => {
                         error!(target: "events", "LoginFailed -- Reason: {}", reason);
                     }
-                    GameEvent::CreateObject {
-                        object_id,
-                        object_name,
-                    } => {
-                        debug!(target: "events", "CREATE OBJECT: {} (0x{:08X})", object_name, object_id);
-                    }
                     GameEvent::ConnectingSetProgress { progress } => {
                         debug!(target: "events", "Connecting progress: {:.1}%", progress * 100.0);
                     }
@@ -418,6 +454,15 @@ impl EventConsumer for DiscordConsumer {
                     }
                     GameEvent::CreatePlayer { character_id } => {
                         debug!(target: "events", "CREATE PLAYER: Character ID {}", character_id);
+                    }
+                    GameEvent::ItemCreateObject { .. }
+                    | GameEvent::ItemOnViewContents { .. }
+                    | GameEvent::PlayerContainersReceived { .. }
+                    | GameEvent::ItemDeleteObject { .. }
+                    | GameEvent::ItemMovedObject { .. }
+                    | GameEvent::QualitiesPrivateUpdateInt { .. }
+                    | GameEvent::ItemSetState { .. } => {
+                        // Ignore inventory events in Discord consumer
                     }
                 }
             }
