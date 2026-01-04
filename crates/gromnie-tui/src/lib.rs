@@ -1,6 +1,7 @@
 pub mod app;
 pub mod components;
 pub mod event_handler;
+pub mod object_tracker;
 pub mod ui;
 pub mod views;
 
