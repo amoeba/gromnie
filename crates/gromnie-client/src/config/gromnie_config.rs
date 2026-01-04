@@ -7,6 +7,25 @@ use crate::config::{
     account_config::AccountConfig, scripting_config::ScriptingConfig, server_config::ServerConfig,
 };
 
+#[derive(Debug)]
+pub enum ConfigLoadError {
+    NotFound,
+    ParseError(String),
+    IoError(String),
+}
+
+impl std::fmt::Display for ConfigLoadError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ConfigLoadError::NotFound => write!(f, "Config file not found"),
+            ConfigLoadError::ParseError(msg) => write!(f, "Failed to parse config: {}", msg),
+            ConfigLoadError::IoError(msg) => write!(f, "IO error reading config: {}", msg),
+        }
+    }
+}
+
+impl std::error::Error for ConfigLoadError {}
+
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct GromnieConfig {
     #[serde(default)]
@@ -31,15 +50,17 @@ impl GromnieConfig {
         proj_dirs.config_dir().join("config.toml")
     }
 
-    pub fn load() -> Result<Self, Box<dyn std::error::Error>> {
+    pub fn load() -> Result<Self, ConfigLoadError> {
         let path = Self::config_path();
 
         if !path.exists() {
-            return Err("Config file not found".into());
+            return Err(ConfigLoadError::NotFound);
         }
 
-        let content = fs::read_to_string(&path)?;
-        let config = toml::from_str(&content)?;
+        let content =
+            fs::read_to_string(&path).map_err(|e| ConfigLoadError::IoError(e.to_string()))?;
+        let config =
+            toml::from_str(&content).map_err(|e| ConfigLoadError::ParseError(e.to_string()))?;
         info!("Loaded config from {}", path.display());
         Ok(config)
     }
