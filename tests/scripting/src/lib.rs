@@ -1,12 +1,13 @@
 // Test script that exercises all major scripting functionality
 // This will be compiled to WASM for testing the scripting host
 
+use gromnie::host_interface::ProtocolEvent;
 use gromnie::ScriptEvent;
 use gromnie_scripting_api as gromnie;
 
 /// Helper function to handle protocol events with detailed pattern matching
 /// This demonstrates how scripts can access strongly-typed protocol events
-fn handle_protocol_event(protocol_event: gromnie::ProtocolEvent) {
+fn handle_protocol_event(protocol_event: ProtocolEvent) {
     use gromnie::host::*;
 
     match protocol_event {
@@ -26,7 +27,7 @@ fn handle_protocol_event(protocol_event: gromnie::ProtocolEvent) {
                     msg.num_slots
                 ));
                 for character in msg.characters {
-                    host::log(&format!(
+                    gromnie::log(&format!(
                         "  - {} (ID: 0x{:08X})",
                         character.name, character.character_id
                     ));

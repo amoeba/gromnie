@@ -75,6 +75,8 @@ pub enum GameScene {
         state: GameWorldState,
         created_objects: Vec<(u32, String)>,
     },
+    /// Error state - showing an error message
+    Error(String),
 }
 
 /// Sub-states within the GameWorld scene
@@ -359,6 +361,8 @@ impl App {
                 error_code,
                 error_message,
             } => {
+                self.game_scene = GameScene::Error(error_message.clone());
+
                 self.add_network_message(NetworkMessage::Received {
                     opcode: format!("0x{:04X}", error_code),
                     description: format!("Character error: {}", error_message),
@@ -435,39 +439,59 @@ impl App {
 
     /// Update from state events from the client
     pub fn update_from_state_event(&mut self, state_event: ClientStateEvent) {
-        let (session, scene) = match state_event {
+        let (session, scene, game_scene_update) = match state_event {
             ClientStateEvent::Connecting => {
-                (SessionState::AuthLoginRequest, SceneState::Connecting)
+                (SessionState::AuthLoginRequest, SceneState::Connecting, None)
             }
-            ClientStateEvent::Connected => {
-                (SessionState::AuthConnectResponse, SceneState::Connecting)
+            ClientStateEvent::Connected => (
+                SessionState::AuthConnectResponse,
+                SceneState::Connecting,
+                None,
+            ),
+            ClientStateEvent::ConnectingFailed { reason } => (
+                SessionState::AuthLoginRequest,
+                SceneState::Error(reason.clone()),
+                Some(GameScene::Error(reason)),
+            ),
+            ClientStateEvent::Patching => {
+                (SessionState::AuthConnected, SceneState::Connecting, None)
             }
-            ClientStateEvent::ConnectingFailed { reason } => {
-                (SessionState::AuthLoginRequest, SceneState::Error(reason))
-            }
-            ClientStateEvent::Patching => (SessionState::AuthConnected, SceneState::Connecting),
-            ClientStateEvent::Patched => (SessionState::AuthConnected, SceneState::CharacterSelect),
-            ClientStateEvent::PatchingFailed { reason } => {
-                (SessionState::AuthConnected, SceneState::Error(reason))
-            }
-            ClientStateEvent::CharacterSelect => {
-                (SessionState::AuthConnected, SceneState::CharacterSelect)
-            }
+            ClientStateEvent::Patched => (
+                SessionState::AuthConnected,
+                SceneState::CharacterSelect,
+                None,
+            ),
+            ClientStateEvent::PatchingFailed { reason } => (
+                SessionState::AuthConnected,
+                SceneState::Error(reason.clone()),
+                Some(GameScene::Error(reason)),
+            ),
+            ClientStateEvent::CharacterSelect => (
+                SessionState::AuthConnected,
+                SceneState::CharacterSelect,
+                None,
+            ),
             ClientStateEvent::EnteringWorld => {
-                (SessionState::AuthConnected, SceneState::EnteringWorld)
+                (SessionState::AuthConnected, SceneState::EnteringWorld, None)
             }
-            ClientStateEvent::InWorld => (SessionState::WorldConnected, SceneState::InWorld),
-            ClientStateEvent::ExitingWorld => {
-                (SessionState::AuthConnected, SceneState::CharacterSelect)
-            }
+            ClientStateEvent::InWorld => (SessionState::WorldConnected, SceneState::InWorld, None),
+            ClientStateEvent::ExitingWorld => (
+                SessionState::AuthConnected,
+                SceneState::CharacterSelect,
+                None,
+            ),
             ClientStateEvent::CharacterError => (
                 SessionState::AuthConnected,
                 SceneState::Error("Character error".to_string()),
+                Some(GameScene::Error("Character error".to_string())),
             ),
         };
 
         self.client_status.session_state = session;
         self.client_status.scene_state = scene;
+        if let Some(scene) = game_scene_update {
+            self.game_scene = scene;
+        }
     }
 }
 
