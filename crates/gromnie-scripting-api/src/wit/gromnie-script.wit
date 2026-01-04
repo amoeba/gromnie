@@ -93,7 +93,8 @@ interface host {
 
     /// Character creation scene state
     record character-create-scene {
-        // Stubbed for now
+        /// Placeholder field (WIT records must have at least one field)
+        placeholder: bool,
     }
 
     /// In-world scene state
