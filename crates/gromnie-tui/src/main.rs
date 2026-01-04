@@ -55,16 +55,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     };
 
-    // Initialize tracing subscriber
-    tracing_subscriber::fmt()
-        .with_writer(std::io::stderr)
-        .with_env_filter(EnvFilter::try_from_default_env().unwrap_or_else(|_| {
-            EnvFilter::new(
-                "info,event_wrapper=debug,tui_consumer=debug,tui_main=debug,events=debug",
-            )
-        }))
-        .init();
-
     let cli = Cli::parse();
 
     // Resolve server and account from CLI args
