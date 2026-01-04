@@ -26,14 +26,9 @@ fn handle_protocol_event(protocol_event: gromnie::ProtocolEvent) {
                     msg.num_slots
                 ));
                 for character in msg.characters {
-                    let status = if character.delete_pending {
-                        "PENDING DELETION"
-                    } else {
-                        "Active"
-                    };
-                    gromnie::log(&format!(
-                        "  - {} (ID: 0x{:08X}) [{}]",
-                        character.name, character.id, status
+                    host::log(&format!(
+                        "  - {} (ID: 0x{:08X})",
+                        character.name, character.character_id
                     ));
                 }
             }
