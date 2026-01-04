@@ -54,7 +54,12 @@ impl ReconnectConfig {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ServerConfig {
     pub host: String,
+    #[serde(default = "default_port")]
     pub port: u16,
+}
+
+fn default_port() -> u16 {
+    9000
 }
 
 impl std::fmt::Display for ServerConfig {
