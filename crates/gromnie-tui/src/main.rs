@@ -55,17 +55,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     };
 
-    // Initialize tracing subscriber with file logging for debugging
-    // Log progress and event flow to file in current directory, but keep console clean for TUI
-    let log_file = std::fs::OpenOptions::new()
-        .create(true)
-        .truncate(true) // Start fresh each run
-        .write(true)
-        .open("gromnie-tui-debug.log")
-        .unwrap();
-
+    // Initialize tracing subscriber
     tracing_subscriber::fmt()
-        .with_writer(log_file)
+        .with_writer(std::io::stderr)
         .with_env_filter(EnvFilter::try_from_default_env().unwrap_or_else(|_| {
             EnvFilter::new(
                 "info,event_wrapper=debug,tui_consumer=debug,tui_main=debug,events=debug",
