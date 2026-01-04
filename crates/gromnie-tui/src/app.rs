@@ -570,23 +570,18 @@ impl App {
                     self.inventory_state
                         .container_items
                         .entry(cid)
-                        .or_insert_with(Vec::new)
+                        .or_default()
                         .push(object_id);
                 }
 
                 // Also track in object tracker
-                self.object_tracker.handle_item_create(
-                    object_id,
-                    name.clone(),
-                    item_type.clone(),
-                    container_id,
-                    burden,
-                    value,
-                    items_capacity,
-                    container_capacity,
-                    None,
-                    None,
-                );
+                let mut obj = crate::object_tracker::WorldObject::new(object_id, name.clone(), item_type.clone());
+                obj.container_id = container_id;
+                obj.burden = burden;
+                obj.value = value;
+                obj.items_capacity = items_capacity;
+                obj.container_capacity = container_capacity;
+                self.object_tracker.handle_item_create(obj);
 
                 // Add object to the list if we're in the game world scene
                 if let GameScene::GameWorld {
@@ -682,19 +677,18 @@ impl App {
                     item.container_id = Some(new_container_id);
 
                     // Remove from old container's contents
-                    if let Some(old_cid) = old_container {
-                        if let Some(contents) =
+                    if let Some(old_cid) = old_container
+                        && let Some(contents) =
                             self.inventory_state.container_items.get_mut(&old_cid)
-                        {
-                            contents.retain(|&id| id != object_id);
-                        }
+                    {
+                        contents.retain(|&id| id != object_id);
                     }
 
                     // Add to new container's contents
                     self.inventory_state
                         .container_items
                         .entry(new_container_id)
-                        .or_insert_with(Vec::new)
+                        .or_default()
                         .push(object_id);
                 }
 

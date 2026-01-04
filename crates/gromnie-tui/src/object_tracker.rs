@@ -67,35 +67,15 @@ impl ObjectTracker {
     }
 
     /// Process ItemCreateObject message
-    pub fn handle_item_create(
-        &mut self,
-        object_id: u32,
-        name: String,
-        object_type: String,
-        container_id: Option<u32>,
-        burden: u32,
-        value: u32,
-        items_capacity: Option<u32>,
-        container_capacity: Option<u32>,
-        stack_size: Option<u32>,
-        max_stack_size: Option<u32>,
-    ) {
-        let mut obj = WorldObject::new(object_id, name, object_type);
-        obj.container_id = container_id;
-        obj.burden = burden;
-        obj.value = value;
-        obj.items_capacity = items_capacity;
-        obj.container_capacity = container_capacity;
-        obj.stack_size = stack_size;
-        obj.max_stack_size = max_stack_size;
-
-        self.objects.insert(object_id, obj);
+    pub fn handle_item_create(&mut self, obj: WorldObject) {
+        let object_id = obj.object_id;
+        self.objects.insert(object_id, obj.clone());
 
         // Track in container_contents if it has a container
-        if let Some(cid) = container_id {
+        if let Some(cid) = obj.container_id {
             self.container_contents
                 .entry(cid)
-                .or_insert_with(Vec::new)
+                .or_default()
                 .push(object_id);
         }
     }
@@ -104,10 +84,10 @@ impl ObjectTracker {
     pub fn handle_item_delete(&mut self, object_id: u32) {
         if let Some(obj) = self.objects.remove(&object_id) {
             // Remove from parent container
-            if let Some(cid) = obj.container_id {
-                if let Some(contents) = self.container_contents.get_mut(&cid) {
-                    contents.retain(|&id| id != object_id);
-                }
+            if let Some(cid) = obj.container_id
+                && let Some(contents) = self.container_contents.get_mut(&cid)
+            {
+                contents.retain(|&id| id != object_id);
             }
         }
 
@@ -119,17 +99,17 @@ impl ObjectTracker {
     pub fn handle_item_moved(&mut self, object_id: u32, new_container_id: u32) {
         if let Some(obj) = self.objects.get_mut(&object_id) {
             // Remove from old container
-            if let Some(old_cid) = obj.container_id {
-                if let Some(contents) = self.container_contents.get_mut(&old_cid) {
-                    contents.retain(|&id| id != object_id);
-                }
+            if let Some(old_cid) = obj.container_id
+                && let Some(contents) = self.container_contents.get_mut(&old_cid)
+            {
+                contents.retain(|&id| id != object_id);
             }
 
             // Add to new container
             obj.container_id = Some(new_container_id);
             self.container_contents
                 .entry(new_container_id)
-                .or_insert_with(Vec::new)
+                .or_default()
                 .push(object_id);
         }
     }
@@ -138,9 +118,8 @@ impl ObjectTracker {
     pub fn handle_quality_update(&mut self, object_id: u32, property_name: String, value: i32) {
         if let Some(obj) = self.objects.get_mut(&object_id) {
             // Handle specific properties that we track separately
-            match property_name.as_str() {
-                "StackSize" => obj.stack_size = Some(value as u32),
-                _ => {}
+            if property_name.as_str() == "StackSize" {
+                obj.stack_size = Some(value as u32);
             }
 
             obj.properties.insert(property_name, value);
@@ -221,18 +200,12 @@ mod tests {
         let mut tracker = ObjectTracker::new();
         tracker.set_player_id(1000);
 
-        tracker.handle_item_create(
-            2000,
-            "Belt Pouch".to_string(),
-            "CONTAINER".to_string(),
-            Some(1000),
-            500,
-            195725,
-            Some(24),
-            None,
-            None,
-            None,
-        );
+        let mut obj = WorldObject::new(2000, "Belt Pouch".to_string(), "CONTAINER".to_string());
+        obj.container_id = Some(1000);
+        obj.burden = 500;
+        obj.value = 195725;
+        obj.items_capacity = Some(24);
+        tracker.handle_item_create(obj);
 
         assert_eq!(tracker.object_count(), 1);
         let obj = tracker.get_object(2000).unwrap();
@@ -246,32 +219,21 @@ mod tests {
         tracker.set_player_id(1000);
 
         // Create a container
-        tracker.handle_item_create(
-            2000,
-            "Belt Pouch".to_string(),
-            "CONTAINER".to_string(),
-            Some(1000),
-            500,
-            195725,
-            Some(24),
-            None,
-            None,
-            None,
-        );
+        let mut obj = WorldObject::new(2000, "Belt Pouch".to_string(), "CONTAINER".to_string());
+        obj.container_id = Some(1000);
+        obj.burden = 500;
+        obj.value = 195725;
+        obj.items_capacity = Some(24);
+        tracker.handle_item_create(obj);
 
         // Create items in the container
-        tracker.handle_item_create(
-            3000,
-            "Potion".to_string(),
-            "CONSUMABLE".to_string(),
-            Some(2000),
-            10,
-            50,
-            None,
-            None,
-            Some(5),
-            Some(100),
-        );
+        let mut obj = WorldObject::new(3000, "Potion".to_string(), "CONSUMABLE".to_string());
+        obj.container_id = Some(2000);
+        obj.burden = 10;
+        obj.value = 50;
+        obj.stack_size = Some(5);
+        obj.max_stack_size = Some(100);
+        tracker.handle_item_create(obj);
 
         let contents = tracker.get_container_contents(2000);
         assert_eq!(contents.len(), 1);
@@ -284,45 +246,26 @@ mod tests {
         tracker.set_player_id(1000);
 
         // Create two containers
-        tracker.handle_item_create(
-            2000,
-            "Belt Pouch".to_string(),
-            "CONTAINER".to_string(),
-            Some(1000),
-            500,
-            195725,
-            Some(24),
-            None,
-            None,
-            None,
-        );
+        let mut obj = WorldObject::new(2000, "Belt Pouch".to_string(), "CONTAINER".to_string());
+        obj.container_id = Some(1000);
+        obj.burden = 500;
+        obj.value = 195725;
+        obj.items_capacity = Some(24);
+        tracker.handle_item_create(obj);
 
-        tracker.handle_item_create(
-            2001,
-            "Backpack".to_string(),
-            "CONTAINER".to_string(),
-            Some(1000),
-            1000,
-            395725,
-            Some(50),
-            None,
-            None,
-            None,
-        );
+        let mut obj = WorldObject::new(2001, "Backpack".to_string(), "CONTAINER".to_string());
+        obj.container_id = Some(1000);
+        obj.burden = 1000;
+        obj.value = 395725;
+        obj.items_capacity = Some(50);
+        tracker.handle_item_create(obj);
 
         // Create item in first container
-        tracker.handle_item_create(
-            3000,
-            "Potion".to_string(),
-            "CONSUMABLE".to_string(),
-            Some(2000),
-            10,
-            50,
-            None,
-            None,
-            None,
-            None,
-        );
+        let mut obj = WorldObject::new(3000, "Potion".to_string(), "CONSUMABLE".to_string());
+        obj.container_id = Some(2000);
+        obj.burden = 10;
+        obj.value = 50;
+        tracker.handle_item_create(obj);
 
         assert_eq!(tracker.get_container_contents(2000).len(), 1);
 

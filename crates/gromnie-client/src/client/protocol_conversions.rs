@@ -103,7 +103,7 @@ impl ToProtocolEvent for acprotocol::messages::s2c::QualitiesPrivateUpdateInt {
     fn to_protocol_event(&self) -> S2CEvent {
         S2CEvent::QualitiesPrivateUpdateInt {
             property: format!("{:?}", self.key),
-            value: self.value as i32,
+            value: self.value,
         }
     }
 }

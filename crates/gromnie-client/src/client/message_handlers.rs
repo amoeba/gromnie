@@ -390,7 +390,7 @@ impl MessageHandler<acprotocol::messages::s2c::QualitiesPrivateUpdateInt> for Cl
         quality_msg: acprotocol::messages::s2c::QualitiesPrivateUpdateInt,
     ) -> Option<GameEvent> {
         let property_name = format!("{:?}", quality_msg.key);
-        let value = quality_msg.value as i32;
+        let value = quality_msg.value;
 
         info!(target: "net", "QualitiesPrivateUpdateInt: Property {} = {}", property_name, value);
 
