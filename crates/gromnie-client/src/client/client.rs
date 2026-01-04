@@ -69,10 +69,11 @@ pub struct Client {
     pub recv_count: u32,
     last_ack_sent: u32,      // Track the last sequence we ACKed to the server
     unacked_send_count: u32, // Track how many sends we've done without receiving a packet
-    fragment_sequence: u32,  // Counter for outgoing fragment sequences
-    next_game_action_sequence: u32, // Sequence counter for GameAction messages
-    pending_fragments: HashMap<u32, Fragment>, // Track incomplete fragment sequences
-    message_queue: VecDeque<RawMessage>, // Queue of parsed messages to process
+    last_receive_time: Option<std::time::Instant>, // Track when we last received any packet from server
+    fragment_sequence: u32,                        // Counter for outgoing fragment sequences
+    next_game_action_sequence: u32,                // Sequence counter for GameAction messages
+    pending_fragments: HashMap<u32, Fragment>,     // Track incomplete fragment sequences
+    message_queue: VecDeque<RawMessage>,           // Queue of parsed messages to process
     pub(crate) outgoing_message_queue: VecDeque<OutgoingMessage>, // Queue of messages to send with optional delays
     pub(crate) raw_event_tx: mpsc::Sender<ClientEvent>,           // Raw event sender to runner
     action_rx: mpsc::UnboundedReceiver<gromnie_events::SimpleClientAction>, // Receive actions from handlers
@@ -159,6 +160,7 @@ impl Client {
             recv_count: 0,
             last_ack_sent: 0,             // Initialize to 0
             unacked_send_count: 0,        // Initialize to 0
+            last_receive_time: None,      // Initialize to None
             fragment_sequence: 1,         // Start at 1 as per actestclient
             next_game_action_sequence: 0, // Start at 0 for GameAction sequences
             pending_fragments: HashMap::new(),
@@ -198,8 +200,11 @@ impl Client {
         // Set sequence based on include_sequence flag
         packet.sequence = if include_sequence { self.send_count } else { 0 };
 
-        // Track unacked sends - increment each time we send
-        self.unacked_send_count += 1;
+        // Track unacked sends - only increment for sequenced packets that expect a response
+        // Non-sequenced packets (TimeSync, ConnectResponse) don't expect sequenced responses
+        if include_sequence {
+            self.unacked_send_count += 1;
+        }
 
         // Check if we've sent too many packets without receiving a response
         if self.unacked_send_count >= MAX_UNACKED_SENDS {
@@ -213,6 +218,25 @@ impl Client {
                 std::io::ErrorKind::ConnectionReset,
                 "Server not responding",
             ));
+        }
+
+        // Also check if we haven't received ANY packet in too long (30 second timeout)
+        // This catches the case where we're only sending TimeSync packets but getting no response
+        const RECEIVE_TIMEOUT_SECS: u64 = 60;
+        if let Some(last_recv) = self.last_receive_time {
+            let time_since_last_recv = last_recv.elapsed().as_secs();
+            if time_since_last_recv > RECEIVE_TIMEOUT_SECS {
+                error!(
+                    target: "net",
+                    "Haven't received any packet from server in {}s - connection appears dead",
+                    time_since_last_recv
+                );
+                self.enter_disconnected();
+                return Err(std::io::Error::new(
+                    std::io::ErrorKind::ConnectionReset,
+                    "Server not responding",
+                ));
+            }
         }
 
         // CRITICAL: Automatically include ACK if we have received packets that need acknowledging
@@ -692,6 +716,7 @@ impl Client {
         self.recv_count = 0;
         self.last_ack_sent = 0;
         self.unacked_send_count = 0;
+        self.last_receive_time = None;
         self.fragment_sequence = 1;
         self.next_game_action_sequence = 0;
 
@@ -864,6 +889,9 @@ impl Client {
         // Increment send_count first, then use it (matches actestclient behavior)
         self.send_count += 1;
         let packet_sequence = self.send_count;
+
+        // Track unacked sends - fragmented messages always expect a response
+        self.unacked_send_count += 1;
 
         // CRITICAL: Automatically include ACK if we have received packets that need acknowledging
         // This matches actestclient behavior and keeps the connection alive!
@@ -1329,6 +1357,9 @@ impl Client {
     }
 
     pub async fn process_packet(&mut self, buffer: &[u8], size: usize, peer: &SocketAddr) {
+        // Track last receive time for disconnect detection
+        self.last_receive_time = Some(std::time::Instant::now());
+
         // Pull out TransitHeader first and inspect
         let mut cursor = std::io::Cursor::new(buffer);
         let packet = PacketHeader::read(&mut cursor).unwrap();

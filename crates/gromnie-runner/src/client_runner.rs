@@ -608,6 +608,20 @@ async fn run_client_loop(
                     break;
                 }
 
+                // Check if we should attempt reconnection (separate from retry logic)
+                if client.write().await.should_reconnect() {
+                    let mut client_guard = client.write().await;
+                    info!("Reconnection timer expired, attempting reconnection...");
+                    if !client_guard.start_reconnection() {
+                        info!("Reconnection not available (max attempts or disabled), exiting loop");
+                        break;
+                    }
+                    // Send initial LoginRequest for reconnection
+                    if let Err(e) = client_guard.do_login().await {
+                        error!("Failed to send LoginRequest for reconnection: {}", e);
+                    }
+                }
+
                 // Check if we should retry in current state
                 {
                     let mut client_guard = client.write().await;
@@ -634,17 +648,7 @@ async fn run_client_loop(
                                 // Character creation in progress, no retry
                             }
                             Scene::Error(_) => {
-                                // In error state - check if we should attempt reconnection
-                                if client_guard.should_reconnect() {
-                                    if !client_guard.start_reconnection() {
-                                        info!("Reconnection not available, exiting loop");
-                                        break;
-                                    }
-                                    // Send initial LoginRequest for reconnection
-                                    if let Err(e) = client_guard.do_login().await {
-                                        error!("Failed to send LoginRequest for reconnection: {}", e);
-                                    }
-                                }
+                                // Error state - reconnection is handled above, not here
                             }
                         }
                     }
