@@ -235,8 +235,7 @@ macro_rules! register_script {
     ($script_type:ty) => {
         #[doc(hidden)]
         #[unsafe(no_mangle)]
-        pub fn __gromnie_script_constructor() -> ::std::boxed::Box<dyn $crate::WasmScript>
-        {
+        pub fn __gromnie_script_constructor() -> ::std::boxed::Box<dyn $crate::WasmScript> {
             ::std::boxed::Box::new(<$script_type as $crate::WasmScript>::new())
         }
     };
