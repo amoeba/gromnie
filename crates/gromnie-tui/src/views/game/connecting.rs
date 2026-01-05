@@ -41,9 +41,9 @@ impl App {
         };
 
         if let Some(ref tx) = self.action_tx {
-            // Immediately transition to GameWorld::LoggingIn
+            // Transition to GameWorld::InPortalSpace when LoginCharacter is sent
             self.game_scene = GameScene::GameWorld {
-                state: crate::app::GameWorldState::LoggingIn,
+                state: crate::app::GameWorldState::InPortalSpace,
                 created_objects: Vec::new(),
             };
 
