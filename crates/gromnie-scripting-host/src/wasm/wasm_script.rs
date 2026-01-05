@@ -276,6 +276,9 @@ fn client_event_to_wasm(event: &ClientEvent) -> gromnie::scripting::host::Script
         ClientEvent::System(system_event) => {
             WitScriptEvent::System(system_event_to_wasm(system_event))
         }
+        ClientEvent::Input(keyboard_event) => {
+            WitScriptEvent::Keyboard(keyboard_event_to_wasm(keyboard_event))
+        }
     }
 }
 
@@ -383,6 +386,58 @@ fn system_event_to_wasm(event: &ClientSystemEvent) -> gromnie::scripting::host::
         }),
         ClientSystemEvent::Disconnected { .. } => WitSystemEvent::Disconnected,
         ClientSystemEvent::Reconnecting { .. } => WitSystemEvent::Reconnecting,
+    }
+}
+
+/// Convert Rust KeyboardEvent to WIT KeyboardEvent
+fn keyboard_event_to_wasm(
+    event: &gromnie_events::KeyboardEvent,
+) -> gromnie::scripting::host::KeyboardEvent {
+    use gromnie::scripting::host::{
+        KeyCode as WitKeyCode, KeyEventKind as WitKeyEventKind, KeyModifiers as WitKeyModifiers,
+        KeyboardEvent as WitKeyboardEvent,
+    };
+    use gromnie_events::{KeyCode, KeyEventKind};
+
+    // Convert KeyCode
+    let key = match &event.key {
+        KeyCode::Char(c) => WitKeyCode::Character(*c),
+        KeyCode::Enter => WitKeyCode::Enter,
+        KeyCode::Tab => WitKeyCode::Tab,
+        KeyCode::Backspace => WitKeyCode::Backspace,
+        KeyCode::Escape => WitKeyCode::Escape,
+        KeyCode::Delete => WitKeyCode::Delete,
+        KeyCode::Insert => WitKeyCode::Insert,
+        KeyCode::Home => WitKeyCode::Home,
+        KeyCode::End => WitKeyCode::End,
+        KeyCode::PageUp => WitKeyCode::PageUp,
+        KeyCode::PageDown => WitKeyCode::PageDown,
+        KeyCode::Up => WitKeyCode::Up,
+        KeyCode::Down => WitKeyCode::Down,
+        KeyCode::Left => WitKeyCode::Left,
+        KeyCode::Right => WitKeyCode::Right,
+        KeyCode::F(n) => WitKeyCode::F(*n),
+        KeyCode::Null => WitKeyCode::Null,
+    };
+
+    // Convert modifiers
+    let modifiers = WitKeyModifiers {
+        ctrl: event.modifiers.ctrl,
+        alt: event.modifiers.alt,
+        shift: event.modifiers.shift,
+    };
+
+    // Convert kind
+    let kind = match event.kind {
+        KeyEventKind::Press => WitKeyEventKind::Press,
+        KeyEventKind::Release => WitKeyEventKind::Release,
+        KeyEventKind::Repeat => WitKeyEventKind::Repeat,
+    };
+
+    WitKeyboardEvent {
+        key,
+        modifiers,
+        kind,
     }
 }
 

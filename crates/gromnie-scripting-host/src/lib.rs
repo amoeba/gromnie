@@ -117,6 +117,16 @@ pub enum EventFilter {
     SystemReloadScripts,
     /// System: Shutdown
     SystemShutdown,
+
+    // Keyboard events
+    /// Keyboard: Key press events
+    KeyboardPress,
+    /// Keyboard: Key release events
+    KeyboardRelease,
+    /// Keyboard: Key repeat events
+    KeyboardRepeat,
+    /// Keyboard: All keyboard events
+    KeyboardAll,
 }
 
 impl EventFilter {
@@ -240,6 +250,38 @@ impl EventFilter {
                 // Scripts won't receive this as it's handled at the runner level
                 false
             }
+
+            // Keyboard event filters
+            EventFilter::KeyboardPress => {
+                matches!(
+                    event,
+                    ClientEvent::Input(gromnie_events::KeyboardEvent {
+                        kind: gromnie_events::KeyEventKind::Press,
+                        ..
+                    })
+                )
+            }
+            EventFilter::KeyboardRelease => {
+                matches!(
+                    event,
+                    ClientEvent::Input(gromnie_events::KeyboardEvent {
+                        kind: gromnie_events::KeyEventKind::Release,
+                        ..
+                    })
+                )
+            }
+            EventFilter::KeyboardRepeat => {
+                matches!(
+                    event,
+                    ClientEvent::Input(gromnie_events::KeyboardEvent {
+                        kind: gromnie_events::KeyEventKind::Repeat,
+                        ..
+                    })
+                )
+            }
+            EventFilter::KeyboardAll => {
+                matches!(event, ClientEvent::Input(_))
+            }
         }
     }
 
@@ -274,6 +316,11 @@ impl EventFilter {
             206 => Some(EventFilter::SystemLoginSucceeded),
             207 => Some(EventFilter::SystemReloadScripts),
             208 => Some(EventFilter::SystemShutdown),
+            // Keyboard events (300-399)
+            300 => Some(EventFilter::KeyboardPress),
+            301 => Some(EventFilter::KeyboardRelease),
+            302 => Some(EventFilter::KeyboardRepeat),
+            303 => Some(EventFilter::KeyboardAll),
             _ => None,
         }
     }
@@ -308,6 +355,11 @@ impl EventFilter {
             EventFilter::SystemLoginSucceeded => 206,
             EventFilter::SystemReloadScripts => 207,
             EventFilter::SystemShutdown => 208,
+            // Keyboard events (300-399)
+            EventFilter::KeyboardPress => 300,
+            EventFilter::KeyboardRelease => 301,
+            EventFilter::KeyboardRepeat => 302,
+            EventFilter::KeyboardAll => 303,
         }
     }
 }

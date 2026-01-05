@@ -291,6 +291,73 @@ interface host {
         character-name: string,
     }
 
+    /// ===== Keyboard/Input Events =====
+
+    /// A keyboard event representing a key press, release, or repeat
+    record keyboard-event {
+        key: key-code,
+        modifiers: key-modifiers,
+        kind: key-event-kind,
+    }
+
+    /// Represents a key on the keyboard
+    variant key-code {
+        /// A character key (a-z, 0-9, symbols, etc.)
+        character(char),
+        /// Enter/Return key
+        enter,
+        /// Tab key
+        tab,
+        /// Backspace key
+        backspace,
+        /// Escape key
+        escape,
+        /// Delete key
+        delete,
+        /// Insert key
+        insert,
+        /// Home key
+        home,
+        /// End key
+        end,
+        /// Page Up key
+        page-up,
+        /// Page Down key
+        page-down,
+        /// Up arrow key
+        up,
+        /// Down arrow key
+        down,
+        /// Left arrow key
+        left,
+        /// Right arrow key
+        right,
+        /// Function keys F1-F12
+        f(u8),
+        /// Null/Unknown key
+        null,
+    }
+
+    /// Modifier keys that can be held during a keyboard event
+    record key-modifiers {
+        /// Control key is held
+        ctrl: bool,
+        /// Alt/Option key is held
+        alt: bool,
+        /// Shift key is held
+        shift: bool,
+    }
+
+    /// The kind of keyboard event
+    enum key-event-kind {
+        /// Key was pressed
+        press,
+        /// Key was released
+        release,
+        /// Key is being held (repeat event)
+        repeat,
+    }
+
     /// Unified event type that scripts receive
     variant script-event {
         /// Game event from server
@@ -299,6 +366,8 @@ interface host {
         state(state-event),
         /// System lifecycle event
         system(system-event),
+        /// Keyboard input event
+        keyboard(keyboard-event),
     }
 
     /// ===== Action Methods =====

@@ -469,6 +469,10 @@ impl EventConsumer for ScriptConsumer {
                     }
                 }
             }
+            gromnie_events::EventType::Input(keyboard_event) => {
+                // Pass through keyboard event directly
+                ClientEvent::Input(keyboard_event)
+            }
         };
 
         self.runner.handle_event(client_event);
