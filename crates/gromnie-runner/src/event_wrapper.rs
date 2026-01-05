@@ -43,6 +43,7 @@ impl EventWrapper {
             ClientEvent::Game(game) => EventType::Game(game),
             ClientEvent::State(state) => EventType::State(state),
             ClientEvent::System(sys) => EventType::System(self.convert_system_event(sys)),
+            ClientEvent::Input(keyboard) => EventType::Input(keyboard),
             ClientEvent::Protocol(_) => {
                 // Protocol events are not yet fully supported in the event bus
                 // For now, convert to a placeholder system event
@@ -64,6 +65,7 @@ impl EventWrapper {
             ClientEvent::Game(_) => EventSource::Network,
             ClientEvent::State(_) => EventSource::ClientInternal,
             ClientEvent::System(_) => EventSource::System,
+            ClientEvent::Input(_) => EventSource::ClientInternal,
             ClientEvent::Protocol(_) => EventSource::Network,
         }
     }

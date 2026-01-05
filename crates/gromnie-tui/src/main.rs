@@ -1,9 +1,10 @@
 use clap::Parser;
+use std::sync::Arc;
 use tracing::{error, info};
 
 use gromnie_client::config::GromnieConfig;
 use gromnie_events::SimpleClientAction;
-use gromnie_runner::{ClientConfig, ClientRunner, TuiConsumer, TuiEvent};
+use gromnie_runner::{ClientConfig, ClientRunner, EventBusManager, TuiConsumer, TuiEvent};
 use gromnie_tui::{App, event_handler::EventHandler, ui::try_init_tui};
 
 #[derive(Parser)]
@@ -116,6 +117,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         character_name: account.character.clone(),
     };
 
+    // Create shared event bus manager for keyboard events
+    let event_bus_manager = Arc::new(EventBusManager::new(100));
+    let keyboard_event_sender = event_bus_manager.create_sender(client_config.id);
+
     // Spawn client task using the runner module
     let runner = ClientRunner::builder()
         .with_clients(client_config)
@@ -123,6 +128,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .with_action_channel(action_tx_channel)
         .with_shutdown(shutdown_rx)
         .with_config(config)
+        .with_event_bus_manager(event_bus_manager)
         .build()
         .expect("Failed to build client runner");
 
@@ -156,7 +162,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         tokio::select! {
             Some(tui_event) = tui_event_rx.recv() => {
                 // Handle TUI events through centralized message passing
-                if let Err(e) = handle_tui_event(&mut app, tui_event, &shutdown_tx) {
+                if let Err(e) = handle_tui_event(&mut app, tui_event, &shutdown_tx, &keyboard_event_sender) {
                     error!("Error handling TUI event: {}", e);
                     break;
                 }
@@ -227,13 +233,27 @@ fn handle_tui_event(
     app: &mut App,
     tui_event: gromnie_tui::event_handler::TuiEvent,
     shutdown_tx: &tokio::sync::watch::Sender<bool>,
+    keyboard_event_sender: &gromnie_runner::EventSender,
 ) -> Result<(), Box<dyn std::error::Error>> {
     use crossterm::event::{KeyCode, KeyModifiers};
+    use gromnie_events::{EventEnvelope, EventSource};
     use gromnie_tui::event_handler::TuiEvent;
+    use gromnie_tui::keyboard::crossterm_to_keyboard_event;
     use tracing::{error, info};
 
     match tui_event {
         TuiEvent::Key(key) => {
+            // First, publish the keyboard event to the event bus for scripts to observe
+            let keyboard_event = crossterm_to_keyboard_event(&key);
+            let envelope = EventEnvelope::input_event(
+                keyboard_event,
+                0, // client_id
+                0, // sequence (event sender will assign proper sequence)
+                EventSource::ClientInternal,
+            );
+            keyboard_event_sender.publish(envelope);
+
+            // Then, handle the key locally for TUI functionality
             // Handle Tab/BackTab for GameWorld tab switching (only when not in portal space)
             if matches!(
                 app.game_scene,

@@ -72,6 +72,7 @@ pub struct ClientRunnerBuilder {
     shutdown_rx: Option<watch::Receiver<bool>>,
     event_bus_capacity: usize,
     app_config: Option<gromnie_client::config::GromnieConfig>,
+    event_bus_manager: Option<Arc<crate::EventBusManager>>,
 }
 
 impl ClientRunnerBuilder {
@@ -84,6 +85,7 @@ impl ClientRunnerBuilder {
             shutdown_rx: None,
             event_bus_capacity: 100,
             app_config: None,
+            event_bus_manager: None,
         }
     }
 
@@ -233,6 +235,15 @@ impl ClientRunnerBuilder {
         self
     }
 
+    /// Provide a shared event bus manager
+    ///
+    /// This allows external code (like TUI) to access the same event bus and publish events.
+    /// If not provided, a new EventBusManager will be created internally.
+    pub fn with_event_bus_manager(mut self, manager: Arc<crate::EventBusManager>) -> Self {
+        self.event_bus_manager = Some(manager);
+        self
+    }
+
     /// Build the ClientRunner
     ///
     /// If config was not provided via `with_config()`, it will be loaded
@@ -299,6 +310,7 @@ impl ClientRunnerBuilder {
             shutdown_rx: self.shutdown_rx,
             event_bus_capacity: self.event_bus_capacity,
             app_config: Some(config),
+            event_bus_manager: self.event_bus_manager,
         })
     }
 }
@@ -318,6 +330,7 @@ pub struct ClientRunner {
     pub(crate) shutdown_rx: Option<watch::Receiver<bool>>,
     pub(crate) event_bus_capacity: usize,
     pub(crate) app_config: Option<gromnie_client::config::GromnieConfig>,
+    pub(crate) event_bus_manager: Option<Arc<crate::EventBusManager>>,
 }
 
 /// Result from running clients
@@ -387,8 +400,10 @@ impl ClientRunner {
         use gromnie_client::client::Client;
         use gromnie_events::{EventEnvelope, EventSource, SystemEvent};
 
-        // Create event bus
-        let event_bus_manager = Arc::new(EventBusManager::new(self.event_bus_capacity));
+        // Create event bus (or use provided one)
+        let event_bus_manager = self
+            .event_bus_manager
+            .unwrap_or_else(|| Arc::new(EventBusManager::new(self.event_bus_capacity)));
 
         // Setup SIGUSR2 handler if scripting is enabled
         if let Some(ref app_config) = self.app_config

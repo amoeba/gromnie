@@ -19,7 +19,7 @@ pub use client_runner_builder::{
     RunResult as BuilderRunResult,
 };
 pub use event_bus::{
-    ClientStateEvent, EventBus, EventContext, EventEnvelope, EventSource, EventType,
+    ClientStateEvent, EventBus, EventContext, EventEnvelope, EventSender, EventSource, EventType,
     ScriptEventType, SystemEvent, TuiEvent,
 };
 pub use event_consumer::{

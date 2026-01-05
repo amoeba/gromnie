@@ -198,6 +198,10 @@ impl EventConsumer for LoggingConsumer {
                     info!(target: "events", "System shutdown");
                 }
             },
+            EventType::Input(_keyboard_event) => {
+                // Input events are typically not logged by LoggingConsumer
+                // Scripts can handle them if needed
+            }
         }
     }
 }
@@ -257,6 +261,9 @@ impl EventConsumer for TuiConsumer {
             EventType::State(state_event) => {
                 tracing::info!(target: "tui_consumer", "TuiConsumer forwarding StateEvent: {:?}", std::mem::discriminant(&state_event));
                 let _ = self.tui_event_tx.send(state_event.into());
+            }
+            EventType::Input(_keyboard_event) => {
+                // Don't forward keyboard events to TUI - TUI handles them directly
             }
         }
     }
@@ -529,6 +536,9 @@ impl EventConsumer for DiscordConsumer {
                     }
                 }
             }
+            EventType::Input(_keyboard_event) => {
+                // Discord consumer doesn't handle keyboard events
+            }
         }
     }
 }
@@ -613,6 +623,7 @@ impl EventConsumer for StatsConsumer {
                 _ => {}
             },
             EventType::State(_) => {}
+            EventType::Input(_) => {}
         }
     }
 }

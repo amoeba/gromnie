@@ -109,6 +109,9 @@ impl EventHandler for LoggingEventHandler {
             EventType::System(system_event) => {
                 tracing::info!(target: "events", "System Event: {:?}", system_event);
             }
+            EventType::Input(keyboard_event) => {
+                tracing::debug!(target: "events", "Input Event: {:?}", keyboard_event);
+            }
         }
     }
 }
