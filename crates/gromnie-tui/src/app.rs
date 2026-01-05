@@ -83,12 +83,10 @@ pub enum GameScene {
 /// Sub-states within the GameWorld scene
 #[derive(Debug, Clone, PartialEq)]
 pub enum GameWorldState {
-    /// Logging in - waiting for LoginComplete notification
-    LoggingIn,
-    /// Logged in and active in game
-    LoggedIn,
-    /// Logging out - received LogOff notification
-    LoggingOut,
+    /// In portal space - sent LoginSendEnterWorld, waiting for LoginCreatePlayer
+    InPortalSpace,
+    /// In the game world - past portal space, actively playing
+    InWorld,
 }
 
 /// Tabs available in the GameWorld scene
@@ -423,11 +421,6 @@ impl App {
             } => {
                 self.client_status.current_character = Some(character_name.clone());
 
-                // Transition from LoggingIn to LoggedIn
-                if let GameScene::GameWorld { ref mut state, .. } = self.game_scene {
-                    *state = GameWorldState::LoggedIn;
-                }
-
                 self.add_network_message(NetworkMessage::Received {
                     opcode: "0xF656".to_string(),
                     description: format!(
@@ -471,11 +464,6 @@ impl App {
                 character_name,
             } => {
                 self.client_status.current_character = Some(character_name.clone());
-
-                // Transition from LoggingIn to LoggedIn
-                if let GameScene::GameWorld { ref mut state, .. } = self.game_scene {
-                    *state = GameWorldState::LoggedIn;
-                }
 
                 self.add_network_message(NetworkMessage::Received {
                     opcode: "0xF656".to_string(),
@@ -538,9 +526,25 @@ impl App {
                 // Also set in object tracker
                 self.object_tracker.set_player_id(character_id);
 
+                // Transition from InPortalSpace to InWorld
+                // CreatePlayer marks the end of portal space
+                if let GameScene::GameWorld { ref mut state, .. } = self.game_scene
+                    && *state == GameWorldState::InPortalSpace
+                {
+                    *state = GameWorldState::InWorld;
+                }
+
+                // Send LoginComplete immediately after CreatePlayer
+                if let Some(ref tx) = self.action_tx {
+                    let _ = tx.send(SimpleClientAction::SendLoginComplete);
+                }
+
                 self.add_network_message(NetworkMessage::Received {
                     opcode: "0xF7B0".to_string(),
-                    description: format!("CreatePlayer: Character ID {}", character_id),
+                    description: format!(
+                        "CreatePlayer: Character ID {} - Portal space complete",
+                        character_id
+                    ),
                     timestamp: chrono::Utc::now(),
                 });
             }
@@ -593,19 +597,11 @@ impl App {
 
                 // Add object to the list if we're in the game world scene
                 if let GameScene::GameWorld {
-                    ref mut state,
                     ref mut created_objects,
+                    ..
                 } = self.game_scene
                 {
                     created_objects.push((object_id, name.clone()));
-
-                    // After receiving first object while logging in, send LoginComplete notification
-                    if *state == GameWorldState::LoggingIn
-                        && created_objects.len() == 1
-                        && let Some(ref tx) = self.action_tx
-                    {
-                        let _ = tx.send(SimpleClientAction::SendLoginComplete);
-                    }
                 }
 
                 // Log whether this item is in player's inventory
