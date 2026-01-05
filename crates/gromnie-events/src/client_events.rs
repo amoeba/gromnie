@@ -1,3 +1,4 @@
+use crate::keyboard_events::KeyboardEvent;
 use crate::protocol_events::ProtocolEvent;
 use crate::simple_game_events::SimpleGameEvent;
 use serde::{Deserialize, Serialize};
@@ -8,6 +9,7 @@ pub enum ClientEvent {
     Protocol(ProtocolEvent),
     State(ClientStateEvent),
     System(ClientSystemEvent),
+    Input(KeyboardEvent),
 }
 
 /// System events that originate from the client (lifecycle events)

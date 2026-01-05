@@ -7,6 +7,7 @@ use std::time::Instant;
 use tokio::sync::mpsc::UnboundedSender;
 
 pub mod client_events;
+pub mod keyboard_events;
 pub mod protocol_events;
 pub mod script_events;
 pub mod simple_client_actions;
@@ -15,6 +16,7 @@ pub mod system_events;
 
 // Re-export key types for convenience
 pub use client_events::{ClientEvent, ClientStateEvent, ClientSystemEvent};
+pub use keyboard_events::{KeyCode, KeyEventKind, KeyModifiers, KeyboardEvent};
 pub use protocol_events::{
     GameEventMsg, IntoGameEventMsg, OrderedGameEvent, ProtocolEvent, S2CEvent,
 };
@@ -72,6 +74,7 @@ pub enum EventType {
     Game(SimpleGameEvent),
     State(ClientStateEvent),
     System(SystemEvent),
+    Input(KeyboardEvent),
 }
 
 // ============================================================================
@@ -125,6 +128,16 @@ impl EventEnvelope {
     ) -> Self {
         let context = EventContext::new(client_id, client_sequence);
         Self::new(EventType::System(system_event), context, source)
+    }
+
+    pub fn input_event(
+        keyboard_event: KeyboardEvent,
+        client_id: u32,
+        client_sequence: u64,
+        source: EventSource,
+    ) -> Self {
+        let context = EventContext::new(client_id, client_sequence);
+        Self::new(EventType::Input(keyboard_event), context, source)
     }
 
     pub fn extract_game_event(&self) -> Option<SimpleGameEvent> {
