@@ -43,28 +43,36 @@ pub fn render_game_world_view(
 
     frame.render_widget(block, area);
 
-    // Create layout: tabs (top) | content (rest)
-    let chunks = Layout::default()
-        .direction(Direction::Vertical)
-        .constraints([Constraint::Length(1), Constraint::Min(0)])
-        .split(inner);
+    // Render based on game world state
+    match state {
+        GameWorldState::InPortalSpace => {
+            render_portal_space(frame, inner);
+        }
+        GameWorldState::InWorld => {
+            // Create layout: tabs (top) | content (rest)
+            let chunks = Layout::default()
+                .direction(Direction::Vertical)
+                .constraints([Constraint::Length(1), Constraint::Min(0)])
+                .split(inner);
 
-    // Render scene tabs
-    render_scene_tabs(frame, chunks[0], app);
+            // Render scene tabs
+            render_scene_tabs(frame, chunks[0], app);
 
-    // Render tab content
-    match app.game_world_tab {
-        GameWorldTab::World => {
-            render_world_tab(frame, chunks[1], app, state, created_objects);
-        }
-        GameWorldTab::Chat => {
-            render_chat_tab(frame, chunks[1], app);
-        }
-        GameWorldTab::Map => {
-            render_map_tab(frame, chunks[1]);
-        }
-        GameWorldTab::Objects => {
-            render_objects_tab(frame, chunks[1], app);
+            // Render tab content
+            match app.game_world_tab {
+                GameWorldTab::World => {
+                    render_world_tab(frame, chunks[1], app, state, created_objects);
+                }
+                GameWorldTab::Chat => {
+                    render_chat_tab(frame, chunks[1], app);
+                }
+                GameWorldTab::Map => {
+                    render_map_tab(frame, chunks[1]);
+                }
+                GameWorldTab::Objects => {
+                    render_objects_tab(frame, chunks[1], app);
+                }
+            }
         }
     }
 }
@@ -106,6 +114,40 @@ fn render_scene_tabs(frame: &mut Frame, area: Rect, app: &App) {
     let tab_bar = Paragraph::new(Line::from(spans)).style(Style::default().fg(Color::White));
 
     frame.render_widget(tab_bar, area);
+}
+
+/// Render portal space - the animation loop while entering the game world
+fn render_portal_space(frame: &mut Frame, area: Rect) {
+    // Create a centered layout for the portal space message
+    let chunks = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([
+            Constraint::Length(1),
+            Constraint::Length(3),
+            Constraint::Length(1),
+        ])
+        .split(area);
+
+    // Portal space title
+    let title = Paragraph::new("*** portal sounds ***")
+        .alignment(Alignment::Center)
+        .style(Style::default().fg(Color::Cyan).bold());
+
+    frame.render_widget(title, chunks[0]);
+
+    // Portal space message
+    let message = Paragraph::new("Materializing into the world...")
+        .alignment(Alignment::Center)
+        .style(Style::default().fg(Color::White));
+
+    frame.render_widget(message, chunks[1]);
+
+    // Loading indicator
+    let loading = Paragraph::new("⏳")
+        .alignment(Alignment::Center)
+        .style(Style::default().fg(Color::Yellow));
+
+    frame.render_widget(loading, chunks[2]);
 }
 
 /// Render the World tab

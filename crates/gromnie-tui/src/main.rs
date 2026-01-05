@@ -234,20 +234,25 @@ fn handle_tui_event(
 
     match tui_event {
         TuiEvent::Key(key) => {
-            // ALWAYS handle Tab/BackTab for GameWorld tab switching
+            // Handle Tab/BackTab for GameWorld tab switching (only when not in portal space)
             if matches!(
                 app.game_scene,
                 gromnie_tui::app::GameScene::GameWorld { .. }
             ) && matches!(key.code, KeyCode::Tab | KeyCode::BackTab)
             {
-                match key.code {
-                    KeyCode::Tab => {
-                        app.next_tab();
+                // Prevent tab switching while in portal space
+                if let gromnie_tui::app::GameScene::GameWorld { ref state, .. } = app.game_scene
+                    && *state != gromnie_tui::app::GameWorldState::InPortalSpace
+                {
+                    match key.code {
+                        KeyCode::Tab => {
+                            app.next_tab();
+                        }
+                        KeyCode::BackTab => {
+                            app.previous_tab();
+                        }
+                        _ => unreachable!(),
                     }
-                    KeyCode::BackTab => {
-                        app.previous_tab();
-                    }
-                    _ => unreachable!(),
                 }
             } else if app.chat_input_active {
                 match key.code {
@@ -295,14 +300,26 @@ fn handle_tui_event(
                             app.select_next_character();
                         }
                         KeyCode::Enter => {
-                            // If in GameWorld scene and on Chat tab, activate chat input
-                            if matches!(
-                                app.game_scene,
-                                gromnie_tui::app::GameScene::GameWorld { .. }
-                            ) && app.game_world_tab == gromnie_tui::app::GameWorldTab::Chat
+                            // If in GameWorld scene and on Chat tab, activate chat input (but not in portal space)
+                            if let gromnie_tui::app::GameScene::GameWorld { ref state, .. } =
+                                app.game_scene
                             {
-                                // Activate chat input when on Chat tab
-                                app.chat_input_active = true;
+                                if app.game_world_tab == gromnie_tui::app::GameWorldTab::Chat {
+                                    // Only allow chat input when not in portal space
+                                    if *state != gromnie_tui::app::GameWorldState::InPortalSpace {
+                                        app.chat_input_active = true;
+                                    }
+                                } else {
+                                    // Try to login with selected character (in other scenes)
+                                    match app.login_selected_character() {
+                                        Ok(_) => {
+                                            info!("Logging in with selected character");
+                                        }
+                                        Err(e) => {
+                                            error!("Failed to login: {}", e);
+                                        }
+                                    }
+                                }
                             } else {
                                 // Try to login with selected character (in other scenes)
                                 match app.login_selected_character() {
@@ -316,12 +333,14 @@ fn handle_tui_event(
                             }
                         }
                         KeyCode::Char('c') => {
-                            // Activate chat input when in game world
-                            if matches!(
-                                app.game_scene,
-                                gromnie_tui::app::GameScene::GameWorld { .. }
-                            ) {
-                                app.chat_input_active = true;
+                            // Activate chat input when in game world (but not during portal space)
+                            if let gromnie_tui::app::GameScene::GameWorld { ref state, .. } =
+                                app.game_scene
+                            {
+                                // Only allow chat input when not in portal space
+                                if *state != gromnie_tui::app::GameWorldState::InPortalSpace {
+                                    app.chat_input_active = true;
+                                }
                             }
                         }
                         _ => {}
