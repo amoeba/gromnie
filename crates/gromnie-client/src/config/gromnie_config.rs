@@ -4,7 +4,8 @@ use serde::{Deserialize, Serialize};
 use tracing::info;
 
 use crate::config::{
-    account_config::AccountConfig, scripting_config::ScriptingConfig, server_config::ServerConfig,
+    account_config::AccountConfig, paths::ProjectPaths, scripting_config::ScriptingConfig,
+    server_config::ServerConfig,
 };
 
 #[derive(Debug)]
@@ -44,10 +45,9 @@ pub struct GromnieConfig {
 
 impl GromnieConfig {
     pub fn config_path() -> PathBuf {
-        use directories::ProjectDirs;
-        let proj_dirs =
-            ProjectDirs::from("", "", "gromnie").expect("Failed to determine config directory");
-        proj_dirs.config_dir().join("config.toml")
+        let proj_paths =
+            ProjectPaths::new("gromnie").expect("Failed to determine config directory");
+        proj_paths.config_dir().join("config.toml")
     }
 
     pub fn load() -> Result<Self, ConfigLoadError> {
