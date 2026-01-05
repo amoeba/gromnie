@@ -2,6 +2,8 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::PathBuf;
 
+use super::paths::ProjectPaths;
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ScriptingConfig {
     /// Whether scripting is enabled
@@ -31,8 +33,8 @@ impl ScriptingConfig {
     /// Get the script directory path (use provided or default)
     pub fn script_dir(&self) -> PathBuf {
         self.script_dir.clone().unwrap_or_else(|| {
-            directories::ProjectDirs::from("", "", "gromnie")
-                .map(|d| d.data_dir().join("scripts"))
+            ProjectPaths::new("gromnie")
+                .map(|p| p.data_dir().join("scripts"))
                 .unwrap_or_else(|| PathBuf::from(".scripts"))
         })
     }

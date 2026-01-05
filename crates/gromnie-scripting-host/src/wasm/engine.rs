@@ -3,6 +3,8 @@ use std::path::PathBuf;
 use wasmtime::{Config, Engine};
 use wasmtime_wasi::{DirPerms, FilePerms, WasiCtx, WasiCtxBuilder};
 
+use gromnie_client::config::ProjectPaths;
+
 /// Create a configured Wasmtime engine for script execution
 pub fn create_engine() -> Result<Engine> {
     let mut config = Config::new();
@@ -42,21 +44,7 @@ pub fn create_wasi_context() -> Result<WasiCtx> {
 
 /// Get the path to the script data directory
 fn get_script_data_path() -> Result<PathBuf> {
-    let mut path = dirs::home_dir().context("Failed to get home directory")?;
-    path.push(".config");
-    path.push("gromnie");
-    path.push("script_data");
-    Ok(path)
-}
-
-/// Helper function using directories crate (already a dependency)
-mod dirs {
-    use std::path::PathBuf;
-
-    pub fn home_dir() -> Option<PathBuf> {
-        std::env::var("HOME")
-            .ok()
-            .map(PathBuf::from)
-            .or_else(|| std::env::var("USERPROFILE").ok().map(PathBuf::from))
-    }
+    let proj_paths =
+        ProjectPaths::new("gromnie").context("Failed to determine config directory")?;
+    Ok(proj_paths.data_dir().join("script_data"))
 }

@@ -144,10 +144,9 @@ fn load_wasm_scripts_blocking(
 
 /// Get the default scripts directory
 pub fn get_wasm_dir() -> PathBuf {
-    use directories::ProjectDirs;
-    let proj_dirs =
-        ProjectDirs::from("", "", "gromnie").expect("Failed to determine config directory");
-    proj_dirs.config_dir().join("scripts")
+    use gromnie_client::config::ProjectPaths;
+    let proj_paths = ProjectPaths::new("gromnie").expect("Failed to determine config directory");
+    proj_paths.data_dir().join("scripts")
 }
 
 #[cfg(test)]
