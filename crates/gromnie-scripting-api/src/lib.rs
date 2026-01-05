@@ -39,6 +39,9 @@ pub use gromnie::scripting::host;
 // Re-export event types
 pub use gromnie::scripting::host::{GameEvent, ScriptEvent, StateEvent, SystemEvent};
 
+// Re-export Scene type
+pub use gromnie::scripting::host::Scene;
+
 // Re-export host functions for WASM scripts
 pub use gromnie::scripting::host::{
     cancel_timer, check_timer, get_client_state, get_event_time_millis, log, login_character,
