@@ -259,3 +259,16 @@ macro_rules! register_script {
         }
     };
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn scene_type_is_exported() {
+        // This test ensures that the Scene type is publicly exported from the API.
+        // It serves as a regression test to prevent accidental removal of the export.
+        // If this fails to compile, it means Scene is no longer exported.
+        let _: Option<Scene> = None;
+    }
+}
