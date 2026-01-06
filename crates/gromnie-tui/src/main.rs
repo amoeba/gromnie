@@ -46,7 +46,8 @@ pub struct Cli {
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let cli = Cli::parse();
-    // Load configuration - require config file like the CLI does
+
+    // Load configuration if available, but only require it when using --server/--account aliases
     let config = match GromnieConfig::load() {
         Ok(cfg) => {
             info!(
@@ -56,22 +57,26 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             cfg
         }
         Err(_) => {
-            eprintln!(
-                "Config file not found at {}. Please create it with servers and accounts.",
-                GromnieConfig::config_path().display()
-            );
-            eprintln!("Example config:");
-            eprintln!("[servers.local]");
-            eprintln!("host = \"localhost\"");
-            eprintln!("port = 9000");
-            eprintln!();
-            eprintln!("[accounts.testing]");
-            eprintln!("username = \"testing\"");
-            eprintln!("password = \"testing\"");
-            return Err("Config file not found".into());
+            // Only error if using config-based connection (--server/--account)
+            if cli.host.is_none() && cli.port.is_none() && cli.password.is_none() {
+                eprintln!(
+                    "Config file not found at {}. Please create it with servers and accounts.",
+                    GromnieConfig::config_path().display()
+                );
+                eprintln!("Example config:");
+                eprintln!("[servers.local]");
+                eprintln!("host = \"localhost\"");
+                eprintln!("port = 9000");
+                eprintln!();
+                eprintln!("[accounts.testing]");
+                eprintln!("username = \"testing\"");
+                eprintln!("password = \"testing\"");
+                return Err("Config file not found".into());
+            }
+            // Use empty config when using direct CLI connection
+            GromnieConfig::default()
         }
     };
-
 
     // Determine connection parameters: CLI args take precedence, then fall back to config
     let (host, port, account_name, password, character_name) =
