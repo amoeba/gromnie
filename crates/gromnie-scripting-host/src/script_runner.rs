@@ -5,11 +5,12 @@ use std::sync::Arc;
 use std::time::{Duration, Instant, SystemTime};
 use tokio::sync::RwLock;
 use tokio::sync::mpsc::UnboundedSender;
-use tracing::{debug, error, info};
+use tracing::{debug, error, info, warn};
 
 use super::EventFilter;
 use super::Script;
 use super::context::ScriptContext;
+use super::script_scanner::ScriptScanner;
 use super::timer::TimerManager;
 use super::wasm::WasmScript;
 use crate::create_runner_from_config;
@@ -35,6 +36,12 @@ pub struct ScriptRunner {
     last_tick: Instant,
     /// Interval between ticks (default 50ms for 20Hz)
     tick_interval: Duration,
+    /// Script scanner for hot reload (optional)
+    pub(crate) scanner: Option<ScriptScanner>,
+    /// Script configuration for reload operations
+    script_config: Option<HashMap<String, toml::Value>>,
+    /// Script directory path
+    script_dir: Option<std::path::PathBuf>,
 }
 
 impl ScriptRunner {
@@ -60,6 +67,9 @@ impl ScriptRunner {
             timer_manager: TimerManager::new(),
             last_tick: Instant::now(),
             tick_interval,
+            scanner: None,
+            script_config: None,
+            script_dir: None,
         }
     }
 
@@ -87,6 +97,9 @@ impl ScriptRunner {
             timer_manager: TimerManager::new(),
             last_tick: Instant::now(),
             tick_interval: DEFAULT_TICK_INTERVAL,
+            scanner: None,
+            script_config: None,
+            script_dir: None,
         }
     }
 
@@ -157,6 +170,35 @@ impl ScriptRunner {
         if !self.scripts.is_empty() {
             info!(target: "scripting", "Loaded {} script(s)", self.scripts.len());
         }
+
+        // Store script config and directory for hot reload
+        self.script_config = Some(script_config.clone());
+        self.script_dir = Some(dir.to_path_buf());
+    }
+
+    /// Enable hot reload for scripts
+    ///
+    /// This creates a scanner that will periodically check for script file changes
+    /// and automatically reload modified or newly added scripts.
+    pub fn enable_hot_reload(&mut self) {
+        if let Some(ref dir) = self.script_dir {
+            let scanner = ScriptScanner::new(dir.clone());
+            let interval = scanner.scan_interval();
+            self.scanner = Some(scanner);
+            info!(
+                target: "scripting",
+                "Hot reload enabled, scanning every {:?}",
+                interval
+            );
+        } else {
+            tracing::warn!(target: "scripting", "Cannot enable hot reload: no script directory set");
+        }
+    }
+
+    /// Disable hot reload for scripts
+    pub fn disable_hot_reload(&mut self) {
+        self.scanner = None;
+        info!(target: "scripting", "Hot reload disabled");
     }
 
     /// Reload scripts (for hot-reload)
@@ -233,6 +275,196 @@ impl ScriptRunner {
         self.scripts.clear();
     }
 
+    /// Handle detected script changes from the scanner
+    fn handle_script_changes(&mut self, changes: super::script_scanner::ScanResult) {
+        let Some(engine) = self.wasm_engine.clone() else {
+            return; // No WASM engine, can't reload
+        };
+
+        let script_config = self.script_config.as_ref().cloned().unwrap_or_default();
+
+        // Handle changed scripts
+        for (path, _new_time) in &changes.changed {
+            info!(target: "scripting", "Hot-reloading script: {}", path.display());
+            self.reload_script_by_path(path, &engine, &script_config);
+        }
+
+        // Handle added scripts
+        for path in &changes.added {
+            info!(target: "scripting", "Loading new script: {}", path.display());
+            self.load_script_by_path(path, &engine, &script_config);
+        }
+
+        // Handle removed scripts (optional - user prefers to ignore for now)
+        if !changes.removed.is_empty() {
+            debug!(
+                target: "scripting",
+                "{} script(s) removed, ignoring (as configured)",
+                changes.removed.len()
+            );
+        }
+    }
+
+    /// Reload a specific script by file path
+    fn reload_script_by_path(
+        &mut self,
+        path: &std::path::Path,
+        engine: &wasmtime::Engine,
+        script_config: &HashMap<String, toml::Value>,
+    ) {
+        // Find the index of the script with this path
+        let index = match self.scripts.iter().position(|s| s.file_path() == path) {
+            Some(idx) => idx,
+            None => {
+                warn!(
+                    target: "scripting",
+                    "Cannot reload script at {}: not found in loaded scripts",
+                    path.display()
+                );
+                return;
+            }
+        };
+
+        let old_script = &self.scripts[index];
+        let script_id = old_script.id().to_string();
+
+        // Create context for on_unload
+        let mut ctx = Self::create_script_context(
+            self.client.clone(),
+            self.action_tx.clone(),
+            &mut self.timer_manager,
+            SystemTime::now(),
+        );
+
+        // Call on_unload on old instance
+        debug!(
+            target: "scripting",
+            "Calling on_unload for: {} ({})",
+            old_script.name(),
+            script_id
+        );
+        let mut old_script = self.scripts.remove(index);
+        old_script.on_unload(&mut ctx);
+
+        // Try to load new instance
+        match WasmScript::from_file(engine, path) {
+            Ok(new_script) => {
+                // Check if this script is enabled in config
+                let is_enabled = script_config
+                    .get(&script_id)
+                    .and_then(|config| config.get("enabled"))
+                    .and_then(|v| v.as_bool())
+                    .unwrap_or(true);
+
+                if !is_enabled {
+                    debug!(
+                        target: "scripting",
+                        "Skipping reload of disabled script: {} ({})",
+                        new_script.name(),
+                        script_id
+                    );
+                    return;
+                }
+
+                // Call on_load on new instance
+                let mut new_script = new_script;
+                new_script.on_load(&mut ctx);
+
+                // Add to scripts
+                self.scripts.push(new_script);
+
+                info!(
+                    target: "scripting",
+                    "Successfully reloaded script: {} ({})",
+                    self.scripts.last().unwrap().name(),
+                    script_id
+                );
+            }
+            Err(e) => {
+                error!(
+                    target: "scripting",
+                    "Failed to reload script {} from {}: {:#}",
+                    script_id,
+                    path.display(),
+                    e
+                );
+                // Note: Old script was already removed, so it's not running anymore
+                // This is intentional - we don't want to keep a broken version running
+            }
+        }
+    }
+
+    /// Load a new script by file path
+    fn load_script_by_path(
+        &mut self,
+        path: &std::path::Path,
+        engine: &wasmtime::Engine,
+        script_config: &HashMap<String, toml::Value>,
+    ) {
+        // Try to load the script
+        match WasmScript::from_file(engine, path) {
+            Ok(script) => {
+                let script_id = script.id().to_string();
+
+                // Check if we already have a script with this ID
+                if self.scripts.iter().any(|s| s.id() == script_id) {
+                    warn!(
+                        target: "scripting",
+                        "Cannot load script {} ({}): script ID already exists",
+                        script.name(),
+                        script_id
+                    );
+                    return;
+                }
+
+                // Check if this script is enabled in config
+                let is_enabled = script_config
+                    .get(&script_id)
+                    .and_then(|config| config.get("enabled"))
+                    .and_then(|v| v.as_bool())
+                    .unwrap_or(true);
+
+                if !is_enabled {
+                    debug!(
+                        target: "scripting",
+                        "Skipping disabled script: {} ({})",
+                        script.name(),
+                        script_id
+                    );
+                    return;
+                }
+
+                // Create context and call on_load
+                let mut ctx = Self::create_script_context(
+                    self.client.clone(),
+                    self.action_tx.clone(),
+                    &mut self.timer_manager,
+                    SystemTime::now(),
+                );
+
+                let mut script = script;
+                script.on_load(&mut ctx);
+
+                self.scripts.push(script);
+
+                info!(
+                    target: "scripting",
+                    "Successfully loaded new script: {} ({})",
+                    self.scripts.last().unwrap().name(),
+                    script_id
+                );
+            }
+            Err(e) => {
+                error!(
+                    target: "scripting",
+                    "Failed to load script from {}: {:#}",
+                    path.display(),
+                    e
+                );
+            }
+        }
+    }
+
     /// Process timers and return fired timer IDs
     fn tick_timers(&mut self, now: Instant) -> Vec<(super::timer::TimerId, String)> {
         self.timer_manager.tick(now)
@@ -271,6 +503,16 @@ impl ScriptRunner {
                         script.id(),
                         e
                     );
+                }
+            }
+        }
+
+        // Check for script changes (runs at scanner's interval, not tick interval)
+        if let Some(ref mut scanner) = self.scanner {
+            if scanner.should_scan() {
+                let changes = scanner.scan_changes();
+                if changes.has_changes() {
+                    self.handle_script_changes(changes);
                 }
             }
         }
@@ -382,9 +624,32 @@ impl ScriptConsumer {
         mut self,
         script_dir: std::path::PathBuf,
         script_config: std::collections::HashMap<String, toml::Value>,
+        hot_reload_enabled: bool,
+        hot_reload_interval_ms: u64,
     ) -> Self {
-        self.script_dir = Some(script_dir);
+        self.script_dir = Some(script_dir.clone());
         self.script_config = Some(script_config);
+
+        // Load initial scripts
+        self.runner.load_scripts(&script_dir, &self.script_config.as_ref().unwrap());
+
+        // Enable hot reload if requested
+        if hot_reload_enabled {
+            self.runner.enable_hot_reload();
+
+            // Set custom scan interval if specified
+            if hot_reload_interval_ms != 1000 {
+                if let Some(ref mut scanner) = self.runner.scanner {
+                    scanner.set_scan_interval(Duration::from_millis(hot_reload_interval_ms));
+                    info!(
+                        target: "scripting",
+                        "Hot reload scan interval set to {}ms",
+                        hot_reload_interval_ms
+                    );
+                }
+            }
+        }
+
         self
     }
 }
@@ -486,7 +751,12 @@ pub fn create_script_consumer(
 
     if scripting_config.enabled {
         let script_dir = scripting_config.script_dir();
-        consumer = consumer.with_reload_config(script_dir, scripting_config.config.clone());
+        consumer = consumer.with_reload_config(
+            script_dir,
+            scripting_config.config.clone(),
+            scripting_config.hot_reload,
+            scripting_config.hot_reload_interval_ms,
+        );
     }
 
     consumer

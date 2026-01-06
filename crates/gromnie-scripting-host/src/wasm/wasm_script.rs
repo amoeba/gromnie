@@ -1,6 +1,7 @@
 use anyhow::{Context, Result};
 use std::any::Any;
-use std::time::Duration;
+use std::path::PathBuf;
+use std::time::{Duration, SystemTime};
 use tracing::warn;
 use wasmtime::component::{Component, Linker, ResourceTable};
 use wasmtime::{Engine, Store};
@@ -62,12 +63,24 @@ pub struct WasmScript {
     name: String,
     description: String,
     subscribed_events: Vec<EventFilter>,
+
+    /// File path for hot reload tracking
+    file_path: PathBuf,
+    /// File modification time for change detection
+    modified_time: SystemTime,
 }
 
 impl WasmScript {
     /// Load a WASM component from a file
     pub fn from_file(engine: &Engine, path: impl AsRef<std::path::Path>) -> Result<Self> {
         let path = path.as_ref();
+
+        // Get file metadata for hot reload tracking
+        let metadata = std::fs::metadata(path)
+            .with_context(|| format!("Failed to read file metadata: {}", path.display()))?;
+        let modified_time = metadata
+            .modified()
+            .with_context(|| format!("Failed to get modification time: {}", path.display()))?;
 
         // Load component from file
         let component = Component::from_file(engine, path)
@@ -139,6 +152,8 @@ impl WasmScript {
             name,
             description,
             subscribed_events,
+            file_path: path.to_path_buf(),
+            modified_time,
         })
     }
 
@@ -260,6 +275,18 @@ impl HostScript for WasmScript {
 
     fn as_any_mut(&mut self) -> &mut dyn Any {
         self
+    }
+}
+
+impl WasmScript {
+    /// Get the file path for this script
+    pub fn file_path(&self) -> &PathBuf {
+        &self.file_path
+    }
+
+    /// Get the modification time for this script
+    pub fn modified_time(&self) -> SystemTime {
+        self.modified_time
     }
 }
 

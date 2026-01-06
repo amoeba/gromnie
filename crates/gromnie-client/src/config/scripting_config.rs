@@ -17,6 +17,22 @@ pub struct ScriptingConfig {
     /// Per-script configuration (script ID -> config values)
     #[serde(default)]
     pub config: HashMap<String, toml::Value>,
+
+    /// Whether hot reload is enabled (default: true)
+    #[serde(default = "default_hot_reload")]
+    pub hot_reload: bool,
+
+    /// Hot reload scan interval in milliseconds (default: 500ms)
+    #[serde(default = "default_hot_reload_interval")]
+    pub hot_reload_interval_ms: u64,
+}
+
+fn default_hot_reload() -> bool {
+    true
+}
+
+fn default_hot_reload_interval() -> u64 {
+    1000
 }
 
 impl Default for ScriptingConfig {
@@ -25,6 +41,8 @@ impl Default for ScriptingConfig {
             enabled: true,
             script_dir: None,
             config: HashMap::new(),
+            hot_reload: true,
+            hot_reload_interval_ms: 1000,
         }
     }
 }
