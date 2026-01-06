@@ -39,6 +39,9 @@ pub use gromnie::scripting::host;
 // Re-export event types
 pub use gromnie::scripting::host::{GameEvent, ScriptEvent, StateEvent, SystemEvent};
 
+// Re-export keyboard types
+pub use gromnie::scripting::host::{KeyboardEvent, KeyCode, KeyModifiers, KeyEventKind};
+
 // Re-export Scene type
 pub use gromnie::scripting::host::Scene;
 

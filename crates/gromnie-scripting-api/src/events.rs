@@ -32,3 +32,9 @@ pub const EVENT_SYSTEM_UPDATING_DONE: u32 = 205;
 pub const EVENT_SYSTEM_LOGIN_SUCCEEDED: u32 = 206;
 pub const EVENT_SYSTEM_RELOAD_SCRIPTS: u32 = 207;
 pub const EVENT_SYSTEM_SHUTDOWN: u32 = 208;
+
+// Keyboard events (300-399)
+pub const KEYBOARD_PRESS: u32 = 300;
+pub const KEYBOARD_RELEASE: u32 = 301;
+pub const KEYBOARD_REPEAT: u32 = 302;
+pub const KEYBOARD_ALL: u32 = 303;

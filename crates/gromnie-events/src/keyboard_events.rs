@@ -87,7 +87,11 @@ impl KeyboardEvent {
 
     /// Create a keyboard event for a character press with no modifiers
     pub fn char_press(c: char) -> Self {
-        Self::new(KeyCode::Char(c), KeyModifiers::default(), KeyEventKind::Press)
+        Self::new(
+            KeyCode::Char(c),
+            KeyModifiers::default(),
+            KeyEventKind::Press,
+        )
     }
 
     /// Create a keyboard event for a key press with no modifiers
