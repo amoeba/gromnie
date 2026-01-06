@@ -54,8 +54,10 @@ fn test_hot_reload_enabled_by_default() {
 #[test]
 fn test_hot_reload_can_be_disabled() {
     // Test that hot reload can be explicitly disabled
-    let mut config = ScriptingConfig::default();
-    config.hot_reload = false;
+    let config = ScriptingConfig {
+        hot_reload: false,
+        ..Default::default()
+    };
 
     assert!(config.enabled, "Scripting should be enabled");
     assert!(!config.hot_reload, "Hot reload should be disabled");
@@ -64,8 +66,10 @@ fn test_hot_reload_can_be_disabled() {
 #[test]
 fn test_custom_scan_interval_config() {
     // Test that custom scan intervals can be configured
-    let mut config = ScriptingConfig::default();
-    config.hot_reload_interval_ms = 1000;
+    let config = ScriptingConfig {
+        hot_reload_interval_ms: 1000,
+        ..Default::default()
+    };
 
     assert_eq!(
         config.hot_reload_interval_ms, 1000,

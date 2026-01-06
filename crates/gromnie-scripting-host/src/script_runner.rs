@@ -508,12 +508,12 @@ impl ScriptRunner {
         }
 
         // Check for script changes (runs at scanner's interval, not tick interval)
-        if let Some(ref mut scanner) = self.scanner {
-            if scanner.should_scan() {
-                let changes = scanner.scan_changes();
-                if changes.has_changes() {
-                    self.handle_script_changes(changes);
-                }
+        if let Some(ref mut scanner) = self.scanner
+            && scanner.should_scan()
+        {
+            let changes = scanner.scan_changes();
+            if changes.has_changes() {
+                self.handle_script_changes(changes);
             }
         }
     }
@@ -632,22 +632,22 @@ impl ScriptConsumer {
 
         // Load initial scripts
         self.runner
-            .load_scripts(&script_dir, &self.script_config.as_ref().unwrap());
+            .load_scripts(&script_dir, self.script_config.as_ref().unwrap());
 
         // Enable hot reload if requested
         if hot_reload_enabled {
             self.runner.enable_hot_reload();
 
             // Set custom scan interval if specified
-            if hot_reload_interval_ms != 1000 {
-                if let Some(ref mut scanner) = self.runner.scanner {
-                    scanner.set_scan_interval(Duration::from_millis(hot_reload_interval_ms));
-                    info!(
-                        target: "scripting",
-                        "Hot reload scan interval set to {}ms",
-                        hot_reload_interval_ms
-                    );
-                }
+            if hot_reload_interval_ms != 1000
+                && let Some(ref mut scanner) = self.runner.scanner
+            {
+                scanner.set_scan_interval(Duration::from_millis(hot_reload_interval_ms));
+                info!(
+                    target: "scripting",
+                    "Hot reload scan interval set to {}ms",
+                    hot_reload_interval_ms
+                );
             }
         }
 
