@@ -7,12 +7,12 @@
 //! - Loading of newly added scripts
 //! - Proper lifecycle management (on_unload/on_load)
 
+use gromnie_client::config::scripting_config::ScriptingConfig;
 use std::fs;
 use std::path::PathBuf;
 use std::thread;
 use std::time::Duration;
 use tempfile::TempDir;
-use gromnie_client::config::scripting_config::ScriptingConfig;
 
 /// Helper function to create a minimal valid WASM file
 /// For testing purposes, we'll create a dummy file since we can't
@@ -76,7 +76,7 @@ fn test_custom_scan_interval_config() {
 #[test]
 fn test_scanner_detects_file_changes() {
     // Test the file change detection in isolation
-    use gromnie_scripting_host::script_scanner::{ScriptScanner, DEFAULT_SCAN_INTERVAL};
+    use gromnie_scripting_host::script_scanner::{DEFAULT_SCAN_INTERVAL, ScriptScanner};
 
     let temp_dir = TempDir::new().expect("Failed to create temp dir");
     let script_dir = temp_dir.path();
@@ -95,10 +95,7 @@ fn test_scanner_detects_file_changes() {
 
     // Second scan should show no changes
     let result = scanner.scan_changes();
-    assert!(
-        !result.has_changes(),
-        "Second scan should show no changes"
-    );
+    assert!(!result.has_changes(), "Second scan should show no changes");
 
     // Modify the file
     thread::sleep(Duration::from_millis(10)); // Ensure different timestamp
@@ -167,7 +164,10 @@ fn test_scanner_detects_removed_files() {
     // Scan should detect removal
     let result = scanner.scan_changes();
     assert_eq!(result.removed.len(), 1, "Should detect removed script");
-    assert_eq!(result.removed[0], script1, "Should detect correct removed script");
+    assert_eq!(
+        result.removed[0], script1,
+        "Should detect correct removed script"
+    );
 }
 
 #[test]
@@ -192,7 +192,7 @@ fn test_scanner_filters_non_wasm_files() {
 
 #[test]
 fn test_scan_interval_timing() {
-    use gromnie_scripting_host::script_scanner::{ScriptScanner, DEFAULT_SCAN_INTERVAL};
+    use gromnie_scripting_host::script_scanner::{DEFAULT_SCAN_INTERVAL, ScriptScanner};
 
     let temp_dir = TempDir::new().expect("Failed to create temp dir");
     let mut scanner = ScriptScanner::new(temp_dir.path().to_path_buf());
@@ -204,19 +204,13 @@ fn test_scan_interval_timing() {
     scanner.scan_changes();
 
     // Should not scan again immediately
-    assert!(
-        !scanner.should_scan(),
-        "Should not scan again immediately"
-    );
+    assert!(!scanner.should_scan(), "Should not scan again immediately");
 
     // Wait for interval to pass
     thread::sleep(DEFAULT_SCAN_INTERVAL + Duration::from_millis(10));
 
     // Should scan again
-    assert!(
-        scanner.should_scan(),
-        "Should scan again after interval"
-    );
+    assert!(scanner.should_scan(), "Should scan again after interval");
 }
 
 #[test]
@@ -237,7 +231,10 @@ fn test_custom_scan_interval() {
     thread::sleep(Duration::from_millis(500));
 
     // Should still not scan
-    assert!(!scanner.should_scan(), "Should not scan before custom interval");
+    assert!(
+        !scanner.should_scan(),
+        "Should not scan before custom interval"
+    );
 
     // Wait for custom interval
     thread::sleep(Duration::from_millis(600));
@@ -254,9 +251,7 @@ fn test_wasm_script_tracks_metadata() {
 
     // Get file metadata
     let metadata = fs::metadata(&script_path).expect("Failed to get metadata");
-    let expected_modified_time = metadata
-        .modified()
-        .expect("Failed to get modified time");
+    let expected_modified_time = metadata.modified().expect("Failed to get modified time");
 
     // Note: We can't actually load WASM without a valid WASM file,
     // but we can test that the file_path and modified_time would be tracked
@@ -305,7 +300,10 @@ fn test_multiple_concurrent_changes() {
     let result = scanner.scan_changes();
     assert_eq!(result.changed.len(), 1, "Should detect 1 modified script");
     assert_eq!(result.added.len(), 1, "Should detect 1 new script");
-    assert_eq!(result.changed[0].0, script1, "Modified script should be script1");
+    assert_eq!(
+        result.changed[0].0, script1,
+        "Modified script should be script1"
+    );
     assert_eq!(result.added[0], script3, "New script should be script3");
 }
 
@@ -317,5 +315,8 @@ fn test_script_config_backward_compatibility() {
     // Should use default values
     assert!(config.enabled);
     assert!(config.hot_reload, "Should default to enabled");
-    assert_eq!(config.hot_reload_interval_ms, 1000, "Should default to 1000ms");
+    assert_eq!(
+        config.hot_reload_interval_ms, 1000,
+        "Should default to 1000ms"
+    );
 }

@@ -631,7 +631,8 @@ impl ScriptConsumer {
         self.script_config = Some(script_config);
 
         // Load initial scripts
-        self.runner.load_scripts(&script_dir, &self.script_config.as_ref().unwrap());
+        self.runner
+            .load_scripts(&script_dir, &self.script_config.as_ref().unwrap());
 
         // Enable hot reload if requested
         if hot_reload_enabled {

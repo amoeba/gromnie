@@ -170,21 +170,19 @@ impl ScriptScanner {
 
             // Get file metadata
             match std::fs::metadata(&path) {
-                Ok(metadata) => {
-                    match metadata.modified() {
-                        Ok(modified_time) => {
-                            scripts.insert(path, modified_time);
-                        }
-                        Err(e) => {
-                            tracing::warn!(
-                                target: "scripting",
-                                "Failed to get modification time for {}: {}",
-                                path.display(),
-                                e
-                            );
-                        }
+                Ok(metadata) => match metadata.modified() {
+                    Ok(modified_time) => {
+                        scripts.insert(path, modified_time);
                     }
-                }
+                    Err(e) => {
+                        tracing::warn!(
+                            target: "scripting",
+                            "Failed to get modification time for {}: {}",
+                            path.display(),
+                            e
+                        );
+                    }
+                },
                 Err(e) => {
                     tracing::warn!(
                         target: "scripting",
@@ -361,9 +359,21 @@ mod tests {
 
         // Should only detect .wasm files
         assert_eq!(result.added.len(), 2);
-        assert!(scanner.cached_state.contains_key(&temp_dir.path().join("script1.wasm")));
-        assert!(scanner.cached_state.contains_key(&temp_dir.path().join("script2.wasm")));
-        assert!(!scanner.cached_state.contains_key(&temp_dir.path().join("script2.txt")));
+        assert!(
+            scanner
+                .cached_state
+                .contains_key(&temp_dir.path().join("script1.wasm"))
+        );
+        assert!(
+            scanner
+                .cached_state
+                .contains_key(&temp_dir.path().join("script2.wasm"))
+        );
+        assert!(
+            !scanner
+                .cached_state
+                .contains_key(&temp_dir.path().join("script2.txt"))
+        );
     }
 
     #[test]
