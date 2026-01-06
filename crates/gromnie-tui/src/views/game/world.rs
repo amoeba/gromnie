@@ -222,7 +222,11 @@ fn render_chat_tab(frame: &mut Frame, area: Rect, app: &App) {
 /// Build the list of visible chat messages that fit in the available space
 /// This function works backwards from the most recent message, adding older messages
 /// until we fill the available height (accounting for text wrapping)
-fn build_visible_messages(app: &App, available_height: u16, available_width: usize) -> Vec<Line<'_>> {
+fn build_visible_messages(
+    app: &App,
+    available_height: u16,
+    available_width: usize,
+) -> Vec<Line<'_>> {
     let mut lines = vec![];
     let mut current_line_count: u16 = 0;
 
