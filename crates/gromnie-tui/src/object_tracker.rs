@@ -93,7 +93,8 @@ impl ObjectTracker {
     pub fn handle_item_delete(&mut self, object_id: u32) {
         if let Some(obj) = self.objects.remove(&object_id) {
             // Track recently deleted with timestamp
-            self.recently_deleted.push((object_id, obj.name.clone(), Instant::now()));
+            self.recently_deleted
+                .push((object_id, obj.name.clone(), Instant::now()));
 
             // Remove from parent container
             if let Some(cid) = obj.container_id

@@ -263,8 +263,8 @@ fn render_objects_tab(frame: &mut Frame, area: Rect, app: &App) {
     objects.sort_by(|a, b| b.last_updated.cmp(&a.last_updated));
 
     // Define time thresholds for color coding
-    let very_recent_threshold = Duration::from_secs(5);  // Green for last 5 seconds
-    let recent_threshold = Duration::from_secs(30);       // Yellow for last 30 seconds
+    let very_recent_threshold = Duration::from_secs(5); // Green for last 5 seconds
+    let recent_threshold = Duration::from_secs(30); // Yellow for last 30 seconds
 
     // Create rows for each object
     let rows: Vec<Row> = objects
@@ -293,11 +293,11 @@ fn render_objects_tab(frame: &mut Frame, area: Rect, app: &App) {
             // Determine row color based on how recently the object was updated
             let time_since_update = obj.last_updated.elapsed();
             let row_color = if time_since_update < very_recent_threshold {
-                Color::Green    // Very recent - bright green
+                Color::Green // Very recent - bright green
             } else if time_since_update < recent_threshold {
-                Color::Yellow   // Recent - yellow
+                Color::Yellow // Recent - yellow
             } else {
-                Color::White    // Older - default white
+                Color::White // Older - default white
             };
 
             Row::new(vec![
@@ -306,7 +306,8 @@ fn render_objects_tab(frame: &mut Frame, area: Rect, app: &App) {
                 obj.object_type.clone(),
                 container_str,
                 obj.burden.to_string(),
-            ]).style(Style::default().fg(row_color))
+            ])
+            .style(Style::default().fg(row_color))
         })
         .collect();
 
