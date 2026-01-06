@@ -1,5 +1,6 @@
 use clap::Parser;
 use tracing::{error, info};
+use tracing_subscriber::EnvFilter;
 
 use gromnie_client::config::GromnieConfig;
 use gromnie_events::SimpleClientAction;
@@ -15,11 +16,27 @@ pub struct Cli {
 
     /// Server to connect to (name from config)
     #[arg(short, long)]
-    server: String,
+    server: Option<String>,
 
     /// Account to use (name from config)
     #[arg(short, long)]
-    account: String,
+    account: Option<String>,
+
+    /// Server host
+    #[arg(long)]
+    host: Option<String>,
+
+    /// Server port
+    #[arg(long)]
+    port: Option<u16>,
+
+    /// Account password
+    #[arg(long)]
+    password: Option<String>,
+
+    /// Character name to auto-login
+    #[arg(long)]
+    character: Option<String>,
 
     /// Enable automatic reconnection on connection loss
     #[arg(long)]
@@ -56,39 +73,79 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let cli = Cli::parse();
 
-    // Resolve server and account from CLI args
-    let server = config.servers.get(&cli.server).ok_or_else(|| {
-        let available = config
-            .servers
-            .keys()
-            .cloned()
-            .collect::<Vec<_>>()
-            .join(", ");
-        format!(
-            "Server '{}' not found. Available: {}",
-            cli.server, available
-        )
-    })?;
+    // Determine connection parameters: CLI args take precedence, then fall back to config
+    let (host, port, account_name, password, character_name) =
+        if cli.host.is_some() || cli.port.is_some() || cli.password.is_some() {
+            // Using CLI arguments for connection
+            let host = cli
+                .host
+                .ok_or("--host is required when using direct connection")?;
+            let port = cli
+                .port
+                .ok_or("--port is required when using direct connection")?;
+            let account_name = cli
+                .account
+                .ok_or("--account is required when using direct connection")?;
+            let password = cli
+                .password
+                .ok_or("--password is required when using direct connection")?;
+            let character_name = cli.character;
 
-    let account = config.accounts.get(&cli.account).ok_or_else(|| {
-        let available = config
-            .accounts
-            .keys()
-            .cloned()
-            .collect::<Vec<_>>()
-            .join(", ");
-        format!(
-            "Account '{}' not found. Available: {}",
-            cli.account, available
-        )
-    })?;
+            info!(
+                "Connecting to server {}:{} with account '{}' (from CLI args)",
+                host, port, account_name
+            );
+            (host, port, account_name, password, character_name)
+        } else {
+            // Using config file
+            let server_name = cli
+                .server
+                .ok_or("Either --server (config name) or --host/--port must be specified")?;
+            let account_name = cli.account.ok_or(
+                "Either --account (config name) or --account/--password must be specified",
+            )?;
 
-    let address = format!("{}:{}", server.host, server.port);
+            let server = config.servers.get(&server_name).ok_or_else(|| {
+                let available = config
+                    .servers
+                    .keys()
+                    .cloned()
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                format!(
+                    "Server '{}' not found. Available: {}",
+                    server_name, available
+                )
+            })?;
 
-    info!(
-        "Connecting to server '{}' with account '{}'",
-        cli.server, cli.account
-    );
+            let account = config.accounts.get(&account_name).ok_or_else(|| {
+                let available = config
+                    .accounts
+                    .keys()
+                    .cloned()
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                format!(
+                    "Account '{}' not found. Available: {}",
+                    account_name, available
+                )
+            })?;
+
+            info!(
+                "Connecting to server '{}' with account '{}' (from config)",
+                server_name, account_name
+            );
+
+            (
+                server.host.clone(),
+                server.port,
+                account.username.clone(),
+                account.password.clone(),
+                account.character.clone(),
+            )
+        };
+
+    let address = format!("{}:{}", host, port);
 
     // Initialize TUI
     let mut tui = try_init_tui()?;
@@ -109,11 +166,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let client_config = ClientConfig {
         id: 0,
         address,
-        account_name: account.username.clone(),
-        password: account.password.clone(),
+        account_name,
+        password,
         // CLI flag overrides config file
         reconnect: cli.reconnect || config.reconnect,
-        character_name: account.character.clone(),
+        character_name,
     };
 
     // Spawn client task using the runner module
