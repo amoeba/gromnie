@@ -45,6 +45,7 @@ pub struct Cli {
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let cli = Cli::parse();
     // Load configuration - require config file like the CLI does
     let config = match GromnieConfig::load() {
         Ok(cfg) => {
@@ -71,7 +72,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     };
 
-    let cli = Cli::parse();
 
     // Determine connection parameters: CLI args take precedence, then fall back to config
     let (host, port, account_name, password, character_name) =
