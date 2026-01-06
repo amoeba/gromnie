@@ -185,7 +185,7 @@ fn render_chat_tab(frame: &mut Frame, area: Rect, app: &App) {
     };
 
     // Calculate available height for messages (account for borders)
-    let available_height = chunks[0].height.saturating_sub(2) as u16;
+    let available_height = chunks[0].height.saturating_sub(2);
     let available_width = chunks[0].width.saturating_sub(2) as usize; // Account for borders
 
     // Build visible messages from most recent to oldest, tracking line count
