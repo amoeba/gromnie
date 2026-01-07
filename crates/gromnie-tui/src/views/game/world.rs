@@ -1,5 +1,5 @@
-use crate::app::{App, GameWorldState, GameWorldTab};
 use crate::ChatWidget;
+use crate::app::{App, GameWorldState, GameWorldTab};
 use ratatui::prelude::*;
 use ratatui::widgets::*;
 
