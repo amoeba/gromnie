@@ -230,14 +230,6 @@ fn build_visible_messages(
     let mut lines = vec![];
     let mut current_line_count: u16 = 0;
 
-    if app.chat_messages.is_empty() {
-        lines.push(Line::from(Span::styled(
-            "TODO: Chat messages",
-            Style::default().fg(Color::Gray).italic(),
-        )));
-        return lines;
-    }
-
     // Iterate from most recent to oldest
     for message in app.chat_messages.iter().rev() {
         // Calculate how many lines this message will take when wrapped
