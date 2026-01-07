@@ -534,10 +534,8 @@ impl App {
                     *state = GameWorldState::InWorld;
                 }
 
-                // Send LoginComplete immediately after CreatePlayer
-                if let Some(ref tx) = self.action_tx {
-                    let _ = tx.send(SimpleClientAction::SendLoginComplete);
-                }
+                // Note: LoginComplete is sent by the client message handler when CreatePlayer is received,
+                // so we don't need to send it again here
 
                 self.add_network_message(NetworkMessage::Received {
                     opcode: "0xF7B0".to_string(),
