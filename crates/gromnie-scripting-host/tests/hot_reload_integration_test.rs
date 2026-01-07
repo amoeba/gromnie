@@ -307,7 +307,11 @@ fn test_multiple_concurrent_changes() {
 
     // Initial scan should show no changes (cache was pre-populated)
     let result = scanner.scan_changes();
-    assert_eq!(result.added.len(), 0, "Should not report cached files as added");
+    assert_eq!(
+        result.added.len(),
+        0,
+        "Should not report cached files as added"
+    );
 
     // Modify one, add one
     thread::sleep(Duration::from_millis(10));
