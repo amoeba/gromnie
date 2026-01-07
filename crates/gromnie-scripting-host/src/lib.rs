@@ -10,6 +10,7 @@ pub mod context;
 pub mod registry;
 pub mod reload;
 pub mod script_runner;
+pub mod script_scanner;
 pub mod timer;
 pub mod wasm;
 

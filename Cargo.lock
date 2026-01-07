@@ -1253,6 +1253,7 @@ dependencies = [
  "gromnie-client",
  "gromnie-events",
  "gromnie-scripting-api",
+ "tempfile",
  "tokio",
  "toml",
  "tracing",
