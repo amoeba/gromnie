@@ -25,15 +25,7 @@ fn render_debug_content(frame: &mut Frame, area: Rect, app: &App) {
         .title(format!("Messages ({})", app.network_messages.len()))
         .borders(Borders::ALL);
 
-    let mut lines = Vec::new();
-
-    // Show messages in reverse chronological order (most recent at top)
-    for message in app
-        .network_messages
-        .iter()
-        .rev()
-        .take(area.height as usize - 2)
-    {
+    let chat_widget = crate::widgets::chat::ChatWidget::new(&app.network_messages, |message| {
         let (color, prefix, opcode, description) = match message {
             crate::app::NetworkMessage::Sent {
                 opcode,
@@ -57,18 +49,15 @@ fn render_debug_content(frame: &mut Frame, area: Rect, app: &App) {
             ),
         };
 
-        lines.push(Line::from(vec![
+        Line::from(vec![
             Span::styled(prefix, Style::default().fg(color).bold()),
             Span::raw(" "),
             Span::raw(opcode),
             Span::raw(" "),
             Span::raw(description),
-        ]));
-    }
+        ])
+    })
+    .block(block);
 
-    let paragraph = Paragraph::new(lines)
-        .block(block)
-        .style(Style::default().fg(Color::White));
-
-    frame.render_widget(paragraph, area);
+    frame.render_widget(chat_widget, area);
 }
