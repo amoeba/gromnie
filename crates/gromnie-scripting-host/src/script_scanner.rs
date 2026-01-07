@@ -38,7 +38,7 @@ pub struct ScriptScanner {
     /// Last time we performed a scan
     last_scan: Option<Instant>,
     /// Cached state from last scan: path -> modification time
-    cached_state: HashMap<PathBuf, SystemTime>,
+    pub cached_state: HashMap<PathBuf, SystemTime>,
 }
 
 impl ScriptScanner {
@@ -49,11 +49,14 @@ impl ScriptScanner {
 
     /// Create a new scanner with a custom scan interval
     pub fn with_interval(script_dir: PathBuf, scan_interval: Duration) -> Self {
+        // Pre-populate the cache with current files to avoid detecting them as "added"
+        let cached_state = Self::get_scripts_in_dir(&script_dir);
+
         Self {
             script_dir,
             scan_interval,
             last_scan: None,
-            cached_state: HashMap::new(),
+            cached_state,
         }
     }
 
@@ -69,12 +72,22 @@ impl ScriptScanner {
     ///
     /// This updates the internal cache and returns any detected changes.
     /// Only scans `.wasm` files, matching the behavior of the script loader.
+    ///
+    /// **Note:** The first scan after creation will detect all existing files
+    /// as "added" since the cache starts empty. Callers should handle this
+    /// initial scan appropriately.
     pub fn scan_changes(&mut self) -> ScanResult {
         let now = Instant::now();
         self.last_scan = Some(now);
 
+        tracing::debug!(
+            target: "scripting",
+            "Scanning script directory for changes: {}",
+            self.script_dir.display()
+        );
+
         // Get current state of the directory
-        let current_state = self.get_current_scripts();
+        let current_state = Self::get_scripts_in_dir(&self.script_dir);
 
         // Compare with cached state to detect changes
         let mut result = ScanResult {
@@ -132,27 +145,27 @@ impl ScriptScanner {
     /// Get the current script files in the directory and their modification times
     ///
     /// Only returns `.wasm` files, matching the loader's behavior.
-    fn get_current_scripts(&self) -> HashMap<PathBuf, SystemTime> {
+    fn get_scripts_in_dir(script_dir: &PathBuf) -> HashMap<PathBuf, SystemTime> {
         let mut scripts = HashMap::new();
 
         // Check if directory exists
-        if !self.script_dir.exists() {
+        if !script_dir.exists() {
             debug!(
                 target: "scripting",
                 "Script directory does not exist: {}",
-                self.script_dir.display()
+                script_dir.display()
             );
             return scripts;
         }
 
         // Read directory entries
-        let entries = match std::fs::read_dir(&self.script_dir) {
+        let entries = match std::fs::read_dir(script_dir) {
             Ok(entries) => entries,
             Err(e) => {
                 tracing::warn!(
                     target: "scripting",
                     "Failed to read script directory {}: {}",
-                    self.script_dir.display(),
+                    script_dir.display(),
                     e
                 );
                 return scripts;

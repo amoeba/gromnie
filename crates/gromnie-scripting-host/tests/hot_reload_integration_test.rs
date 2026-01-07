@@ -89,17 +89,13 @@ fn test_scanner_detects_file_changes() {
     let script1 = script_dir.join("script1.wasm");
     create_dummy_wasm_file(&script1);
 
-    // Create scanner
+    // Create scanner - cache is pre-populated, so initial scan shows no changes
     let mut scanner = ScriptScanner::new(script_dir.to_path_buf());
-
-    // Initial scan should detect the file
     let result = scanner.scan_changes();
-    assert_eq!(result.added.len(), 1, "Should detect initial script");
-    assert_eq!(result.added[0], script1, "Should detect correct script");
-
-    // Second scan should show no changes
-    let result = scanner.scan_changes();
-    assert!(!result.has_changes(), "Second scan should show no changes");
+    assert!(
+        !result.has_changes(),
+        "First scan should not detect files (cache pre-populated)"
+    );
 
     // Modify the file
     thread::sleep(Duration::from_millis(10)); // Ensure different timestamp
@@ -189,9 +185,23 @@ fn test_scanner_filters_non_wasm_files() {
 
     let mut scanner = ScriptScanner::new(script_dir.to_path_buf());
 
-    // Scan should only detect .wasm files
-    let result = scanner.scan_changes();
-    assert_eq!(result.added.len(), 2, "Should only detect .wasm files");
+    // Scan should only detect .wasm files in cache (cache is pre-populated)
+    scanner.scan_changes();
+    assert!(
+        scanner
+            .cached_state
+            .contains_key(&script_dir.join("script1.wasm"))
+    );
+    assert!(
+        scanner
+            .cached_state
+            .contains_key(&script_dir.join("script2.wasm"))
+    );
+    assert!(
+        !scanner
+            .cached_state
+            .contains_key(&script_dir.join("script2.txt"))
+    );
 }
 
 #[test]
@@ -288,9 +298,16 @@ fn test_multiple_concurrent_changes() {
 
     let mut scanner = ScriptScanner::new(script_dir.to_path_buf());
 
-    // Initial scan
+    // Verify that initial scripts are cached (not reported as "added")
+    assert_eq!(
+        scanner.cached_state.len(),
+        2,
+        "Should have 2 scripts in cache"
+    );
+
+    // Initial scan should show no changes (cache was pre-populated)
     let result = scanner.scan_changes();
-    assert_eq!(result.added.len(), 2, "Should detect 2 initial scripts");
+    assert_eq!(result.added.len(), 0, "Should not report cached files as added");
 
     // Modify one, add one
     thread::sleep(Duration::from_millis(10));

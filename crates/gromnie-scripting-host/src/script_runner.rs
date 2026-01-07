@@ -36,8 +36,6 @@ pub struct ScriptRunner {
     last_tick: Instant,
     /// Interval between ticks (default 50ms for 20Hz)
     tick_interval: Duration,
-    /// Script scanner for hot reload (optional)
-    pub(crate) scanner: Option<ScriptScanner>,
     /// Script configuration for reload operations
     script_config: Option<HashMap<String, toml::Value>>,
     /// Script directory path
@@ -67,7 +65,6 @@ impl ScriptRunner {
             timer_manager: TimerManager::new(),
             last_tick: Instant::now(),
             tick_interval,
-            scanner: None,
             script_config: None,
             script_dir: None,
         }
@@ -97,7 +94,6 @@ impl ScriptRunner {
             timer_manager: TimerManager::new(),
             last_tick: Instant::now(),
             tick_interval: DEFAULT_TICK_INTERVAL,
-            scanner: None,
             script_config: None,
             script_dir: None,
         }
@@ -161,44 +157,20 @@ impl ScriptRunner {
         };
 
         let scripts = super::wasm::load_wasm_scripts(engine, dir, script_config);
+        let loaded_count = scripts.len();
 
         for script in scripts {
             debug!(target: "scripting", "Registering script: {} ({})", script.name(), script.id());
             self.register_script(script);
         }
 
-        if !self.scripts.is_empty() {
-            info!(target: "scripting", "Loaded {} script(s)", self.scripts.len());
+        if loaded_count > 0 {
+            info!(target: "scripting", "Loaded {} script(s) (total: {})", loaded_count, self.scripts.len());
         }
 
         // Store script config and directory for hot reload
         self.script_config = Some(script_config.clone());
         self.script_dir = Some(dir.to_path_buf());
-    }
-
-    /// Enable hot reload for scripts
-    ///
-    /// This creates a scanner that will periodically check for script file changes
-    /// and automatically reload modified or newly added scripts.
-    pub fn enable_hot_reload(&mut self) {
-        if let Some(ref dir) = self.script_dir {
-            let scanner = ScriptScanner::new(dir.clone());
-            let interval = scanner.scan_interval();
-            self.scanner = Some(scanner);
-            info!(
-                target: "scripting",
-                "Hot reload enabled, scanning every {:?}",
-                interval
-            );
-        } else {
-            tracing::warn!(target: "scripting", "Cannot enable hot reload: no script directory set");
-        }
-    }
-
-    /// Disable hot reload for scripts
-    pub fn disable_hot_reload(&mut self) {
-        self.scanner = None;
-        info!(target: "scripting", "Hot reload disabled");
     }
 
     /// Reload scripts (for hot-reload)
@@ -283,25 +255,74 @@ impl ScriptRunner {
 
         let script_config = self.script_config.as_ref().cloned().unwrap_or_default();
 
-        // Handle changed scripts
+        // Detect file replacements: when a file is both removed and added, it's actually
+        // a modification (common with install scripts that delete then copy)
+        let mut replacements = std::collections::HashSet::new();
+
+        // Find removed scripts that have corresponding added scripts with the same filename
+        for removed_path in &changes.removed {
+            if let Some(filename) = removed_path.file_name() {
+                for added_path in &changes.added {
+                    if added_path.file_name() == Some(filename) {
+                        // Same filename - this is a replacement, not a true add/remove
+                        replacements.insert(filename);
+                        break;
+                    }
+                }
+            }
+        }
+
+        // Handle removed scripts that were actually replaced (treat as modification)
+        for removed_path in &changes.removed {
+            if let Some(filename) = removed_path.file_name()
+                && replacements.contains(filename)
+            {
+                // Find the corresponding added path
+                if let Some(added_path) = changes
+                    .added
+                    .iter()
+                    .find(|p| p.file_name() == Some(filename))
+                {
+                    info!(
+                        target: "scripting",
+                        "Hot-reloading replaced script: {} -> {}",
+                        removed_path.display(),
+                        added_path.display()
+                    );
+                    self.reload_script_by_path_replacement(
+                        removed_path,
+                        added_path,
+                        &engine,
+                        &script_config,
+                    );
+                }
+            }
+        }
+
+        // Handle changed scripts (true modifications)
         for (path, _new_time) in &changes.changed {
-            info!(target: "scripting", "Hot-reloading script: {}", path.display());
+            info!(target: "scripting", "Hot-reloading modified script: {}", path.display());
             self.reload_script_by_path(path, &engine, &script_config);
         }
 
-        // Handle added scripts
+        // Handle truly added scripts (not replacements)
         for path in &changes.added {
-            info!(target: "scripting", "Loading new script: {}", path.display());
-            self.load_script_by_path(path, &engine, &script_config);
+            if let Some(filename) = path.file_name()
+                && !replacements.contains(filename)
+            {
+                info!(target: "scripting", "Loading new script: {}", path.display());
+                self.load_script_by_path(path, &engine, &script_config);
+            }
         }
 
-        // Handle removed scripts (optional - user prefers to ignore for now)
-        if !changes.removed.is_empty() {
-            debug!(
-                target: "scripting",
-                "{} script(s) removed, ignoring (as configured)",
-                changes.removed.len()
-            );
+        // Handle truly removed scripts (not replacements)
+        for path in &changes.removed {
+            if let Some(filename) = path.file_name()
+                && !replacements.contains(filename)
+            {
+                info!(target: "scripting", "Unloading removed script: {}", path.display());
+                self.unload_script_by_path(path);
+            }
         }
     }
 
@@ -465,6 +486,143 @@ impl ScriptRunner {
         }
     }
 
+    /// Reload a script when its file was replaced (removed then added)
+    /// This handles the case where install scripts delete old files then copy new ones
+    fn reload_script_by_path_replacement(
+        &mut self,
+        old_path: &std::path::Path,
+        new_path: &std::path::Path,
+        engine: &wasmtime::Engine,
+        script_config: &HashMap<String, toml::Value>,
+    ) {
+        // Find the script by the old path
+        let index = match self.scripts.iter().position(|s| s.file_path() == old_path) {
+            Some(idx) => idx,
+            None => {
+                // Script not found at old path - just try to load from new path
+                debug!(
+                    target: "scripting",
+                    "Script not found at old path {}, loading from new path {}",
+                    old_path.display(),
+                    new_path.display()
+                );
+                self.load_script_by_path(new_path, engine, script_config);
+                return;
+            }
+        };
+
+        let old_script = &self.scripts[index];
+        let script_id = old_script.id().to_string();
+
+        // Create context for on_unload
+        let mut ctx = Self::create_script_context(
+            self.client.clone(),
+            self.action_tx.clone(),
+            &mut self.timer_manager,
+            SystemTime::now(),
+        );
+
+        // Call on_unload on old instance
+        debug!(
+            target: "scripting",
+            "Calling on_unload for replaced script: {} ({})",
+            old_script.name(),
+            script_id
+        );
+        let mut old_script = self.scripts.remove(index);
+        old_script.on_unload(&mut ctx);
+
+        // Try to load new instance
+        match WasmScript::from_file(engine, new_path) {
+            Ok(new_script) => {
+                // Check if this script is enabled in config
+                let is_enabled = script_config
+                    .get(&script_id)
+                    .and_then(|config| config.get("enabled"))
+                    .and_then(|v| v.as_bool())
+                    .unwrap_or(true);
+
+                if !is_enabled {
+                    debug!(
+                        target: "scripting",
+                        "Skipping reload of disabled script: {} ({})",
+                        new_script.name(),
+                        script_id
+                    );
+                    return;
+                }
+
+                // Call on_load on new instance
+                let mut new_script = new_script;
+                new_script.on_load(&mut ctx);
+
+                // Add to scripts
+                self.scripts.push(new_script);
+
+                info!(
+                    target: "scripting",
+                    "Successfully reloaded replaced script: {} ({})",
+                    self.scripts.last().unwrap().name(),
+                    script_id
+                );
+            }
+            Err(e) => {
+                error!(
+                    target: "scripting",
+                    "Failed to reload replaced script {} from {}: {:#}",
+                    script_id,
+                    new_path.display(),
+                    e
+                );
+            }
+        }
+    }
+
+    /// Unload a script by its file path
+    fn unload_script_by_path(&mut self, path: &std::path::Path) {
+        // Find the script by path
+        let index = match self.scripts.iter().position(|s| s.file_path() == path) {
+            Some(idx) => idx,
+            None => {
+                debug!(
+                    target: "scripting",
+                    "Script at {} not found, may have already been unloaded",
+                    path.display()
+                );
+                return;
+            }
+        };
+
+        let script = &self.scripts[index];
+        let script_id = script.id().to_string();
+        let script_name = script.name().to_string();
+
+        // Create context for on_unload
+        let mut ctx = Self::create_script_context(
+            self.client.clone(),
+            self.action_tx.clone(),
+            &mut self.timer_manager,
+            SystemTime::now(),
+        );
+
+        // Call on_unload and remove
+        debug!(
+            target: "scripting",
+            "Calling on_unload for removed script: {} ({})",
+            script_name,
+            script_id
+        );
+        let mut script = self.scripts.remove(index);
+        script.on_unload(&mut ctx);
+
+        info!(
+            target: "scripting",
+            "Unloaded removed script: {} ({})",
+            script_name,
+            script_id
+        );
+    }
+
     /// Process timers and return fired timer IDs
     fn tick_timers(&mut self, now: Instant) -> Vec<(super::timer::TimerId, String)> {
         self.timer_manager.tick(now)
@@ -504,16 +662,6 @@ impl ScriptRunner {
                         e
                     );
                 }
-            }
-        }
-
-        // Check for script changes (runs at scanner's interval, not tick interval)
-        if let Some(ref mut scanner) = self.scanner
-            && scanner.should_scan()
-        {
-            let changes = scanner.scan_changes();
-            if changes.has_changes() {
-                self.handle_script_changes(changes);
             }
         }
     }
@@ -606,17 +754,19 @@ impl Drop for ScriptRunner {
 
 /// Wrapper around ScriptRunner that implements EventConsumer trait
 pub struct ScriptConsumer {
-    runner: ScriptRunner,
+    runner: Arc<std::sync::Mutex<ScriptRunner>>,
     script_dir: Option<std::path::PathBuf>,
     script_config: Option<std::collections::HashMap<String, toml::Value>>,
+    hot_reload_task: Option<tokio::task::JoinHandle<()>>,
 }
 
 impl ScriptConsumer {
     pub fn new(runner: ScriptRunner) -> Self {
         Self {
-            runner,
+            runner: Arc::new(std::sync::Mutex::new(runner)),
             script_dir: None,
             script_config: None,
+            hot_reload_task: None,
         }
     }
 
@@ -628,35 +778,84 @@ impl ScriptConsumer {
         hot_reload_interval_ms: u64,
     ) -> Self {
         self.script_dir = Some(script_dir.clone());
-        self.script_config = Some(script_config);
+        self.script_config = Some(script_config.clone());
 
         // Load initial scripts
-        self.runner
-            .load_scripts(&script_dir, self.script_config.as_ref().unwrap());
+        {
+            let mut runner = self.runner.lock().expect("Failed to lock runner");
+            runner.load_scripts(&script_dir, &script_config);
+        }
 
         // Enable hot reload if requested
         if hot_reload_enabled {
+            let interval = Duration::from_millis(hot_reload_interval_ms);
             info!(
                 target: "scripting",
                 "Enabling hot reload with interval: {}ms",
                 hot_reload_interval_ms
             );
-            self.runner.enable_hot_reload();
 
-            // Set custom scan interval if specified
-            if hot_reload_interval_ms != 1000
-                && let Some(ref mut scanner) = self.runner.scanner
-            {
-                scanner.set_scan_interval(Duration::from_millis(hot_reload_interval_ms));
-                info!(
-                    target: "scripting",
-                    "Hot reload scan interval set to {}ms",
-                    hot_reload_interval_ms
-                );
-            }
+            // Spawn background task for hot reload
+            let runner = self.runner.clone();
+            let scanner = ScriptScanner::with_interval(script_dir, interval);
+
+            let task = tokio::spawn(async move {
+                Self::hot_reload_task(runner, scanner).await;
+            });
+
+            self.hot_reload_task = Some(task);
+
+            info!(
+                target: "scripting",
+                "Hot reload enabled, scanning every {}ms",
+                hot_reload_interval_ms
+            );
         }
 
         self
+    }
+
+    /// Background task for hot reload
+    /// Periodically scans for script changes and applies them
+    async fn hot_reload_task(
+        runner: Arc<std::sync::Mutex<ScriptRunner>>,
+        mut scanner: ScriptScanner,
+    ) {
+        let interval = scanner.scan_interval();
+        let mut interval_timer = tokio::time::interval(interval);
+        interval_timer.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+
+        info!(
+            target: "scripting",
+            "Hot reload background task started, scanning every {:?}",
+            interval
+        );
+
+        loop {
+            interval_timer.tick().await;
+
+            debug!(target: "scripting", "Hot reload: scanning for changes...");
+
+            // Scan for changes
+            let changes = scanner.scan_changes();
+
+            if changes.has_changes() {
+                info!(
+                    target: "scripting",
+                    "Hot reload: detected changes - {} modified, {} added, {} removed",
+                    changes.changed.len(),
+                    changes.added.len(),
+                    changes.removed.len()
+                );
+
+                // Acquire lock and handle changes
+                if let Ok(mut runner) = runner.lock() {
+                    runner.handle_script_changes(changes);
+                } else {
+                    error!(target: "scripting", "Failed to acquire lock for hot reload");
+                }
+            }
+        }
     }
 }
 
@@ -669,7 +868,12 @@ impl EventConsumer for ScriptConsumer {
         {
             if let Some(ref script_dir) = self.script_dir {
                 if let Some(ref script_config) = self.script_config {
-                    self.runner.reload_scripts(script_dir, script_config);
+                    // Acquire lock and reload
+                    if let Ok(mut runner) = self.runner.lock() {
+                        runner.reload_scripts(script_dir, script_config);
+                    } else {
+                        tracing::error!(target: "scripting", "Failed to acquire lock for script reload");
+                    }
                 } else {
                     tracing::warn!(target: "scripting", "ReloadScripts event received but script_config is None");
                 }
@@ -742,7 +946,21 @@ impl EventConsumer for ScriptConsumer {
             }
         };
 
-        self.runner.handle_event(client_event);
+        // Acquire lock to handle event
+        if let Ok(mut runner) = self.runner.lock() {
+            runner.handle_event(client_event);
+        } else {
+            tracing::error!(target: "scripting", "Failed to acquire lock for event handling");
+        }
+    }
+}
+
+impl Drop for ScriptConsumer {
+    fn drop(&mut self) {
+        // Abort the hot reload task if it's running
+        if let Some(task) = self.hot_reload_task.take() {
+            task.abort();
+        }
     }
 }
 
