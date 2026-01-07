@@ -1,4 +1,5 @@
 use crate::app::{App, GameWorldState, GameWorldTab};
+use crate::ChatWidget;
 use ratatui::prelude::*;
 use ratatui::widgets::*;
 
@@ -184,49 +185,15 @@ fn render_chat_tab(frame: &mut Frame, area: Rect, app: &App) {
             .split(area)
     };
 
-    // Build chat messages with colors
-    let lines: Vec<Line> = app
-        .chat_messages
-        .iter()
-        .map(|message| {
-            // Color based on message type
-            let color = match message.message_type {
-                0x00 => Color::White,   // Broadcast
-                0x03 => Color::Cyan,    // Tell (incoming)
-                0x04 => Color::Green,   // OutgoingTell
-                0x05 => Color::Yellow,  // System
-                0x06 => Color::Red,     // Combat
-                0x07 => Color::Magenta, // Magic
-                _ => Color::White,
-            };
+    // Render chat messages using the ChatWidget
+    let chat_widget = ChatWidget::new(&app.chat_messages)
+        .block(Block::default().title("Messages").borders(Borders::ALL));
 
-            Line::from(Span::styled(
-                message.text.clone(),
-                Style::default().fg(color),
-            ))
-        })
-        .collect();
-
-    // Calculate scroll offset to show most recent messages at bottom
-    // Estimate wrapped line count by assuming ~1.5x lines due to wrapping
-    // This ensures we scroll to the absolute bottom
-    let estimated_wrapped_lines = (lines.len() as u16) * 2; // Conservative estimate
-    let viewport_height = chunks[0].height.saturating_sub(2); // Account for borders
-    let scroll_offset = estimated_wrapped_lines.saturating_sub(viewport_height);
-
-    // Render chat messages
-    let chat_messages_widget = Paragraph::new(lines)
-        .block(Block::default().title("Messages").borders(Borders::ALL))
-        .style(Style::default().fg(Color::White))
-        .wrap(ratatui::widgets::Wrap { trim: true })
-        .scroll((scroll_offset, 0));
-
-    frame.render_widget(chat_messages_widget, chunks[0]);
+    frame.render_widget(chat_widget, chunks[0]);
 
     // Render chat input only when active
     if app.chat_input_active {
         let input_title = "Input (Enter to send, ESC to cancel)";
-
         let input_style = Style::default().fg(Color::Yellow);
 
         let chat_input_widget = Paragraph::new(app.chat_input.as_str())

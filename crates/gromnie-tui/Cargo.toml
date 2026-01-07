@@ -21,6 +21,7 @@ gromnie-events = { path = "../gromnie-events" }
 gromnie-runner = { path = "../gromnie-runner" }
 gromnie-scripting-host = { path = "../gromnie-scripting-host", optional = true }
 ratatui.workspace = true
+textwrap = "0.16"
 tokio = { version = "1.36.0", features = ["full"] }
 tracing.workspace = true
 tracing-subscriber.workspace = true
