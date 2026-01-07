@@ -400,3 +400,23 @@ impl MessageHandler<acprotocol::messages::s2c::QualitiesPrivateUpdateInt> for Cl
         })
     }
 }
+
+/// Handle ItemDeleteObject messages
+impl MessageHandler<acprotocol::messages::s2c::ItemDeleteObject> for Client {
+    fn handle(
+        &mut self,
+        delete_obj: acprotocol::messages::s2c::ItemDeleteObject,
+    ) -> Option<GameEvent> {
+        let object_id = delete_obj.object_id.0;
+
+        info!(target: "net", "Object deleted from world: 0x{:08X}", object_id);
+
+        // Emit protocol event
+        let protocol_event = ProtocolEvent::S2C(delete_obj.to_protocol_event());
+        let _ = self
+            .raw_event_tx
+            .try_send(ClientEvent::Protocol(protocol_event));
+
+        Some(GameEvent::ItemDeleteObject { object_id })
+    }
+}
