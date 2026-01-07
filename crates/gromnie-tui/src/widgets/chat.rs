@@ -57,7 +57,10 @@ impl<'a, T> Widget for ChatWidget<'a, T> {
 impl<'a, T> ChatWidget<'a, T> {
     /// Convert chat messages to colored lines
     fn messages_to_lines(&self) -> Vec<Line<'static>> {
-        self.messages.iter().map(|msg| (self.renderer)(msg)).collect()
+        self.messages
+            .iter()
+            .map(|msg| (self.renderer)(msg))
+            .collect()
     }
 
     /// Get only the lines that fit in the viewport, showing the bottom lines

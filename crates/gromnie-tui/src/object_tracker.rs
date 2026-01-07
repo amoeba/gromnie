@@ -35,7 +35,7 @@ pub struct WorldObject {
 
     /// Timestamp when this object was last updated (created, modified, or deleted)
     pub last_updated: Instant,
-    
+
     /// Current state of the object
     pub state: ObjectState,
 }
@@ -220,7 +220,6 @@ impl ObjectTracker {
             .map(|obj| obj.object_id)
             .collect()
     }
-
 }
 
 #[cfg(test)]
