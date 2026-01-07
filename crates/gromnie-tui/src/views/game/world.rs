@@ -255,11 +255,17 @@ fn render_map_tab(frame: &mut Frame, area: Rect) {
 /// Render the Inventory tab
 /// Render the Objects tab - displays all tracked objects from ObjectTracker
 fn render_objects_tab(frame: &mut Frame, area: Rect, app: &App) {
+    use std::time::Duration;
+
     let object_count = app.object_tracker.object_count();
 
-    // Collect and sort objects by ID
+    // Collect and sort objects by last_updated (most recent first)
     let mut objects: Vec<_> = app.object_tracker.objects.values().collect();
-    objects.sort_by_key(|obj| obj.object_id);
+    objects.sort_by(|a, b| b.last_updated.cmp(&a.last_updated));
+
+    // Define time thresholds for color coding
+    let very_recent_threshold = Duration::from_secs(5); // Green for last 5 seconds
+    let recent_threshold = Duration::from_secs(30); // Yellow for last 30 seconds
 
     // Create rows for each object
     let rows: Vec<Row> = objects
@@ -285,6 +291,16 @@ fn render_objects_tab(frame: &mut Frame, area: Rect, app: &App) {
                 })
                 .unwrap_or_else(|| "World".to_string());
 
+            // Determine row color based on how recently the object was updated
+            let time_since_update = obj.last_updated.elapsed();
+            let row_color = if time_since_update < very_recent_threshold {
+                Color::Green // Very recent - bright green
+            } else if time_since_update < recent_threshold {
+                Color::Yellow // Recent - yellow
+            } else {
+                Color::White // Older - default white
+            };
+
             Row::new(vec![
                 obj.object_id.to_string(),
                 obj.name.clone(),
@@ -292,6 +308,7 @@ fn render_objects_tab(frame: &mut Frame, area: Rect, app: &App) {
                 container_str,
                 obj.burden.to_string(),
             ])
+            .style(Style::default().fg(row_color))
         })
         .collect();
 
