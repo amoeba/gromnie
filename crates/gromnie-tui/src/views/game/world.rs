@@ -208,10 +208,11 @@ fn render_chat_tab(frame: &mut Frame, area: Rect, app: &App) {
         .collect();
 
     // Calculate scroll offset to show most recent messages at bottom
-    // The Paragraph widget will naturally wrap text, we just need to scroll
-    let line_count = lines.len() as u16;
+    // Estimate wrapped line count by assuming ~1.5x lines due to wrapping
+    // This ensures we scroll to the absolute bottom
+    let estimated_wrapped_lines = (lines.len() as u16) * 2; // Conservative estimate
     let viewport_height = chunks[0].height.saturating_sub(2); // Account for borders
-    let scroll_offset = line_count.saturating_sub(viewport_height);
+    let scroll_offset = estimated_wrapped_lines.saturating_sub(viewport_height);
 
     // Render chat messages
     let chat_messages_widget = Paragraph::new(lines)
