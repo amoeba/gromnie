@@ -9,21 +9,15 @@ use gromnie_client::config::scripting_config::ScriptingConfig;
 use gromnie_events::SimpleClientAction;
 
 /// Create a script runner from config
+///
+/// Note: This only creates the runner with WASM support enabled.
+/// Scripts are loaded separately via `with_reload_config()` to avoid duplicate loading.
 pub fn create_runner_from_config(
     client: Arc<RwLock<Client>>,
     action_tx: UnboundedSender<SimpleClientAction>,
-    config: &ScriptingConfig,
+    _config: &ScriptingConfig,
 ) -> ScriptRunner {
     // Create runner with script support
     debug!(target: "scripting", "Creating script runner");
-    let mut runner = ScriptRunner::new_with_wasm(client, action_tx);
-
-    // Load scripts if enabled
-    if config.enabled {
-        let script_dir = config.script_dir();
-        debug!(target: "scripting", "Loading scripts from: {}", script_dir.display());
-        runner.load_scripts(&script_dir, &config.config);
-    }
-
-    runner
+    ScriptRunner::new_with_wasm(client, action_tx)
 }
