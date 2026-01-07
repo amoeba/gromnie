@@ -636,6 +636,11 @@ impl ScriptConsumer {
 
         // Enable hot reload if requested
         if hot_reload_enabled {
+            info!(
+                target: "scripting",
+                "Enabling hot reload with interval: {}ms",
+                hot_reload_interval_ms
+            );
             self.runner.enable_hot_reload();
 
             // Set custom scan interval if specified
