@@ -108,6 +108,14 @@ impl ToProtocolEvent for acprotocol::messages::s2c::QualitiesPrivateUpdateInt {
     }
 }
 
+impl ToProtocolEvent for acprotocol::messages::s2c::ItemDeleteObject {
+    fn to_protocol_event(&self) -> S2CEvent {
+        S2CEvent::ItemDeleteObject {
+            object_id: self.object_id.0,
+        }
+    }
+}
+
 // ============================================================================
 // Conversion from game event types to GameEventMsg
 // ============================================================================

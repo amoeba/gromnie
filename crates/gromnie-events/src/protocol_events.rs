@@ -40,6 +40,9 @@ pub enum S2CEvent {
         items_capacity: Option<u32>,
         container_capacity: Option<u32>,
     },
+    ItemDeleteObject {
+        object_id: u32,
+    },
     ItemOnViewContents {
         container_id: u32,
         items: Vec<u32>,

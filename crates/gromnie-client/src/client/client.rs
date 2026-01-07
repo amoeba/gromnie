@@ -1144,6 +1144,12 @@ impl Client {
                         )
                         .ok();
                     }
+                    S2CMessage::ItemDeleteObject => {
+                        dispatch_message::<acprotocol::messages::s2c::ItemDeleteObject, _>(
+                            self, message, &event_tx,
+                        )
+                        .ok();
+                    }
                     S2CMessage::CommunicationTextboxString => self.handle_chat_message(message),
                     S2CMessage::CommunicationHearSpeech => {
                         dispatch_message::<acprotocol::messages::s2c::CommunicationHearSpeech, _>(
@@ -1160,6 +1166,18 @@ impl Client {
                     }
                     S2CMessage::CharacterCharacterError => {
                         dispatch_message::<acprotocol::messages::s2c::CharacterCharacterError, _>(
+                            self, message, &event_tx,
+                        )
+                        .ok();
+                    }
+                    S2CMessage::QualitiesPrivateUpdateInt => {
+                        dispatch_message::<acprotocol::messages::s2c::QualitiesPrivateUpdateInt, _>(
+                            self, message, &event_tx,
+                        )
+                        .ok();
+                    }
+                    S2CMessage::ItemSetState => {
+                        dispatch_message::<acprotocol::messages::s2c::ItemSetState, _>(
                             self, message, &event_tx,
                         )
                         .ok();

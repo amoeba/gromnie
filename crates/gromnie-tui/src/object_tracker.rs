@@ -1,6 +1,17 @@
 use std::collections::HashMap;
 use std::time::Instant;
 
+/// State of an object for display purposes
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ObjectState {
+    /// Object was just created
+    Created,
+    /// Object was updated
+    Updated,
+    /// Object was deleted
+    Deleted,
+}
+
 /// Represents a world object (item, player, container, etc.)
 #[derive(Debug, Clone)]
 pub struct WorldObject {
@@ -22,8 +33,11 @@ pub struct WorldObject {
     // Quality/condition tracking
     pub properties: HashMap<String, i32>,
 
-    /// Timestamp when this object was last updated (created or modified)
+    /// Timestamp when this object was last updated (created, modified, or deleted)
     pub last_updated: Instant,
+    
+    /// Current state of the object
+    pub state: ObjectState,
 }
 
 impl WorldObject {
@@ -41,6 +55,7 @@ impl WorldObject {
             max_stack_size: None,
             properties: HashMap::new(),
             last_updated: Instant::now(),
+            state: ObjectState::Created,
         }
     }
 
@@ -52,7 +67,7 @@ impl WorldObject {
 /// Tracks all objects in the game world, synchronized with server state
 #[derive(Debug, Clone, Default)]
 pub struct ObjectTracker {
-    /// All objects by ObjectId
+    /// All objects by ObjectId (includes created, updated, and deleted objects)
     pub objects: HashMap<u32, WorldObject>,
 
     /// Container -> child items mapping
@@ -60,9 +75,6 @@ pub struct ObjectTracker {
 
     /// Player ID reference
     pub player_id: Option<u32>,
-
-    /// Track recently deleted objects with their deletion time and name
-    pub recently_deleted: Vec<(u32, String, Instant)>,
 }
 
 impl ObjectTracker {
@@ -71,13 +83,14 @@ impl ObjectTracker {
             objects: HashMap::new(),
             container_contents: HashMap::new(),
             player_id: None,
-            recently_deleted: Vec::new(),
         }
     }
 
     /// Process ItemCreateObject message
-    pub fn handle_item_create(&mut self, obj: WorldObject) {
+    pub fn handle_item_create(&mut self, mut obj: WorldObject) {
         let object_id = obj.object_id;
+        obj.state = ObjectState::Created;
+        obj.last_updated = Instant::now();
         self.objects.insert(object_id, obj.clone());
 
         // Track in container_contents if it has a container
@@ -91,10 +104,9 @@ impl ObjectTracker {
 
     /// Process ItemDeleteObject message
     pub fn handle_item_delete(&mut self, object_id: u32) {
-        if let Some(obj) = self.objects.remove(&object_id) {
-            // Track recently deleted with timestamp
-            self.recently_deleted
-                .push((object_id, obj.name.clone(), Instant::now()));
+        if let Some(obj) = self.objects.get_mut(&object_id) {
+            obj.state = ObjectState::Deleted;
+            obj.last_updated = Instant::now();
 
             // Remove from parent container
             if let Some(cid) = obj.container_id
@@ -104,7 +116,7 @@ impl ObjectTracker {
             }
         }
 
-        // Remove as a container itself
+        // Remove as a container itself (but keep the deleted object in the objects map)
         self.container_contents.remove(&object_id);
     }
 
@@ -120,7 +132,8 @@ impl ObjectTracker {
 
             // Add to new container
             obj.container_id = Some(new_container_id);
-            obj.last_updated = Instant::now(); // Mark as updated
+            obj.state = ObjectState::Updated;
+            obj.last_updated = Instant::now();
             self.container_contents
                 .entry(new_container_id)
                 .or_default()
@@ -137,7 +150,8 @@ impl ObjectTracker {
             }
 
             obj.properties.insert(property_name, value);
-            obj.last_updated = Instant::now(); // Mark as updated
+            obj.state = ObjectState::Updated;
+            obj.last_updated = Instant::now();
         }
     }
 
@@ -145,7 +159,8 @@ impl ObjectTracker {
     pub fn handle_item_set_state(&mut self, object_id: u32, property_name: String, value: i32) {
         if let Some(obj) = self.objects.get_mut(&object_id) {
             obj.properties.insert(property_name, value);
-            obj.last_updated = Instant::now(); // Mark as updated
+            obj.state = ObjectState::Updated;
+            obj.last_updated = Instant::now();
         }
     }
 
@@ -205,6 +220,7 @@ impl ObjectTracker {
             .map(|obj| obj.object_id)
             .collect()
     }
+
 }
 
 #[cfg(test)]
