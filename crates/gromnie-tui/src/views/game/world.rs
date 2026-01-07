@@ -184,19 +184,41 @@ fn render_chat_tab(frame: &mut Frame, area: Rect, app: &App) {
             .split(area)
     };
 
-    // Calculate available height for messages (account for borders)
-    let available_height = chunks[0].height.saturating_sub(2);
-    let available_width = chunks[0].width.saturating_sub(2) as usize; // Account for borders
+    // Build chat messages with colors
+    let lines: Vec<Line> = app
+        .chat_messages
+        .iter()
+        .map(|message| {
+            // Color based on message type
+            let color = match message.message_type {
+                0x00 => Color::White,   // Broadcast
+                0x03 => Color::Cyan,    // Tell (incoming)
+                0x04 => Color::Green,   // OutgoingTell
+                0x05 => Color::Yellow,  // System
+                0x06 => Color::Red,     // Combat
+                0x07 => Color::Magenta, // Magic
+                _ => Color::White,
+            };
 
-    // Build visible messages from most recent to oldest, tracking line count
-    let visible_messages = build_visible_messages(app, available_height, available_width);
+            Line::from(Span::styled(
+                message.text.clone(),
+                Style::default().fg(color),
+            ))
+        })
+        .collect();
+
+    // Calculate scroll offset to show most recent messages at bottom
+    // The Paragraph widget will naturally wrap text, we just need to scroll
+    let line_count = lines.len() as u16;
+    let viewport_height = chunks[0].height.saturating_sub(2); // Account for borders
+    let scroll_offset = line_count.saturating_sub(viewport_height);
 
     // Render chat messages
-    let chat_messages_widget = Paragraph::new(visible_messages)
+    let chat_messages_widget = Paragraph::new(lines)
         .block(Block::default().title("Messages").borders(Borders::ALL))
         .style(Style::default().fg(Color::White))
         .wrap(ratatui::widgets::Wrap { trim: true })
-        .scroll((0, 0)); // Always scrolled to bottom (auto-scroll)
+        .scroll((scroll_offset, 0));
 
     frame.render_widget(chat_messages_widget, chunks[0]);
 
@@ -217,71 +239,6 @@ fn render_chat_tab(frame: &mut Frame, area: Rect, app: &App) {
 
         frame.render_widget(chat_input_widget, chunks[1]);
     }
-}
-
-/// Build the list of visible chat messages that fit in the available space
-/// This function works backwards from the most recent message, adding older messages
-/// until we fill the available height (accounting for text wrapping)
-fn build_visible_messages(
-    app: &App,
-    available_height: u16,
-    available_width: usize,
-) -> Vec<Line<'_>> {
-    let mut lines = vec![];
-    let mut current_line_count: u16 = 0;
-
-    // Iterate from most recent to oldest
-    for message in app.chat_messages.iter().rev() {
-        // Calculate how many lines this message will take when wrapped
-        let wrapped_lines = estimate_wrapped_lines(&message.text, available_width);
-
-        // Check if adding this message would exceed available height
-        if current_line_count + wrapped_lines > available_height {
-            // Not enough space, stop adding messages
-            break;
-        }
-
-        // Color based on message type
-        let color = match message.message_type {
-            0x00 => Color::White,   // Broadcast
-            0x03 => Color::Cyan,    // Tell (incoming)
-            0x04 => Color::Green,   // OutgoingTell
-            0x05 => Color::Yellow,  // System
-            0x06 => Color::Red,     // Combat
-            0x07 => Color::Magenta, // Magic
-            _ => Color::White,
-        };
-
-        // Add to lines (we'll reverse at the end)
-        lines.push(Line::from(Span::styled(
-            message.text.clone(),
-            Style::default().fg(color),
-        )));
-
-        current_line_count += wrapped_lines;
-    }
-
-    // Reverse to get oldest -> newest order (top to bottom)
-    lines.reverse();
-
-    lines
-}
-
-/// Estimate how many lines a text string will take when wrapped
-/// This is a simple heuristic - assumes average character width
-fn estimate_wrapped_lines(text: &str, available_width: usize) -> u16 {
-    if available_width == 0 {
-        return 1;
-    }
-
-    let text_len = text.len();
-    if text_len == 0 {
-        return 1;
-    }
-
-    // Estimate lines by dividing text length by available width
-    // Add 1 to account for partial lines
-    ((text_len / available_width) + 1) as u16
 }
 
 /// Render the Map tab
@@ -361,38 +318,4 @@ fn render_objects_tab(frame: &mut Frame, area: Rect, app: &App) {
     .style(Style::default().fg(Color::White));
 
     frame.render_widget(table, area);
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_estimate_wrapped_lines() {
-        // Short text fits in one line
-        assert_eq!(estimate_wrapped_lines("hi", 10), 1);
-
-        // Empty text
-        assert_eq!(estimate_wrapped_lines("", 10), 1);
-
-        // Text exactly fits width
-        assert_eq!(estimate_wrapped_lines("abcdefghij", 10), 2);
-
-        // Text longer than width
-        assert_eq!(estimate_wrapped_lines("abcdefghijklmnopqrstuvwxyz", 10), 3);
-
-        // Zero width edge case
-        assert_eq!(estimate_wrapped_lines("hello", 0), 1);
-    }
-
-    #[test]
-    fn test_estimate_wrapped_lines_long_messages() {
-        // Very long message
-        let long_msg = "a".repeat(100);
-        assert_eq!(estimate_wrapped_lines(&long_msg, 20), 6);
-
-        // Medium message
-        let med_msg = "hello world! this is a test message";
-        assert_eq!(estimate_wrapped_lines(med_msg, 15), 3);
-    }
 }
