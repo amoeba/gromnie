@@ -302,11 +302,7 @@ impl Client {
 
         while let Some(msg) = self.outgoing_message_queue.pop_front() {
             if msg.is_ready() {
-                // Message is ready to be sent
-                let msg_discriminant = std::mem::discriminant(&msg.content);
-                info!(target: "net", "send_pending_messages: sending message: {:?}", msg_discriminant);
-
-                // Send the message content
+                // Send the message content (logging happens in send_outgoing_message)
                 self.send_outgoing_message(msg.content).await?;
             } else {
                 // Message is not ready yet, keep for later
@@ -369,6 +365,7 @@ impl Client {
     }
 
     /// Send LoginComplete notification to server after receiving initial world state
+    /// Also handles the transition to InWorld and emits LoginSucceeded event
     pub fn send_login_complete_notification(&mut self) {
         // Check if we're in CharacterSelect with entering_world state
         let entering = if let Some(char_select) = self.scene.as_character_select() {
@@ -429,8 +426,6 @@ impl Client {
         // Transition to InWorld scene now that login is complete
         self.scene = Scene::InWorld(InWorldScene::new(character_id, character_name));
         info!(target: "net", "Scene transition: CharacterSelect -> InWorld");
-
-        info!(target: "net", "LoginComplete notification queued and event emitted");
     }
 
     /// Send a chat message to the server
@@ -833,19 +828,24 @@ impl Client {
     ) -> Result<(), std::io::Error> {
         match message {
             OutgoingMessageContent::CharacterCreation(char_gen) => {
+                info!(target: "outgoing_msg", "→ CharacterCreation");
                 self.send_character_creation_internal(char_gen).await
             }
             OutgoingMessageContent::CharacterCreationAce(account, char_gen) => {
+                info!(target: "outgoing_msg", "→ CharacterCreationAce (account: {})", account);
                 self.send_character_creation_ace_internal(account, char_gen)
                     .await
             }
             OutgoingMessageContent::EnterWorldRequest => {
+                info!(target: "outgoing_msg", "→ 0xF7C8 CharacterEnterWorldRequest");
                 self.send_enter_world_request_internal().await
             }
             OutgoingMessageContent::EnterWorld(enter_world) => {
+                info!(target: "outgoing_msg", "→ LoginSendEnterWorld");
                 self.send_enter_world_internal(enter_world).await
             }
             OutgoingMessageContent::GameAction(message_data) => {
+                info!(target: "outgoing_msg", "→ GameAction ({}bytes)", message_data.len());
                 self.send_fragmented_message(message_data, FragmentGroup::Object)
                     .await
             }

@@ -36,20 +36,16 @@ impl MessageHandler<acprotocol::messages::s2c::LoginCreatePlayer> for Client {
             .as_character_select()
             .and_then(|scene| scene.entering_world.as_ref().cloned())
         {
-            // Mark login as complete
-            self.mark_login_complete();
-
             // Send the login complete notification
+            // This will also handle the transition to InWorld and emit LoginSucceeded event
             if !entering.login_complete {
                 self.send_login_complete_notification();
+            } else {
+                warn!(target: "net", "LoginCreatePlayer: login_complete already marked, skipping send");
             }
 
-            // Transition to InWorld scene with the character info
-            let char_name = entering.character_name.clone();
-            self.transition_to_in_world(entering.character_id, entering.character_name);
-
             info!(target: "net", "Character successfully entered world: {} (ID: 0x{:08X})",
-                  char_name, character_id);
+                  entering.character_name, character_id);
         } else {
             warn!(target: "net", "LoginCreatePlayer received but not in CharacterSelect with entering_world state");
         }

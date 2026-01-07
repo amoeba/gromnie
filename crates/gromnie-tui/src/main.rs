@@ -1,5 +1,6 @@
 use clap::Parser;
 use tracing::{error, info};
+use tracing_subscriber::EnvFilter;
 
 use gromnie_client::config::GromnieConfig;
 use gromnie_events::SimpleClientAction;
@@ -145,7 +146,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 server.port,
                 account.username.clone(),
                 account.password.clone(),
-                account.character.clone(),
+                None, // Don't auto-login character
             )
         };
 
