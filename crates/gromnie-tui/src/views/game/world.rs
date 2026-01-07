@@ -186,8 +186,21 @@ fn render_chat_tab(frame: &mut Frame, area: Rect, app: &App) {
     };
 
     // Render chat messages using the ChatWidget
-    let chat_widget = ChatWidget::new(&app.chat_messages)
-        .block(Block::default().title("Messages").borders(Borders::ALL));
+    let chat_widget = ChatWidget::new(&app.chat_messages, |msg| {
+        let color = match msg.message_type {
+            0x00 => Color::White,   // Broadcast
+            0x03 => Color::Cyan,    // Tell (incoming)
+            0x04 => Color::Green,   // OutgoingTell
+            0x05 => Color::Yellow,  // System
+            0x06 => Color::Red,     // Combat
+            0x07 => Color::Magenta, // Magic
+            _ => Color::White,
+        };
+
+        let text_span = Span::styled(msg.text.clone(), Style::default().fg(color));
+        Line::from(text_span)
+    })
+    .block(Block::default().title("Messages").borders(Borders::ALL));
 
     frame.render_widget(chat_widget, chunks[0]);
 

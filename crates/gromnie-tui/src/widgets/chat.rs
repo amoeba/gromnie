@@ -1,24 +1,28 @@
-use crate::app::ChatMessage;
 use ratatui::{
     buffer::Buffer,
     layout::Rect,
     style::{Color, Style},
-    text::{Line, Span},
+    text::Line,
     widgets::{Block, Paragraph, Widget},
 };
 use std::collections::VecDeque;
 
 /// A chat widget that displays messages with proper scrolling to show the latest messages
-pub struct ChatWidget<'a> {
-    messages: &'a VecDeque<ChatMessage>,
+pub struct ChatWidget<'a, T> {
+    messages: &'a VecDeque<T>,
     block: Option<Block<'a>>,
+    renderer: Box<dyn Fn(&T) -> Line<'static> + 'a>,
 }
 
-impl<'a> ChatWidget<'a> {
-    pub fn new(messages: &'a VecDeque<ChatMessage>) -> Self {
+impl<'a, T> ChatWidget<'a, T> {
+    pub fn new<F>(messages: &'a VecDeque<T>, renderer: F) -> Self
+    where
+        F: Fn(&T) -> Line<'static> + 'a,
+    {
         Self {
             messages,
             block: None,
+            renderer: Box::new(renderer),
         }
     }
 
@@ -28,7 +32,7 @@ impl<'a> ChatWidget<'a> {
     }
 }
 
-impl<'a> Widget for ChatWidget<'a> {
+impl<'a, T> Widget for ChatWidget<'a, T> {
     fn render(self, area: Rect, buf: &mut Buffer) {
         if area.height < 2 {
             return;
@@ -50,26 +54,10 @@ impl<'a> Widget for ChatWidget<'a> {
     }
 }
 
-impl<'a> ChatWidget<'a> {
+impl<'a, T> ChatWidget<'a, T> {
     /// Convert chat messages to colored lines
     fn messages_to_lines(&self) -> Vec<Line<'static>> {
-        self.messages
-            .iter()
-            .map(|msg| {
-                let color = match msg.message_type {
-                    0x00 => Color::White,   // Broadcast
-                    0x03 => Color::Cyan,    // Tell (incoming)
-                    0x04 => Color::Green,   // OutgoingTell
-                    0x05 => Color::Yellow,  // System
-                    0x06 => Color::Red,     // Combat
-                    0x07 => Color::Magenta, // Magic
-                    _ => Color::White,
-                };
-
-                let text_span = Span::styled(msg.text.clone(), Style::default().fg(color));
-                Line::from(text_span)
-            })
-            .collect()
+        self.messages.iter().map(|msg| (self.renderer)(msg)).collect()
     }
 
     /// Get only the lines that fit in the viewport, showing the bottom lines
