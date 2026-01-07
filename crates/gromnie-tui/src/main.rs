@@ -1,6 +1,5 @@
 use clap::Parser;
 use tracing::{error, info};
-use tracing_subscriber::EnvFilter;
 
 use gromnie_client::config::GromnieConfig;
 use gromnie_events::SimpleClientAction;

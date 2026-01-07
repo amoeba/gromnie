@@ -184,18 +184,11 @@ fn render_chat_tab(frame: &mut Frame, area: Rect, app: &App) {
             .split(area)
     };
 
-    // Render chat messages
-    let mut lines = vec![];
-    if app.chat_messages.is_empty() {
-        lines.push(Line::from(Span::styled(
-            "TODO: Chat messages",
-            Style::default().fg(Color::Gray).italic(),
-        )));
-    } else {
-        // Show most recent messages (up to height of area)
-        let max_messages = (chunks[0].height as usize).saturating_sub(2); // Account for borders
-
-        for message in app.chat_messages.iter().rev().take(max_messages).rev() {
+    // Build chat messages with colors
+    let lines: Vec<Line> = app
+        .chat_messages
+        .iter()
+        .map(|message| {
             // Color based on message type
             let color = match message.message_type {
                 0x00 => Color::White,   // Broadcast
@@ -207,17 +200,25 @@ fn render_chat_tab(frame: &mut Frame, area: Rect, app: &App) {
                 _ => Color::White,
             };
 
-            lines.push(Line::from(Span::styled(
+            Line::from(Span::styled(
                 message.text.clone(),
                 Style::default().fg(color),
-            )));
-        }
-    }
+            ))
+        })
+        .collect();
 
+    // Calculate scroll offset to show most recent messages at bottom
+    // The Paragraph widget will naturally wrap text, we just need to scroll
+    let line_count = lines.len() as u16;
+    let viewport_height = chunks[0].height.saturating_sub(2); // Account for borders
+    let scroll_offset = line_count.saturating_sub(viewport_height);
+
+    // Render chat messages
     let chat_messages_widget = Paragraph::new(lines)
         .block(Block::default().title("Messages").borders(Borders::ALL))
         .style(Style::default().fg(Color::White))
-        .wrap(ratatui::widgets::Wrap { trim: true });
+        .wrap(ratatui::widgets::Wrap { trim: true })
+        .scroll((scroll_offset, 0));
 
     frame.render_widget(chat_messages_widget, chunks[0]);
 
