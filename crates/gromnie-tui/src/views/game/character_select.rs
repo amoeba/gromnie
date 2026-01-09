@@ -13,8 +13,9 @@ fn render_character_list(frame: &mut Frame, area: Rect, app: &App) {
     // Show world name at the top if available
     if let Some(ref world_name) = app.client_status.world_name {
         lines.push(Line::from(vec![
-            Span::styled("World: ", Style::default().fg(Color::Cyan).bold()),
-            Span::styled(world_name, Style::default().fg(Color::White).bold()),
+            Span::styled("│", Style::default().fg(Color::White)),
+            Span::styled(" ", Style::default().fg(Color::White)),
+            Span::styled(world_name, Style::default().fg(Color::Cyan).bold()),
         ]));
         lines.push(Line::from("")); // Empty line separator
     }
@@ -72,7 +73,7 @@ fn render_character_list(frame: &mut Frame, area: Rect, app: &App) {
         ]));
     }
 
-    let title = format!("{}: Character Select", app.client_status.account_name);
+    let title = "Character Select";
     let paragraph = Paragraph::new(lines)
         .block(Block::default().title(title).borders(Borders::ALL))
         .style(Style::default().fg(Color::White));
