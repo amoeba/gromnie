@@ -15,7 +15,8 @@ fn render_character_list(frame: &mut Frame, area: Rect, app: &App) {
         lines.push(Line::from(vec![
             Span::styled("│", Style::default().fg(Color::White)),
             Span::styled(" ", Style::default().fg(Color::White)),
-            Span::styled(world_name, Style::default().fg(Color::Cyan).bold()),
+            Span::styled("World: ", Style::default().fg(Color::Cyan).bold()),
+            Span::styled(world_name, Style::default().fg(Color::White).bold()),
         ]));
         lines.push(Line::from("")); // Empty line separator
     }
