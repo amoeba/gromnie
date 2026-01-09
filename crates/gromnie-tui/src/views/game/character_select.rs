@@ -10,6 +10,26 @@ pub fn render_character_select_view(frame: &mut Frame, area: Rect, app: &App) {
 fn render_character_list(frame: &mut Frame, area: Rect, app: &App) {
     let mut lines = vec![];
 
+    // Show world name at the top if available
+    if let Some(ref world_name) = app.client_status.world_name {
+        lines.push(Line::from(vec![
+            Span::styled("World: ", Style::default().fg(Color::Cyan).bold()),
+            Span::styled(world_name, Style::default().fg(Color::White).bold()),
+        ]));
+        lines.push(Line::from("")); // Empty line separator
+    }
+
+    // Add "Characters" header
+    lines.push(Line::from(vec![Span::styled(
+        "Characters",
+        Style::default().fg(Color::Yellow).bold(),
+    )]));
+    lines.push(Line::from(vec![Span::styled(
+        "-------------",
+        Style::default().fg(Color::Yellow),
+    )]));
+    lines.push(Line::from("")); // Empty line separator
+
     for (index, character) in app.client_status.characters.iter().enumerate() {
         let is_selected = index == app.selected_character_index;
         let delete_indicator = if character.seconds_greyed_out > 0 {
