@@ -79,6 +79,11 @@ pub enum S2CEvent {
         property: String,
         value: i32,
     },
+    WorldInfo {
+        world_name: String,
+        connections: u32,
+        max_connections: u32,
+    },
 }
 
 /// Nested game events with OrderedGameEvent metadata

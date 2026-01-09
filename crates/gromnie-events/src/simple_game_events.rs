@@ -80,4 +80,8 @@ pub enum SimpleGameEvent {
         property_name: String,
         value: i32,
     },
+    /// World name received from server
+    WorldNameReceived {
+        world_name: String,
+    },
 }

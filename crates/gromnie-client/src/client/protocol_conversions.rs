@@ -116,6 +116,16 @@ impl ToProtocolEvent for acprotocol::messages::s2c::ItemDeleteObject {
     }
 }
 
+impl ToProtocolEvent for acprotocol::messages::s2c::LoginWorldInfo {
+    fn to_protocol_event(&self) -> S2CEvent {
+        S2CEvent::WorldInfo {
+            world_name: self.world_name.clone(),
+            connections: self.connections,
+            max_connections: self.max_connections,
+        }
+    }
+}
+
 // ============================================================================
 // Conversion from game event types to GameEventMsg
 // ============================================================================

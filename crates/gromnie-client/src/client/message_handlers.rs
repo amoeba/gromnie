@@ -420,3 +420,24 @@ impl MessageHandler<acprotocol::messages::s2c::ItemDeleteObject> for Client {
         Some(GameEvent::ItemDeleteObject { object_id })
     }
 }
+
+/// Handle LoginWorldInfo messages
+impl MessageHandler<acprotocol::messages::s2c::LoginWorldInfo> for Client {
+    fn handle(
+        &mut self,
+        world_info: acprotocol::messages::s2c::LoginWorldInfo,
+    ) -> Option<GameEvent> {
+        info!(target: "net", "World info received - Name: {}, Connections: {}/{}",
+            world_info.world_name, world_info.connections, world_info.max_connections);
+
+        // Emit protocol event
+        let protocol_event = ProtocolEvent::S2C(world_info.to_protocol_event());
+        let _ = self
+            .raw_event_tx
+            .try_send(ClientEvent::Protocol(protocol_event));
+
+        Some(GameEvent::WorldNameReceived {
+            world_name: world_info.world_name.clone(),
+        })
+    }
+}
