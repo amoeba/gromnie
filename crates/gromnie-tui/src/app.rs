@@ -126,20 +126,6 @@ impl ClientStatus {
             && matches!(self.scene_state, SceneState::InWorld)
             && self.current_character.is_some()
     }
-
-    /// Get a human-readable connection status
-    pub fn connection_status(&self) -> String {
-        if self.is_logged_in() {
-            format!(
-                "Logged in {}",
-                self.current_character.as_deref().unwrap_or("Unknown")
-            )
-        } else if self.is_connected() {
-            "Connected".to_string()
-        } else {
-            "Disconnected".to_string()
-        }
-    }
 }
 
 impl Default for ClientStatus {
