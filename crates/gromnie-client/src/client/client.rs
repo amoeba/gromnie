@@ -46,6 +46,10 @@ use crate::client::protocol_conversions::{
     combat_handle_attacker_notification_to_game_event_msg, combat_handle_defender_notification_to_game_event_msg,
     combat_handle_evasion_attacker_notification_to_game_event_msg, combat_handle_evasion_defender_notification_to_game_event_msg,
     combat_query_health_response_to_game_event_msg,
+    // Phase 2: Magic & Items
+    magic_update_enchantment_to_game_event_msg, magic_remove_enchantment_to_game_event_msg,
+    item_set_appraise_info_to_game_event_msg, item_appraise_done_to_game_event_msg,
+    item_wear_item_to_game_event_msg, item_query_item_mana_response_to_game_event_msg,
 };
 use crate::client::{ClientEvent, ClientSystemEvent, GameEvent};
 use crate::crypto::crypto_system::CryptoSystem;
@@ -1556,6 +1560,73 @@ impl Client {
                     object_id,
                     sequence,
                     combat_query_health_response_to_game_event_msg,
+                )
+                .ok();
+            }
+            // ===== Phase 2: Magic & Items =====
+            GameEventType::MagicUpdateEnchantment => {
+                dispatch_game_event::<acprotocol::gameevents::MagicUpdateEnchantment, _, _>(
+                    self,
+                    &mut cursor,
+                    &event_tx,
+                    object_id,
+                    sequence,
+                    magic_update_enchantment_to_game_event_msg,
+                )
+                .ok();
+            }
+            GameEventType::MagicRemoveEnchantment => {
+                dispatch_game_event::<acprotocol::gameevents::MagicRemoveEnchantment, _, _>(
+                    self,
+                    &mut cursor,
+                    &event_tx,
+                    object_id,
+                    sequence,
+                    magic_remove_enchantment_to_game_event_msg,
+                )
+                .ok();
+            }
+            GameEventType::ItemSetAppraiseInfo => {
+                dispatch_game_event::<acprotocol::gameevents::ItemSetAppraiseInfo, _, _>(
+                    self,
+                    &mut cursor,
+                    &event_tx,
+                    object_id,
+                    sequence,
+                    item_set_appraise_info_to_game_event_msg,
+                )
+                .ok();
+            }
+            GameEventType::ItemAppraiseDone => {
+                dispatch_game_event::<acprotocol::gameevents::ItemAppraiseDone, _, _>(
+                    self,
+                    &mut cursor,
+                    &event_tx,
+                    object_id,
+                    sequence,
+                    item_appraise_done_to_game_event_msg,
+                )
+                .ok();
+            }
+            GameEventType::ItemWearItem => {
+                dispatch_game_event::<acprotocol::gameevents::ItemWearItem, _, _>(
+                    self,
+                    &mut cursor,
+                    &event_tx,
+                    object_id,
+                    sequence,
+                    item_wear_item_to_game_event_msg,
+                )
+                .ok();
+            }
+            GameEventType::ItemQueryItemManaResponse => {
+                dispatch_game_event::<acprotocol::gameevents::ItemQueryItemManaResponse, _, _>(
+                    self,
+                    &mut cursor,
+                    &event_tx,
+                    object_id,
+                    sequence,
+                    item_query_item_mana_response_to_game_event_msg,
                 )
                 .ok();
             }

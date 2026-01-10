@@ -572,20 +572,70 @@ pub fn combat_query_health_response_to_game_event_msg(
 // Phase 2: Magic & Items Conversions
 // ============================================================================
 
-/// Magic/Enchantment conversions (placeholder - awaiting acprotocol types)
-/// These will be implemented once acprotocol provides the message structures
+/// Convert acprotocol MagicUpdateEnchantment game event to GameEventMsg
+pub fn magic_update_enchantment_to_game_event_msg(
+    event: acprotocol::gameevents::MagicUpdateEnchantment,
+) -> GameEventMsg {
+    GameEventMsg::MagicUpdateEnchantment {
+        enchantment_id: event.enchantment.id.id.0,
+        spell_id: event.enchantment.id.id.0 as u32,
+        layer: event.enchantment.id.layer,
+        caster_id: event.enchantment.caster_id.0,
+        power_level: event.enchantment.power_level as f32,
+        start_time: event.enchantment.start_time,
+        duration: event.enchantment.duration,
+    }
+}
 
-/// Item Appraisal conversions (placeholder - awaiting acprotocol types)
-/// These will be implemented once acprotocol provides the message structures
+/// Convert acprotocol MagicRemoveEnchantment game event to GameEventMsg
+pub fn magic_remove_enchantment_to_game_event_msg(
+    event: acprotocol::gameevents::MagicRemoveEnchantment,
+) -> GameEventMsg {
+    GameEventMsg::MagicRemoveEnchantment {
+        enchantment_id: event.spell_id.id.0,
+    }
+}
 
-/// Equipment/Wear conversions (placeholder - awaiting acprotocol types)
-/// These will be implemented once acprotocol provides the message structures
+/// Convert acprotocol ItemSetAppraiseInfo game event to GameEventMsg
+pub fn item_set_appraise_info_to_game_event_msg(
+    event: acprotocol::gameevents::ItemSetAppraiseInfo,
+) -> GameEventMsg {
+    GameEventMsg::ItemSetAppraiseInfo {
+        object_id: event.object_id.0,
+        success: event.success,
+        appraisal_data: vec![], // Complex nested structure, storing as empty for now
+    }
+}
 
-/// Container/Inventory conversions (placeholder - awaiting acprotocol types)
-/// These will be implemented once acprotocol provides the message structures
+/// Convert acprotocol ItemAppraiseDone game event to GameEventMsg
+pub fn item_appraise_done_to_game_event_msg(
+    _event: acprotocol::gameevents::ItemAppraiseDone,
+) -> GameEventMsg {
+    GameEventMsg::ItemAppraiseDone {
+        object_id: 0, // Unknown field in acprotocol event
+    }
+}
 
-/// Item Query conversions (placeholder - awaiting acprotocol types)
-/// These will be implemented once acprotocol provides the message structures
+/// Convert acprotocol ItemWearItem game event to GameEventMsg
+pub fn item_wear_item_to_game_event_msg(
+    event: acprotocol::gameevents::ItemWearItem,
+) -> GameEventMsg {
+    GameEventMsg::ItemWearItem {
+        object_id: event.object_id.0,
+        equipped_slot: event.slot.bits(),
+    }
+}
+
+/// Convert acprotocol ItemQueryItemManaResponse game event to GameEventMsg
+pub fn item_query_item_mana_response_to_game_event_msg(
+    event: acprotocol::gameevents::ItemQueryItemManaResponse,
+) -> GameEventMsg {
+    GameEventMsg::ItemQueryItemManaResponse {
+        object_id: event.object_id.0,
+        mana: event.mana,
+        max_mana: 100, // Not available in event, using placeholder
+    }
+}
 
 #[cfg(test)]
 mod tests {

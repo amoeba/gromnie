@@ -100,3 +100,45 @@ where
 
     Ok(())
 }
+
+// ============================================================================
+// Phase 2: Magic & Items GameEventHandler Implementations
+// ============================================================================
+
+use crate::client::Client;
+
+impl GameEventHandler<acprotocol::gameevents::MagicUpdateEnchantment> for Client {
+    fn handle(&mut self, _event: acprotocol::gameevents::MagicUpdateEnchantment) -> Option<GameEvent> {
+        None
+    }
+}
+
+impl GameEventHandler<acprotocol::gameevents::MagicRemoveEnchantment> for Client {
+    fn handle(&mut self, _event: acprotocol::gameevents::MagicRemoveEnchantment) -> Option<GameEvent> {
+        None
+    }
+}
+
+impl GameEventHandler<acprotocol::gameevents::ItemSetAppraiseInfo> for Client {
+    fn handle(&mut self, _event: acprotocol::gameevents::ItemSetAppraiseInfo) -> Option<GameEvent> {
+        None
+    }
+}
+
+impl GameEventHandler<acprotocol::gameevents::ItemAppraiseDone> for Client {
+    fn handle(&mut self, _event: acprotocol::gameevents::ItemAppraiseDone) -> Option<GameEvent> {
+        None
+    }
+}
+
+impl GameEventHandler<acprotocol::gameevents::ItemWearItem> for Client {
+    fn handle(&mut self, _event: acprotocol::gameevents::ItemWearItem) -> Option<GameEvent> {
+        None
+    }
+}
+
+impl GameEventHandler<acprotocol::gameevents::ItemQueryItemManaResponse> for Client {
+    fn handle(&mut self, _event: acprotocol::gameevents::ItemQueryItemManaResponse) -> Option<GameEvent> {
+        None
+    }
+}
