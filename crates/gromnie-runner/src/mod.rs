@@ -5,6 +5,7 @@ pub mod client_runner_builder;
 pub mod event_bus;
 mod event_consumer;
 mod event_wrapper;
+pub mod logging;
 
 pub use character_gen::CharacterBuilder;
 pub use client_naming::{ClientNaming, encode_client_id};
