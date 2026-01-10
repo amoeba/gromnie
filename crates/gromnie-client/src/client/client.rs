@@ -39,11 +39,26 @@ use crate::client::game_event_handler::dispatch_game_event;
 use crate::client::message_handler::dispatch_message;
 use crate::client::protocol_conversions::{
     hear_direct_speech_to_game_event_msg, transient_string_to_game_event_msg,
+    item_on_view_contents_to_game_event_msg, magic_update_spell_to_game_event_msg,
+    fellowship_full_update_to_game_event_msg, trade_register_trade_to_game_event_msg,
+    combat_handle_attack_done_to_game_event_msg, combat_handle_commence_attack_to_game_event_msg,
+    combat_handle_victim_notification_self_to_game_event_msg, combat_handle_victim_notification_other_to_game_event_msg,
+    combat_handle_attacker_notification_to_game_event_msg, combat_handle_defender_notification_to_game_event_msg,
+    combat_handle_evasion_attacker_notification_to_game_event_msg, combat_handle_evasion_defender_notification_to_game_event_msg,
+    combat_query_health_response_to_game_event_msg,
 };
 use crate::client::{ClientEvent, ClientSystemEvent, GameEvent};
 use crate::crypto::crypto_system::CryptoSystem;
 use crate::crypto::magic_number::get_magic_number;
-use acprotocol::gameevents::{CommunicationHearDirectSpeech, CommunicationTransientString};
+use acprotocol::gameevents::{
+    CommunicationHearDirectSpeech, CommunicationTransientString,
+    ItemOnViewContents, MagicUpdateSpell, FellowshipFullUpdate, TradeRegisterTrade,
+    CombatHandleAttackDoneEvent, CombatHandleCommenceAttackEvent,
+    CombatHandleVictimNotificationEventSelf, CombatHandleVictimNotificationEventOther,
+    CombatHandleAttackerNotificationEvent, CombatHandleDefenderNotificationEvent,
+    CombatHandleEvasionAttackerNotificationEvent, CombatHandleEvasionDefenderNotificationEvent,
+    CombatQueryHealthResponse,
+};
 
 /// Maximum number of packets we can send without receiving before considering connection dead
 const MAX_UNACKED_SENDS: u32 = 20;
@@ -1182,9 +1197,159 @@ impl Client {
                         )
                         .ok();
                     }
+                    // Quality/Property Updates
+                    S2CMessage::QualitiesUpdateInt => {
+                        dispatch_message::<acprotocol::messages::s2c::QualitiesUpdateInt, _>(
+                            self, message, &event_tx,
+                        )
+                        .ok();
+                    }
+                    S2CMessage::QualitiesUpdateInt64 => {
+                        dispatch_message::<acprotocol::messages::s2c::QualitiesUpdateInt64, _>(
+                            self, message, &event_tx,
+                        )
+                        .ok();
+                    }
+                    S2CMessage::QualitiesPrivateUpdateInt64 => {
+                        dispatch_message::<acprotocol::messages::s2c::QualitiesPrivateUpdateInt64, _>(
+                            self, message, &event_tx,
+                        )
+                        .ok();
+                    }
+                    S2CMessage::QualitiesUpdateBool => {
+                        dispatch_message::<acprotocol::messages::s2c::QualitiesUpdateBool, _>(
+                            self, message, &event_tx,
+                        )
+                        .ok();
+                    }
+                    S2CMessage::QualitiesPrivateUpdateBool => {
+                        dispatch_message::<acprotocol::messages::s2c::QualitiesPrivateUpdateBool, _>(
+                            self, message, &event_tx,
+                        )
+                        .ok();
+                    }
+                    S2CMessage::QualitiesUpdateFloat => {
+                        dispatch_message::<acprotocol::messages::s2c::QualitiesUpdateFloat, _>(
+                            self, message, &event_tx,
+                        )
+                        .ok();
+                    }
+                    S2CMessage::QualitiesPrivateUpdateFloat => {
+                        dispatch_message::<acprotocol::messages::s2c::QualitiesPrivateUpdateFloat, _>(
+                            self, message, &event_tx,
+                        )
+                        .ok();
+                    }
+                    S2CMessage::QualitiesUpdateString => {
+                        dispatch_message::<acprotocol::messages::s2c::QualitiesUpdateString, _>(
+                            self, message, &event_tx,
+                        )
+                        .ok();
+                    }
+                    S2CMessage::QualitiesPrivateUpdateString => {
+                        dispatch_message::<acprotocol::messages::s2c::QualitiesPrivateUpdateString, _>(
+                            self, message, &event_tx,
+                        )
+                        .ok();
+                    }
+                    S2CMessage::QualitiesUpdateDataId => {
+                        dispatch_message::<acprotocol::messages::s2c::QualitiesUpdateDataId, _>(
+                            self, message, &event_tx,
+                        )
+                        .ok();
+                    }
+                    S2CMessage::QualitiesPrivateUpdateDataId => {
+                        dispatch_message::<acprotocol::messages::s2c::QualitiesPrivateUpdateDataId, _>(
+                            self, message, &event_tx,
+                        )
+                        .ok();
+                    }
+                    S2CMessage::QualitiesUpdateInstanceId => {
+                        dispatch_message::<acprotocol::messages::s2c::QualitiesUpdateInstanceId, _>(
+                            self, message, &event_tx,
+                        )
+                        .ok();
+                    }
+                    S2CMessage::QualitiesPrivateUpdateInstanceId => {
+                        dispatch_message::<acprotocol::messages::s2c::QualitiesPrivateUpdateInstanceId, _>(
+                            self, message, &event_tx,
+                        )
+                        .ok();
+                    }
+                    // Communication
+                    S2CMessage::CommunicationHearEmote => {
+                        dispatch_message::<acprotocol::messages::s2c::CommunicationHearEmote, _>(
+                            self, message, &event_tx,
+                        )
+                        .ok();
+                    }
+                    S2CMessage::CommunicationHearSoulEmote => {
+                        dispatch_message::<acprotocol::messages::s2c::CommunicationHearSoulEmote, _>(
+                            self, message, &event_tx,
+                        )
+                        .ok();
+                    }
+                    // Items/Inventory
+                    S2CMessage::ItemUpdateStackSize => {
+                        dispatch_message::<acprotocol::messages::s2c::ItemUpdateStackSize, _>(
+                            self, message, &event_tx,
+                        )
+                        .ok();
+                    }
+                    S2CMessage::ItemServerSaysRemove => {
+                        dispatch_message::<acprotocol::messages::s2c::ItemServerSaysRemove, _>(
+                            self, message, &event_tx,
+                        )
+                        .ok();
+                    }
+                    S2CMessage::InventoryPickupEvent => {
+                        dispatch_message::<acprotocol::messages::s2c::InventoryPickupEvent, _>(
+                            self, message, &event_tx,
+                        )
+                        .ok();
+                    }
+                    // Effects
+                    S2CMessage::EffectsSoundEvent => {
+                        dispatch_message::<acprotocol::messages::s2c::EffectsSoundEvent, _>(
+                            self, message, &event_tx,
+                        )
+                        .ok();
+                    }
+                    // Movement
+                    S2CMessage::MovementPositionAndMovementEvent => {
+                        dispatch_message::<acprotocol::messages::s2c::MovementPositionAndMovementEvent, _>(
+                            self, message, &event_tx,
+                        )
+                        .ok();
+                    }
+                    S2CMessage::MovementPositionEvent => {
+                        dispatch_message::<acprotocol::messages::s2c::MovementPositionEvent, _>(
+                            self, message, &event_tx,
+                        )
+                        .ok();
+                    }
+                    S2CMessage::MovementSetObjectMovement => {
+                        dispatch_message::<acprotocol::messages::s2c::MovementSetObjectMovement, _>(
+                            self, message, &event_tx,
+                        )
+                        .ok();
+                    }
+                    S2CMessage::MovementVectorUpdate => {
+                        dispatch_message::<acprotocol::messages::s2c::MovementVectorUpdate, _>(
+                            self, message, &event_tx,
+                        )
+                        .ok();
+                    }
+                    // Combat
+                    S2CMessage::CombatHandlePlayerDeathEvent => {
+                        dispatch_message::<acprotocol::messages::s2c::CombatHandlePlayerDeathEvent, _>(
+                            self, message, &event_tx,
+                        )
+                        .ok();
+                    }
                     // Add more handlers as needed
                     _ => {
-                        info!(target: "net", "Unhandled S2CMessage: {:?} (0x{:04X})", msg_type, message.opcode);
+                        debug!(target: "net", "Unhandled S2CMessage: {:?} (0x{:04X})", msg_type, message.opcode);
                     }
                 }
             }
@@ -1248,6 +1413,149 @@ impl Client {
                     object_id,
                     sequence,
                     transient_string_to_game_event_msg,
+                )
+                .ok();
+            }
+            GameEventType::ItemOnViewContents => {
+                dispatch_game_event::<ItemOnViewContents, _, _>(
+                    self,
+                    &mut cursor,
+                    &event_tx,
+                    object_id,
+                    sequence,
+                    item_on_view_contents_to_game_event_msg,
+                )
+                .ok();
+            }
+            GameEventType::MagicUpdateSpell => {
+                dispatch_game_event::<MagicUpdateSpell, _, _>(
+                    self,
+                    &mut cursor,
+                    &event_tx,
+                    object_id,
+                    sequence,
+                    magic_update_spell_to_game_event_msg,
+                )
+                .ok();
+            }
+            GameEventType::FellowshipFullUpdate => {
+                dispatch_game_event::<FellowshipFullUpdate, _, _>(
+                    self,
+                    &mut cursor,
+                    &event_tx,
+                    object_id,
+                    sequence,
+                    fellowship_full_update_to_game_event_msg,
+                )
+                .ok();
+            }
+            GameEventType::TradeRegisterTrade => {
+                dispatch_game_event::<TradeRegisterTrade, _, _>(
+                    self,
+                    &mut cursor,
+                    &event_tx,
+                    object_id,
+                    sequence,
+                    trade_register_trade_to_game_event_msg,
+                )
+                .ok();
+            }
+            GameEventType::CombatHandleAttackDoneEvent => {
+                dispatch_game_event::<CombatHandleAttackDoneEvent, _, _>(
+                    self,
+                    &mut cursor,
+                    &event_tx,
+                    object_id,
+                    sequence,
+                    combat_handle_attack_done_to_game_event_msg,
+                )
+                .ok();
+            }
+            GameEventType::CombatHandleCommenceAttackEvent => {
+                dispatch_game_event::<CombatHandleCommenceAttackEvent, _, _>(
+                    self,
+                    &mut cursor,
+                    &event_tx,
+                    object_id,
+                    sequence,
+                    combat_handle_commence_attack_to_game_event_msg,
+                )
+                .ok();
+            }
+            GameEventType::CombatHandleVictimNotificationEventSelf => {
+                dispatch_game_event::<CombatHandleVictimNotificationEventSelf, _, _>(
+                    self,
+                    &mut cursor,
+                    &event_tx,
+                    object_id,
+                    sequence,
+                    combat_handle_victim_notification_self_to_game_event_msg,
+                )
+                .ok();
+            }
+            GameEventType::CombatHandleVictimNotificationEventOther => {
+                dispatch_game_event::<CombatHandleVictimNotificationEventOther, _, _>(
+                    self,
+                    &mut cursor,
+                    &event_tx,
+                    object_id,
+                    sequence,
+                    combat_handle_victim_notification_other_to_game_event_msg,
+                )
+                .ok();
+            }
+            GameEventType::CombatHandleAttackerNotificationEvent => {
+                dispatch_game_event::<CombatHandleAttackerNotificationEvent, _, _>(
+                    self,
+                    &mut cursor,
+                    &event_tx,
+                    object_id,
+                    sequence,
+                    combat_handle_attacker_notification_to_game_event_msg,
+                )
+                .ok();
+            }
+            GameEventType::CombatHandleDefenderNotificationEvent => {
+                dispatch_game_event::<CombatHandleDefenderNotificationEvent, _, _>(
+                    self,
+                    &mut cursor,
+                    &event_tx,
+                    object_id,
+                    sequence,
+                    combat_handle_defender_notification_to_game_event_msg,
+                )
+                .ok();
+            }
+            GameEventType::CombatHandleEvasionAttackerNotificationEvent => {
+                dispatch_game_event::<CombatHandleEvasionAttackerNotificationEvent, _, _>(
+                    self,
+                    &mut cursor,
+                    &event_tx,
+                    object_id,
+                    sequence,
+                    combat_handle_evasion_attacker_notification_to_game_event_msg,
+                )
+                .ok();
+            }
+            GameEventType::CombatHandleEvasionDefenderNotificationEvent => {
+                dispatch_game_event::<CombatHandleEvasionDefenderNotificationEvent, _, _>(
+                    self,
+                    &mut cursor,
+                    &event_tx,
+                    object_id,
+                    sequence,
+                    combat_handle_evasion_defender_notification_to_game_event_msg,
+                )
+                .ok();
+            }
+            GameEventType::CombatQueryHealthResponse => {
+                dispatch_game_event::<CombatQueryHealthResponse, _, _>(
+                    self,
+                    &mut cursor,
+                    &event_tx,
+                    object_id,
+                    sequence,
+                    combat_query_health_response_to_game_event_msg,
                 )
                 .ok();
             }
@@ -1844,5 +2152,167 @@ impl GameEventHandler<acprotocol::gameevents::CommunicationTransientString> for 
             message,
             message_type: 0x05, // System message type
         })
+    }
+}
+
+/// Handle Item_OnViewContents game events (CRITICAL for inventory)
+impl GameEventHandler<acprotocol::gameevents::ItemOnViewContents> for Client {
+    fn handle(
+        &mut self,
+        event: acprotocol::gameevents::ItemOnViewContents,
+    ) -> Option<GameEvent> {
+        let container_id = event.container_id.0;
+        let items: Vec<u32> = event.items.list.iter().map(|cp| cp.object_id.0).collect();
+
+        info!(target: "net", "ViewContents: Container 0x{:08X} contains {} items",
+              container_id, items.len());
+
+        // Return an event indicating we received container contents
+        Some(GameEvent::ItemOnViewContents {
+            container_id,
+            items: items.clone(),
+        })
+    }
+}
+
+/// Handle Magic_UpdateSpell game events
+impl GameEventHandler<acprotocol::gameevents::MagicUpdateSpell> for Client {
+    fn handle(
+        &mut self,
+        event: acprotocol::gameevents::MagicUpdateSpell,
+    ) -> Option<GameEvent> {
+        info!(target: "net", "MagicUpdateSpell: Spell {:?}", event.spell_id.id);
+        None // Most magic events are handled automatically via protocol events
+    }
+}
+
+/// Handle Fellowship_FullUpdate game events
+impl GameEventHandler<acprotocol::gameevents::FellowshipFullUpdate> for Client {
+    fn handle(
+        &mut self,
+        event: acprotocol::gameevents::FellowshipFullUpdate,
+    ) -> Option<GameEvent> {
+        info!(target: "net", "FellowshipFullUpdate: {}", event.fellowship.name);
+        None // Handled via protocol events
+    }
+}
+
+/// Handle Trade_RegisterTrade game events
+impl GameEventHandler<acprotocol::gameevents::TradeRegisterTrade> for Client {
+    fn handle(
+        &mut self,
+        event: acprotocol::gameevents::TradeRegisterTrade,
+    ) -> Option<GameEvent> {
+        info!(target: "net", "TradeRegisterTrade: {} <-> {}",
+              event.initiator_id.0, event.partner_id.0);
+        None // Handled via protocol events
+    }
+}
+
+// ============================================================================
+// Combat Game Event Handlers
+// ============================================================================
+
+/// Handle CombatHandleAttackDone game events
+impl GameEventHandler<acprotocol::gameevents::CombatHandleAttackDoneEvent> for Client {
+    fn handle(
+        &mut self,
+        event: acprotocol::gameevents::CombatHandleAttackDoneEvent,
+    ) -> Option<GameEvent> {
+        info!(target: "net", "CombatHandleAttackDone: target {}", event.number);
+        None
+    }
+}
+
+/// Handle CombatHandleCommenceAttack game events
+impl GameEventHandler<acprotocol::gameevents::CombatHandleCommenceAttackEvent> for Client {
+    fn handle(
+        &mut self,
+        _event: acprotocol::gameevents::CombatHandleCommenceAttackEvent,
+    ) -> Option<GameEvent> {
+        info!(target: "net", "CombatHandleCommenceAttack");
+        None
+    }
+}
+
+/// Handle CombatHandleVictimNotificationSelf game events
+impl GameEventHandler<acprotocol::gameevents::CombatHandleVictimNotificationEventSelf> for Client {
+    fn handle(
+        &mut self,
+        event: acprotocol::gameevents::CombatHandleVictimNotificationEventSelf,
+    ) -> Option<GameEvent> {
+        info!(target: "net", "CombatHandleVictimNotificationSelf: {}", event.message);
+        None
+    }
+}
+
+/// Handle CombatHandleVictimNotificationOther game events
+impl GameEventHandler<acprotocol::gameevents::CombatHandleVictimNotificationEventOther> for Client {
+    fn handle(
+        &mut self,
+        event: acprotocol::gameevents::CombatHandleVictimNotificationEventOther,
+    ) -> Option<GameEvent> {
+        info!(target: "net", "CombatHandleVictimNotificationOther: {}", event.message);
+        None
+    }
+}
+
+/// Handle CombatHandleAttackerNotification game events
+impl GameEventHandler<acprotocol::gameevents::CombatHandleAttackerNotificationEvent> for Client {
+    fn handle(
+        &mut self,
+        event: acprotocol::gameevents::CombatHandleAttackerNotificationEvent,
+    ) -> Option<GameEvent> {
+        info!(target: "net", "CombatHandleAttackerNotification: hit {} for {} damage",
+              event.defender_name, event.damage);
+        None
+    }
+}
+
+/// Handle CombatHandleDefenderNotification game events
+impl GameEventHandler<acprotocol::gameevents::CombatHandleDefenderNotificationEvent> for Client {
+    fn handle(
+        &mut self,
+        event: acprotocol::gameevents::CombatHandleDefenderNotificationEvent,
+    ) -> Option<GameEvent> {
+        info!(target: "net", "CombatHandleDefenderNotification: {} hit for {} damage",
+              event.attacker_name, event.damage);
+        None
+    }
+}
+
+/// Handle CombatHandleEvasionAttackerNotification game events
+impl GameEventHandler<acprotocol::gameevents::CombatHandleEvasionAttackerNotificationEvent> for Client {
+    fn handle(
+        &mut self,
+        event: acprotocol::gameevents::CombatHandleEvasionAttackerNotificationEvent,
+    ) -> Option<GameEvent> {
+        info!(target: "net", "CombatHandleEvasionAttackerNotification: {} evaded",
+              event.defender_name);
+        None
+    }
+}
+
+/// Handle CombatHandleEvasionDefenderNotification game events
+impl GameEventHandler<acprotocol::gameevents::CombatHandleEvasionDefenderNotificationEvent> for Client {
+    fn handle(
+        &mut self,
+        event: acprotocol::gameevents::CombatHandleEvasionDefenderNotificationEvent,
+    ) -> Option<GameEvent> {
+        info!(target: "net", "CombatHandleEvasionDefenderNotification: evaded {}",
+              event.attacker_name);
+        None
+    }
+}
+
+/// Handle CombatQueryHealthResponse game events
+impl GameEventHandler<acprotocol::gameevents::CombatQueryHealthResponse> for Client {
+    fn handle(
+        &mut self,
+        event: acprotocol::gameevents::CombatQueryHealthResponse,
+    ) -> Option<GameEvent> {
+        info!(target: "net", "CombatQueryHealthResponse: target 0x{:08X} health {:.1}%",
+              event.object_id.0, event.health * 100.0);
+        None
     }
 }

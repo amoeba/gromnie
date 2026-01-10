@@ -102,6 +102,7 @@ impl ToProtocolEvent for acprotocol::messages::s2c::ItemSetState {
 impl ToProtocolEvent for acprotocol::messages::s2c::QualitiesPrivateUpdateInt {
     fn to_protocol_event(&self) -> S2CEvent {
         S2CEvent::QualitiesPrivateUpdateInt {
+            sequence: self.sequence,
             property: format!("{:?}", self.key),
             value: self.value,
         }
@@ -112,6 +113,282 @@ impl ToProtocolEvent for acprotocol::messages::s2c::ItemDeleteObject {
     fn to_protocol_event(&self) -> S2CEvent {
         S2CEvent::ItemDeleteObject {
             object_id: self.object_id.0,
+        }
+    }
+}
+
+// ============================================================================
+// Quality/Property Update Conversions
+// ============================================================================
+
+impl ToProtocolEvent for acprotocol::messages::s2c::QualitiesUpdateInt {
+    fn to_protocol_event(&self) -> S2CEvent {
+        S2CEvent::QualitiesUpdateInt {
+            sequence: self.sequence,
+            object_id: self.object_id.0,
+            property: format!("{:?}", self.key),
+            value: self.value,
+        }
+    }
+}
+
+impl ToProtocolEvent for acprotocol::messages::s2c::QualitiesUpdateInt64 {
+    fn to_protocol_event(&self) -> S2CEvent {
+        S2CEvent::QualitiesUpdateInt64 {
+            sequence: self.sequence,
+            object_id: self.object_id.0,
+            property: format!("{:?}", self.key),
+            value: self.value,
+        }
+    }
+}
+
+impl ToProtocolEvent for acprotocol::messages::s2c::QualitiesPrivateUpdateInt64 {
+    fn to_protocol_event(&self) -> S2CEvent {
+        S2CEvent::QualitiesPrivateUpdateInt64 {
+            sequence: self.sequence,
+            property: format!("{:?}", self.key),
+            value: self.value,
+        }
+    }
+}
+
+impl ToProtocolEvent for acprotocol::messages::s2c::QualitiesUpdateBool {
+    fn to_protocol_event(&self) -> S2CEvent {
+        S2CEvent::QualitiesUpdateBool {
+            sequence: self.sequence,
+            object_id: self.object_id.0,
+            property: format!("{:?}", self.key),
+            value: self.value,
+        }
+    }
+}
+
+impl ToProtocolEvent for acprotocol::messages::s2c::QualitiesPrivateUpdateBool {
+    fn to_protocol_event(&self) -> S2CEvent {
+        S2CEvent::QualitiesPrivateUpdateBool {
+            sequence: self.sequence,
+            property: format!("{:?}", self.key),
+            value: self.value,
+        }
+    }
+}
+
+impl ToProtocolEvent for acprotocol::messages::s2c::QualitiesUpdateFloat {
+    fn to_protocol_event(&self) -> S2CEvent {
+        S2CEvent::QualitiesUpdateFloat {
+            sequence: self.sequence,
+            object_id: self.object_id.0,
+            property: format!("{:?}", self.key),
+            value: self.value as f64,
+        }
+    }
+}
+
+impl ToProtocolEvent for acprotocol::messages::s2c::QualitiesPrivateUpdateFloat {
+    fn to_protocol_event(&self) -> S2CEvent {
+        S2CEvent::QualitiesPrivateUpdateFloat {
+            sequence: self.sequence,
+            property: format!("{:?}", self.key),
+            value: self.value as f64,
+        }
+    }
+}
+
+impl ToProtocolEvent for acprotocol::messages::s2c::QualitiesUpdateString {
+    fn to_protocol_event(&self) -> S2CEvent {
+        S2CEvent::QualitiesUpdateString {
+            sequence: self.sequence,
+            object_id: self.object_id.0,
+            property: format!("{:?}", self.key),
+            value: self.value.clone(),
+        }
+    }
+}
+
+impl ToProtocolEvent for acprotocol::messages::s2c::QualitiesPrivateUpdateString {
+    fn to_protocol_event(&self) -> S2CEvent {
+        S2CEvent::QualitiesPrivateUpdateString {
+            sequence: self.sequence,
+            property: format!("{:?}", self.key),
+            value: self.value.clone(),
+        }
+    }
+}
+
+impl ToProtocolEvent for acprotocol::messages::s2c::QualitiesUpdateDataId {
+    fn to_protocol_event(&self) -> S2CEvent {
+        S2CEvent::QualitiesUpdateDataId {
+            sequence: self.sequence,
+            object_id: self.object_id.0,
+            property: format!("{:?}", self.key),
+            value: self.value,
+        }
+    }
+}
+
+impl ToProtocolEvent for acprotocol::messages::s2c::QualitiesPrivateUpdateDataId {
+    fn to_protocol_event(&self) -> S2CEvent {
+        S2CEvent::QualitiesPrivateUpdateDataId {
+            sequence: self.sequence,
+            property: format!("{:?}", self.key),
+            value: self.value,
+        }
+    }
+}
+
+impl ToProtocolEvent for acprotocol::messages::s2c::QualitiesUpdateInstanceId {
+    fn to_protocol_event(&self) -> S2CEvent {
+        S2CEvent::QualitiesUpdateInstanceId {
+            sequence: self.sequence,
+            object_id: self.object_id.0,
+            property: format!("{:?}", self.key),
+            value: self.value.0,
+        }
+    }
+}
+
+impl ToProtocolEvent for acprotocol::messages::s2c::QualitiesPrivateUpdateInstanceId {
+    fn to_protocol_event(&self) -> S2CEvent {
+        S2CEvent::QualitiesPrivateUpdateInstanceId {
+            sequence: self.sequence,
+            property: format!("{:?}", self.key),
+            value: self.value.0,
+        }
+    }
+}
+
+// ============================================================================
+// Communication Message Conversions
+// ============================================================================
+
+impl ToProtocolEvent for acprotocol::messages::s2c::CommunicationHearEmote {
+    fn to_protocol_event(&self) -> S2CEvent {
+        S2CEvent::CommunicationHearEmote {
+            sender_name: self.sender_name.clone(),
+            message: self.text.clone(),
+        }
+    }
+}
+
+impl ToProtocolEvent for acprotocol::messages::s2c::CommunicationHearSoulEmote {
+    fn to_protocol_event(&self) -> S2CEvent {
+        S2CEvent::CommunicationHearSoulEmote {
+            sender_name: self.sender_name.clone(),
+            message: self.text.clone(),
+        }
+    }
+}
+
+impl ToProtocolEvent for acprotocol::messages::s2c::CommunicationTextboxString {
+    fn to_protocol_event(&self) -> S2CEvent {
+        S2CEvent::CommunicationTextboxString {
+            message: self.text.clone(),
+            message_type: self.type_.clone() as u32,
+        }
+    }
+}
+
+// ============================================================================
+// Item/Inventory Message Conversions
+// ============================================================================
+
+impl ToProtocolEvent for acprotocol::messages::s2c::ItemUpdateStackSize {
+    fn to_protocol_event(&self) -> S2CEvent {
+        S2CEvent::ItemUpdateStackSize {
+            object_id: self.object_id.0,
+            stack_size: self.new_value as i32,
+        }
+    }
+}
+
+impl ToProtocolEvent for acprotocol::messages::s2c::ItemServerSaysRemove {
+    fn to_protocol_event(&self) -> S2CEvent {
+        S2CEvent::ItemServerSaysRemove {
+            object_id: self.object_id.0,
+        }
+    }
+}
+
+impl ToProtocolEvent for acprotocol::messages::s2c::InventoryPickupEvent {
+    fn to_protocol_event(&self) -> S2CEvent {
+        S2CEvent::InventoryPickup {
+            object_id: self.object_id.0,
+        }
+    }
+}
+
+// ============================================================================
+// Effects Message Conversions
+// ============================================================================
+
+impl ToProtocolEvent for acprotocol::messages::s2c::EffectsSoundEvent {
+    fn to_protocol_event(&self) -> S2CEvent {
+        S2CEvent::EffectsSoundEvent {
+            object_id: self.object_id.0,
+            sound_id: self.sound_type.clone() as u32,
+        }
+    }
+}
+
+// ============================================================================
+// Movement Message Conversions
+// ============================================================================
+
+impl ToProtocolEvent for acprotocol::messages::s2c::MovementPositionAndMovementEvent {
+    fn to_protocol_event(&self) -> S2CEvent {
+        S2CEvent::MovementPositionAndMovement {
+            object_id: self.object_id.0,
+            position: serde_json::to_string(&self.position).unwrap_or_default(),
+            movement_data: serde_json::to_string(&self.movement_data).unwrap_or_default(),
+        }
+    }
+}
+
+impl ToProtocolEvent for acprotocol::messages::s2c::MovementPositionEvent {
+    fn to_protocol_event(&self) -> S2CEvent {
+        S2CEvent::MovementPosition {
+            object_id: self.object_id.0,
+            position: serde_json::to_string(&self.position).unwrap_or_default(),
+        }
+    }
+}
+
+impl ToProtocolEvent for acprotocol::messages::s2c::MovementSetObjectMovement {
+    fn to_protocol_event(&self) -> S2CEvent {
+        S2CEvent::MovementSetObjectMovement {
+            object_id: self.object_id.0,
+            instance_sequence: self.object_instance_sequence,
+            movement_data: serde_json::to_string(&self.movement_data).unwrap_or_default(),
+        }
+    }
+}
+
+impl ToProtocolEvent for acprotocol::messages::s2c::MovementVectorUpdate {
+    fn to_protocol_event(&self) -> S2CEvent {
+        S2CEvent::MovementVectorUpdate {
+            object_id: self.object_id.0,
+            velocity_x: self.velocity.x,
+            velocity_y: self.velocity.y,
+            velocity_z: self.velocity.z,
+            omega_x: self.omega.x,
+            omega_y: self.omega.y,
+            omega_z: self.omega.z,
+            instance_sequence: self.object_instance_sequence,
+            vector_sequence: self.object_vector_sequence,
+        }
+    }
+}
+
+// ============================================================================
+// Combat Message Conversions
+// ============================================================================
+
+impl ToProtocolEvent for acprotocol::messages::s2c::CombatHandlePlayerDeathEvent {
+    fn to_protocol_event(&self) -> S2CEvent {
+        S2CEvent::CombatHandlePlayerDeath {
+            victim_id: self.killed_id.0,
+            killer_id: self.killer_id.0,
         }
     }
 }
@@ -142,6 +419,152 @@ pub fn transient_string_to_game_event_msg(
 ) -> GameEventMsg {
     GameEventMsg::TransientString {
         message: event.message,
+    }
+}
+
+// ============================================================================
+// Additional Game Event Conversions
+// ============================================================================
+
+/// Convert acprotocol ItemOnViewContents to GameEventMsg
+pub fn item_on_view_contents_to_game_event_msg(
+    event: acprotocol::gameevents::ItemOnViewContents,
+) -> GameEventMsg {
+    GameEventMsg::ItemOnViewContents {
+        container_id: event.container_id.0,
+        items: event.items.list.iter().map(|cp| cp.object_id.0).collect(),
+    }
+}
+
+/// Convert acprotocol MagicUpdateSpell to GameEventMsg
+pub fn magic_update_spell_to_game_event_msg(
+    event: acprotocol::gameevents::MagicUpdateSpell,
+) -> GameEventMsg {
+    GameEventMsg::MagicUpdateSpell {
+        spell_id: event.spell_id.id.0 as u32,
+    }
+}
+
+/// Convert acprotocol FellowshipFullUpdate to GameEventMsg
+pub fn fellowship_full_update_to_game_event_msg(
+    event: acprotocol::gameevents::FellowshipFullUpdate,
+) -> GameEventMsg {
+    let fellowship = &event.fellowship;
+    let members: Vec<u32> = fellowship.members.table.keys().map(|id| id.0).collect();
+    GameEventMsg::FellowshipFullUpdate {
+        fellowship_id: fellowship.leader_id.0, // Use leader_id as fellowship_id
+        leader_name: fellowship.name.clone(),
+        leader_id: fellowship.leader_id.0,
+        members,
+        locked: fellowship.locked,
+    }
+}
+
+/// Convert acprotocol TradeRegisterTrade to GameEventMsg
+pub fn trade_register_trade_to_game_event_msg(
+    event: acprotocol::gameevents::TradeRegisterTrade,
+) -> GameEventMsg {
+    GameEventMsg::TradeRegisterTrade {
+        initiator_id: event.initiator_id.0,
+        partner_id: event.partner_id.0,
+    }
+}
+
+// ============================================================================
+// Combat Game Event Conversions
+// ============================================================================
+
+/// Convert acprotocol CombatHandleAttackDoneEvent to GameEventMsg
+pub fn combat_handle_attack_done_to_game_event_msg(
+    event: acprotocol::gameevents::CombatHandleAttackDoneEvent,
+) -> GameEventMsg {
+    GameEventMsg::CombatHandleAttackDone {
+        target_id: event.number,
+    }
+}
+
+/// Convert acprotocol CombatHandleCommenceAttackEvent to GameEventMsg
+pub fn combat_handle_commence_attack_to_game_event_msg(
+    _event: acprotocol::gameevents::CombatHandleCommenceAttackEvent,
+) -> GameEventMsg {
+    GameEventMsg::CombatHandleCommenceAttack {
+        target_id: 0, // This event has no fields
+    }
+}
+
+/// Convert acprotocol CombatHandleVictimNotificationEventSelf to GameEventMsg
+pub fn combat_handle_victim_notification_self_to_game_event_msg(
+    event: acprotocol::gameevents::CombatHandleVictimNotificationEventSelf,
+) -> GameEventMsg {
+    GameEventMsg::CombatHandleVictimNotificationSelf {
+        message: event.message,
+        damage_type: 0, // Not available in event
+        damage_amount: 0, // Not available in event
+        critical: false, // Not available in event
+    }
+}
+
+/// Convert acprotocol CombatHandleVictimNotificationEventOther to GameEventMsg
+pub fn combat_handle_victim_notification_other_to_game_event_msg(
+    event: acprotocol::gameevents::CombatHandleVictimNotificationEventOther,
+) -> GameEventMsg {
+    GameEventMsg::CombatHandleVictimNotificationOther {
+        attacker_name: event.message,
+        part_index: 0, // Not available in event
+    }
+}
+
+/// Convert acprotocol CombatHandleAttackerNotificationEvent to GameEventMsg
+pub fn combat_handle_attacker_notification_to_game_event_msg(
+    event: acprotocol::gameevents::CombatHandleAttackerNotificationEvent,
+) -> GameEventMsg {
+    GameEventMsg::CombatHandleAttackerNotification {
+        victim_name: event.defender_name,
+        damage_type: event.type_.bits(),
+        damage_amount: event.damage as f32,
+        critical: event.critical,
+        hit_location: event.attack_conditions.bits(),
+    }
+}
+
+/// Convert acprotocol CombatHandleDefenderNotificationEvent to GameEventMsg
+pub fn combat_handle_defender_notification_to_game_event_msg(
+    event: acprotocol::gameevents::CombatHandleDefenderNotificationEvent,
+) -> GameEventMsg {
+    GameEventMsg::CombatHandleDefenderNotification {
+        attacker_name: event.attacker_name,
+        damage_type: event.type_.bits(),
+        evasion_result: event.attack_conditions.bits(),
+    }
+}
+
+/// Convert acprotocol CombatHandleEvasionAttackerNotificationEvent to GameEventMsg
+pub fn combat_handle_evasion_attacker_notification_to_game_event_msg(
+    event: acprotocol::gameevents::CombatHandleEvasionAttackerNotificationEvent,
+) -> GameEventMsg {
+    GameEventMsg::CombatHandleEvasionAttackerNotification {
+        defender_name: event.defender_name,
+        evasion_result: 0, // Not available in event
+    }
+}
+
+/// Convert acprotocol CombatHandleEvasionDefenderNotificationEvent to GameEventMsg
+pub fn combat_handle_evasion_defender_notification_to_game_event_msg(
+    event: acprotocol::gameevents::CombatHandleEvasionDefenderNotificationEvent,
+) -> GameEventMsg {
+    GameEventMsg::CombatHandleEvasionDefenderNotification {
+        attacker_name: event.attacker_name,
+        evasion_result: 0, // Not available in event
+    }
+}
+
+/// Convert acprotocol CombatQueryHealthResponse to GameEventMsg
+pub fn combat_query_health_response_to_game_event_msg(
+    event: acprotocol::gameevents::CombatQueryHealthResponse,
+) -> GameEventMsg {
+    GameEventMsg::CombatQueryHealthResponse {
+        target_id: event.object_id.0,
+        health_percent: event.health,
     }
 }
 

@@ -205,6 +205,70 @@ interface host {
         message: string,
     }
 
+    // ----- Quality Update Messages -----
+
+    record quality-update-int-msg {
+        sequence: u8,
+        object-id: u32,
+        property: string,
+        value: s32,
+    }
+
+    record quality-update-bool-msg {
+        sequence: u8,
+        object-id: u32,
+        property: string,
+        value: bool,
+    }
+
+    record quality-update-float-msg {
+        sequence: u8,
+        object-id: u32,
+        property: string,
+        value: f64,
+    }
+
+    record quality-update-string-msg {
+        sequence: u8,
+        object-id: u32,
+        property: string,
+        value: string,
+    }
+
+    // ----- Communication Messages -----
+
+    record communication-emote-msg {
+        sender-name: string,
+        message: string,
+    }
+
+    record communication-textbox-msg {
+        message: string,
+        message-type: u32,
+    }
+
+    // ----- Item/Inventory Messages -----
+
+    record item-update-stack-msg {
+        object-id: u32,
+        stack-size: s32,
+    }
+
+    record item-server-remove-msg {
+        object-id: u32,
+    }
+
+    record inventory-pickup-msg {
+        object-id: u32,
+    }
+
+    // ----- Effects Messages -----
+
+    record effects-sound-msg {
+        object-id: u32,
+        sound-id: u32,
+    }
+
     // ----- Top-level S2C Messages -----
 
     /// Top-level server-to-client messages
@@ -217,14 +281,59 @@ interface host {
         hear-ranged-speech(hear-ranged-speech-msg),
         ddd-interrogation(ddd-interrogation-msg),
         chargen-verification-response,
+        // Quality updates
+        qualities-update-int(quality-update-int-msg),
+        qualities-private-update-int(quality-update-int-msg),
+        qualities-update-bool(quality-update-bool-msg),
+        qualities-private-update-bool(quality-update-bool-msg),
+        qualities-update-float(quality-update-float-msg),
+        qualities-private-update-float(quality-update-float-msg),
+        qualities-update-string(quality-update-string-msg),
+        qualities-private-update-string(quality-update-string-msg),
+        // Communication
+        communication-hear-emote(communication-emote-msg),
+        communication-hear-soul-emote(communication-emote-msg),
+        communication-textbox-string(communication-textbox-msg),
+        // Items/Inventory
+        item-update-stack-size(item-update-stack-msg),
+        item-server-says-remove(item-server-remove-msg),
+        inventory-pickup(inventory-pickup-msg),
+        // Effects
+        effects-sound-event(effects-sound-msg),
     }
 
     // ----- Nested Game Events -----
+
+    record item-on-view-contents-msg {
+        container-id: u32,
+        items: list<u32>,
+    }
+
+    record magic-update-spell-msg {
+        spell-id: u32,
+    }
+
+    record fellowship-full-update-msg {
+        fellowship-id: u32,
+        leader-name: string,
+        leader-id: u32,
+        members: list<u32>,
+        locked: bool,
+    }
+
+    record trade-register-msg {
+        initiator-id: u32,
+        partner-id: u32,
+    }
 
     /// Nested game events (from OrderedGameEvent wrapper)
     variant game-event-msg {
         hear-direct-speech(hear-direct-speech-msg),
         transient-string(transient-string-msg),
+        item-on-view-contents(item-on-view-contents-msg),
+        magic-update-spell(magic-update-spell-msg),
+        fellowship-full-update(fellowship-full-update-msg),
+        trade-register(trade-register-msg),
     }
 
     // ----- Unified Protocol Event -----
