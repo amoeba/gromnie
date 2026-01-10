@@ -286,6 +286,346 @@ pub enum S2CEvent {
         victim_id: u32,
         killer_id: u32,
     },
+    // ===== Phase 2: Magic & Items Messages =====
+    // Magic/Enchantment Messages
+    MagicUpdateEnchantmentS2C {
+        enchantment_id: u32,
+        spell_id: u32,
+        layer: u32,
+        caster_id: u32,
+        duration: f32,
+    },
+    MagicRemoveEnchantmentS2C {
+        enchantment_id: u32,
+        layer: u32,
+    },
+    MagicEnchantmentAlreadyPresent {
+        enchantment_id: u32,
+        layer: u32,
+    },
+    MagicEnchantmentRemovalFailed {
+        reason_code: u32,
+    },
+    // Item Appraisal & Properties
+    ItemAppriseInfo {
+        object_id: u32,
+        appraisal_data: Vec<u8>,
+    },
+    ItemAppriseInfoDone {
+        object_id: u32,
+        success: bool,
+    },
+    // Equipment Messages
+    ItemWearOutfit {
+        object_id: u32,
+        placer_id: u32,
+        slot_index: u32,
+    },
+    ItemUnwearOutfit {
+        object_id: u32,
+        placer_id: u32,
+    },
+    // Container/Inventory Messages
+    ItemContainersViewData {
+        container_id: u32,
+        contents: Vec<u32>,
+    },
+    ItemContainerIdUpdate {
+        object_id: u32,
+        container_id: u32,
+    },
+    ItemMoveItemRequest {
+        object_id: u32,
+        source_container: u32,
+        destination_container: u32,
+        placement: u32,
+    },
+    ItemMoveItemResponse {
+        success: bool,
+        object_id: u32,
+        reason_code: u32,
+    },
+    ItemEncumbranceUpdate {
+        current_encumbrance: u32,
+        max_encumbrance: u32,
+    },
+    // Item Query Responses
+    ItemQueryItemManaResponseS2C {
+        object_id: u32,
+        current_mana: u32,
+        max_mana: u32,
+    },
+    ItemGetInscriptionResponseS2C {
+        object_id: u32,
+        inscription: String,
+        author_id: u32,
+        author_name: String,
+        author_account: String,
+    },
+    ItemQueryItemSchoolsResponseS2C {
+        object_id: u32,
+        schools: Vec<u32>,
+    },
+    ItemQueryItemVendorResponse {
+        object_id: u32,
+        vendor_id: u32,
+        vendor_name: String,
+        vendor_price: u32,
+    },
+    // ===== Phase 3: Social Systems Messages =====
+    // Trade System
+    TradeRegisterTrade {
+        initiator_id: u32,
+        partner_id: u32,
+    },
+    TradeOpenTrade {
+        partner_id: u32,
+        partner_name: String,
+    },
+    TradeCloseTrade {
+        reason: u32,
+    },
+    TradeAddToTrade {
+        item_id: u32,
+        trader_id: u32,
+    },
+    TradeRemoveFromTrade {
+        item_id: u32,
+        trader_id: u32,
+    },
+    TradeAcceptTrade {
+        trader_id: u32,
+    },
+    TradeDeclineTrade {},
+    TradeResetTrade {},
+    TradeTradeFailure {
+        reason: u32,
+    },
+    TradeClearTradeAcceptance {},
+    // Fellowship System
+    FellowshipFullUpdate {
+        fellowship_data: Vec<u8>,
+    },
+    FellowshipUpdateFellow {
+        fellow_id: u32,
+        fellow_data: Vec<u8>,
+    },
+    FellowshipUpdateDone {},
+    FellowshipDisband {},
+    FellowshipQuit {
+        fellow_id: u32,
+    },
+    FellowshipDismiss {
+        fellow_id: u32,
+    },
+    // Social Features
+    FriendsUpdate {
+        friends: Vec<(u32, String, bool)>,
+    },
+    CharacterTitleTable {
+        titles: Vec<(u32, String)>,
+    },
+    AddOrSetCharacterTitle {
+        title_id: u32,
+        title: String,
+        active: bool,
+    },
+    // Contracts
+    SendClientContractTrackerTable {
+        contracts: Vec<u32>,
+    },
+    SendClientContractTracker {
+        contract_id: u32,
+        stage: u32,
+        timestamp: u64,
+    },
+    // Allegiance
+    AllegianceUpdate {
+        allegiance_data: Vec<u8>,
+    },
+    AllegianceUpdateDone {},
+    AllegianceUpdateAborted {},
+    AllegianceLoginNotification {
+        member_name: String,
+        member_id: u32,
+    },
+    AllegianceInfoResponse {
+        allegiance_name: String,
+        allegiance_data: Vec<u8>,
+    },
+    // Vendor
+    VendorInfo {
+        vendor_id: u32,
+        vendor_type: u32,
+        items: Vec<u32>,
+    },
+    // ===== Phase 4: Advanced Features Messages =====
+    // Housing
+    HouseProfile {
+        house_id: u32,
+        owner_id: u32,
+        house_type: u32,
+    },
+    HouseData {
+        house_id: u32,
+        position: Vec<u8>,
+    },
+    HouseStatus {
+        house_id: u32,
+        status: u32,
+    },
+    HouseUpdateRentTime {
+        house_id: u32,
+        rent_time: u32,
+    },
+    HouseUpdateRentPayment {
+        house_id: u32,
+        payment: u32,
+    },
+    HouseUpdateRestrictions {
+        house_id: u32,
+        restrictions: u32,
+    },
+    HouseUpdateHAR {
+        house_id: u32,
+        har: Vec<u8>,
+    },
+    HouseTransaction {
+        house_id: u32,
+        transaction_type: u32,
+    },
+    HouseAvailableHouses {
+        houses: Vec<u32>,
+    },
+    // Writing/Books
+    WritingBookOpen {
+        book_id: u32,
+        pages: u32,
+    },
+    WritingBookAddPageResponse {
+        book_id: u32,
+        success: bool,
+    },
+    WritingBookDeletePageResponse {
+        book_id: u32,
+        success: bool,
+    },
+    WritingBookPageDataResponse {
+        book_id: u32,
+        page: u32,
+        content: String,
+    },
+    // Character Customization
+    CharacterStartBarber {
+        barber_id: u32,
+    },
+    CharacterQueryAgeResponse {
+        age: u32,
+    },
+    CharacterConfirmationRequest {
+        confirmation_type: u32,
+        context: u32,
+        message: String,
+    },
+    // Games
+    GameJoinGameResponse {
+        game_id: u32,
+        team_id: u32,
+    },
+    GameStartGame {
+        game_id: u32,
+    },
+    GameMoveResponse {
+        game_id: u32,
+        move_data: Vec<u8>,
+    },
+    GameOpponentTurn {
+        game_id: u32,
+        move_data: Vec<u8>,
+    },
+    GameOpponentStalemateState {
+        game_id: u32,
+    },
+    GameGameOver {
+        game_id: u32,
+        winner_id: u32,
+    },
+    // Channels
+    ChannelBroadcast {
+        channel_id: u32,
+        sender_name: String,
+        message: String,
+    },
+    ChannelList {
+        channels: Vec<(u32, String)>,
+    },
+    ChannelIndex {
+        channel_id: u32,
+        channel_name: String,
+    },
+    // ===== Phase 5: Polish Messages =====
+    // Admin Tools
+    ReceivePlayerData {
+        player_id: u32,
+        data: Vec<u8>,
+    },
+    QueryPlugin {
+        plugin_name: String,
+    },
+    QueryPluginList {
+        plugins: Vec<String>,
+    },
+    QueryPluginResponse {
+        plugin_name: String,
+        plugin_data: Vec<u8>,
+    },
+    // Advanced Communication
+    TurbineChat {
+        message_type: u32,
+        channel_id: u32,
+        sender_name: String,
+        message: String,
+    },
+    TextboxString {
+        message: String,
+        message_type: u32,
+    },
+    PopUpString {
+        message: String,
+    },
+    WeenieError {
+        error_code: u32,
+    },
+    WeenieErrorWithString {
+        error_code: u32,
+        message: String,
+    },
+    // Portal Storms
+    PortalStormBrewing {},
+    PortalStormImminent {},
+    PortalStorm {},
+    PortalStormSubsided {},
+    // Salvage
+    SalvageOperationsResultData {
+        success: bool,
+        salvage_type: u32,
+        amount: u32,
+    },
+    // Misc
+    LoginPlayerDescription {
+        player_id: u32,
+        description: Vec<u8>,
+    },
+    ReturnPing {
+        sequence: u32,
+    },
+    SetSquelchDB {
+        squelch_data: Vec<u8>,
+    },
+    ChatRoomTracker {
+        chat_room_id: u32,
+        chat_room_name: String,
+    },
 }
 
 /// Nested game events with OrderedGameEvent metadata

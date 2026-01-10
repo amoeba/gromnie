@@ -568,6 +568,25 @@ pub fn combat_query_health_response_to_game_event_msg(
     }
 }
 
+// ============================================================================
+// Phase 2: Magic & Items Conversions
+// ============================================================================
+
+/// Magic/Enchantment conversions (placeholder - awaiting acprotocol types)
+/// These will be implemented once acprotocol provides the message structures
+
+/// Item Appraisal conversions (placeholder - awaiting acprotocol types)
+/// These will be implemented once acprotocol provides the message structures
+
+/// Equipment/Wear conversions (placeholder - awaiting acprotocol types)
+/// These will be implemented once acprotocol provides the message structures
+
+/// Container/Inventory conversions (placeholder - awaiting acprotocol types)
+/// These will be implemented once acprotocol provides the message structures
+
+/// Item Query conversions (placeholder - awaiting acprotocol types)
+/// These will be implemented once acprotocol provides the message structures
+
 #[cfg(test)]
 mod tests {
     use gromnie_events::{GameEventMsg, S2CEvent};
