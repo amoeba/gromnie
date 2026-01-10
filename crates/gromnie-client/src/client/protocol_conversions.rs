@@ -902,6 +902,431 @@ pub fn vendor_info_to_game_event_msg(
     }
 }
 
+// ============================================================================
+// Phase 4: Housing Game Event Conversions
+// ============================================================================
+
+/// Convert acprotocol HouseHouseProfile to GameEventMsg
+pub fn house_profile_to_game_event_msg(
+    _event: acprotocol::gameevents::HouseHouseProfile,
+) -> GameEventMsg {
+    GameEventMsg::HouseProfile {
+        house_id: 0,
+        owner_id: 0,
+        house_type: 0,
+    }
+}
+
+/// Convert acprotocol HouseHouseData to GameEventMsg
+pub fn house_data_to_game_event_msg(
+    _event: acprotocol::gameevents::HouseHouseData,
+) -> GameEventMsg {
+    GameEventMsg::HouseData {
+        house_id: 0,
+        position: vec![],
+    }
+}
+
+/// Convert acprotocol HouseHouseStatus to GameEventMsg
+pub fn house_status_to_game_event_msg(
+    _event: acprotocol::gameevents::HouseHouseStatus,
+) -> GameEventMsg {
+    GameEventMsg::HouseStatus {
+        house_id: 0,
+        status: 0,
+    }
+}
+
+/// Convert acprotocol HouseHouseUpdateRentTime to GameEventMsg
+pub fn house_update_rent_time_to_game_event_msg(
+    _event: acprotocol::gameevents::HouseUpdateRentTime,
+) -> GameEventMsg {
+    GameEventMsg::HouseUpdateRentTime {
+        house_id: 0,
+        rent_time: 0,
+    }
+}
+
+/// Convert acprotocol HouseHouseUpdateRentPayment to GameEventMsg
+pub fn house_update_rent_payment_to_game_event_msg(
+    _event: acprotocol::gameevents::HouseUpdateRentPayment,
+) -> GameEventMsg {
+    GameEventMsg::HouseUpdateRentPayment {
+        house_id: 0,
+        payment: 0,
+    }
+}
+
+/// Convert acprotocol HouseHouseUpdateRestrictions to GameEventMsg
+pub fn house_update_restrictions_to_game_event_msg(
+    _event: acprotocol::gameevents::HouseUpdateRestrictions,
+) -> GameEventMsg {
+    GameEventMsg::HouseUpdateRestrictions {
+        house_id: 0,
+        restrictions: 0,
+    }
+}
+
+/// Convert acprotocol HouseHouseUpdateHAR to GameEventMsg
+pub fn house_update_har_to_game_event_msg(
+    _event: acprotocol::gameevents::HouseUpdateHAR,
+) -> GameEventMsg {
+    GameEventMsg::HouseUpdateHAR {
+        house_id: 0,
+        har: vec![],
+    }
+}
+
+/// Convert acprotocol HouseHouseTransaction to GameEventMsg
+pub fn house_transaction_to_game_event_msg(
+    _event: acprotocol::gameevents::HouseHouseTransaction,
+) -> GameEventMsg {
+    GameEventMsg::HouseTransaction {
+        house_id: 0,
+        transaction_type: 0,
+    }
+}
+
+/// Convert acprotocol HouseHouseAvailableHouses to GameEventMsg
+pub fn house_available_houses_to_game_event_msg(
+    _event: acprotocol::gameevents::HouseAvailableHouses,
+) -> GameEventMsg {
+    GameEventMsg::HouseAvailableHouses {
+        houses: vec![],
+    }
+}
+
+// ============================================================================
+// Phase 4: Writing Game Event Conversions
+// ============================================================================
+
+/// Convert acprotocol WritingWritingBookOpen to GameEventMsg
+pub fn writing_book_open_to_game_event_msg(
+    _event: acprotocol::gameevents::WritingBookOpen,
+) -> GameEventMsg {
+    GameEventMsg::WritingBookOpen {
+        book_id: 0,
+        pages: 0,
+    }
+}
+
+/// Convert acprotocol WritingWritingBookAddPageResponse to GameEventMsg
+pub fn writing_book_add_page_response_to_game_event_msg(
+    _event: acprotocol::gameevents::WritingBookAddPageResponse,
+) -> GameEventMsg {
+    GameEventMsg::WritingBookAddPageResponse {
+        book_id: 0,
+        success: false,
+    }
+}
+
+/// Convert acprotocol WritingWritingBookDeletePageResponse to GameEventMsg
+pub fn writing_book_delete_page_response_to_game_event_msg(
+    _event: acprotocol::gameevents::WritingBookDeletePageResponse,
+) -> GameEventMsg {
+    GameEventMsg::WritingBookDeletePageResponse {
+        book_id: 0,
+        success: false,
+    }
+}
+
+/// Convert acprotocol WritingWritingBookPageDataResponse to GameEventMsg
+pub fn writing_book_page_data_response_to_game_event_msg(
+    _event: acprotocol::gameevents::WritingBookPageDataResponse,
+) -> GameEventMsg {
+    GameEventMsg::WritingBookPageDataResponse {
+        book_id: 0,
+        page: 0,
+        content: String::new(),
+    }
+}
+
+// ============================================================================
+// Phase 4: Character Game Event Conversions
+// ============================================================================
+
+/// Convert acprotocol CharacterCharacterStartBarber to GameEventMsg
+pub fn character_start_barber_to_game_event_msg(
+    _event: acprotocol::gameevents::CharacterStartBarber,
+) -> GameEventMsg {
+    GameEventMsg::CharacterStartBarber {
+        barber_id: 0,
+    }
+}
+
+/// Convert acprotocol CharacterCharacterQueryAgeResponse to GameEventMsg
+pub fn character_query_age_response_to_game_event_msg(
+    _event: acprotocol::gameevents::CharacterQueryAgeResponse,
+) -> GameEventMsg {
+    GameEventMsg::CharacterQueryAgeResponse {
+        age: 0,
+    }
+}
+
+/// Convert acprotocol CharacterCharacterConfirmationRequest to GameEventMsg
+pub fn character_confirmation_request_to_game_event_msg(
+    _event: acprotocol::gameevents::CharacterConfirmationRequest,
+) -> GameEventMsg {
+    GameEventMsg::CharacterConfirmationRequest {
+        confirmation_type: 0,
+        context: 0,
+        message: String::new(),
+    }
+}
+
+// ============================================================================
+// Phase 4: Game Events Game Event Conversions
+// ============================================================================
+
+/// Convert acprotocol GameGameJoinGameResponse to GameEventMsg
+pub fn game_join_game_response_to_game_event_msg(
+    _event: acprotocol::gameevents::GameJoinGameResponse,
+) -> GameEventMsg {
+    GameEventMsg::GameJoinGameResponse {
+        game_id: 0,
+        team_id: 0,
+    }
+}
+
+/// Convert acprotocol GameGameStartGame to GameEventMsg
+pub fn game_start_game_to_game_event_msg(
+    _event: acprotocol::gameevents::GameStartGame,
+) -> GameEventMsg {
+    GameEventMsg::GameStartGame {
+        game_id: 0,
+    }
+}
+
+/// Convert acprotocol GameGameMoveResponse to GameEventMsg
+pub fn game_move_response_to_game_event_msg(
+    _event: acprotocol::gameevents::GameMoveResponse,
+) -> GameEventMsg {
+    GameEventMsg::GameMoveResponse {
+        game_id: 0,
+        move_data: vec![],
+    }
+}
+
+/// Convert acprotocol GameGameOpponentTurn to GameEventMsg
+pub fn game_opponent_turn_to_game_event_msg(
+    _event: acprotocol::gameevents::GameOpponentTurn,
+) -> GameEventMsg {
+    GameEventMsg::GameOpponentTurn {
+        game_id: 0,
+        move_data: vec![],
+    }
+}
+
+/// Convert acprotocol GameGameOpponentStalemateState to GameEventMsg
+pub fn game_opponent_stalemate_state_to_game_event_msg(
+    _event: acprotocol::gameevents::GameOpponentStalemateState,
+) -> GameEventMsg {
+    GameEventMsg::GameOpponentStalemateState {
+        game_id: 0,
+    }
+}
+
+/// Convert acprotocol GameGameGameOver to GameEventMsg
+pub fn game_game_over_to_game_event_msg(
+    _event: acprotocol::gameevents::GameGameOver,
+) -> GameEventMsg {
+    GameEventMsg::GameGameOver {
+        game_id: 0,
+        winner_id: 0,
+    }
+}
+
+// ============================================================================
+// Phase 4: Channels Game Event Conversions
+// ============================================================================
+
+/// Convert acprotocol CommunicationCommunicationChannelBroadcast to GameEventMsg
+pub fn channel_broadcast_to_game_event_msg(
+    _event: acprotocol::gameevents::CommunicationChannelBroadcast,
+) -> GameEventMsg {
+    GameEventMsg::CommunicationChannelBroadcast {
+        channel_id: 0,
+        sender_name: String::new(),
+        message: String::new(),
+    }
+}
+
+/// Convert acprotocol CommunicationCommunicationChannelList to GameEventMsg
+pub fn channel_list_to_game_event_msg(
+    _event: acprotocol::gameevents::CommunicationChannelList,
+) -> GameEventMsg {
+    GameEventMsg::CommunicationChannelList {
+        channels: vec![],
+    }
+}
+
+/// Convert acprotocol CommunicationChannelIndex to GameEventMsg
+pub fn channel_index_to_game_event_msg(
+    _event: acprotocol::gameevents::CommunicationChannelIndex,
+) -> GameEventMsg {
+    GameEventMsg::CommunicationChannelIndex {
+        channel_id: 0,
+        channel_name: String::new(),
+    }
+}
+
+// ============================================================================
+// Phase 5: Admin Game Event Conversions
+// ============================================================================
+
+/// Convert acprotocol AdminQueryPlugin to GameEventMsg
+pub fn admin_query_plugin_to_game_event_msg(
+    _event: acprotocol::gameevents::AdminQueryPlugin,
+) -> GameEventMsg {
+    GameEventMsg::AdminQueryPlugin {
+        plugin_name: String::new(),
+    }
+}
+
+/// Convert acprotocol AdminQueryPluginList to GameEventMsg
+pub fn admin_query_plugin_list_to_game_event_msg(
+    _event: acprotocol::gameevents::AdminQueryPluginList,
+) -> GameEventMsg {
+    GameEventMsg::AdminQueryPluginList {
+        plugins: vec![],
+    }
+}
+
+/// Convert acprotocol AdminQueryPluginResponse2 to GameEventMsg
+pub fn admin_query_plugin_response_to_game_event_msg(
+    _event: acprotocol::gameevents::AdminQueryPluginResponse2,
+) -> GameEventMsg {
+    GameEventMsg::AdminQueryPluginResponse {
+        plugin_name: String::new(),
+        plugin_data: vec![],
+    }
+}
+
+// ============================================================================
+// Phase 5: Portal Storm Game Event Conversions
+// ============================================================================
+
+/// Convert acprotocol MiscPortalStormBrewing to GameEventMsg
+pub fn misc_portal_storm_brewing_to_game_event_msg(
+    _event: acprotocol::gameevents::MiscPortalStormBrewing,
+) -> GameEventMsg {
+    GameEventMsg::MiscPortalStormBrewing {}
+}
+
+/// Convert acprotocol MiscPortalStormImminent to GameEventMsg
+pub fn misc_portal_storm_imminent_to_game_event_msg(
+    _event: acprotocol::gameevents::MiscPortalStormImminent,
+) -> GameEventMsg {
+    GameEventMsg::MiscPortalStormImminent {}
+}
+
+/// Convert acprotocol MiscPortalStorm to GameEventMsg
+pub fn misc_portal_storm_to_game_event_msg(
+    _event: acprotocol::gameevents::MiscPortalStorm,
+) -> GameEventMsg {
+    GameEventMsg::MiscPortalStorm {}
+}
+
+/// Convert acprotocol MiscPortalStormSubsided to GameEventMsg
+pub fn misc_portal_storm_subsided_to_game_event_msg(
+    _event: acprotocol::gameevents::MiscPortalStormSubsided,
+) -> GameEventMsg {
+    GameEventMsg::MiscPortalStormSubsided {}
+}
+
+// ============================================================================
+// Phase 5: Additional Communication Game Event Conversions
+// ============================================================================
+
+/// Convert acprotocol CommunicationPopUpString to GameEventMsg
+pub fn communication_popup_string_to_game_event_msg(
+    _event: acprotocol::gameevents::CommunicationPopUpString,
+) -> GameEventMsg {
+    GameEventMsg::CommunicationPopUpString {
+        message: String::new(),
+    }
+}
+
+/// Convert acprotocol CommunicationWeenieError to GameEventMsg
+pub fn communication_weenie_error_to_game_event_msg(
+    _event: acprotocol::gameevents::CommunicationWeenieError,
+) -> GameEventMsg {
+    GameEventMsg::CommunicationWeenieError {
+        error_code: 0,
+    }
+}
+
+/// Convert acprotocol CommunicationWeenieErrorWithString to GameEventMsg
+pub fn communication_weenie_error_with_string_to_game_event_msg(
+    _event: acprotocol::gameevents::CommunicationWeenieErrorWithString,
+) -> GameEventMsg {
+    GameEventMsg::CommunicationWeenieErrorWithString {
+        error_code: 0,
+        message: String::new(),
+    }
+}
+
+/// Convert acprotocol CommunicationSetSquelchDB to GameEventMsg
+pub fn communication_set_squelch_db_to_game_event_msg(
+    _event: acprotocol::gameevents::CommunicationSetSquelchDB,
+) -> GameEventMsg {
+    GameEventMsg::CommunicationSetSquelchDB {
+        squelch_data: vec![],
+    }
+}
+
+/// Convert acprotocol CommunicationChatRoomTracker to GameEventMsg
+pub fn communication_chat_room_tracker_to_game_event_msg(
+    _event: acprotocol::gameevents::CommunicationChatRoomTracker,
+) -> GameEventMsg {
+    GameEventMsg::CommunicationChatRoomTracker {
+        chat_room_id: 0,
+        chat_room_name: String::new(),
+    }
+}
+
+// ============================================================================
+// Phase 5: Salvage Game Event Conversions
+// ============================================================================
+
+/// Convert acprotocol InventorySalvageOperationsResultData to GameEventMsg
+pub fn inventory_salvage_operations_result_to_game_event_msg(
+    _event: acprotocol::gameevents::InventorySalvageOperationsResultData,
+) -> GameEventMsg {
+    GameEventMsg::InventorySalvageOperationsResultData {
+        success: false,
+        salvage_type: 0,
+        amount: 0,
+    }
+}
+
+// ============================================================================
+// Phase 5: Login Game Event Conversions
+// ============================================================================
+
+/// Convert acprotocol LoginPlayerDescription to GameEventMsg
+pub fn login_player_description_to_game_event_msg(
+    _event: acprotocol::gameevents::LoginPlayerDescription,
+) -> GameEventMsg {
+    GameEventMsg::LoginPlayerDescription {
+        player_id: 0,
+        description: vec![],
+    }
+}
+
+// ============================================================================
+// Phase 5: Character Game Event Conversions
+// ============================================================================
+
+/// Convert acprotocol CharacterReturnPing to GameEventMsg
+pub fn character_return_ping_to_game_event_msg(
+    _event: acprotocol::gameevents::CharacterReturnPing,
+) -> GameEventMsg {
+    GameEventMsg::CharacterReturnPing {
+        sequence: 0,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use gromnie_events::{GameEventMsg, S2CEvent};

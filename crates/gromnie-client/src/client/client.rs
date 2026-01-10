@@ -70,6 +70,41 @@ use crate::client::protocol_conversions::{
     allegiance_info_response_to_game_event_msg,
     // Phase 3: Vendor
     vendor_info_to_game_event_msg,
+    // Phase 4: Housing
+    house_profile_to_game_event_msg, house_data_to_game_event_msg,
+    house_status_to_game_event_msg, house_update_rent_time_to_game_event_msg,
+    house_update_rent_payment_to_game_event_msg, house_update_restrictions_to_game_event_msg,
+    house_update_har_to_game_event_msg, house_transaction_to_game_event_msg,
+    house_available_houses_to_game_event_msg,
+    // Phase 4: Writing
+    writing_book_open_to_game_event_msg, writing_book_add_page_response_to_game_event_msg,
+    writing_book_delete_page_response_to_game_event_msg, writing_book_page_data_response_to_game_event_msg,
+    // Phase 4: Character
+    character_start_barber_to_game_event_msg, character_query_age_response_to_game_event_msg,
+    character_confirmation_request_to_game_event_msg,
+    // Phase 4: Games
+    game_join_game_response_to_game_event_msg, game_start_game_to_game_event_msg,
+    game_move_response_to_game_event_msg, game_opponent_turn_to_game_event_msg,
+    game_opponent_stalemate_state_to_game_event_msg, game_game_over_to_game_event_msg,
+    // Phase 4: Channels
+    channel_broadcast_to_game_event_msg, channel_list_to_game_event_msg,
+    channel_index_to_game_event_msg,
+    // Phase 5: Admin
+    admin_query_plugin_to_game_event_msg, admin_query_plugin_list_to_game_event_msg,
+    admin_query_plugin_response_to_game_event_msg,
+    // Phase 5: Portal Storms
+    misc_portal_storm_brewing_to_game_event_msg, misc_portal_storm_imminent_to_game_event_msg,
+    misc_portal_storm_to_game_event_msg, misc_portal_storm_subsided_to_game_event_msg,
+    // Phase 5: Communication
+    communication_popup_string_to_game_event_msg, communication_weenie_error_to_game_event_msg,
+    communication_weenie_error_with_string_to_game_event_msg, communication_set_squelch_db_to_game_event_msg,
+    communication_chat_room_tracker_to_game_event_msg,
+    // Phase 5: Salvage
+    inventory_salvage_operations_result_to_game_event_msg,
+    // Phase 5: Login
+    login_player_description_to_game_event_msg,
+    // Phase 5: Character
+    character_return_ping_to_game_event_msg,
 };
 use crate::client::{ClientEvent, ClientSystemEvent, GameEvent};
 use crate::crypto::crypto_system::CryptoSystem;
@@ -1938,6 +1973,457 @@ impl Client {
                     object_id,
                     sequence,
                     vendor_info_to_game_event_msg,
+                )
+                .ok();
+            }
+            // Phase 4: Housing
+            GameEventType::HouseHouseProfile => {
+                dispatch_game_event::<acprotocol::gameevents::HouseHouseProfile, _, _>(
+                    self,
+                    &mut cursor,
+                    &event_tx,
+                    object_id,
+                    sequence,
+                    house_profile_to_game_event_msg,
+                )
+                .ok();
+            }
+            GameEventType::HouseHouseData => {
+                dispatch_game_event::<acprotocol::gameevents::HouseHouseData, _, _>(
+                    self,
+                    &mut cursor,
+                    &event_tx,
+                    object_id,
+                    sequence,
+                    house_data_to_game_event_msg,
+                )
+                .ok();
+            }
+            GameEventType::HouseHouseStatus => {
+                dispatch_game_event::<acprotocol::gameevents::HouseHouseStatus, _, _>(
+                    self,
+                    &mut cursor,
+                    &event_tx,
+                    object_id,
+                    sequence,
+                    house_status_to_game_event_msg,
+                )
+                .ok();
+            }
+            GameEventType::HouseUpdateRentTime => {
+                dispatch_game_event::<acprotocol::gameevents::HouseUpdateRentTime, _, _>(
+                    self,
+                    &mut cursor,
+                    &event_tx,
+                    object_id,
+                    sequence,
+                    house_update_rent_time_to_game_event_msg,
+                )
+                .ok();
+            }
+            GameEventType::HouseUpdateRentPayment => {
+                dispatch_game_event::<acprotocol::gameevents::HouseUpdateRentPayment, _, _>(
+                    self,
+                    &mut cursor,
+                    &event_tx,
+                    object_id,
+                    sequence,
+                    house_update_rent_payment_to_game_event_msg,
+                )
+                .ok();
+            }
+            GameEventType::HouseUpdateRestrictions => {
+                dispatch_game_event::<acprotocol::gameevents::HouseUpdateRestrictions, _, _>(
+                    self,
+                    &mut cursor,
+                    &event_tx,
+                    object_id,
+                    sequence,
+                    house_update_restrictions_to_game_event_msg,
+                )
+                .ok();
+            }
+            GameEventType::HouseUpdateHAR => {
+                dispatch_game_event::<acprotocol::gameevents::HouseUpdateHAR, _, _>(
+                    self,
+                    &mut cursor,
+                    &event_tx,
+                    object_id,
+                    sequence,
+                    house_update_har_to_game_event_msg,
+                )
+                .ok();
+            }
+            GameEventType::HouseHouseTransaction => {
+                dispatch_game_event::<acprotocol::gameevents::HouseHouseTransaction, _, _>(
+                    self,
+                    &mut cursor,
+                    &event_tx,
+                    object_id,
+                    sequence,
+                    house_transaction_to_game_event_msg,
+                )
+                .ok();
+            }
+            GameEventType::HouseAvailableHouses => {
+                dispatch_game_event::<acprotocol::gameevents::HouseAvailableHouses, _, _>(
+                    self,
+                    &mut cursor,
+                    &event_tx,
+                    object_id,
+                    sequence,
+                    house_available_houses_to_game_event_msg,
+                )
+                .ok();
+            }
+            // Phase 4: Writing
+            GameEventType::WritingBookOpen => {
+                dispatch_game_event::<acprotocol::gameevents::WritingBookOpen, _, _>(
+                    self,
+                    &mut cursor,
+                    &event_tx,
+                    object_id,
+                    sequence,
+                    writing_book_open_to_game_event_msg,
+                )
+                .ok();
+            }
+            GameEventType::WritingBookAddPageResponse => {
+                dispatch_game_event::<acprotocol::gameevents::WritingBookAddPageResponse, _, _>(
+                    self,
+                    &mut cursor,
+                    &event_tx,
+                    object_id,
+                    sequence,
+                    writing_book_add_page_response_to_game_event_msg,
+                )
+                .ok();
+            }
+            GameEventType::WritingBookDeletePageResponse => {
+                dispatch_game_event::<acprotocol::gameevents::WritingBookDeletePageResponse, _, _>(
+                    self,
+                    &mut cursor,
+                    &event_tx,
+                    object_id,
+                    sequence,
+                    writing_book_delete_page_response_to_game_event_msg,
+                )
+                .ok();
+            }
+            GameEventType::WritingBookPageDataResponse => {
+                dispatch_game_event::<acprotocol::gameevents::WritingBookPageDataResponse, _, _>(
+                    self,
+                    &mut cursor,
+                    &event_tx,
+                    object_id,
+                    sequence,
+                    writing_book_page_data_response_to_game_event_msg,
+                )
+                .ok();
+            }
+            // Phase 4: Character
+            GameEventType::CharacterStartBarber => {
+                dispatch_game_event::<acprotocol::gameevents::CharacterStartBarber, _, _>(
+                    self,
+                    &mut cursor,
+                    &event_tx,
+                    object_id,
+                    sequence,
+                    character_start_barber_to_game_event_msg,
+                )
+                .ok();
+            }
+            GameEventType::CharacterQueryAgeResponse => {
+                dispatch_game_event::<acprotocol::gameevents::CharacterQueryAgeResponse, _, _>(
+                    self,
+                    &mut cursor,
+                    &event_tx,
+                    object_id,
+                    sequence,
+                    character_query_age_response_to_game_event_msg,
+                )
+                .ok();
+            }
+            GameEventType::CharacterConfirmationRequest => {
+                dispatch_game_event::<acprotocol::gameevents::CharacterConfirmationRequest, _, _>(
+                    self,
+                    &mut cursor,
+                    &event_tx,
+                    object_id,
+                    sequence,
+                    character_confirmation_request_to_game_event_msg,
+                )
+                .ok();
+            }
+            // Phase 4: Games
+            GameEventType::GameJoinGameResponse => {
+                dispatch_game_event::<acprotocol::gameevents::GameJoinGameResponse, _, _>(
+                    self,
+                    &mut cursor,
+                    &event_tx,
+                    object_id,
+                    sequence,
+                    game_join_game_response_to_game_event_msg,
+                )
+                .ok();
+            }
+            GameEventType::GameStartGame => {
+                dispatch_game_event::<acprotocol::gameevents::GameStartGame, _, _>(
+                    self,
+                    &mut cursor,
+                    &event_tx,
+                    object_id,
+                    sequence,
+                    game_start_game_to_game_event_msg,
+                )
+                .ok();
+            }
+            GameEventType::GameMoveResponse => {
+                dispatch_game_event::<acprotocol::gameevents::GameMoveResponse, _, _>(
+                    self,
+                    &mut cursor,
+                    &event_tx,
+                    object_id,
+                    sequence,
+                    game_move_response_to_game_event_msg,
+                )
+                .ok();
+            }
+            GameEventType::GameOpponentTurn => {
+                dispatch_game_event::<acprotocol::gameevents::GameOpponentTurn, _, _>(
+                    self,
+                    &mut cursor,
+                    &event_tx,
+                    object_id,
+                    sequence,
+                    game_opponent_turn_to_game_event_msg,
+                )
+                .ok();
+            }
+            GameEventType::GameOpponentStalemateState => {
+                dispatch_game_event::<acprotocol::gameevents::GameOpponentStalemateState, _, _>(
+                    self,
+                    &mut cursor,
+                    &event_tx,
+                    object_id,
+                    sequence,
+                    game_opponent_stalemate_state_to_game_event_msg,
+                )
+                .ok();
+            }
+            GameEventType::GameGameOver => {
+                dispatch_game_event::<acprotocol::gameevents::GameGameOver, _, _>(
+                    self,
+                    &mut cursor,
+                    &event_tx,
+                    object_id,
+                    sequence,
+                    game_game_over_to_game_event_msg,
+                )
+                .ok();
+            }
+            // Phase 4: Channels
+            GameEventType::CommunicationChannelBroadcast => {
+                dispatch_game_event::<acprotocol::gameevents::CommunicationChannelBroadcast, _, _>(
+                    self,
+                    &mut cursor,
+                    &event_tx,
+                    object_id,
+                    sequence,
+                    channel_broadcast_to_game_event_msg,
+                )
+                .ok();
+            }
+            GameEventType::CommunicationChannelList => {
+                dispatch_game_event::<acprotocol::gameevents::CommunicationChannelList, _, _>(
+                    self,
+                    &mut cursor,
+                    &event_tx,
+                    object_id,
+                    sequence,
+                    channel_list_to_game_event_msg,
+                )
+                .ok();
+            }
+            GameEventType::CommunicationChannelIndex => {
+                dispatch_game_event::<acprotocol::gameevents::CommunicationChannelIndex, _, _>(
+                    self,
+                    &mut cursor,
+                    &event_tx,
+                    object_id,
+                    sequence,
+                    channel_index_to_game_event_msg,
+                )
+                .ok();
+            }
+            // Phase 5: Admin
+            GameEventType::AdminQueryPlugin => {
+                dispatch_game_event::<acprotocol::gameevents::AdminQueryPlugin, _, _>(
+                    self,
+                    &mut cursor,
+                    &event_tx,
+                    object_id,
+                    sequence,
+                    admin_query_plugin_to_game_event_msg,
+                )
+                .ok();
+            }
+            GameEventType::AdminQueryPluginList => {
+                dispatch_game_event::<acprotocol::gameevents::AdminQueryPluginList, _, _>(
+                    self,
+                    &mut cursor,
+                    &event_tx,
+                    object_id,
+                    sequence,
+                    admin_query_plugin_list_to_game_event_msg,
+                )
+                .ok();
+            }
+            GameEventType::AdminQueryPluginResponse2 => {
+                dispatch_game_event::<acprotocol::gameevents::AdminQueryPluginResponse2, _, _>(
+                    self,
+                    &mut cursor,
+                    &event_tx,
+                    object_id,
+                    sequence,
+                    admin_query_plugin_response_to_game_event_msg,
+                )
+                .ok();
+            }
+            // Phase 5: Portal Storms
+            GameEventType::MiscPortalStormBrewing => {
+                dispatch_game_event::<acprotocol::gameevents::MiscPortalStormBrewing, _, _>(
+                    self,
+                    &mut cursor,
+                    &event_tx,
+                    object_id,
+                    sequence,
+                    misc_portal_storm_brewing_to_game_event_msg,
+                )
+                .ok();
+            }
+            GameEventType::MiscPortalStormImminent => {
+                dispatch_game_event::<acprotocol::gameevents::MiscPortalStormImminent, _, _>(
+                    self,
+                    &mut cursor,
+                    &event_tx,
+                    object_id,
+                    sequence,
+                    misc_portal_storm_imminent_to_game_event_msg,
+                )
+                .ok();
+            }
+            GameEventType::MiscPortalStorm => {
+                dispatch_game_event::<acprotocol::gameevents::MiscPortalStorm, _, _>(
+                    self,
+                    &mut cursor,
+                    &event_tx,
+                    object_id,
+                    sequence,
+                    misc_portal_storm_to_game_event_msg,
+                )
+                .ok();
+            }
+            GameEventType::MiscPortalStormSubsided => {
+                dispatch_game_event::<acprotocol::gameevents::MiscPortalStormSubsided, _, _>(
+                    self,
+                    &mut cursor,
+                    &event_tx,
+                    object_id,
+                    sequence,
+                    misc_portal_storm_subsided_to_game_event_msg,
+                )
+                .ok();
+            }
+            // Phase 5: Additional Communication
+            GameEventType::CommunicationPopUpString => {
+                dispatch_game_event::<acprotocol::gameevents::CommunicationPopUpString, _, _>(
+                    self,
+                    &mut cursor,
+                    &event_tx,
+                    object_id,
+                    sequence,
+                    communication_popup_string_to_game_event_msg,
+                )
+                .ok();
+            }
+            GameEventType::CommunicationWeenieError => {
+                dispatch_game_event::<acprotocol::gameevents::CommunicationWeenieError, _, _>(
+                    self,
+                    &mut cursor,
+                    &event_tx,
+                    object_id,
+                    sequence,
+                    communication_weenie_error_to_game_event_msg,
+                )
+                .ok();
+            }
+            GameEventType::CommunicationWeenieErrorWithString => {
+                dispatch_game_event::<acprotocol::gameevents::CommunicationWeenieErrorWithString, _, _>(
+                    self,
+                    &mut cursor,
+                    &event_tx,
+                    object_id,
+                    sequence,
+                    communication_weenie_error_with_string_to_game_event_msg,
+                )
+                .ok();
+            }
+            GameEventType::CommunicationSetSquelchDB => {
+                dispatch_game_event::<acprotocol::gameevents::CommunicationSetSquelchDB, _, _>(
+                    self,
+                    &mut cursor,
+                    &event_tx,
+                    object_id,
+                    sequence,
+                    communication_set_squelch_db_to_game_event_msg,
+                )
+                .ok();
+            }
+            GameEventType::CommunicationChatRoomTracker => {
+                dispatch_game_event::<acprotocol::gameevents::CommunicationChatRoomTracker, _, _>(
+                    self,
+                    &mut cursor,
+                    &event_tx,
+                    object_id,
+                    sequence,
+                    communication_chat_room_tracker_to_game_event_msg,
+                )
+                .ok();
+            }
+            // Phase 5: Salvage
+            GameEventType::InventorySalvageOperationsResultData => {
+                dispatch_game_event::<acprotocol::gameevents::InventorySalvageOperationsResultData, _, _>(
+                    self,
+                    &mut cursor,
+                    &event_tx,
+                    object_id,
+                    sequence,
+                    inventory_salvage_operations_result_to_game_event_msg,
+                )
+                .ok();
+            }
+            // Phase 5: Login
+            GameEventType::LoginPlayerDescription => {
+                dispatch_game_event::<acprotocol::gameevents::LoginPlayerDescription, _, _>(
+                    self,
+                    &mut cursor,
+                    &event_tx,
+                    object_id,
+                    sequence,
+                    login_player_description_to_game_event_msg,
+                )
+                .ok();
+            }
+            // Phase 5: Character
+            GameEventType::CharacterReturnPing => {
+                dispatch_game_event::<acprotocol::gameevents::CharacterReturnPing, _, _>(
+                    self,
+                    &mut cursor,
+                    &event_tx,
+                    object_id,
+                    sequence,
+                    character_return_ping_to_game_event_msg,
                 )
                 .ok();
             }
