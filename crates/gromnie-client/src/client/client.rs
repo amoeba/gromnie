@@ -50,6 +50,26 @@ use crate::client::protocol_conversions::{
     magic_update_enchantment_to_game_event_msg, magic_remove_enchantment_to_game_event_msg,
     item_set_appraise_info_to_game_event_msg, item_appraise_done_to_game_event_msg,
     item_wear_item_to_game_event_msg, item_query_item_mana_response_to_game_event_msg,
+    // Phase 3: Trade
+    trade_open_trade_to_game_event_msg, trade_close_trade_to_game_event_msg,
+    trade_add_to_trade_to_game_event_msg, trade_remove_from_trade_to_game_event_msg,
+    trade_accept_trade_to_game_event_msg, trade_decline_trade_to_game_event_msg,
+    trade_reset_trade_to_game_event_msg, trade_trade_failure_to_game_event_msg,
+    trade_clear_trade_acceptance_to_game_event_msg,
+    // Phase 3: Fellowship
+    fellowship_update_fellow_to_game_event_msg, fellowship_disband_to_game_event_msg,
+    fellowship_quit_to_game_event_msg, fellowship_dismiss_to_game_event_msg,
+    fellowship_update_done_to_game_event_msg, fellowship_stats_done_to_game_event_msg,
+    // Phase 3: Social
+    social_friends_update_to_game_event_msg, social_character_title_table_to_game_event_msg,
+    social_add_or_set_character_title_to_game_event_msg, social_send_client_contract_tracker_table_to_game_event_msg,
+    social_send_client_contract_tracker_to_game_event_msg,
+    // Phase 3: Allegiance
+    allegiance_update_to_game_event_msg, allegiance_update_done_to_game_event_msg,
+    allegiance_update_aborted_to_game_event_msg, allegiance_login_notification_to_game_event_msg,
+    allegiance_info_response_to_game_event_msg,
+    // Phase 3: Vendor
+    vendor_info_to_game_event_msg,
 };
 use crate::client::{ClientEvent, ClientSystemEvent, GameEvent};
 use crate::crypto::crypto_system::CryptoSystem;
@@ -1627,6 +1647,297 @@ impl Client {
                     object_id,
                     sequence,
                     item_query_item_mana_response_to_game_event_msg,
+                )
+                .ok();
+            }
+            // ===== Phase 3: Trade Events =====
+            GameEventType::TradeOpenTrade => {
+                dispatch_game_event::<acprotocol::gameevents::TradeOpenTrade, _, _>(
+                    self,
+                    &mut cursor,
+                    &event_tx,
+                    object_id,
+                    sequence,
+                    trade_open_trade_to_game_event_msg,
+                )
+                .ok();
+            }
+            GameEventType::TradeCloseTrade => {
+                dispatch_game_event::<acprotocol::gameevents::TradeCloseTrade, _, _>(
+                    self,
+                    &mut cursor,
+                    &event_tx,
+                    object_id,
+                    sequence,
+                    trade_close_trade_to_game_event_msg,
+                )
+                .ok();
+            }
+            GameEventType::TradeAddToTrade => {
+                dispatch_game_event::<acprotocol::gameevents::TradeAddToTrade, _, _>(
+                    self,
+                    &mut cursor,
+                    &event_tx,
+                    object_id,
+                    sequence,
+                    trade_add_to_trade_to_game_event_msg,
+                )
+                .ok();
+            }
+            GameEventType::TradeRemoveFromTrade => {
+                dispatch_game_event::<acprotocol::gameevents::TradeRemoveFromTrade, _, _>(
+                    self,
+                    &mut cursor,
+                    &event_tx,
+                    object_id,
+                    sequence,
+                    trade_remove_from_trade_to_game_event_msg,
+                )
+                .ok();
+            }
+            GameEventType::TradeAcceptTrade => {
+                dispatch_game_event::<acprotocol::gameevents::TradeAcceptTrade, _, _>(
+                    self,
+                    &mut cursor,
+                    &event_tx,
+                    object_id,
+                    sequence,
+                    trade_accept_trade_to_game_event_msg,
+                )
+                .ok();
+            }
+            GameEventType::TradeDeclineTrade => {
+                dispatch_game_event::<acprotocol::gameevents::TradeDeclineTrade, _, _>(
+                    self,
+                    &mut cursor,
+                    &event_tx,
+                    object_id,
+                    sequence,
+                    trade_decline_trade_to_game_event_msg,
+                )
+                .ok();
+            }
+            GameEventType::TradeResetTrade => {
+                dispatch_game_event::<acprotocol::gameevents::TradeResetTrade, _, _>(
+                    self,
+                    &mut cursor,
+                    &event_tx,
+                    object_id,
+                    sequence,
+                    trade_reset_trade_to_game_event_msg,
+                )
+                .ok();
+            }
+            GameEventType::TradeTradeFailure => {
+                dispatch_game_event::<acprotocol::gameevents::TradeTradeFailure, _, _>(
+                    self,
+                    &mut cursor,
+                    &event_tx,
+                    object_id,
+                    sequence,
+                    trade_trade_failure_to_game_event_msg,
+                )
+                .ok();
+            }
+            GameEventType::TradeClearTradeAcceptance => {
+                dispatch_game_event::<acprotocol::gameevents::TradeClearTradeAcceptance, _, _>(
+                    self,
+                    &mut cursor,
+                    &event_tx,
+                    object_id,
+                    sequence,
+                    trade_clear_trade_acceptance_to_game_event_msg,
+                )
+                .ok();
+            }
+            // ===== Phase 3: Fellowship Events =====
+            GameEventType::FellowshipUpdateFellow => {
+                dispatch_game_event::<acprotocol::gameevents::FellowshipUpdateFellow, _, _>(
+                    self,
+                    &mut cursor,
+                    &event_tx,
+                    object_id,
+                    sequence,
+                    fellowship_update_fellow_to_game_event_msg,
+                )
+                .ok();
+            }
+            GameEventType::FellowshipDisband => {
+                dispatch_game_event::<acprotocol::gameevents::FellowshipDisband, _, _>(
+                    self,
+                    &mut cursor,
+                    &event_tx,
+                    object_id,
+                    sequence,
+                    fellowship_disband_to_game_event_msg,
+                )
+                .ok();
+            }
+            GameEventType::FellowshipQuit => {
+                dispatch_game_event::<acprotocol::gameevents::FellowshipQuit, _, _>(
+                    self,
+                    &mut cursor,
+                    &event_tx,
+                    object_id,
+                    sequence,
+                    fellowship_quit_to_game_event_msg,
+                )
+                .ok();
+            }
+            GameEventType::FellowshipDismiss => {
+                dispatch_game_event::<acprotocol::gameevents::FellowshipDismiss, _, _>(
+                    self,
+                    &mut cursor,
+                    &event_tx,
+                    object_id,
+                    sequence,
+                    fellowship_dismiss_to_game_event_msg,
+                )
+                .ok();
+            }
+            GameEventType::FellowshipFellowUpdateDone => {
+                dispatch_game_event::<acprotocol::gameevents::FellowshipFellowUpdateDone, _, _>(
+                    self,
+                    &mut cursor,
+                    &event_tx,
+                    object_id,
+                    sequence,
+                    fellowship_update_done_to_game_event_msg,
+                )
+                .ok();
+            }
+            GameEventType::FellowshipFellowStatsDone => {
+                dispatch_game_event::<acprotocol::gameevents::FellowshipFellowStatsDone, _, _>(
+                    self,
+                    &mut cursor,
+                    &event_tx,
+                    object_id,
+                    sequence,
+                    fellowship_stats_done_to_game_event_msg,
+                )
+                .ok();
+            }
+            // ===== Phase 3: Social Events =====
+            GameEventType::SocialFriendsUpdate => {
+                dispatch_game_event::<acprotocol::gameevents::SocialFriendsUpdate, _, _>(
+                    self,
+                    &mut cursor,
+                    &event_tx,
+                    object_id,
+                    sequence,
+                    social_friends_update_to_game_event_msg,
+                )
+                .ok();
+            }
+            GameEventType::SocialCharacterTitleTable => {
+                dispatch_game_event::<acprotocol::gameevents::SocialCharacterTitleTable, _, _>(
+                    self,
+                    &mut cursor,
+                    &event_tx,
+                    object_id,
+                    sequence,
+                    social_character_title_table_to_game_event_msg,
+                )
+                .ok();
+            }
+            GameEventType::SocialAddOrSetCharacterTitle => {
+                dispatch_game_event::<acprotocol::gameevents::SocialAddOrSetCharacterTitle, _, _>(
+                    self,
+                    &mut cursor,
+                    &event_tx,
+                    object_id,
+                    sequence,
+                    social_add_or_set_character_title_to_game_event_msg,
+                )
+                .ok();
+            }
+            GameEventType::SocialSendClientContractTrackerTable => {
+                dispatch_game_event::<acprotocol::gameevents::SocialSendClientContractTrackerTable, _, _>(
+                    self,
+                    &mut cursor,
+                    &event_tx,
+                    object_id,
+                    sequence,
+                    social_send_client_contract_tracker_table_to_game_event_msg,
+                )
+                .ok();
+            }
+            GameEventType::SocialSendClientContractTracker => {
+                dispatch_game_event::<acprotocol::gameevents::SocialSendClientContractTracker, _, _>(
+                    self,
+                    &mut cursor,
+                    &event_tx,
+                    object_id,
+                    sequence,
+                    social_send_client_contract_tracker_to_game_event_msg,
+                )
+                .ok();
+            }
+            // ===== Phase 3: Allegiance Events =====
+            GameEventType::AllegianceAllegianceUpdate => {
+                dispatch_game_event::<acprotocol::gameevents::AllegianceAllegianceUpdate, _, _>(
+                    self,
+                    &mut cursor,
+                    &event_tx,
+                    object_id,
+                    sequence,
+                    allegiance_update_to_game_event_msg,
+                )
+                .ok();
+            }
+            GameEventType::AllegianceAllegianceUpdateDone => {
+                dispatch_game_event::<acprotocol::gameevents::AllegianceAllegianceUpdateDone, _, _>(
+                    self,
+                    &mut cursor,
+                    &event_tx,
+                    object_id,
+                    sequence,
+                    allegiance_update_done_to_game_event_msg,
+                )
+                .ok();
+            }
+            GameEventType::AllegianceAllegianceUpdateAborted => {
+                dispatch_game_event::<acprotocol::gameevents::AllegianceAllegianceUpdateAborted, _, _>(
+                    self,
+                    &mut cursor,
+                    &event_tx,
+                    object_id,
+                    sequence,
+                    allegiance_update_aborted_to_game_event_msg,
+                )
+                .ok();
+            }
+            GameEventType::AllegianceAllegianceLoginNotificationEvent => {
+                dispatch_game_event::<acprotocol::gameevents::AllegianceAllegianceLoginNotificationEvent, _, _>(
+                    self,
+                    &mut cursor,
+                    &event_tx,
+                    object_id,
+                    sequence,
+                    allegiance_login_notification_to_game_event_msg,
+                )
+                .ok();
+            }
+            GameEventType::AllegianceAllegianceInfoResponseEvent => {
+                dispatch_game_event::<acprotocol::gameevents::AllegianceAllegianceInfoResponseEvent, _, _>(
+                    self,
+                    &mut cursor,
+                    &event_tx,
+                    object_id,
+                    sequence,
+                    allegiance_info_response_to_game_event_msg,
+                )
+                .ok();
+            }
+            // ===== Phase 3: Vendor Events =====
+            GameEventType::VendorVendorInfo => {
+                dispatch_game_event::<acprotocol::gameevents::VendorVendorInfo, _, _>(
+                    self,
+                    &mut cursor,
+                    &event_tx,
+                    object_id,
+                    sequence,
+                    vendor_info_to_game_event_msg,
                 )
                 .ok();
             }

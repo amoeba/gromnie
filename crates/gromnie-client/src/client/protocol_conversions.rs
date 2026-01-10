@@ -637,6 +637,271 @@ pub fn item_query_item_mana_response_to_game_event_msg(
     }
 }
 
+// ============================================================================
+// Phase 3: Trade Game Event Conversions
+// ============================================================================
+
+/// Convert acprotocol TradeOpenTrade to GameEventMsg
+pub fn trade_open_trade_to_game_event_msg(
+    _event: acprotocol::gameevents::TradeOpenTrade,
+) -> GameEventMsg {
+    // TradeOpenTrade only contains object_id, partner name/id not available
+    GameEventMsg::TradeOpenTrade {
+        partner_id: 0,
+        partner_name: "Unknown".to_string(),
+    }
+}
+
+/// Convert acprotocol TradeCloseTrade to GameEventMsg
+pub fn trade_close_trade_to_game_event_msg(
+    event: acprotocol::gameevents::TradeCloseTrade,
+) -> GameEventMsg {
+    GameEventMsg::TradeCloseTrade {
+        reason: event.reason.clone() as u32,
+    }
+}
+
+/// Convert acprotocol TradeAddToTrade to GameEventMsg
+pub fn trade_add_to_trade_to_game_event_msg(
+    event: acprotocol::gameevents::TradeAddToTrade,
+) -> GameEventMsg {
+    GameEventMsg::TradeAddToTrade {
+        item_id: event.object_id.0,
+        trader_id: 0,  // Not available in event
+    }
+}
+
+/// Convert acprotocol TradeRemoveFromTrade to GameEventMsg
+pub fn trade_remove_from_trade_to_game_event_msg(
+    event: acprotocol::gameevents::TradeRemoveFromTrade,
+) -> GameEventMsg {
+    GameEventMsg::TradeRemoveFromTrade {
+        item_id: event.object_id.0,
+        trader_id: 0,  // Not available in event
+    }
+}
+
+/// Convert acprotocol TradeAcceptTrade to GameEventMsg
+pub fn trade_accept_trade_to_game_event_msg(
+    event: acprotocol::gameevents::TradeAcceptTrade,
+) -> GameEventMsg {
+    GameEventMsg::TradeAcceptTrade {
+        trader_id: event.object_id.0,
+    }
+}
+
+/// Convert acprotocol TradeDeclineTrade to GameEventMsg
+pub fn trade_decline_trade_to_game_event_msg(
+    _event: acprotocol::gameevents::TradeDeclineTrade,
+) -> GameEventMsg {
+    GameEventMsg::TradeDeclineTrade {}
+}
+
+/// Convert acprotocol TradeResetTrade to GameEventMsg
+pub fn trade_reset_trade_to_game_event_msg(
+    _event: acprotocol::gameevents::TradeResetTrade,
+) -> GameEventMsg {
+    GameEventMsg::TradeResetTrade {}
+}
+
+/// Convert acprotocol TradeTradeFailure to GameEventMsg
+pub fn trade_trade_failure_to_game_event_msg(
+    event: acprotocol::gameevents::TradeTradeFailure,
+) -> GameEventMsg {
+    GameEventMsg::TradeTradeFailure {
+        reason: event.reason,
+    }
+}
+
+/// Convert acprotocol TradeClearTradeAcceptance to GameEventMsg
+pub fn trade_clear_trade_acceptance_to_game_event_msg(
+    _event: acprotocol::gameevents::TradeClearTradeAcceptance,
+) -> GameEventMsg {
+    GameEventMsg::TradeClearTradeAcceptance {}
+}
+
+// ============================================================================
+// Phase 3: Fellowship Game Event Conversions
+// ============================================================================
+
+/// Convert acprotocol FellowshipUpdateFellow to GameEventMsg
+pub fn fellowship_update_fellow_to_game_event_msg(
+    _event: acprotocol::gameevents::FellowshipUpdateFellow,
+) -> GameEventMsg {
+    // FellowshipUpdateFellow contains Fellow struct - simplified stub
+    GameEventMsg::FellowshipUpdateFellow {
+        fellow_id: 0,
+        fellow_name: String::new(),
+        health_percent: 0.0,
+        stamina_percent: 0.0,
+        mana_percent: 0.0,
+        level: 0,
+    }
+}
+
+/// Convert acprotocol FellowshipDisband to GameEventMsg
+pub fn fellowship_disband_to_game_event_msg(
+    _event: acprotocol::gameevents::FellowshipDisband,
+) -> GameEventMsg {
+    GameEventMsg::FellowshipDisband {}
+}
+
+/// Convert acprotocol FellowshipQuit to GameEventMsg
+pub fn fellowship_quit_to_game_event_msg(
+    _event: acprotocol::gameevents::FellowshipQuit,
+) -> GameEventMsg {
+    GameEventMsg::FellowshipQuit {
+        fellow_id: 0,
+    }
+}
+
+/// Convert acprotocol FellowshipDismiss to GameEventMsg
+pub fn fellowship_dismiss_to_game_event_msg(
+    _event: acprotocol::gameevents::FellowshipDismiss,
+) -> GameEventMsg {
+    GameEventMsg::FellowshipDismiss {
+        fellow_id: 0,
+    }
+}
+
+/// Convert acprotocol FellowshipFellowUpdateDone to GameEventMsg
+pub fn fellowship_update_done_to_game_event_msg(
+    _event: acprotocol::gameevents::FellowshipFellowUpdateDone,
+) -> GameEventMsg {
+    GameEventMsg::FellowshipUpdateDone {}
+}
+
+/// Convert acprotocol FellowshipFellowStatsDone to GameEventMsg
+pub fn fellowship_stats_done_to_game_event_msg(
+    _event: acprotocol::gameevents::FellowshipFellowStatsDone,
+) -> GameEventMsg {
+    GameEventMsg::FellowshipStatsDone {}
+}
+
+// ============================================================================
+// Phase 3: Social Game Event Conversions
+// ============================================================================
+
+/// Convert acprotocol SocialFriendsUpdate to GameEventMsg
+pub fn social_friends_update_to_game_event_msg(
+    _event: acprotocol::gameevents::SocialFriendsUpdate,
+) -> GameEventMsg {
+    // Simplified stub - complex structure
+    GameEventMsg::SocialFriendsUpdate {
+        friends: vec![],
+    }
+}
+
+/// Convert acprotocol SocialCharacterTitleTable to GameEventMsg
+pub fn social_character_title_table_to_game_event_msg(
+    _event: acprotocol::gameevents::SocialCharacterTitleTable,
+) -> GameEventMsg {
+    // Simplified stub - complex structure
+    GameEventMsg::SocialCharacterTitleTable {
+        titles: vec![],
+    }
+}
+
+/// Convert acprotocol SocialAddOrSetCharacterTitle to GameEventMsg
+pub fn social_add_or_set_character_title_to_game_event_msg(
+    _event: acprotocol::gameevents::SocialAddOrSetCharacterTitle,
+) -> GameEventMsg {
+    // Simplified stub - complex structure
+    GameEventMsg::SocialAddOrSetCharacterTitle {
+        title_id: 0,
+        title: String::new(),
+        active: false,
+    }
+}
+
+/// Convert acprotocol SocialSendClientContractTrackerTable to GameEventMsg
+pub fn social_send_client_contract_tracker_table_to_game_event_msg(
+    _event: acprotocol::gameevents::SocialSendClientContractTrackerTable,
+) -> GameEventMsg {
+    // Simplified stub - complex structure
+    GameEventMsg::SocialSendClientContractTrackerTable {
+        contracts: vec![],
+    }
+}
+
+/// Convert acprotocol SocialSendClientContractTracker to GameEventMsg
+pub fn social_send_client_contract_tracker_to_game_event_msg(
+    _event: acprotocol::gameevents::SocialSendClientContractTracker,
+) -> GameEventMsg {
+    // Simplified stub - complex structure
+    GameEventMsg::SocialSendClientContractTracker {
+        contract_id: 0,
+        stage: 0,
+        timestamp: 0,
+    }
+}
+
+// ============================================================================
+// Phase 3: Allegiance Game Event Conversions
+// ============================================================================
+
+/// Convert acprotocol AllegianceAllegianceUpdate to GameEventMsg
+pub fn allegiance_update_to_game_event_msg(
+    _event: acprotocol::gameevents::AllegianceAllegianceUpdate,
+) -> GameEventMsg {
+    // Serialize allegiance data - simplified for now
+    GameEventMsg::AllegianceUpdate {
+        allegiance_data: vec![],  // Complex structure, empty for now
+    }
+}
+
+/// Convert acprotocol AllegianceAllegianceUpdateDone to GameEventMsg
+pub fn allegiance_update_done_to_game_event_msg(
+    _event: acprotocol::gameevents::AllegianceAllegianceUpdateDone,
+) -> GameEventMsg {
+    GameEventMsg::AllegianceUpdateDone {}
+}
+
+/// Convert acprotocol AllegianceAllegianceUpdateAborted to GameEventMsg
+pub fn allegiance_update_aborted_to_game_event_msg(
+    _event: acprotocol::gameevents::AllegianceAllegianceUpdateAborted,
+) -> GameEventMsg {
+    GameEventMsg::AllegianceUpdateAborted {}
+}
+
+/// Convert acprotocol AllegianceAllegianceLoginNotificationEvent to GameEventMsg
+pub fn allegiance_login_notification_to_game_event_msg(
+    _event: acprotocol::gameevents::AllegianceAllegianceLoginNotificationEvent,
+) -> GameEventMsg {
+    // Simplified stub - complex structure
+    GameEventMsg::AllegianceLoginNotification {
+        member_name: String::new(),
+        member_id: 0,
+    }
+}
+
+/// Convert acprotocol AllegianceInfoResponse to GameEventMsg
+pub fn allegiance_info_response_to_game_event_msg(
+    _event: acprotocol::gameevents::AllegianceAllegianceInfoResponseEvent,
+) -> GameEventMsg {
+    // Simplified stub - complex structure
+    GameEventMsg::AllegianceInfoResponse {
+        allegiance_name: String::new(),
+        allegiance_data: vec![],
+    }
+}
+
+// ============================================================================
+// Phase 3: Vendor Game Event Conversions
+// ============================================================================
+
+/// Convert acprotocol VendorVendorInfo to GameEventMsg
+pub fn vendor_info_to_game_event_msg(
+    _event: acprotocol::gameevents::VendorVendorInfo,
+) -> GameEventMsg {
+    // Simplified stub - complex ItemProfile structure
+    GameEventMsg::VendorInfo {
+        vendor_id: 0,
+        vendor_type: 0,
+        items: vec![],
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use gromnie_events::{GameEventMsg, S2CEvent};

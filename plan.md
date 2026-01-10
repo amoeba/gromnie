@@ -442,3 +442,25 @@ Significant progress has been made on protocol coverage:
 **Current bottleneck:** acprotocol message type definitions for Phase 2-5. Once these are available in acprotocol, implementations can proceed rapidly (2-4 hours per phase following Phase 1 pattern).
 
 **Alternative approach:** Consider code generation to auto-generate conversions, handlers, and dispatch registration once acprotocol types are available (estimated 8-12 hours initial setup, then instant generation for all phases).
+
+
+Implemented 6 Phase 2 game event handlers:
+  - MagicUpdateEnchantment: enchantment updates
+  - MagicRemoveEnchantment: enchantment removal
+  - ItemSetAppraiseInfo: appraisal data
+  - ItemAppraiseDone: appraisal completion
+  - ItemWearItem: equipment/wear
+  - ItemQueryItemManaResponse: mana queries
+
+  Added:
+  - Conversion functions in protocol_conversions.rs
+  - GameEventHandler trait implementations in game_event_handler.rs
+  - Dispatch handlers in client.rs handle_game_event()
+
+  All 22 tests pass. Phase 2 game events now flow through to scripts via
+  ProtocolEvent::GameEvent channel. S2C event types still defined but not
+  used (those are GameEventMessages, not S2CMessages in acprotocol)."
+[feat/protocol-coverage d7e8cb1] Phase 2 implementation: Magic & Items game events handlers complete
+ 3 files changed, 173 insertions(+), 10 deletions(-)
+Perfect! Phase 2 is now implemented. The Phase 2 messages absolutely exist in acprotocol - they just come through as GameEventMessages (wrapped in OrderedGameEvent 0xF7B0), not top-level S2CMessages. We've successfully implemented handlers for all 6 core Phase 2 message types.
+
