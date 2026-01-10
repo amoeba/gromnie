@@ -152,8 +152,10 @@ impl Handler {
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    // Initialize tracing subscriber
-    let _log_guard = logging::init_logging("discord", true)?;
+    // Initialize tracing subscriber (opt-in file logging via GROMNIE_LOG_FILE env var)
+    // The guard must be kept alive for the entire program duration to ensure logs are flushed
+    #[allow(unused_variables)]
+    let log_guard = logging::init_logging("discord")?;
 
     let _cli = Cli::parse();
 
