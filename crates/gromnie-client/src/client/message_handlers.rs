@@ -427,15 +427,14 @@ impl MessageHandler<acprotocol::messages::s2c::ItemDeleteObject> for Client {
 
 /// Handle QualitiesUpdateInt messages
 impl MessageHandler<acprotocol::messages::s2c::QualitiesUpdateInt> for Client {
-    fn handle(
-        &mut self,
-        msg: acprotocol::messages::s2c::QualitiesUpdateInt,
-    ) -> Option<GameEvent> {
+    fn handle(&mut self, msg: acprotocol::messages::s2c::QualitiesUpdateInt) -> Option<GameEvent> {
         info!(target: "net", "QualitiesUpdateInt: Object {} property {:?} = {}",
               msg.object_id.0, msg.key, msg.value);
 
         let protocol_event = ProtocolEvent::S2C(msg.to_protocol_event());
-        let _ = self.raw_event_tx.try_send(ClientEvent::Protocol(protocol_event));
+        let _ = self
+            .raw_event_tx
+            .try_send(ClientEvent::Protocol(protocol_event));
         None
     }
 }
@@ -450,7 +449,9 @@ impl MessageHandler<acprotocol::messages::s2c::QualitiesUpdateInt64> for Client 
               msg.object_id.0, msg.key, msg.value);
 
         let protocol_event = ProtocolEvent::S2C(msg.to_protocol_event());
-        let _ = self.raw_event_tx.try_send(ClientEvent::Protocol(protocol_event));
+        let _ = self
+            .raw_event_tx
+            .try_send(ClientEvent::Protocol(protocol_event));
         None
     }
 }
@@ -465,22 +466,23 @@ impl MessageHandler<acprotocol::messages::s2c::QualitiesPrivateUpdateInt64> for 
               msg.key, msg.value);
 
         let protocol_event = ProtocolEvent::S2C(msg.to_protocol_event());
-        let _ = self.raw_event_tx.try_send(ClientEvent::Protocol(protocol_event));
+        let _ = self
+            .raw_event_tx
+            .try_send(ClientEvent::Protocol(protocol_event));
         None
     }
 }
 
 /// Handle QualitiesUpdateBool messages
 impl MessageHandler<acprotocol::messages::s2c::QualitiesUpdateBool> for Client {
-    fn handle(
-        &mut self,
-        msg: acprotocol::messages::s2c::QualitiesUpdateBool,
-    ) -> Option<GameEvent> {
+    fn handle(&mut self, msg: acprotocol::messages::s2c::QualitiesUpdateBool) -> Option<GameEvent> {
         info!(target: "net", "QualitiesUpdateBool: Object {} property {:?} = {}",
               msg.object_id.0, msg.key, msg.value);
 
         let protocol_event = ProtocolEvent::S2C(msg.to_protocol_event());
-        let _ = self.raw_event_tx.try_send(ClientEvent::Protocol(protocol_event));
+        let _ = self
+            .raw_event_tx
+            .try_send(ClientEvent::Protocol(protocol_event));
         None
     }
 }
@@ -495,7 +497,9 @@ impl MessageHandler<acprotocol::messages::s2c::QualitiesPrivateUpdateBool> for C
               msg.key, msg.value);
 
         let protocol_event = ProtocolEvent::S2C(msg.to_protocol_event());
-        let _ = self.raw_event_tx.try_send(ClientEvent::Protocol(protocol_event));
+        let _ = self
+            .raw_event_tx
+            .try_send(ClientEvent::Protocol(protocol_event));
         None
     }
 }
@@ -510,7 +514,9 @@ impl MessageHandler<acprotocol::messages::s2c::QualitiesUpdateFloat> for Client 
               msg.object_id.0, msg.key, msg.value);
 
         let protocol_event = ProtocolEvent::S2C(msg.to_protocol_event());
-        let _ = self.raw_event_tx.try_send(ClientEvent::Protocol(protocol_event));
+        let _ = self
+            .raw_event_tx
+            .try_send(ClientEvent::Protocol(protocol_event));
         None
     }
 }
@@ -525,7 +531,9 @@ impl MessageHandler<acprotocol::messages::s2c::QualitiesPrivateUpdateFloat> for 
               msg.key, msg.value);
 
         let protocol_event = ProtocolEvent::S2C(msg.to_protocol_event());
-        let _ = self.raw_event_tx.try_send(ClientEvent::Protocol(protocol_event));
+        let _ = self
+            .raw_event_tx
+            .try_send(ClientEvent::Protocol(protocol_event));
         None
     }
 }
@@ -540,7 +548,9 @@ impl MessageHandler<acprotocol::messages::s2c::QualitiesUpdateString> for Client
               msg.object_id.0, msg.key, msg.value);
 
         let protocol_event = ProtocolEvent::S2C(msg.to_protocol_event());
-        let _ = self.raw_event_tx.try_send(ClientEvent::Protocol(protocol_event));
+        let _ = self
+            .raw_event_tx
+            .try_send(ClientEvent::Protocol(protocol_event));
         None
     }
 }
@@ -555,7 +565,9 @@ impl MessageHandler<acprotocol::messages::s2c::QualitiesPrivateUpdateString> for
               msg.key, msg.value);
 
         let protocol_event = ProtocolEvent::S2C(msg.to_protocol_event());
-        let _ = self.raw_event_tx.try_send(ClientEvent::Protocol(protocol_event));
+        let _ = self
+            .raw_event_tx
+            .try_send(ClientEvent::Protocol(protocol_event));
         None
     }
 }
@@ -570,7 +582,9 @@ impl MessageHandler<acprotocol::messages::s2c::QualitiesUpdateDataId> for Client
               msg.object_id.0, msg.key, msg.value);
 
         let protocol_event = ProtocolEvent::S2C(msg.to_protocol_event());
-        let _ = self.raw_event_tx.try_send(ClientEvent::Protocol(protocol_event));
+        let _ = self
+            .raw_event_tx
+            .try_send(ClientEvent::Protocol(protocol_event));
         None
     }
 }
@@ -585,7 +599,9 @@ impl MessageHandler<acprotocol::messages::s2c::QualitiesPrivateUpdateDataId> for
               msg.key, msg.value);
 
         let protocol_event = ProtocolEvent::S2C(msg.to_protocol_event());
-        let _ = self.raw_event_tx.try_send(ClientEvent::Protocol(protocol_event));
+        let _ = self
+            .raw_event_tx
+            .try_send(ClientEvent::Protocol(protocol_event));
         None
     }
 }
@@ -600,7 +616,9 @@ impl MessageHandler<acprotocol::messages::s2c::QualitiesUpdateInstanceId> for Cl
               msg.object_id.0, msg.key, msg.value.0);
 
         let protocol_event = ProtocolEvent::S2C(msg.to_protocol_event());
-        let _ = self.raw_event_tx.try_send(ClientEvent::Protocol(protocol_event));
+        let _ = self
+            .raw_event_tx
+            .try_send(ClientEvent::Protocol(protocol_event));
         None
     }
 }
@@ -615,7 +633,9 @@ impl MessageHandler<acprotocol::messages::s2c::QualitiesPrivateUpdateInstanceId>
               msg.key, msg.value.0);
 
         let protocol_event = ProtocolEvent::S2C(msg.to_protocol_event());
-        let _ = self.raw_event_tx.try_send(ClientEvent::Protocol(protocol_event));
+        let _ = self
+            .raw_event_tx
+            .try_send(ClientEvent::Protocol(protocol_event));
         None
     }
 }
@@ -635,7 +655,9 @@ impl MessageHandler<acprotocol::messages::s2c::CommunicationHearEmote> for Clien
         info!(target: "net", "HearEmote: {} {}", msg.sender_name, msg.text);
 
         let protocol_event = ProtocolEvent::S2C(msg.to_protocol_event());
-        let _ = self.raw_event_tx.try_send(ClientEvent::Protocol(protocol_event));
+        let _ = self
+            .raw_event_tx
+            .try_send(ClientEvent::Protocol(protocol_event));
         None
     }
 }
@@ -649,7 +671,9 @@ impl MessageHandler<acprotocol::messages::s2c::CommunicationHearSoulEmote> for C
         info!(target: "net", "HearSoulEmote: {} {}", msg.sender_name, msg.text);
 
         let protocol_event = ProtocolEvent::S2C(msg.to_protocol_event());
-        let _ = self.raw_event_tx.try_send(ClientEvent::Protocol(protocol_event));
+        let _ = self
+            .raw_event_tx
+            .try_send(ClientEvent::Protocol(protocol_event));
         None
     }
 }
@@ -660,15 +684,14 @@ impl MessageHandler<acprotocol::messages::s2c::CommunicationHearSoulEmote> for C
 
 /// Handle ItemUpdateStackSize messages
 impl MessageHandler<acprotocol::messages::s2c::ItemUpdateStackSize> for Client {
-    fn handle(
-        &mut self,
-        msg: acprotocol::messages::s2c::ItemUpdateStackSize,
-    ) -> Option<GameEvent> {
+    fn handle(&mut self, msg: acprotocol::messages::s2c::ItemUpdateStackSize) -> Option<GameEvent> {
         info!(target: "net", "ItemUpdateStackSize: Object {} new value = {}",
               msg.object_id.0, msg.new_value);
 
         let protocol_event = ProtocolEvent::S2C(msg.to_protocol_event());
-        let _ = self.raw_event_tx.try_send(ClientEvent::Protocol(protocol_event));
+        let _ = self
+            .raw_event_tx
+            .try_send(ClientEvent::Protocol(protocol_event));
         None
     }
 }
@@ -682,7 +705,9 @@ impl MessageHandler<acprotocol::messages::s2c::ItemServerSaysRemove> for Client 
         info!(target: "net", "ItemServerSaysRemove: Object {}", msg.object_id.0);
 
         let protocol_event = ProtocolEvent::S2C(msg.to_protocol_event());
-        let _ = self.raw_event_tx.try_send(ClientEvent::Protocol(protocol_event));
+        let _ = self
+            .raw_event_tx
+            .try_send(ClientEvent::Protocol(protocol_event));
         None
     }
 }
@@ -696,7 +721,9 @@ impl MessageHandler<acprotocol::messages::s2c::InventoryPickupEvent> for Client 
         info!(target: "net", "InventoryPickupEvent: Object {}", msg.object_id.0);
 
         let protocol_event = ProtocolEvent::S2C(msg.to_protocol_event());
-        let _ = self.raw_event_tx.try_send(ClientEvent::Protocol(protocol_event));
+        let _ = self
+            .raw_event_tx
+            .try_send(ClientEvent::Protocol(protocol_event));
         None
     }
 }
@@ -707,15 +734,14 @@ impl MessageHandler<acprotocol::messages::s2c::InventoryPickupEvent> for Client 
 
 /// Handle EffectsSoundEvent messages
 impl MessageHandler<acprotocol::messages::s2c::EffectsSoundEvent> for Client {
-    fn handle(
-        &mut self,
-        msg: acprotocol::messages::s2c::EffectsSoundEvent,
-    ) -> Option<GameEvent> {
+    fn handle(&mut self, msg: acprotocol::messages::s2c::EffectsSoundEvent) -> Option<GameEvent> {
         info!(target: "net", "EffectsSoundEvent: Object {} sound type 0x{:08X}",
               msg.object_id.0, msg.sound_type.clone() as u32);
 
         let protocol_event = ProtocolEvent::S2C(msg.to_protocol_event());
-        let _ = self.raw_event_tx.try_send(ClientEvent::Protocol(protocol_event));
+        let _ = self
+            .raw_event_tx
+            .try_send(ClientEvent::Protocol(protocol_event));
         None
     }
 }
@@ -733,7 +759,9 @@ impl MessageHandler<acprotocol::messages::s2c::MovementPositionAndMovementEvent>
         info!(target: "net", "MovementPositionAndMovement: Object 0x{:08X}", msg.object_id.0);
 
         let protocol_event = ProtocolEvent::S2C(msg.to_protocol_event());
-        let _ = self.raw_event_tx.try_send(ClientEvent::Protocol(protocol_event));
+        let _ = self
+            .raw_event_tx
+            .try_send(ClientEvent::Protocol(protocol_event));
         None
     }
 }
@@ -747,7 +775,9 @@ impl MessageHandler<acprotocol::messages::s2c::MovementPositionEvent> for Client
         info!(target: "net", "MovementPosition: Object 0x{:08X}", msg.object_id.0);
 
         let protocol_event = ProtocolEvent::S2C(msg.to_protocol_event());
-        let _ = self.raw_event_tx.try_send(ClientEvent::Protocol(protocol_event));
+        let _ = self
+            .raw_event_tx
+            .try_send(ClientEvent::Protocol(protocol_event));
         None
     }
 }
@@ -761,7 +791,9 @@ impl MessageHandler<acprotocol::messages::s2c::MovementSetObjectMovement> for Cl
         info!(target: "net", "MovementSetObjectMovement: Object 0x{:08X}", msg.object_id.0);
 
         let protocol_event = ProtocolEvent::S2C(msg.to_protocol_event());
-        let _ = self.raw_event_tx.try_send(ClientEvent::Protocol(protocol_event));
+        let _ = self
+            .raw_event_tx
+            .try_send(ClientEvent::Protocol(protocol_event));
         None
     }
 }
@@ -776,7 +808,9 @@ impl MessageHandler<acprotocol::messages::s2c::MovementVectorUpdate> for Client 
               msg.object_id.0, msg.velocity.x, msg.velocity.y, msg.velocity.z);
 
         let protocol_event = ProtocolEvent::S2C(msg.to_protocol_event());
-        let _ = self.raw_event_tx.try_send(ClientEvent::Protocol(protocol_event));
+        let _ = self
+            .raw_event_tx
+            .try_send(ClientEvent::Protocol(protocol_event));
         None
     }
 }
@@ -795,7 +829,9 @@ impl MessageHandler<acprotocol::messages::s2c::CombatHandlePlayerDeathEvent> for
               msg.killed_id.0, msg.killer_id.0);
 
         let protocol_event = ProtocolEvent::S2C(msg.to_protocol_event());
-        let _ = self.raw_event_tx.try_send(ClientEvent::Protocol(protocol_event));
+        let _ = self
+            .raw_event_tx
+            .try_send(ClientEvent::Protocol(protocol_event));
         None
     }
 }

@@ -509,15 +509,22 @@ fn s2c_event_to_wit(event: &S2CEvent) -> gromnie::scripting::host::S2cEvent {
         }),
         S2CEvent::CharGenVerificationResponse => WitS2cEvent::ChargenVerificationResponse,
         // Quality updates
-        S2CEvent::QualitiesUpdateInt { sequence, object_id, property, value } => {
-            WitS2cEvent::QualitiesUpdateInt(gromnie::scripting::host::QualityUpdateIntMsg {
-                sequence: *sequence,
-                object_id: *object_id,
-                property: property.clone(),
-                value: *value,
-            })
-        }
-        S2CEvent::QualitiesPrivateUpdateInt { sequence, property, value } => {
+        S2CEvent::QualitiesUpdateInt {
+            sequence,
+            object_id,
+            property,
+            value,
+        } => WitS2cEvent::QualitiesUpdateInt(gromnie::scripting::host::QualityUpdateIntMsg {
+            sequence: *sequence,
+            object_id: *object_id,
+            property: property.clone(),
+            value: *value,
+        }),
+        S2CEvent::QualitiesPrivateUpdateInt {
+            sequence,
+            property,
+            value,
+        } => {
             WitS2cEvent::QualitiesPrivateUpdateInt(gromnie::scripting::host::QualityUpdateIntMsg {
                 sequence: *sequence,
                 object_id: 0, // Private quality updates don't have object_id
@@ -525,80 +532,115 @@ fn s2c_event_to_wit(event: &S2CEvent) -> gromnie::scripting::host::S2cEvent {
                 value: *value,
             })
         }
-        S2CEvent::QualitiesUpdateBool { sequence, object_id, property, value } => {
-            WitS2cEvent::QualitiesUpdateBool(gromnie::scripting::host::QualityUpdateBoolMsg {
-                sequence: *sequence,
-                object_id: *object_id,
-                property: property.clone(),
-                value: *value,
-            })
+        S2CEvent::QualitiesUpdateBool {
+            sequence,
+            object_id,
+            property,
+            value,
+        } => WitS2cEvent::QualitiesUpdateBool(gromnie::scripting::host::QualityUpdateBoolMsg {
+            sequence: *sequence,
+            object_id: *object_id,
+            property: property.clone(),
+            value: *value,
+        }),
+        S2CEvent::QualitiesPrivateUpdateBool {
+            sequence,
+            property,
+            value,
+        } => {
+            WitS2cEvent::QualitiesPrivateUpdateBool(
+                gromnie::scripting::host::QualityUpdateBoolMsg {
+                    sequence: *sequence,
+                    object_id: 0, // Private quality updates don't have object_id
+                    property: property.clone(),
+                    value: *value,
+                },
+            )
         }
-        S2CEvent::QualitiesPrivateUpdateBool { sequence, property, value } => {
-            WitS2cEvent::QualitiesPrivateUpdateBool(gromnie::scripting::host::QualityUpdateBoolMsg {
-                sequence: *sequence,
-                object_id: 0, // Private quality updates don't have object_id
-                property: property.clone(),
-                value: *value,
-            })
+        S2CEvent::QualitiesUpdateFloat {
+            sequence,
+            object_id,
+            property,
+            value,
+        } => WitS2cEvent::QualitiesUpdateFloat(gromnie::scripting::host::QualityUpdateFloatMsg {
+            sequence: *sequence,
+            object_id: *object_id,
+            property: property.clone(),
+            value: *value,
+        }),
+        S2CEvent::QualitiesPrivateUpdateFloat {
+            sequence,
+            property,
+            value,
+        } => {
+            WitS2cEvent::QualitiesPrivateUpdateFloat(
+                gromnie::scripting::host::QualityUpdateFloatMsg {
+                    sequence: *sequence,
+                    object_id: 0, // Private quality updates don't have object_id
+                    property: property.clone(),
+                    value: *value,
+                },
+            )
         }
-        S2CEvent::QualitiesUpdateFloat { sequence, object_id, property, value } => {
-            WitS2cEvent::QualitiesUpdateFloat(gromnie::scripting::host::QualityUpdateFloatMsg {
-                sequence: *sequence,
-                object_id: *object_id,
-                property: property.clone(),
-                value: *value,
-            })
-        }
-        S2CEvent::QualitiesPrivateUpdateFloat { sequence, property, value } => {
-            WitS2cEvent::QualitiesPrivateUpdateFloat(gromnie::scripting::host::QualityUpdateFloatMsg {
-                sequence: *sequence,
-                object_id: 0, // Private quality updates don't have object_id
-                property: property.clone(),
-                value: *value,
-            })
-        }
-        S2CEvent::QualitiesUpdateString { sequence, object_id, property, value } => {
-            WitS2cEvent::QualitiesUpdateString(gromnie::scripting::host::QualityUpdateStringMsg {
-                sequence: *sequence,
-                object_id: *object_id,
-                property: property.clone(),
-                value: value.clone(),
-            })
-        }
-        S2CEvent::QualitiesPrivateUpdateString { sequence, property, value } => {
-            WitS2cEvent::QualitiesPrivateUpdateString(gromnie::scripting::host::QualityUpdateStringMsg {
-                sequence: *sequence,
-                object_id: 0, // Private quality updates don't have object_id
-                property: property.clone(),
-                value: value.clone(),
-            })
+        S2CEvent::QualitiesUpdateString {
+            sequence,
+            object_id,
+            property,
+            value,
+        } => WitS2cEvent::QualitiesUpdateString(gromnie::scripting::host::QualityUpdateStringMsg {
+            sequence: *sequence,
+            object_id: *object_id,
+            property: property.clone(),
+            value: value.clone(),
+        }),
+        S2CEvent::QualitiesPrivateUpdateString {
+            sequence,
+            property,
+            value,
+        } => {
+            WitS2cEvent::QualitiesPrivateUpdateString(
+                gromnie::scripting::host::QualityUpdateStringMsg {
+                    sequence: *sequence,
+                    object_id: 0, // Private quality updates don't have object_id
+                    property: property.clone(),
+                    value: value.clone(),
+                },
+            )
         }
         // Communication
-        S2CEvent::CommunicationHearEmote { sender_name, message } => {
-            WitS2cEvent::CommunicationHearEmote(gromnie::scripting::host::CommunicationEmoteMsg {
+        S2CEvent::CommunicationHearEmote {
+            sender_name,
+            message,
+        } => WitS2cEvent::CommunicationHearEmote(gromnie::scripting::host::CommunicationEmoteMsg {
+            sender_name: sender_name.clone(),
+            message: message.clone(),
+        }),
+        S2CEvent::CommunicationHearSoulEmote {
+            sender_name,
+            message,
+        } => WitS2cEvent::CommunicationHearSoulEmote(
+            gromnie::scripting::host::CommunicationEmoteMsg {
                 sender_name: sender_name.clone(),
                 message: message.clone(),
-            })
-        }
-        S2CEvent::CommunicationHearSoulEmote { sender_name, message } => {
-            WitS2cEvent::CommunicationHearSoulEmote(gromnie::scripting::host::CommunicationEmoteMsg {
-                sender_name: sender_name.clone(),
-                message: message.clone(),
-            })
-        }
-        S2CEvent::CommunicationTextboxString { message, message_type } => {
-            WitS2cEvent::CommunicationTextboxString(gromnie::scripting::host::CommunicationTextboxMsg {
+            },
+        ),
+        S2CEvent::CommunicationTextboxString {
+            message,
+            message_type,
+        } => WitS2cEvent::CommunicationTextboxString(
+            gromnie::scripting::host::CommunicationTextboxMsg {
                 message: message.clone(),
                 message_type: *message_type,
-            })
-        }
+            },
+        ),
         // Items/Inventory
-        S2CEvent::ItemUpdateStackSize { object_id, stack_size } => {
-            WitS2cEvent::ItemUpdateStackSize(gromnie::scripting::host::ItemUpdateStackMsg {
-                object_id: *object_id,
-                stack_size: *stack_size,
-            })
-        }
+        S2CEvent::ItemUpdateStackSize {
+            object_id,
+            stack_size,
+        } => WitS2cEvent::ItemUpdateStackSize(gromnie::scripting::host::ItemUpdateStackMsg {
+            object_id: *object_id,
+            stack_size: *stack_size,
+        }),
         S2CEvent::ItemServerSaysRemove { object_id } => {
             WitS2cEvent::ItemServerSaysRemove(gromnie::scripting::host::ItemServerRemoveMsg {
                 object_id: *object_id,
@@ -610,12 +652,13 @@ fn s2c_event_to_wit(event: &S2CEvent) -> gromnie::scripting::host::S2cEvent {
             })
         }
         // Effects
-        S2CEvent::EffectsSoundEvent { object_id, sound_id } => {
-            WitS2cEvent::EffectsSoundEvent(gromnie::scripting::host::EffectsSoundMsg {
-                object_id: *object_id,
-                sound_id: *sound_id,
-            })
-        }
+        S2CEvent::EffectsSoundEvent {
+            object_id,
+            sound_id,
+        } => WitS2cEvent::EffectsSoundEvent(gromnie::scripting::host::EffectsSoundMsg {
+            object_id: *object_id,
+            sound_id: *sound_id,
+        }),
         // Ignore unknown S2C events (future variants added via #[non_exhaustive])
         _ => {
             warn!(target: "scripting", "Unknown S2C event variant, returning placeholder");
@@ -649,32 +692,40 @@ fn game_event_msg_to_wit(event: &GameEventMsg) -> gromnie::scripting::host::Game
                 message: message.clone(),
             })
         }
-        GameEventMsg::ItemOnViewContents { container_id, items } => {
-            WitGameEventMsg::ItemOnViewContents(gromnie::scripting::host::ItemOnViewContentsMsg {
-                container_id: *container_id,
-                items: items.clone(),
-            })
-        }
+        GameEventMsg::ItemOnViewContents {
+            container_id,
+            items,
+        } => WitGameEventMsg::ItemOnViewContents(gromnie::scripting::host::ItemOnViewContentsMsg {
+            container_id: *container_id,
+            items: items.clone(),
+        }),
         GameEventMsg::MagicUpdateSpell { spell_id } => {
             WitGameEventMsg::MagicUpdateSpell(gromnie::scripting::host::MagicUpdateSpellMsg {
                 spell_id: *spell_id,
             })
         }
-        GameEventMsg::FellowshipFullUpdate { fellowship_id, leader_name, leader_id, members, locked } => {
-            WitGameEventMsg::FellowshipFullUpdate(gromnie::scripting::host::FellowshipFullUpdateMsg {
+        GameEventMsg::FellowshipFullUpdate {
+            fellowship_id,
+            leader_name,
+            leader_id,
+            members,
+            locked,
+        } => WitGameEventMsg::FellowshipFullUpdate(
+            gromnie::scripting::host::FellowshipFullUpdateMsg {
                 fellowship_id: *fellowship_id,
                 leader_name: leader_name.clone(),
                 leader_id: *leader_id,
                 members: members.clone(),
                 locked: *locked,
-            })
-        }
-        GameEventMsg::TradeRegisterTrade { initiator_id, partner_id } => {
-            WitGameEventMsg::TradeRegister(gromnie::scripting::host::TradeRegisterMsg {
-                initiator_id: *initiator_id,
-                partner_id: *partner_id,
-            })
-        }
+            },
+        ),
+        GameEventMsg::TradeRegisterTrade {
+            initiator_id,
+            partner_id,
+        } => WitGameEventMsg::TradeRegister(gromnie::scripting::host::TradeRegisterMsg {
+            initiator_id: *initiator_id,
+            partner_id: *partner_id,
+        }),
         // Ignore unknown game event messages (future variants added via #[non_exhaustive])
         _ => {
             warn!(target: "scripting", "Unknown game event message variant, returning placeholder");

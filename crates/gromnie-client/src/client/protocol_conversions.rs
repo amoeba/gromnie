@@ -10,56 +10,60 @@ use gromnie_events::{GameEventMsg, S2CEvent};
 pub mod prelude {
     //! Re-export all game event conversion functions for convenient importing
     pub use super::{
-        hear_direct_speech_to_game_event_msg, transient_string_to_game_event_msg,
-        item_on_view_contents_to_game_event_msg, magic_update_spell_to_game_event_msg,
-        fellowship_full_update_to_game_event_msg, trade_register_trade_to_game_event_msg,
-        combat_handle_attack_done_to_game_event_msg, combat_handle_commence_attack_to_game_event_msg,
-        combat_handle_victim_notification_self_to_game_event_msg, combat_handle_victim_notification_other_to_game_event_msg,
-        combat_handle_attacker_notification_to_game_event_msg, combat_handle_defender_notification_to_game_event_msg,
-        combat_handle_evasion_attacker_notification_to_game_event_msg, combat_handle_evasion_defender_notification_to_game_event_msg,
-        combat_query_health_response_to_game_event_msg,
-        magic_update_enchantment_to_game_event_msg, magic_remove_enchantment_to_game_event_msg,
-        item_set_appraise_info_to_game_event_msg, item_appraise_done_to_game_event_msg,
-        item_wear_item_to_game_event_msg, item_query_item_mana_response_to_game_event_msg,
-        trade_open_trade_to_game_event_msg, trade_close_trade_to_game_event_msg,
-        trade_add_to_trade_to_game_event_msg, trade_remove_from_trade_to_game_event_msg,
-        trade_accept_trade_to_game_event_msg, trade_decline_trade_to_game_event_msg,
-        trade_reset_trade_to_game_event_msg, trade_trade_failure_to_game_event_msg,
-        trade_clear_trade_acceptance_to_game_event_msg,
-        fellowship_update_fellow_to_game_event_msg, fellowship_disband_to_game_event_msg,
-        fellowship_quit_to_game_event_msg, fellowship_dismiss_to_game_event_msg,
-        fellowship_update_done_to_game_event_msg, fellowship_stats_done_to_game_event_msg,
-        social_friends_update_to_game_event_msg, social_character_title_table_to_game_event_msg,
-        social_add_or_set_character_title_to_game_event_msg, social_send_client_contract_tracker_table_to_game_event_msg,
-        social_send_client_contract_tracker_to_game_event_msg,
-        allegiance_update_to_game_event_msg, allegiance_update_done_to_game_event_msg,
-        allegiance_update_aborted_to_game_event_msg, allegiance_login_notification_to_game_event_msg,
-        allegiance_info_response_to_game_event_msg,
-        vendor_info_to_game_event_msg,
-        house_profile_to_game_event_msg, house_data_to_game_event_msg,
-        house_status_to_game_event_msg, house_update_rent_time_to_game_event_msg,
-        house_update_rent_payment_to_game_event_msg, house_update_restrictions_to_game_event_msg,
-        house_update_har_to_game_event_msg, house_transaction_to_game_event_msg,
-        house_available_houses_to_game_event_msg,
-        writing_book_open_to_game_event_msg, writing_book_add_page_response_to_game_event_msg,
-        writing_book_delete_page_response_to_game_event_msg, writing_book_page_data_response_to_game_event_msg,
-        character_start_barber_to_game_event_msg, character_query_age_response_to_game_event_msg,
+        admin_query_plugin_list_to_game_event_msg, admin_query_plugin_response_to_game_event_msg,
+        admin_query_plugin_to_game_event_msg, allegiance_info_response_to_game_event_msg,
+        allegiance_login_notification_to_game_event_msg,
+        allegiance_update_aborted_to_game_event_msg, allegiance_update_done_to_game_event_msg,
+        allegiance_update_to_game_event_msg, channel_broadcast_to_game_event_msg,
+        channel_index_to_game_event_msg, channel_list_to_game_event_msg,
         character_confirmation_request_to_game_event_msg,
-        game_join_game_response_to_game_event_msg, game_start_game_to_game_event_msg,
-        game_move_response_to_game_event_msg, game_opponent_turn_to_game_event_msg,
-        game_opponent_stalemate_state_to_game_event_msg, game_game_over_to_game_event_msg,
-        channel_broadcast_to_game_event_msg, channel_list_to_game_event_msg,
-        channel_index_to_game_event_msg,
-        admin_query_plugin_to_game_event_msg, admin_query_plugin_list_to_game_event_msg,
-        admin_query_plugin_response_to_game_event_msg,
-        misc_portal_storm_brewing_to_game_event_msg, misc_portal_storm_imminent_to_game_event_msg,
-        misc_portal_storm_to_game_event_msg, misc_portal_storm_subsided_to_game_event_msg,
-        communication_popup_string_to_game_event_msg, communication_weenie_error_to_game_event_msg,
-        communication_weenie_error_with_string_to_game_event_msg, communication_set_squelch_db_to_game_event_msg,
+        character_query_age_response_to_game_event_msg, character_return_ping_to_game_event_msg,
+        character_start_barber_to_game_event_msg, combat_handle_attack_done_to_game_event_msg,
+        combat_handle_attacker_notification_to_game_event_msg,
+        combat_handle_commence_attack_to_game_event_msg,
+        combat_handle_defender_notification_to_game_event_msg,
+        combat_handle_evasion_attacker_notification_to_game_event_msg,
+        combat_handle_evasion_defender_notification_to_game_event_msg,
+        combat_handle_victim_notification_other_to_game_event_msg,
+        combat_handle_victim_notification_self_to_game_event_msg,
+        combat_query_health_response_to_game_event_msg,
         communication_chat_room_tracker_to_game_event_msg,
+        communication_popup_string_to_game_event_msg,
+        communication_set_squelch_db_to_game_event_msg,
+        communication_weenie_error_to_game_event_msg,
+        communication_weenie_error_with_string_to_game_event_msg,
+        fellowship_disband_to_game_event_msg, fellowship_dismiss_to_game_event_msg,
+        fellowship_full_update_to_game_event_msg, fellowship_quit_to_game_event_msg,
+        fellowship_stats_done_to_game_event_msg, fellowship_update_done_to_game_event_msg,
+        fellowship_update_fellow_to_game_event_msg, game_game_over_to_game_event_msg,
+        game_join_game_response_to_game_event_msg, game_move_response_to_game_event_msg,
+        game_opponent_stalemate_state_to_game_event_msg, game_opponent_turn_to_game_event_msg,
+        game_start_game_to_game_event_msg, hear_direct_speech_to_game_event_msg,
+        house_available_houses_to_game_event_msg, house_data_to_game_event_msg,
+        house_profile_to_game_event_msg, house_status_to_game_event_msg,
+        house_transaction_to_game_event_msg, house_update_har_to_game_event_msg,
+        house_update_rent_payment_to_game_event_msg, house_update_rent_time_to_game_event_msg,
+        house_update_restrictions_to_game_event_msg,
         inventory_salvage_operations_result_to_game_event_msg,
-        login_player_description_to_game_event_msg,
-        character_return_ping_to_game_event_msg,
+        item_appraise_done_to_game_event_msg, item_on_view_contents_to_game_event_msg,
+        item_query_item_mana_response_to_game_event_msg, item_set_appraise_info_to_game_event_msg,
+        item_wear_item_to_game_event_msg, login_player_description_to_game_event_msg,
+        magic_remove_enchantment_to_game_event_msg, magic_update_enchantment_to_game_event_msg,
+        magic_update_spell_to_game_event_msg, misc_portal_storm_brewing_to_game_event_msg,
+        misc_portal_storm_imminent_to_game_event_msg, misc_portal_storm_subsided_to_game_event_msg,
+        misc_portal_storm_to_game_event_msg, social_add_or_set_character_title_to_game_event_msg,
+        social_character_title_table_to_game_event_msg, social_friends_update_to_game_event_msg,
+        social_send_client_contract_tracker_table_to_game_event_msg,
+        social_send_client_contract_tracker_to_game_event_msg,
+        trade_accept_trade_to_game_event_msg, trade_add_to_trade_to_game_event_msg,
+        trade_clear_trade_acceptance_to_game_event_msg, trade_close_trade_to_game_event_msg,
+        trade_decline_trade_to_game_event_msg, trade_open_trade_to_game_event_msg,
+        trade_register_trade_to_game_event_msg, trade_remove_from_trade_to_game_event_msg,
+        trade_reset_trade_to_game_event_msg, trade_trade_failure_to_game_event_msg,
+        transient_string_to_game_event_msg, vendor_info_to_game_event_msg,
+        writing_book_add_page_response_to_game_event_msg,
+        writing_book_delete_page_response_to_game_event_msg, writing_book_open_to_game_event_msg,
+        writing_book_page_data_response_to_game_event_msg,
     };
 }
 
@@ -536,9 +540,9 @@ pub fn combat_handle_victim_notification_self_to_game_event_msg(
 ) -> GameEventMsg {
     GameEventMsg::CombatHandleVictimNotificationSelf {
         message: event.message,
-        damage_type: 0, // Not available in event
+        damage_type: 0,   // Not available in event
         damage_amount: 0, // Not available in event
-        critical: false, // Not available in event
+        critical: false,  // Not available in event
     }
 }
 
@@ -701,7 +705,7 @@ pub fn trade_add_to_trade_to_game_event_msg(
 ) -> GameEventMsg {
     GameEventMsg::TradeAddToTrade {
         item_id: event.object_id.0,
-        trader_id: 0,  // Not available in event
+        trader_id: 0, // Not available in event
     }
 }
 
@@ -711,7 +715,7 @@ pub fn trade_remove_from_trade_to_game_event_msg(
 ) -> GameEventMsg {
     GameEventMsg::TradeRemoveFromTrade {
         item_id: event.object_id.0,
-        trader_id: 0,  // Not available in event
+        trader_id: 0, // Not available in event
     }
 }
 
@@ -782,18 +786,14 @@ pub fn fellowship_disband_to_game_event_msg(
 pub fn fellowship_quit_to_game_event_msg(
     _event: acprotocol::gameevents::FellowshipQuit,
 ) -> GameEventMsg {
-    GameEventMsg::FellowshipQuit {
-        fellow_id: 0,
-    }
+    GameEventMsg::FellowshipQuit { fellow_id: 0 }
 }
 
 /// Convert acprotocol FellowshipDismiss to GameEventMsg
 pub fn fellowship_dismiss_to_game_event_msg(
     _event: acprotocol::gameevents::FellowshipDismiss,
 ) -> GameEventMsg {
-    GameEventMsg::FellowshipDismiss {
-        fellow_id: 0,
-    }
+    GameEventMsg::FellowshipDismiss { fellow_id: 0 }
 }
 
 /// Convert acprotocol FellowshipFellowUpdateDone to GameEventMsg
@@ -817,9 +817,7 @@ pub fn social_friends_update_to_game_event_msg(
     _event: acprotocol::gameevents::SocialFriendsUpdate,
 ) -> GameEventMsg {
     // Simplified stub - complex structure
-    GameEventMsg::SocialFriendsUpdate {
-        friends: vec![],
-    }
+    GameEventMsg::SocialFriendsUpdate { friends: vec![] }
 }
 
 /// Convert acprotocol SocialCharacterTitleTable to GameEventMsg
@@ -827,9 +825,7 @@ pub fn social_character_title_table_to_game_event_msg(
     _event: acprotocol::gameevents::SocialCharacterTitleTable,
 ) -> GameEventMsg {
     // Simplified stub - complex structure
-    GameEventMsg::SocialCharacterTitleTable {
-        titles: vec![],
-    }
+    GameEventMsg::SocialCharacterTitleTable { titles: vec![] }
 }
 
 /// Convert acprotocol SocialAddOrSetCharacterTitle to GameEventMsg
@@ -849,9 +845,7 @@ pub fn social_send_client_contract_tracker_table_to_game_event_msg(
     _event: acprotocol::gameevents::SocialSendClientContractTrackerTable,
 ) -> GameEventMsg {
     // Simplified stub - complex structure
-    GameEventMsg::SocialSendClientContractTrackerTable {
-        contracts: vec![],
-    }
+    GameEventMsg::SocialSendClientContractTrackerTable { contracts: vec![] }
 }
 
 /// Convert acprotocol SocialSendClientContractTracker to GameEventMsg
@@ -874,7 +868,7 @@ pub fn allegiance_update_to_game_event_msg(
 ) -> GameEventMsg {
     // Serialize allegiance data - simplified for now
     GameEventMsg::AllegianceUpdate {
-        allegiance_data: vec![],  // Complex structure, empty for now
+        allegiance_data: vec![], // Complex structure, empty for now
     }
 }
 
@@ -1015,9 +1009,7 @@ pub fn house_transaction_to_game_event_msg(
 pub fn house_available_houses_to_game_event_msg(
     _event: acprotocol::gameevents::HouseAvailableHouses,
 ) -> GameEventMsg {
-    GameEventMsg::HouseAvailableHouses {
-        houses: vec![],
-    }
+    GameEventMsg::HouseAvailableHouses { houses: vec![] }
 }
 
 // Writing Game Event Conversions
@@ -1069,18 +1061,14 @@ pub fn writing_book_page_data_response_to_game_event_msg(
 pub fn character_start_barber_to_game_event_msg(
     _event: acprotocol::gameevents::CharacterStartBarber,
 ) -> GameEventMsg {
-    GameEventMsg::CharacterStartBarber {
-        barber_id: 0,
-    }
+    GameEventMsg::CharacterStartBarber { barber_id: 0 }
 }
 
 /// Convert acprotocol CharacterCharacterQueryAgeResponse to GameEventMsg
 pub fn character_query_age_response_to_game_event_msg(
     _event: acprotocol::gameevents::CharacterQueryAgeResponse,
 ) -> GameEventMsg {
-    GameEventMsg::CharacterQueryAgeResponse {
-        age: 0,
-    }
+    GameEventMsg::CharacterQueryAgeResponse { age: 0 }
 }
 
 /// Convert acprotocol CharacterCharacterConfirmationRequest to GameEventMsg
@@ -1110,9 +1098,7 @@ pub fn game_join_game_response_to_game_event_msg(
 pub fn game_start_game_to_game_event_msg(
     _event: acprotocol::gameevents::GameStartGame,
 ) -> GameEventMsg {
-    GameEventMsg::GameStartGame {
-        game_id: 0,
-    }
+    GameEventMsg::GameStartGame { game_id: 0 }
 }
 
 /// Convert acprotocol GameGameMoveResponse to GameEventMsg
@@ -1139,9 +1125,7 @@ pub fn game_opponent_turn_to_game_event_msg(
 pub fn game_opponent_stalemate_state_to_game_event_msg(
     _event: acprotocol::gameevents::GameOpponentStalemateState,
 ) -> GameEventMsg {
-    GameEventMsg::GameOpponentStalemateState {
-        game_id: 0,
-    }
+    GameEventMsg::GameOpponentStalemateState { game_id: 0 }
 }
 
 /// Convert acprotocol GameGameGameOver to GameEventMsg
@@ -1171,9 +1155,7 @@ pub fn channel_broadcast_to_game_event_msg(
 pub fn channel_list_to_game_event_msg(
     _event: acprotocol::gameevents::CommunicationChannelList,
 ) -> GameEventMsg {
-    GameEventMsg::CommunicationChannelList {
-        channels: vec![],
-    }
+    GameEventMsg::CommunicationChannelList { channels: vec![] }
 }
 
 /// Convert acprotocol CommunicationChannelIndex to GameEventMsg
@@ -1201,9 +1183,7 @@ pub fn admin_query_plugin_to_game_event_msg(
 pub fn admin_query_plugin_list_to_game_event_msg(
     _event: acprotocol::gameevents::AdminQueryPluginList,
 ) -> GameEventMsg {
-    GameEventMsg::AdminQueryPluginList {
-        plugins: vec![],
-    }
+    GameEventMsg::AdminQueryPluginList { plugins: vec![] }
 }
 
 /// Convert acprotocol AdminQueryPluginResponse2 to GameEventMsg
@@ -1261,9 +1241,7 @@ pub fn communication_popup_string_to_game_event_msg(
 pub fn communication_weenie_error_to_game_event_msg(
     _event: acprotocol::gameevents::CommunicationWeenieError,
 ) -> GameEventMsg {
-    GameEventMsg::CommunicationWeenieError {
-        error_code: 0,
-    }
+    GameEventMsg::CommunicationWeenieError { error_code: 0 }
 }
 
 /// Convert acprotocol CommunicationWeenieErrorWithString to GameEventMsg
@@ -1326,9 +1304,7 @@ pub fn login_player_description_to_game_event_msg(
 pub fn character_return_ping_to_game_event_msg(
     _event: acprotocol::gameevents::CharacterReturnPing,
 ) -> GameEventMsg {
-    GameEventMsg::CharacterReturnPing {
-        sequence: 0,
-    }
+    GameEventMsg::CharacterReturnPing { sequence: 0 }
 }
 
 #[cfg(test)]

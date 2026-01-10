@@ -106,13 +106,19 @@ where
 use crate::client::Client;
 
 impl GameEventHandler<acprotocol::gameevents::MagicUpdateEnchantment> for Client {
-    fn handle(&mut self, _event: acprotocol::gameevents::MagicUpdateEnchantment) -> Option<GameEvent> {
+    fn handle(
+        &mut self,
+        _event: acprotocol::gameevents::MagicUpdateEnchantment,
+    ) -> Option<GameEvent> {
         None
     }
 }
 
 impl GameEventHandler<acprotocol::gameevents::MagicRemoveEnchantment> for Client {
-    fn handle(&mut self, _event: acprotocol::gameevents::MagicRemoveEnchantment) -> Option<GameEvent> {
+    fn handle(
+        &mut self,
+        _event: acprotocol::gameevents::MagicRemoveEnchantment,
+    ) -> Option<GameEvent> {
         None
     }
 }
@@ -136,7 +142,10 @@ impl GameEventHandler<acprotocol::gameevents::ItemWearItem> for Client {
 }
 
 impl GameEventHandler<acprotocol::gameevents::ItemQueryItemManaResponse> for Client {
-    fn handle(&mut self, _event: acprotocol::gameevents::ItemQueryItemManaResponse) -> Option<GameEvent> {
+    fn handle(
+        &mut self,
+        _event: acprotocol::gameevents::ItemQueryItemManaResponse,
+    ) -> Option<GameEvent> {
         None
     }
 }
@@ -162,7 +171,10 @@ impl GameEventHandler<acprotocol::gameevents::TradeAddToTrade> for Client {
 }
 
 impl GameEventHandler<acprotocol::gameevents::TradeRemoveFromTrade> for Client {
-    fn handle(&mut self, _event: acprotocol::gameevents::TradeRemoveFromTrade) -> Option<GameEvent> {
+    fn handle(
+        &mut self,
+        _event: acprotocol::gameevents::TradeRemoveFromTrade,
+    ) -> Option<GameEvent> {
         None
     }
 }
@@ -192,7 +204,10 @@ impl GameEventHandler<acprotocol::gameevents::TradeTradeFailure> for Client {
 }
 
 impl GameEventHandler<acprotocol::gameevents::TradeClearTradeAcceptance> for Client {
-    fn handle(&mut self, _event: acprotocol::gameevents::TradeClearTradeAcceptance) -> Option<GameEvent> {
+    fn handle(
+        &mut self,
+        _event: acprotocol::gameevents::TradeClearTradeAcceptance,
+    ) -> Option<GameEvent> {
         None
     }
 }
@@ -200,7 +215,10 @@ impl GameEventHandler<acprotocol::gameevents::TradeClearTradeAcceptance> for Cli
 // Fellowship GameEventHandler Implementations
 
 impl GameEventHandler<acprotocol::gameevents::FellowshipUpdateFellow> for Client {
-    fn handle(&mut self, _event: acprotocol::gameevents::FellowshipUpdateFellow) -> Option<GameEvent> {
+    fn handle(
+        &mut self,
+        _event: acprotocol::gameevents::FellowshipUpdateFellow,
+    ) -> Option<GameEvent> {
         None
     }
 }
@@ -224,13 +242,19 @@ impl GameEventHandler<acprotocol::gameevents::FellowshipDismiss> for Client {
 }
 
 impl GameEventHandler<acprotocol::gameevents::FellowshipFellowUpdateDone> for Client {
-    fn handle(&mut self, _event: acprotocol::gameevents::FellowshipFellowUpdateDone) -> Option<GameEvent> {
+    fn handle(
+        &mut self,
+        _event: acprotocol::gameevents::FellowshipFellowUpdateDone,
+    ) -> Option<GameEvent> {
         None
     }
 }
 
 impl GameEventHandler<acprotocol::gameevents::FellowshipFellowStatsDone> for Client {
-    fn handle(&mut self, _event: acprotocol::gameevents::FellowshipFellowStatsDone) -> Option<GameEvent> {
+    fn handle(
+        &mut self,
+        _event: acprotocol::gameevents::FellowshipFellowStatsDone,
+    ) -> Option<GameEvent> {
         None
     }
 }
@@ -244,25 +268,37 @@ impl GameEventHandler<acprotocol::gameevents::SocialFriendsUpdate> for Client {
 }
 
 impl GameEventHandler<acprotocol::gameevents::SocialCharacterTitleTable> for Client {
-    fn handle(&mut self, _event: acprotocol::gameevents::SocialCharacterTitleTable) -> Option<GameEvent> {
+    fn handle(
+        &mut self,
+        _event: acprotocol::gameevents::SocialCharacterTitleTable,
+    ) -> Option<GameEvent> {
         None
     }
 }
 
 impl GameEventHandler<acprotocol::gameevents::SocialAddOrSetCharacterTitle> for Client {
-    fn handle(&mut self, _event: acprotocol::gameevents::SocialAddOrSetCharacterTitle) -> Option<GameEvent> {
+    fn handle(
+        &mut self,
+        _event: acprotocol::gameevents::SocialAddOrSetCharacterTitle,
+    ) -> Option<GameEvent> {
         None
     }
 }
 
 impl GameEventHandler<acprotocol::gameevents::SocialSendClientContractTrackerTable> for Client {
-    fn handle(&mut self, _event: acprotocol::gameevents::SocialSendClientContractTrackerTable) -> Option<GameEvent> {
+    fn handle(
+        &mut self,
+        _event: acprotocol::gameevents::SocialSendClientContractTrackerTable,
+    ) -> Option<GameEvent> {
         None
     }
 }
 
 impl GameEventHandler<acprotocol::gameevents::SocialSendClientContractTracker> for Client {
-    fn handle(&mut self, _event: acprotocol::gameevents::SocialSendClientContractTracker) -> Option<GameEvent> {
+    fn handle(
+        &mut self,
+        _event: acprotocol::gameevents::SocialSendClientContractTracker,
+    ) -> Option<GameEvent> {
         None
     }
 }
@@ -270,31 +306,48 @@ impl GameEventHandler<acprotocol::gameevents::SocialSendClientContractTracker> f
 // Allegiance GameEventHandler Implementations
 
 impl GameEventHandler<acprotocol::gameevents::AllegianceAllegianceUpdate> for Client {
-    fn handle(&mut self, _event: acprotocol::gameevents::AllegianceAllegianceUpdate) -> Option<GameEvent> {
+    fn handle(
+        &mut self,
+        _event: acprotocol::gameevents::AllegianceAllegianceUpdate,
+    ) -> Option<GameEvent> {
         None
     }
 }
 
 impl GameEventHandler<acprotocol::gameevents::AllegianceAllegianceUpdateDone> for Client {
-    fn handle(&mut self, _event: acprotocol::gameevents::AllegianceAllegianceUpdateDone) -> Option<GameEvent> {
+    fn handle(
+        &mut self,
+        _event: acprotocol::gameevents::AllegianceAllegianceUpdateDone,
+    ) -> Option<GameEvent> {
         None
     }
 }
 
 impl GameEventHandler<acprotocol::gameevents::AllegianceAllegianceUpdateAborted> for Client {
-    fn handle(&mut self, _event: acprotocol::gameevents::AllegianceAllegianceUpdateAborted) -> Option<GameEvent> {
+    fn handle(
+        &mut self,
+        _event: acprotocol::gameevents::AllegianceAllegianceUpdateAborted,
+    ) -> Option<GameEvent> {
         None
     }
 }
 
-impl GameEventHandler<acprotocol::gameevents::AllegianceAllegianceLoginNotificationEvent> for Client {
-    fn handle(&mut self, _event: acprotocol::gameevents::AllegianceAllegianceLoginNotificationEvent) -> Option<GameEvent> {
+impl GameEventHandler<acprotocol::gameevents::AllegianceAllegianceLoginNotificationEvent>
+    for Client
+{
+    fn handle(
+        &mut self,
+        _event: acprotocol::gameevents::AllegianceAllegianceLoginNotificationEvent,
+    ) -> Option<GameEvent> {
         None
     }
 }
 
 impl GameEventHandler<acprotocol::gameevents::AllegianceAllegianceInfoResponseEvent> for Client {
-    fn handle(&mut self, _event: acprotocol::gameevents::AllegianceAllegianceInfoResponseEvent) -> Option<GameEvent> {
+    fn handle(
+        &mut self,
+        _event: acprotocol::gameevents::AllegianceAllegianceInfoResponseEvent,
+    ) -> Option<GameEvent> {
         None
     }
 }
@@ -334,13 +387,19 @@ impl GameEventHandler<acprotocol::gameevents::HouseUpdateRentTime> for Client {
 }
 
 impl GameEventHandler<acprotocol::gameevents::HouseUpdateRentPayment> for Client {
-    fn handle(&mut self, _event: acprotocol::gameevents::HouseUpdateRentPayment) -> Option<GameEvent> {
+    fn handle(
+        &mut self,
+        _event: acprotocol::gameevents::HouseUpdateRentPayment,
+    ) -> Option<GameEvent> {
         None
     }
 }
 
 impl GameEventHandler<acprotocol::gameevents::HouseUpdateRestrictions> for Client {
-    fn handle(&mut self, _event: acprotocol::gameevents::HouseUpdateRestrictions) -> Option<GameEvent> {
+    fn handle(
+        &mut self,
+        _event: acprotocol::gameevents::HouseUpdateRestrictions,
+    ) -> Option<GameEvent> {
         None
     }
 }
@@ -352,13 +411,19 @@ impl GameEventHandler<acprotocol::gameevents::HouseUpdateHAR> for Client {
 }
 
 impl GameEventHandler<acprotocol::gameevents::HouseHouseTransaction> for Client {
-    fn handle(&mut self, _event: acprotocol::gameevents::HouseHouseTransaction) -> Option<GameEvent> {
+    fn handle(
+        &mut self,
+        _event: acprotocol::gameevents::HouseHouseTransaction,
+    ) -> Option<GameEvent> {
         None
     }
 }
 
 impl GameEventHandler<acprotocol::gameevents::HouseAvailableHouses> for Client {
-    fn handle(&mut self, _event: acprotocol::gameevents::HouseAvailableHouses) -> Option<GameEvent> {
+    fn handle(
+        &mut self,
+        _event: acprotocol::gameevents::HouseAvailableHouses,
+    ) -> Option<GameEvent> {
         None
     }
 }
@@ -372,19 +437,28 @@ impl GameEventHandler<acprotocol::gameevents::WritingBookOpen> for Client {
 }
 
 impl GameEventHandler<acprotocol::gameevents::WritingBookAddPageResponse> for Client {
-    fn handle(&mut self, _event: acprotocol::gameevents::WritingBookAddPageResponse) -> Option<GameEvent> {
+    fn handle(
+        &mut self,
+        _event: acprotocol::gameevents::WritingBookAddPageResponse,
+    ) -> Option<GameEvent> {
         None
     }
 }
 
 impl GameEventHandler<acprotocol::gameevents::WritingBookDeletePageResponse> for Client {
-    fn handle(&mut self, _event: acprotocol::gameevents::WritingBookDeletePageResponse) -> Option<GameEvent> {
+    fn handle(
+        &mut self,
+        _event: acprotocol::gameevents::WritingBookDeletePageResponse,
+    ) -> Option<GameEvent> {
         None
     }
 }
 
 impl GameEventHandler<acprotocol::gameevents::WritingBookPageDataResponse> for Client {
-    fn handle(&mut self, _event: acprotocol::gameevents::WritingBookPageDataResponse) -> Option<GameEvent> {
+    fn handle(
+        &mut self,
+        _event: acprotocol::gameevents::WritingBookPageDataResponse,
+    ) -> Option<GameEvent> {
         None
     }
 }
@@ -392,19 +466,28 @@ impl GameEventHandler<acprotocol::gameevents::WritingBookPageDataResponse> for C
 // Character GameEventHandler Implementations
 
 impl GameEventHandler<acprotocol::gameevents::CharacterStartBarber> for Client {
-    fn handle(&mut self, _event: acprotocol::gameevents::CharacterStartBarber) -> Option<GameEvent> {
+    fn handle(
+        &mut self,
+        _event: acprotocol::gameevents::CharacterStartBarber,
+    ) -> Option<GameEvent> {
         None
     }
 }
 
 impl GameEventHandler<acprotocol::gameevents::CharacterQueryAgeResponse> for Client {
-    fn handle(&mut self, _event: acprotocol::gameevents::CharacterQueryAgeResponse) -> Option<GameEvent> {
+    fn handle(
+        &mut self,
+        _event: acprotocol::gameevents::CharacterQueryAgeResponse,
+    ) -> Option<GameEvent> {
         None
     }
 }
 
 impl GameEventHandler<acprotocol::gameevents::CharacterConfirmationRequest> for Client {
-    fn handle(&mut self, _event: acprotocol::gameevents::CharacterConfirmationRequest) -> Option<GameEvent> {
+    fn handle(
+        &mut self,
+        _event: acprotocol::gameevents::CharacterConfirmationRequest,
+    ) -> Option<GameEvent> {
         None
     }
 }
@@ -412,7 +495,10 @@ impl GameEventHandler<acprotocol::gameevents::CharacterConfirmationRequest> for 
 // Game Events GameEventHandler Implementations
 
 impl GameEventHandler<acprotocol::gameevents::GameJoinGameResponse> for Client {
-    fn handle(&mut self, _event: acprotocol::gameevents::GameJoinGameResponse) -> Option<GameEvent> {
+    fn handle(
+        &mut self,
+        _event: acprotocol::gameevents::GameJoinGameResponse,
+    ) -> Option<GameEvent> {
         None
     }
 }
@@ -436,7 +522,10 @@ impl GameEventHandler<acprotocol::gameevents::GameOpponentTurn> for Client {
 }
 
 impl GameEventHandler<acprotocol::gameevents::GameOpponentStalemateState> for Client {
-    fn handle(&mut self, _event: acprotocol::gameevents::GameOpponentStalemateState) -> Option<GameEvent> {
+    fn handle(
+        &mut self,
+        _event: acprotocol::gameevents::GameOpponentStalemateState,
+    ) -> Option<GameEvent> {
         None
     }
 }
@@ -450,19 +539,28 @@ impl GameEventHandler<acprotocol::gameevents::GameGameOver> for Client {
 // Channels GameEventHandler Implementations
 
 impl GameEventHandler<acprotocol::gameevents::CommunicationChannelBroadcast> for Client {
-    fn handle(&mut self, _event: acprotocol::gameevents::CommunicationChannelBroadcast) -> Option<GameEvent> {
+    fn handle(
+        &mut self,
+        _event: acprotocol::gameevents::CommunicationChannelBroadcast,
+    ) -> Option<GameEvent> {
         None
     }
 }
 
 impl GameEventHandler<acprotocol::gameevents::CommunicationChannelList> for Client {
-    fn handle(&mut self, _event: acprotocol::gameevents::CommunicationChannelList) -> Option<GameEvent> {
+    fn handle(
+        &mut self,
+        _event: acprotocol::gameevents::CommunicationChannelList,
+    ) -> Option<GameEvent> {
         None
     }
 }
 
 impl GameEventHandler<acprotocol::gameevents::CommunicationChannelIndex> for Client {
-    fn handle(&mut self, _event: acprotocol::gameevents::CommunicationChannelIndex) -> Option<GameEvent> {
+    fn handle(
+        &mut self,
+        _event: acprotocol::gameevents::CommunicationChannelIndex,
+    ) -> Option<GameEvent> {
         None
     }
 }
@@ -476,13 +574,19 @@ impl GameEventHandler<acprotocol::gameevents::AdminQueryPlugin> for Client {
 }
 
 impl GameEventHandler<acprotocol::gameevents::AdminQueryPluginList> for Client {
-    fn handle(&mut self, _event: acprotocol::gameevents::AdminQueryPluginList) -> Option<GameEvent> {
+    fn handle(
+        &mut self,
+        _event: acprotocol::gameevents::AdminQueryPluginList,
+    ) -> Option<GameEvent> {
         None
     }
 }
 
 impl GameEventHandler<acprotocol::gameevents::AdminQueryPluginResponse2> for Client {
-    fn handle(&mut self, _event: acprotocol::gameevents::AdminQueryPluginResponse2) -> Option<GameEvent> {
+    fn handle(
+        &mut self,
+        _event: acprotocol::gameevents::AdminQueryPluginResponse2,
+    ) -> Option<GameEvent> {
         None
     }
 }
@@ -490,13 +594,19 @@ impl GameEventHandler<acprotocol::gameevents::AdminQueryPluginResponse2> for Cli
 // Portal Storms GameEventHandler Implementations
 
 impl GameEventHandler<acprotocol::gameevents::MiscPortalStormBrewing> for Client {
-    fn handle(&mut self, _event: acprotocol::gameevents::MiscPortalStormBrewing) -> Option<GameEvent> {
+    fn handle(
+        &mut self,
+        _event: acprotocol::gameevents::MiscPortalStormBrewing,
+    ) -> Option<GameEvent> {
         None
     }
 }
 
 impl GameEventHandler<acprotocol::gameevents::MiscPortalStormImminent> for Client {
-    fn handle(&mut self, _event: acprotocol::gameevents::MiscPortalStormImminent) -> Option<GameEvent> {
+    fn handle(
+        &mut self,
+        _event: acprotocol::gameevents::MiscPortalStormImminent,
+    ) -> Option<GameEvent> {
         None
     }
 }
@@ -508,7 +618,10 @@ impl GameEventHandler<acprotocol::gameevents::MiscPortalStorm> for Client {
 }
 
 impl GameEventHandler<acprotocol::gameevents::MiscPortalStormSubsided> for Client {
-    fn handle(&mut self, _event: acprotocol::gameevents::MiscPortalStormSubsided) -> Option<GameEvent> {
+    fn handle(
+        &mut self,
+        _event: acprotocol::gameevents::MiscPortalStormSubsided,
+    ) -> Option<GameEvent> {
         None
     }
 }
@@ -516,31 +629,46 @@ impl GameEventHandler<acprotocol::gameevents::MiscPortalStormSubsided> for Clien
 // Additional Communication GameEventHandler Implementations
 
 impl GameEventHandler<acprotocol::gameevents::CommunicationPopUpString> for Client {
-    fn handle(&mut self, _event: acprotocol::gameevents::CommunicationPopUpString) -> Option<GameEvent> {
+    fn handle(
+        &mut self,
+        _event: acprotocol::gameevents::CommunicationPopUpString,
+    ) -> Option<GameEvent> {
         None
     }
 }
 
 impl GameEventHandler<acprotocol::gameevents::CommunicationWeenieError> for Client {
-    fn handle(&mut self, _event: acprotocol::gameevents::CommunicationWeenieError) -> Option<GameEvent> {
+    fn handle(
+        &mut self,
+        _event: acprotocol::gameevents::CommunicationWeenieError,
+    ) -> Option<GameEvent> {
         None
     }
 }
 
 impl GameEventHandler<acprotocol::gameevents::CommunicationWeenieErrorWithString> for Client {
-    fn handle(&mut self, _event: acprotocol::gameevents::CommunicationWeenieErrorWithString) -> Option<GameEvent> {
+    fn handle(
+        &mut self,
+        _event: acprotocol::gameevents::CommunicationWeenieErrorWithString,
+    ) -> Option<GameEvent> {
         None
     }
 }
 
 impl GameEventHandler<acprotocol::gameevents::CommunicationSetSquelchDB> for Client {
-    fn handle(&mut self, _event: acprotocol::gameevents::CommunicationSetSquelchDB) -> Option<GameEvent> {
+    fn handle(
+        &mut self,
+        _event: acprotocol::gameevents::CommunicationSetSquelchDB,
+    ) -> Option<GameEvent> {
         None
     }
 }
 
 impl GameEventHandler<acprotocol::gameevents::CommunicationChatRoomTracker> for Client {
-    fn handle(&mut self, _event: acprotocol::gameevents::CommunicationChatRoomTracker) -> Option<GameEvent> {
+    fn handle(
+        &mut self,
+        _event: acprotocol::gameevents::CommunicationChatRoomTracker,
+    ) -> Option<GameEvent> {
         None
     }
 }
@@ -548,7 +676,10 @@ impl GameEventHandler<acprotocol::gameevents::CommunicationChatRoomTracker> for 
 // Salvage GameEventHandler Implementations
 
 impl GameEventHandler<acprotocol::gameevents::InventorySalvageOperationsResultData> for Client {
-    fn handle(&mut self, _event: acprotocol::gameevents::InventorySalvageOperationsResultData) -> Option<GameEvent> {
+    fn handle(
+        &mut self,
+        _event: acprotocol::gameevents::InventorySalvageOperationsResultData,
+    ) -> Option<GameEvent> {
         None
     }
 }
@@ -556,7 +687,10 @@ impl GameEventHandler<acprotocol::gameevents::InventorySalvageOperationsResultDa
 // Login GameEventHandler Implementations
 
 impl GameEventHandler<acprotocol::gameevents::LoginPlayerDescription> for Client {
-    fn handle(&mut self, _event: acprotocol::gameevents::LoginPlayerDescription) -> Option<GameEvent> {
+    fn handle(
+        &mut self,
+        _event: acprotocol::gameevents::LoginPlayerDescription,
+    ) -> Option<GameEvent> {
         None
     }
 }

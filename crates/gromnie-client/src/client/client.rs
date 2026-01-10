@@ -42,13 +42,12 @@ use crate::client::{ClientEvent, ClientSystemEvent, GameEvent};
 use crate::crypto::crypto_system::CryptoSystem;
 use crate::crypto::magic_number::get_magic_number;
 use acprotocol::gameevents::{
-    CommunicationHearDirectSpeech, CommunicationTransientString,
-    ItemOnViewContents, MagicUpdateSpell, FellowshipFullUpdate, TradeRegisterTrade,
-    CombatHandleAttackDoneEvent, CombatHandleCommenceAttackEvent,
-    CombatHandleVictimNotificationEventSelf, CombatHandleVictimNotificationEventOther,
-    CombatHandleAttackerNotificationEvent, CombatHandleDefenderNotificationEvent,
+    CombatHandleAttackDoneEvent, CombatHandleAttackerNotificationEvent,
+    CombatHandleCommenceAttackEvent, CombatHandleDefenderNotificationEvent,
     CombatHandleEvasionAttackerNotificationEvent, CombatHandleEvasionDefenderNotificationEvent,
-    CombatQueryHealthResponse,
+    CombatHandleVictimNotificationEventOther, CombatHandleVictimNotificationEventSelf,
+    CombatQueryHealthResponse, CommunicationHearDirectSpeech, CommunicationTransientString,
+    FellowshipFullUpdate, ItemOnViewContents, MagicUpdateSpell, TradeRegisterTrade,
 };
 
 /// Maximum number of packets we can send without receiving before considering connection dead
@@ -1238,9 +1237,10 @@ impl Client {
                         .ok();
                     }
                     S2CMessage::QualitiesPrivateUpdateString => {
-                        dispatch_message::<acprotocol::messages::s2c::QualitiesPrivateUpdateString, _>(
-                            self, message, &event_tx,
-                        )
+                        dispatch_message::<
+                            acprotocol::messages::s2c::QualitiesPrivateUpdateString,
+                            _,
+                        >(self, message, &event_tx)
                         .ok();
                     }
                     S2CMessage::QualitiesUpdateDataId => {
@@ -1250,9 +1250,10 @@ impl Client {
                         .ok();
                     }
                     S2CMessage::QualitiesPrivateUpdateDataId => {
-                        dispatch_message::<acprotocol::messages::s2c::QualitiesPrivateUpdateDataId, _>(
-                            self, message, &event_tx,
-                        )
+                        dispatch_message::<
+                            acprotocol::messages::s2c::QualitiesPrivateUpdateDataId,
+                            _,
+                        >(self, message, &event_tx)
                         .ok();
                     }
                     S2CMessage::QualitiesUpdateInstanceId => {
@@ -1262,9 +1263,10 @@ impl Client {
                         .ok();
                     }
                     S2CMessage::QualitiesPrivateUpdateInstanceId => {
-                        dispatch_message::<acprotocol::messages::s2c::QualitiesPrivateUpdateInstanceId, _>(
-                            self, message, &event_tx,
-                        )
+                        dispatch_message::<
+                            acprotocol::messages::s2c::QualitiesPrivateUpdateInstanceId,
+                            _,
+                        >(self, message, &event_tx)
                         .ok();
                     }
                     // Communication
@@ -1308,9 +1310,10 @@ impl Client {
                     }
                     // Movement
                     S2CMessage::MovementPositionAndMovementEvent => {
-                        dispatch_message::<acprotocol::messages::s2c::MovementPositionAndMovementEvent, _>(
-                            self, message, &event_tx,
-                        )
+                        dispatch_message::<
+                            acprotocol::messages::s2c::MovementPositionAndMovementEvent,
+                            _,
+                        >(self, message, &event_tx)
                         .ok();
                     }
                     S2CMessage::MovementPositionEvent => {
@@ -1333,9 +1336,10 @@ impl Client {
                     }
                     // Combat
                     S2CMessage::CombatHandlePlayerDeathEvent => {
-                        dispatch_message::<acprotocol::messages::s2c::CombatHandlePlayerDeathEvent, _>(
-                            self, message, &event_tx,
-                        )
+                        dispatch_message::<
+                            acprotocol::messages::s2c::CombatHandlePlayerDeathEvent,
+                            _,
+                        >(self, message, &event_tx)
                         .ok();
                     }
                     // Add more handlers as needed
@@ -1819,7 +1823,11 @@ impl Client {
                 .ok();
             }
             GameEventType::SocialSendClientContractTrackerTable => {
-                dispatch_game_event::<acprotocol::gameevents::SocialSendClientContractTrackerTable, _, _>(
+                dispatch_game_event::<
+                    acprotocol::gameevents::SocialSendClientContractTrackerTable,
+                    _,
+                    _,
+                >(
                     self,
                     &mut cursor,
                     &event_tx,
@@ -1864,7 +1872,11 @@ impl Client {
                 .ok();
             }
             GameEventType::AllegianceAllegianceUpdateAborted => {
-                dispatch_game_event::<acprotocol::gameevents::AllegianceAllegianceUpdateAborted, _, _>(
+                dispatch_game_event::<
+                    acprotocol::gameevents::AllegianceAllegianceUpdateAborted,
+                    _,
+                    _,
+                >(
                     self,
                     &mut cursor,
                     &event_tx,
@@ -1875,7 +1887,11 @@ impl Client {
                 .ok();
             }
             GameEventType::AllegianceAllegianceLoginNotificationEvent => {
-                dispatch_game_event::<acprotocol::gameevents::AllegianceAllegianceLoginNotificationEvent, _, _>(
+                dispatch_game_event::<
+                    acprotocol::gameevents::AllegianceAllegianceLoginNotificationEvent,
+                    _,
+                    _,
+                >(
                     self,
                     &mut cursor,
                     &event_tx,
@@ -1886,7 +1902,11 @@ impl Client {
                 .ok();
             }
             GameEventType::AllegianceAllegianceInfoResponseEvent => {
-                dispatch_game_event::<acprotocol::gameevents::AllegianceAllegianceInfoResponseEvent, _, _>(
+                dispatch_game_event::<
+                    acprotocol::gameevents::AllegianceAllegianceInfoResponseEvent,
+                    _,
+                    _,
+                >(
                     self,
                     &mut cursor,
                     &event_tx,
@@ -2291,7 +2311,11 @@ impl Client {
                 .ok();
             }
             GameEventType::CommunicationWeenieErrorWithString => {
-                dispatch_game_event::<acprotocol::gameevents::CommunicationWeenieErrorWithString, _, _>(
+                dispatch_game_event::<
+                    acprotocol::gameevents::CommunicationWeenieErrorWithString,
+                    _,
+                    _,
+                >(
                     self,
                     &mut cursor,
                     &event_tx,
@@ -2325,7 +2349,11 @@ impl Client {
             }
             // Phase 5: Salvage
             GameEventType::InventorySalvageOperationsResultData => {
-                dispatch_game_event::<acprotocol::gameevents::InventorySalvageOperationsResultData, _, _>(
+                dispatch_game_event::<
+                    acprotocol::gameevents::InventorySalvageOperationsResultData,
+                    _,
+                    _,
+                >(
                     self,
                     &mut cursor,
                     &event_tx,
@@ -2955,10 +2983,7 @@ impl GameEventHandler<acprotocol::gameevents::CommunicationTransientString> for 
 
 /// Handle Item_OnViewContents game events (CRITICAL for inventory)
 impl GameEventHandler<acprotocol::gameevents::ItemOnViewContents> for Client {
-    fn handle(
-        &mut self,
-        event: acprotocol::gameevents::ItemOnViewContents,
-    ) -> Option<GameEvent> {
+    fn handle(&mut self, event: acprotocol::gameevents::ItemOnViewContents) -> Option<GameEvent> {
         let container_id = event.container_id.0;
         let items: Vec<u32> = event.items.list.iter().map(|cp| cp.object_id.0).collect();
 
@@ -2975,10 +3000,7 @@ impl GameEventHandler<acprotocol::gameevents::ItemOnViewContents> for Client {
 
 /// Handle Magic_UpdateSpell game events
 impl GameEventHandler<acprotocol::gameevents::MagicUpdateSpell> for Client {
-    fn handle(
-        &mut self,
-        event: acprotocol::gameevents::MagicUpdateSpell,
-    ) -> Option<GameEvent> {
+    fn handle(&mut self, event: acprotocol::gameevents::MagicUpdateSpell) -> Option<GameEvent> {
         info!(target: "net", "MagicUpdateSpell: Spell {:?}", event.spell_id.id);
         None // Most magic events are handled automatically via protocol events
     }
@@ -2986,10 +3008,7 @@ impl GameEventHandler<acprotocol::gameevents::MagicUpdateSpell> for Client {
 
 /// Handle Fellowship_FullUpdate game events
 impl GameEventHandler<acprotocol::gameevents::FellowshipFullUpdate> for Client {
-    fn handle(
-        &mut self,
-        event: acprotocol::gameevents::FellowshipFullUpdate,
-    ) -> Option<GameEvent> {
+    fn handle(&mut self, event: acprotocol::gameevents::FellowshipFullUpdate) -> Option<GameEvent> {
         info!(target: "net", "FellowshipFullUpdate: {}", event.fellowship.name);
         None // Handled via protocol events
     }
@@ -2997,10 +3016,7 @@ impl GameEventHandler<acprotocol::gameevents::FellowshipFullUpdate> for Client {
 
 /// Handle Trade_RegisterTrade game events
 impl GameEventHandler<acprotocol::gameevents::TradeRegisterTrade> for Client {
-    fn handle(
-        &mut self,
-        event: acprotocol::gameevents::TradeRegisterTrade,
-    ) -> Option<GameEvent> {
+    fn handle(&mut self, event: acprotocol::gameevents::TradeRegisterTrade) -> Option<GameEvent> {
         info!(target: "net", "TradeRegisterTrade: {} <-> {}",
               event.initiator_id.0, event.partner_id.0);
         None // Handled via protocol events
@@ -3078,7 +3094,9 @@ impl GameEventHandler<acprotocol::gameevents::CombatHandleDefenderNotificationEv
 }
 
 /// Handle CombatHandleEvasionAttackerNotification game events
-impl GameEventHandler<acprotocol::gameevents::CombatHandleEvasionAttackerNotificationEvent> for Client {
+impl GameEventHandler<acprotocol::gameevents::CombatHandleEvasionAttackerNotificationEvent>
+    for Client
+{
     fn handle(
         &mut self,
         event: acprotocol::gameevents::CombatHandleEvasionAttackerNotificationEvent,
@@ -3090,7 +3108,9 @@ impl GameEventHandler<acprotocol::gameevents::CombatHandleEvasionAttackerNotific
 }
 
 /// Handle CombatHandleEvasionDefenderNotification game events
-impl GameEventHandler<acprotocol::gameevents::CombatHandleEvasionDefenderNotificationEvent> for Client {
+impl GameEventHandler<acprotocol::gameevents::CombatHandleEvasionDefenderNotificationEvent>
+    for Client
+{
     fn handle(
         &mut self,
         event: acprotocol::gameevents::CombatHandleEvasionDefenderNotificationEvent,

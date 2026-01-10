@@ -168,7 +168,7 @@ pub enum S2CEvent {
     // ===== Movement Messages =====
     MovementPositionAndMovement {
         object_id: u32,
-        position: String, // JSON-serialized PositionPack
+        position: String,      // JSON-serialized PositionPack
         movement_data: String, // JSON-serialized MovementData
     },
     MovementPosition {
