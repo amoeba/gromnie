@@ -101,9 +101,7 @@ where
     Ok(())
 }
 
-// ============================================================================
-// Phase 2: Magic & Items GameEventHandler Implementations
-// ============================================================================
+// Magic & Items GameEventHandler Implementations
 
 use crate::client::Client;
 
@@ -143,9 +141,7 @@ impl GameEventHandler<acprotocol::gameevents::ItemQueryItemManaResponse> for Cli
     }
 }
 
-// ============================================================================
-// Phase 3: Trade GameEventHandler Implementations
-// ============================================================================
+// Trade GameEventHandler Implementations
 
 impl GameEventHandler<acprotocol::gameevents::TradeOpenTrade> for Client {
     fn handle(&mut self, _event: acprotocol::gameevents::TradeOpenTrade) -> Option<GameEvent> {
@@ -201,9 +197,7 @@ impl GameEventHandler<acprotocol::gameevents::TradeClearTradeAcceptance> for Cli
     }
 }
 
-// ============================================================================
-// Phase 3: Fellowship GameEventHandler Implementations
-// ============================================================================
+// Fellowship GameEventHandler Implementations
 
 impl GameEventHandler<acprotocol::gameevents::FellowshipUpdateFellow> for Client {
     fn handle(&mut self, _event: acprotocol::gameevents::FellowshipUpdateFellow) -> Option<GameEvent> {
@@ -241,9 +235,7 @@ impl GameEventHandler<acprotocol::gameevents::FellowshipFellowStatsDone> for Cli
     }
 }
 
-// ============================================================================
-// Phase 3: Social GameEventHandler Implementations
-// ============================================================================
+// Social GameEventHandler Implementations
 
 impl GameEventHandler<acprotocol::gameevents::SocialFriendsUpdate> for Client {
     fn handle(&mut self, _event: acprotocol::gameevents::SocialFriendsUpdate) -> Option<GameEvent> {
@@ -275,9 +267,7 @@ impl GameEventHandler<acprotocol::gameevents::SocialSendClientContractTracker> f
     }
 }
 
-// ============================================================================
-// Phase 3: Allegiance GameEventHandler Implementations
-// ============================================================================
+// Allegiance GameEventHandler Implementations
 
 impl GameEventHandler<acprotocol::gameevents::AllegianceAllegianceUpdate> for Client {
     fn handle(&mut self, _event: acprotocol::gameevents::AllegianceAllegianceUpdate) -> Option<GameEvent> {
@@ -309,9 +299,7 @@ impl GameEventHandler<acprotocol::gameevents::AllegianceAllegianceInfoResponseEv
     }
 }
 
-// ============================================================================
-// Phase 3: Vendor GameEventHandler Implementations
-// ============================================================================
+// Vendor GameEventHandler Implementations
 
 impl GameEventHandler<acprotocol::gameevents::VendorVendorInfo> for Client {
     fn handle(&mut self, _event: acprotocol::gameevents::VendorVendorInfo) -> Option<GameEvent> {
@@ -319,9 +307,7 @@ impl GameEventHandler<acprotocol::gameevents::VendorVendorInfo> for Client {
     }
 }
 
-// ============================================================================
-// Phase 4: Housing GameEventHandler Implementations
-// ============================================================================
+// Housing GameEventHandler Implementations
 
 impl GameEventHandler<acprotocol::gameevents::HouseHouseProfile> for Client {
     fn handle(&mut self, _event: acprotocol::gameevents::HouseHouseProfile) -> Option<GameEvent> {
@@ -377,9 +363,7 @@ impl GameEventHandler<acprotocol::gameevents::HouseAvailableHouses> for Client {
     }
 }
 
-// ============================================================================
-// Phase 4: Writing GameEventHandler Implementations
-// ============================================================================
+// Writing GameEventHandler Implementations
 
 impl GameEventHandler<acprotocol::gameevents::WritingBookOpen> for Client {
     fn handle(&mut self, _event: acprotocol::gameevents::WritingBookOpen) -> Option<GameEvent> {
@@ -405,9 +389,7 @@ impl GameEventHandler<acprotocol::gameevents::WritingBookPageDataResponse> for C
     }
 }
 
-// ============================================================================
-// Phase 4: Character GameEventHandler Implementations
-// ============================================================================
+// Character GameEventHandler Implementations
 
 impl GameEventHandler<acprotocol::gameevents::CharacterStartBarber> for Client {
     fn handle(&mut self, _event: acprotocol::gameevents::CharacterStartBarber) -> Option<GameEvent> {
@@ -427,9 +409,7 @@ impl GameEventHandler<acprotocol::gameevents::CharacterConfirmationRequest> for 
     }
 }
 
-// ============================================================================
-// Phase 4: Game Events GameEventHandler Implementations
-// ============================================================================
+// Game Events GameEventHandler Implementations
 
 impl GameEventHandler<acprotocol::gameevents::GameJoinGameResponse> for Client {
     fn handle(&mut self, _event: acprotocol::gameevents::GameJoinGameResponse) -> Option<GameEvent> {
@@ -467,9 +447,7 @@ impl GameEventHandler<acprotocol::gameevents::GameGameOver> for Client {
     }
 }
 
-// ============================================================================
-// Phase 4: Channels GameEventHandler Implementations
-// ============================================================================
+// Channels GameEventHandler Implementations
 
 impl GameEventHandler<acprotocol::gameevents::CommunicationChannelBroadcast> for Client {
     fn handle(&mut self, _event: acprotocol::gameevents::CommunicationChannelBroadcast) -> Option<GameEvent> {
@@ -489,9 +467,7 @@ impl GameEventHandler<acprotocol::gameevents::CommunicationChannelIndex> for Cli
     }
 }
 
-// ============================================================================
-// Phase 5: Admin GameEventHandler Implementations
-// ============================================================================
+// Admin GameEventHandler Implementations
 
 impl GameEventHandler<acprotocol::gameevents::AdminQueryPlugin> for Client {
     fn handle(&mut self, _event: acprotocol::gameevents::AdminQueryPlugin) -> Option<GameEvent> {
@@ -511,9 +487,7 @@ impl GameEventHandler<acprotocol::gameevents::AdminQueryPluginResponse2> for Cli
     }
 }
 
-// ============================================================================
-// Phase 5: Portal Storms GameEventHandler Implementations
-// ============================================================================
+// Portal Storms GameEventHandler Implementations
 
 impl GameEventHandler<acprotocol::gameevents::MiscPortalStormBrewing> for Client {
     fn handle(&mut self, _event: acprotocol::gameevents::MiscPortalStormBrewing) -> Option<GameEvent> {
@@ -539,9 +513,7 @@ impl GameEventHandler<acprotocol::gameevents::MiscPortalStormSubsided> for Clien
     }
 }
 
-// ============================================================================
-// Phase 5: Additional Communication GameEventHandler Implementations
-// ============================================================================
+// Additional Communication GameEventHandler Implementations
 
 impl GameEventHandler<acprotocol::gameevents::CommunicationPopUpString> for Client {
     fn handle(&mut self, _event: acprotocol::gameevents::CommunicationPopUpString) -> Option<GameEvent> {
@@ -573,9 +545,7 @@ impl GameEventHandler<acprotocol::gameevents::CommunicationChatRoomTracker> for 
     }
 }
 
-// ============================================================================
-// Phase 5: Salvage GameEventHandler Implementations
-// ============================================================================
+// Salvage GameEventHandler Implementations
 
 impl GameEventHandler<acprotocol::gameevents::InventorySalvageOperationsResultData> for Client {
     fn handle(&mut self, _event: acprotocol::gameevents::InventorySalvageOperationsResultData) -> Option<GameEvent> {
@@ -583,9 +553,7 @@ impl GameEventHandler<acprotocol::gameevents::InventorySalvageOperationsResultDa
     }
 }
 
-// ============================================================================
-// Phase 5: Login GameEventHandler Implementations
-// ============================================================================
+// Login GameEventHandler Implementations
 
 impl GameEventHandler<acprotocol::gameevents::LoginPlayerDescription> for Client {
     fn handle(&mut self, _event: acprotocol::gameevents::LoginPlayerDescription) -> Option<GameEvent> {
@@ -593,9 +561,7 @@ impl GameEventHandler<acprotocol::gameevents::LoginPlayerDescription> for Client
     }
 }
 
-// ============================================================================
-// Phase 5: Character GameEventHandler Implementations
-// ============================================================================
+// Character GameEventHandler Implementations
 
 impl GameEventHandler<acprotocol::gameevents::CharacterReturnPing> for Client {
     fn handle(&mut self, _event: acprotocol::gameevents::CharacterReturnPing) -> Option<GameEvent> {

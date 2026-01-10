@@ -286,7 +286,7 @@ pub enum S2CEvent {
         victim_id: u32,
         killer_id: u32,
     },
-    // ===== Phase 2: Magic & Items Messages =====
+    // ===== Magic & Items Messages =====
     // Magic/Enchantment Messages
     MagicUpdateEnchantmentS2C {
         enchantment_id: u32,
@@ -372,7 +372,7 @@ pub enum S2CEvent {
         vendor_name: String,
         vendor_price: u32,
     },
-    // ===== Phase 3: Social Systems Messages =====
+    // ===== Social Systems Messages =====
     // Trade System
     TradeRegisterTrade {
         initiator_id: u32,
@@ -459,7 +459,7 @@ pub enum S2CEvent {
         vendor_type: u32,
         items: Vec<u32>,
     },
-    // ===== Phase 4: Advanced Features Messages =====
+    // ===== Advanced Features Messages =====
     // Housing
     HouseProfile {
         house_id: u32,
@@ -563,7 +563,7 @@ pub enum S2CEvent {
         channel_id: u32,
         channel_name: String,
     },
-    // ===== Phase 5: Polish Messages =====
+    // ===== Polish Messages =====
     // Admin Tools
     ReceivePlayerData {
         player_id: u32,
@@ -1030,9 +1030,7 @@ pub enum GameEventMsg {
     MiscPortalStormSubsided {},
 }
 
-// ============================================================================
 // Conversion from game event handler types
-// ============================================================================
 
 /// Convert from CommunicationHearDirectSpeech game event handler type
 ///

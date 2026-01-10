@@ -7,6 +7,62 @@
 
 use gromnie_events::{GameEventMsg, S2CEvent};
 
+pub mod prelude {
+    //! Re-export all game event conversion functions for convenient importing
+    pub use super::{
+        hear_direct_speech_to_game_event_msg, transient_string_to_game_event_msg,
+        item_on_view_contents_to_game_event_msg, magic_update_spell_to_game_event_msg,
+        fellowship_full_update_to_game_event_msg, trade_register_trade_to_game_event_msg,
+        combat_handle_attack_done_to_game_event_msg, combat_handle_commence_attack_to_game_event_msg,
+        combat_handle_victim_notification_self_to_game_event_msg, combat_handle_victim_notification_other_to_game_event_msg,
+        combat_handle_attacker_notification_to_game_event_msg, combat_handle_defender_notification_to_game_event_msg,
+        combat_handle_evasion_attacker_notification_to_game_event_msg, combat_handle_evasion_defender_notification_to_game_event_msg,
+        combat_query_health_response_to_game_event_msg,
+        magic_update_enchantment_to_game_event_msg, magic_remove_enchantment_to_game_event_msg,
+        item_set_appraise_info_to_game_event_msg, item_appraise_done_to_game_event_msg,
+        item_wear_item_to_game_event_msg, item_query_item_mana_response_to_game_event_msg,
+        trade_open_trade_to_game_event_msg, trade_close_trade_to_game_event_msg,
+        trade_add_to_trade_to_game_event_msg, trade_remove_from_trade_to_game_event_msg,
+        trade_accept_trade_to_game_event_msg, trade_decline_trade_to_game_event_msg,
+        trade_reset_trade_to_game_event_msg, trade_trade_failure_to_game_event_msg,
+        trade_clear_trade_acceptance_to_game_event_msg,
+        fellowship_update_fellow_to_game_event_msg, fellowship_disband_to_game_event_msg,
+        fellowship_quit_to_game_event_msg, fellowship_dismiss_to_game_event_msg,
+        fellowship_update_done_to_game_event_msg, fellowship_stats_done_to_game_event_msg,
+        social_friends_update_to_game_event_msg, social_character_title_table_to_game_event_msg,
+        social_add_or_set_character_title_to_game_event_msg, social_send_client_contract_tracker_table_to_game_event_msg,
+        social_send_client_contract_tracker_to_game_event_msg,
+        allegiance_update_to_game_event_msg, allegiance_update_done_to_game_event_msg,
+        allegiance_update_aborted_to_game_event_msg, allegiance_login_notification_to_game_event_msg,
+        allegiance_info_response_to_game_event_msg,
+        vendor_info_to_game_event_msg,
+        house_profile_to_game_event_msg, house_data_to_game_event_msg,
+        house_status_to_game_event_msg, house_update_rent_time_to_game_event_msg,
+        house_update_rent_payment_to_game_event_msg, house_update_restrictions_to_game_event_msg,
+        house_update_har_to_game_event_msg, house_transaction_to_game_event_msg,
+        house_available_houses_to_game_event_msg,
+        writing_book_open_to_game_event_msg, writing_book_add_page_response_to_game_event_msg,
+        writing_book_delete_page_response_to_game_event_msg, writing_book_page_data_response_to_game_event_msg,
+        character_start_barber_to_game_event_msg, character_query_age_response_to_game_event_msg,
+        character_confirmation_request_to_game_event_msg,
+        game_join_game_response_to_game_event_msg, game_start_game_to_game_event_msg,
+        game_move_response_to_game_event_msg, game_opponent_turn_to_game_event_msg,
+        game_opponent_stalemate_state_to_game_event_msg, game_game_over_to_game_event_msg,
+        channel_broadcast_to_game_event_msg, channel_list_to_game_event_msg,
+        channel_index_to_game_event_msg,
+        admin_query_plugin_to_game_event_msg, admin_query_plugin_list_to_game_event_msg,
+        admin_query_plugin_response_to_game_event_msg,
+        misc_portal_storm_brewing_to_game_event_msg, misc_portal_storm_imminent_to_game_event_msg,
+        misc_portal_storm_to_game_event_msg, misc_portal_storm_subsided_to_game_event_msg,
+        communication_popup_string_to_game_event_msg, communication_weenie_error_to_game_event_msg,
+        communication_weenie_error_with_string_to_game_event_msg, communication_set_squelch_db_to_game_event_msg,
+        communication_chat_room_tracker_to_game_event_msg,
+        inventory_salvage_operations_result_to_game_event_msg,
+        login_player_description_to_game_event_msg,
+        character_return_ping_to_game_event_msg,
+    };
+}
+
 /// Helper trait for converting acprotocol S2C message types to ProtocolEvent-compatible types
 pub trait ToProtocolEvent {
     fn to_protocol_event(&self) -> S2CEvent;
@@ -117,9 +173,7 @@ impl ToProtocolEvent for acprotocol::messages::s2c::ItemDeleteObject {
     }
 }
 
-// ============================================================================
 // Quality/Property Update Conversions
-// ============================================================================
 
 impl ToProtocolEvent for acprotocol::messages::s2c::QualitiesUpdateInt {
     fn to_protocol_event(&self) -> S2CEvent {
@@ -258,9 +312,7 @@ impl ToProtocolEvent for acprotocol::messages::s2c::QualitiesPrivateUpdateInstan
     }
 }
 
-// ============================================================================
 // Communication Message Conversions
-// ============================================================================
 
 impl ToProtocolEvent for acprotocol::messages::s2c::CommunicationHearEmote {
     fn to_protocol_event(&self) -> S2CEvent {
@@ -289,9 +341,7 @@ impl ToProtocolEvent for acprotocol::messages::s2c::CommunicationTextboxString {
     }
 }
 
-// ============================================================================
 // Item/Inventory Message Conversions
-// ============================================================================
 
 impl ToProtocolEvent for acprotocol::messages::s2c::ItemUpdateStackSize {
     fn to_protocol_event(&self) -> S2CEvent {
@@ -318,9 +368,7 @@ impl ToProtocolEvent for acprotocol::messages::s2c::InventoryPickupEvent {
     }
 }
 
-// ============================================================================
 // Effects Message Conversions
-// ============================================================================
 
 impl ToProtocolEvent for acprotocol::messages::s2c::EffectsSoundEvent {
     fn to_protocol_event(&self) -> S2CEvent {
@@ -331,9 +379,7 @@ impl ToProtocolEvent for acprotocol::messages::s2c::EffectsSoundEvent {
     }
 }
 
-// ============================================================================
 // Movement Message Conversions
-// ============================================================================
 
 impl ToProtocolEvent for acprotocol::messages::s2c::MovementPositionAndMovementEvent {
     fn to_protocol_event(&self) -> S2CEvent {
@@ -380,9 +426,7 @@ impl ToProtocolEvent for acprotocol::messages::s2c::MovementVectorUpdate {
     }
 }
 
-// ============================================================================
 // Combat Message Conversions
-// ============================================================================
 
 impl ToProtocolEvent for acprotocol::messages::s2c::CombatHandlePlayerDeathEvent {
     fn to_protocol_event(&self) -> S2CEvent {
@@ -393,9 +437,7 @@ impl ToProtocolEvent for acprotocol::messages::s2c::CombatHandlePlayerDeathEvent
     }
 }
 
-// ============================================================================
 // Conversion from game event types to GameEventMsg
-// ============================================================================
 //
 // These conversions are used by the game event dispatcher to create protocol events.
 // They're implemented as standalone functions to avoid orphan rule issues.
@@ -422,9 +464,7 @@ pub fn transient_string_to_game_event_msg(
     }
 }
 
-// ============================================================================
 // Additional Game Event Conversions
-// ============================================================================
 
 /// Convert acprotocol ItemOnViewContents to GameEventMsg
 pub fn item_on_view_contents_to_game_event_msg(
@@ -470,9 +510,7 @@ pub fn trade_register_trade_to_game_event_msg(
     }
 }
 
-// ============================================================================
 // Combat Game Event Conversions
-// ============================================================================
 
 /// Convert acprotocol CombatHandleAttackDoneEvent to GameEventMsg
 pub fn combat_handle_attack_done_to_game_event_msg(
@@ -568,9 +606,7 @@ pub fn combat_query_health_response_to_game_event_msg(
     }
 }
 
-// ============================================================================
-// Phase 2: Magic & Items Conversions
-// ============================================================================
+// Magic & Items Conversions
 
 /// Convert acprotocol MagicUpdateEnchantment game event to GameEventMsg
 pub fn magic_update_enchantment_to_game_event_msg(
@@ -637,9 +673,7 @@ pub fn item_query_item_mana_response_to_game_event_msg(
     }
 }
 
-// ============================================================================
-// Phase 3: Trade Game Event Conversions
-// ============================================================================
+// Trade Game Event Conversions
 
 /// Convert acprotocol TradeOpenTrade to GameEventMsg
 pub fn trade_open_trade_to_game_event_msg(
@@ -720,9 +754,7 @@ pub fn trade_clear_trade_acceptance_to_game_event_msg(
     GameEventMsg::TradeClearTradeAcceptance {}
 }
 
-// ============================================================================
-// Phase 3: Fellowship Game Event Conversions
-// ============================================================================
+// Fellowship Game Event Conversions
 
 /// Convert acprotocol FellowshipUpdateFellow to GameEventMsg
 pub fn fellowship_update_fellow_to_game_event_msg(
@@ -778,9 +810,7 @@ pub fn fellowship_stats_done_to_game_event_msg(
     GameEventMsg::FellowshipStatsDone {}
 }
 
-// ============================================================================
-// Phase 3: Social Game Event Conversions
-// ============================================================================
+// Social Game Event Conversions
 
 /// Convert acprotocol SocialFriendsUpdate to GameEventMsg
 pub fn social_friends_update_to_game_event_msg(
@@ -836,9 +866,7 @@ pub fn social_send_client_contract_tracker_to_game_event_msg(
     }
 }
 
-// ============================================================================
-// Phase 3: Allegiance Game Event Conversions
-// ============================================================================
+// Allegiance Game Event Conversions
 
 /// Convert acprotocol AllegianceAllegianceUpdate to GameEventMsg
 pub fn allegiance_update_to_game_event_msg(
@@ -886,9 +914,7 @@ pub fn allegiance_info_response_to_game_event_msg(
     }
 }
 
-// ============================================================================
-// Phase 3: Vendor Game Event Conversions
-// ============================================================================
+// Vendor Game Event Conversions
 
 /// Convert acprotocol VendorVendorInfo to GameEventMsg
 pub fn vendor_info_to_game_event_msg(
@@ -902,9 +928,7 @@ pub fn vendor_info_to_game_event_msg(
     }
 }
 
-// ============================================================================
-// Phase 4: Housing Game Event Conversions
-// ============================================================================
+// Housing Game Event Conversions
 
 /// Convert acprotocol HouseHouseProfile to GameEventMsg
 pub fn house_profile_to_game_event_msg(
@@ -996,9 +1020,7 @@ pub fn house_available_houses_to_game_event_msg(
     }
 }
 
-// ============================================================================
-// Phase 4: Writing Game Event Conversions
-// ============================================================================
+// Writing Game Event Conversions
 
 /// Convert acprotocol WritingWritingBookOpen to GameEventMsg
 pub fn writing_book_open_to_game_event_msg(
@@ -1041,9 +1063,7 @@ pub fn writing_book_page_data_response_to_game_event_msg(
     }
 }
 
-// ============================================================================
-// Phase 4: Character Game Event Conversions
-// ============================================================================
+// Character Game Event Conversions
 
 /// Convert acprotocol CharacterCharacterStartBarber to GameEventMsg
 pub fn character_start_barber_to_game_event_msg(
@@ -1074,9 +1094,7 @@ pub fn character_confirmation_request_to_game_event_msg(
     }
 }
 
-// ============================================================================
-// Phase 4: Game Events Game Event Conversions
-// ============================================================================
+// Game Events Game Event Conversions
 
 /// Convert acprotocol GameGameJoinGameResponse to GameEventMsg
 pub fn game_join_game_response_to_game_event_msg(
@@ -1136,9 +1154,7 @@ pub fn game_game_over_to_game_event_msg(
     }
 }
 
-// ============================================================================
 // Phase 4: Channels Game Event Conversions
-// ============================================================================
 
 /// Convert acprotocol CommunicationCommunicationChannelBroadcast to GameEventMsg
 pub fn channel_broadcast_to_game_event_msg(
@@ -1170,9 +1186,7 @@ pub fn channel_index_to_game_event_msg(
     }
 }
 
-// ============================================================================
 // Phase 5: Admin Game Event Conversions
-// ============================================================================
 
 /// Convert acprotocol AdminQueryPlugin to GameEventMsg
 pub fn admin_query_plugin_to_game_event_msg(
@@ -1202,9 +1216,7 @@ pub fn admin_query_plugin_response_to_game_event_msg(
     }
 }
 
-// ============================================================================
 // Phase 5: Portal Storm Game Event Conversions
-// ============================================================================
 
 /// Convert acprotocol MiscPortalStormBrewing to GameEventMsg
 pub fn misc_portal_storm_brewing_to_game_event_msg(
@@ -1234,9 +1246,7 @@ pub fn misc_portal_storm_subsided_to_game_event_msg(
     GameEventMsg::MiscPortalStormSubsided {}
 }
 
-// ============================================================================
 // Phase 5: Additional Communication Game Event Conversions
-// ============================================================================
 
 /// Convert acprotocol CommunicationPopUpString to GameEventMsg
 pub fn communication_popup_string_to_game_event_msg(
@@ -1285,9 +1295,7 @@ pub fn communication_chat_room_tracker_to_game_event_msg(
     }
 }
 
-// ============================================================================
-// Phase 5: Salvage Game Event Conversions
-// ============================================================================
+// Salvage Game Event Conversions
 
 /// Convert acprotocol InventorySalvageOperationsResultData to GameEventMsg
 pub fn inventory_salvage_operations_result_to_game_event_msg(
@@ -1300,9 +1308,7 @@ pub fn inventory_salvage_operations_result_to_game_event_msg(
     }
 }
 
-// ============================================================================
-// Phase 5: Login Game Event Conversions
-// ============================================================================
+// Login Game Event Conversions
 
 /// Convert acprotocol LoginPlayerDescription to GameEventMsg
 pub fn login_player_description_to_game_event_msg(
@@ -1314,9 +1320,7 @@ pub fn login_player_description_to_game_event_msg(
     }
 }
 
-// ============================================================================
-// Phase 5: Character Game Event Conversions
-// ============================================================================
+// Character Game Event Conversions
 
 /// Convert acprotocol CharacterReturnPing to GameEventMsg
 pub fn character_return_ping_to_game_event_msg(

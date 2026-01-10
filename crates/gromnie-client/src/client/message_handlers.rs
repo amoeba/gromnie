@@ -801,10 +801,10 @@ impl MessageHandler<acprotocol::messages::s2c::CombatHandlePlayerDeathEvent> for
 }
 
 // ============================================================================
-// Phase 2: Magic & Items Message Handlers
+// Magic & Items Message Handlers
 // ============================================================================
 // These handlers cover enchantments, appraisal, equipment, containers,
-// and item queries as part of Phase 2 protocol coverage.
+// and item queries as part of the protocol coverage.
 
 // Magic & Enchantment Handlers
 // Handlers for MagicUpdateEnchantment, MagicRemoveEnchantment, etc.

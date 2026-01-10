@@ -37,75 +37,7 @@ use tracing::{debug, error, info, warn};
 use crate::client::constants::*;
 use crate::client::game_event_handler::dispatch_game_event;
 use crate::client::message_handler::dispatch_message;
-use crate::client::protocol_conversions::{
-    hear_direct_speech_to_game_event_msg, transient_string_to_game_event_msg,
-    item_on_view_contents_to_game_event_msg, magic_update_spell_to_game_event_msg,
-    fellowship_full_update_to_game_event_msg, trade_register_trade_to_game_event_msg,
-    combat_handle_attack_done_to_game_event_msg, combat_handle_commence_attack_to_game_event_msg,
-    combat_handle_victim_notification_self_to_game_event_msg, combat_handle_victim_notification_other_to_game_event_msg,
-    combat_handle_attacker_notification_to_game_event_msg, combat_handle_defender_notification_to_game_event_msg,
-    combat_handle_evasion_attacker_notification_to_game_event_msg, combat_handle_evasion_defender_notification_to_game_event_msg,
-    combat_query_health_response_to_game_event_msg,
-    // Phase 2: Magic & Items
-    magic_update_enchantment_to_game_event_msg, magic_remove_enchantment_to_game_event_msg,
-    item_set_appraise_info_to_game_event_msg, item_appraise_done_to_game_event_msg,
-    item_wear_item_to_game_event_msg, item_query_item_mana_response_to_game_event_msg,
-    // Phase 3: Trade
-    trade_open_trade_to_game_event_msg, trade_close_trade_to_game_event_msg,
-    trade_add_to_trade_to_game_event_msg, trade_remove_from_trade_to_game_event_msg,
-    trade_accept_trade_to_game_event_msg, trade_decline_trade_to_game_event_msg,
-    trade_reset_trade_to_game_event_msg, trade_trade_failure_to_game_event_msg,
-    trade_clear_trade_acceptance_to_game_event_msg,
-    // Phase 3: Fellowship
-    fellowship_update_fellow_to_game_event_msg, fellowship_disband_to_game_event_msg,
-    fellowship_quit_to_game_event_msg, fellowship_dismiss_to_game_event_msg,
-    fellowship_update_done_to_game_event_msg, fellowship_stats_done_to_game_event_msg,
-    // Phase 3: Social
-    social_friends_update_to_game_event_msg, social_character_title_table_to_game_event_msg,
-    social_add_or_set_character_title_to_game_event_msg, social_send_client_contract_tracker_table_to_game_event_msg,
-    social_send_client_contract_tracker_to_game_event_msg,
-    // Phase 3: Allegiance
-    allegiance_update_to_game_event_msg, allegiance_update_done_to_game_event_msg,
-    allegiance_update_aborted_to_game_event_msg, allegiance_login_notification_to_game_event_msg,
-    allegiance_info_response_to_game_event_msg,
-    // Phase 3: Vendor
-    vendor_info_to_game_event_msg,
-    // Phase 4: Housing
-    house_profile_to_game_event_msg, house_data_to_game_event_msg,
-    house_status_to_game_event_msg, house_update_rent_time_to_game_event_msg,
-    house_update_rent_payment_to_game_event_msg, house_update_restrictions_to_game_event_msg,
-    house_update_har_to_game_event_msg, house_transaction_to_game_event_msg,
-    house_available_houses_to_game_event_msg,
-    // Phase 4: Writing
-    writing_book_open_to_game_event_msg, writing_book_add_page_response_to_game_event_msg,
-    writing_book_delete_page_response_to_game_event_msg, writing_book_page_data_response_to_game_event_msg,
-    // Phase 4: Character
-    character_start_barber_to_game_event_msg, character_query_age_response_to_game_event_msg,
-    character_confirmation_request_to_game_event_msg,
-    // Phase 4: Games
-    game_join_game_response_to_game_event_msg, game_start_game_to_game_event_msg,
-    game_move_response_to_game_event_msg, game_opponent_turn_to_game_event_msg,
-    game_opponent_stalemate_state_to_game_event_msg, game_game_over_to_game_event_msg,
-    // Phase 4: Channels
-    channel_broadcast_to_game_event_msg, channel_list_to_game_event_msg,
-    channel_index_to_game_event_msg,
-    // Phase 5: Admin
-    admin_query_plugin_to_game_event_msg, admin_query_plugin_list_to_game_event_msg,
-    admin_query_plugin_response_to_game_event_msg,
-    // Phase 5: Portal Storms
-    misc_portal_storm_brewing_to_game_event_msg, misc_portal_storm_imminent_to_game_event_msg,
-    misc_portal_storm_to_game_event_msg, misc_portal_storm_subsided_to_game_event_msg,
-    // Phase 5: Communication
-    communication_popup_string_to_game_event_msg, communication_weenie_error_to_game_event_msg,
-    communication_weenie_error_with_string_to_game_event_msg, communication_set_squelch_db_to_game_event_msg,
-    communication_chat_room_tracker_to_game_event_msg,
-    // Phase 5: Salvage
-    inventory_salvage_operations_result_to_game_event_msg,
-    // Phase 5: Login
-    login_player_description_to_game_event_msg,
-    // Phase 5: Character
-    character_return_ping_to_game_event_msg,
-};
+use crate::client::protocol_conversions::prelude::*;
 use crate::client::{ClientEvent, ClientSystemEvent, GameEvent};
 use crate::crypto::crypto_system::CryptoSystem;
 use crate::crypto::magic_number::get_magic_number;
@@ -2983,9 +2915,7 @@ impl Client {
     }
 }
 
-// ============================================================================
 // GameEventHandler implementations
-// ============================================================================
 
 use crate::client::game_event_handler::GameEventHandler;
 
@@ -3077,9 +3007,7 @@ impl GameEventHandler<acprotocol::gameevents::TradeRegisterTrade> for Client {
     }
 }
 
-// ============================================================================
 // Combat Game Event Handlers
-// ============================================================================
 
 /// Handle CombatHandleAttackDone game events
 impl GameEventHandler<acprotocol::gameevents::CombatHandleAttackDoneEvent> for Client {
