@@ -3,7 +3,7 @@ use tracing::{error, info};
 
 use gromnie_client::config::GromnieConfig;
 use gromnie_events::SimpleClientAction;
-use gromnie_runner::{ClientConfig, ClientRunner, TuiConsumer, TuiEvent};
+use gromnie_runner::{ClientConfig, ClientRunner, TuiConsumer, TuiEvent, logging};
 use gromnie_tui::{App, event_handler::EventHandler, ui::try_init_tui};
 
 #[derive(Parser)]
@@ -44,6 +44,9 @@ pub struct Cli {
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    // Initialize logging with file output
+    let _log_guard = logging::init_logging("tui", true)?;
+
     let cli = Cli::parse();
 
     // Load configuration if available, but only require it when using --server/--account aliases

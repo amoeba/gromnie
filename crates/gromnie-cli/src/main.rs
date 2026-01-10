@@ -2,10 +2,9 @@ use std::error::Error;
 use std::fs;
 
 use clap::Parser;
-use gromnie_runner::{ClientConfig, ClientRunner, LoggingConsumer};
+use gromnie_runner::{ClientConfig, ClientRunner, LoggingConsumer, logging};
 use ratatui::{TerminalOptions, Viewport};
 use tracing::info;
-use tracing_subscriber::EnvFilter;
 
 use gromnie_cli::{app::App, run as cli_run};
 use gromnie_client::config::{ConfigLoadError, GromnieConfig};
@@ -73,11 +72,8 @@ enabled = true
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
-    tracing_subscriber::fmt()
-        .with_env_filter(
-            EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info")),
-        )
-        .init();
+    // Initialize logging with file output
+    let _log_guard = logging::init_logging("cli", true)?;
 
     let cli = Cli::parse();
 

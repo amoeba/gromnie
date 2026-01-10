@@ -10,10 +10,9 @@ use std::sync::Arc;
 use std::time::Instant;
 use tokio::sync::RwLock;
 use tracing::{error, info};
-use tracing_subscriber::EnvFilter;
 
 use gromnie_events::SimpleGameEvent;
-use gromnie_runner::{ClientConfig, DiscordConsumer, EventBusManager, UptimeData};
+use gromnie_runner::{ClientConfig, DiscordConsumer, EventBusManager, UptimeData, logging};
 
 #[derive(Parser)]
 #[command(version, about, long_about = None)]
@@ -154,11 +153,7 @@ impl Handler {
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Initialize tracing subscriber
-    tracing_subscriber::fmt()
-        .with_env_filter(
-            EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info")),
-        )
-        .init();
+    let _log_guard = logging::init_logging("discord", true)?;
 
     let _cli = Cli::parse();
 
