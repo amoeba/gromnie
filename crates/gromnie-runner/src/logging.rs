@@ -2,7 +2,7 @@ use std::fs::{self, File, OpenOptions};
 use std::io::{self, BufWriter};
 use std::path::PathBuf;
 use tracing_appender::non_blocking::WorkerGuard;
-use tracing_subscriber::{fmt, EnvFilter, layer::SubscriberExt, util::SubscriberInitExt};
+use tracing_subscriber::{EnvFilter, fmt, layer::SubscriberExt, util::SubscriberInitExt};
 
 const MAX_LOG_SIZE: u64 = 1024 * 1024; // 1MB
 
@@ -34,16 +34,12 @@ pub fn init_logging(component_name: &str, enabled: bool) -> io::Result<Option<Wo
         let (non_blocking_file, guard) = tracing_appender::non_blocking(BufWriter::new(file));
 
         // Set up layered subscriber with both console and file output
-        let env_filter = EnvFilter::try_from_default_env()
-            .unwrap_or_else(|_| EnvFilter::new("info"));
+        let env_filter =
+            EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info"));
 
         tracing_subscriber::registry()
             .with(env_filter)
-            .with(
-                fmt::layer()
-                    .with_writer(io::stdout)
-                    .with_ansi(true),
-            )
+            .with(fmt::layer().with_writer(io::stdout).with_ansi(true))
             .with(
                 fmt::layer()
                     .with_writer(non_blocking_file)
@@ -70,9 +66,8 @@ pub fn init_logging(component_name: &str, enabled: bool) -> io::Result<Option<Wo
 /// Get the log directory path.
 fn get_log_directory() -> io::Result<PathBuf> {
     // Use the same data directory as the rest of the app
-    let proj_paths =
-        gromnie_client::config::paths::ProjectPaths::new("gromnie")
-            .ok_or_else(|| io::Error::new(io::ErrorKind::NotFound, "Failed to find home directory"))?;
+    let proj_paths = gromnie_client::config::paths::ProjectPaths::new("gromnie")
+        .ok_or_else(|| io::Error::new(io::ErrorKind::NotFound, "Failed to find home directory"))?;
 
     Ok(proj_paths.data_dir().join("logs"))
 }
