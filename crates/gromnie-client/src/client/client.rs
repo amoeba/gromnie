@@ -37,13 +37,18 @@ use tracing::{debug, error, info, warn};
 use crate::client::constants::*;
 use crate::client::game_event_handler::dispatch_game_event;
 use crate::client::message_handler::dispatch_message;
-use crate::client::protocol_conversions::{
-    hear_direct_speech_to_game_event_msg, transient_string_to_game_event_msg,
-};
+use crate::client::protocol_conversions::prelude::*;
 use crate::client::{ClientEvent, ClientSystemEvent, GameEvent};
 use crate::crypto::crypto_system::CryptoSystem;
 use crate::crypto::magic_number::get_magic_number;
-use acprotocol::gameevents::{CommunicationHearDirectSpeech, CommunicationTransientString};
+use acprotocol::gameevents::{
+    CombatHandleAttackDoneEvent, CombatHandleAttackerNotificationEvent,
+    CombatHandleCommenceAttackEvent, CombatHandleDefenderNotificationEvent,
+    CombatHandleEvasionAttackerNotificationEvent, CombatHandleEvasionDefenderNotificationEvent,
+    CombatHandleVictimNotificationEventOther, CombatHandleVictimNotificationEventSelf,
+    CombatQueryHealthResponse, CommunicationHearDirectSpeech, CommunicationTransientString,
+    FellowshipFullUpdate, ItemOnViewContents, MagicUpdateSpell, TradeRegisterTrade,
+};
 
 /// Maximum number of packets we can send without receiving before considering connection dead
 const MAX_UNACKED_SENDS: u32 = 20;
@@ -1182,9 +1187,164 @@ impl Client {
                         )
                         .ok();
                     }
+                    // Quality/Property Updates
+                    S2CMessage::QualitiesUpdateInt => {
+                        dispatch_message::<acprotocol::messages::s2c::QualitiesUpdateInt, _>(
+                            self, message, &event_tx,
+                        )
+                        .ok();
+                    }
+                    S2CMessage::QualitiesUpdateInt64 => {
+                        dispatch_message::<acprotocol::messages::s2c::QualitiesUpdateInt64, _>(
+                            self, message, &event_tx,
+                        )
+                        .ok();
+                    }
+                    S2CMessage::QualitiesPrivateUpdateInt64 => {
+                        dispatch_message::<acprotocol::messages::s2c::QualitiesPrivateUpdateInt64, _>(
+                            self, message, &event_tx,
+                        )
+                        .ok();
+                    }
+                    S2CMessage::QualitiesUpdateBool => {
+                        dispatch_message::<acprotocol::messages::s2c::QualitiesUpdateBool, _>(
+                            self, message, &event_tx,
+                        )
+                        .ok();
+                    }
+                    S2CMessage::QualitiesPrivateUpdateBool => {
+                        dispatch_message::<acprotocol::messages::s2c::QualitiesPrivateUpdateBool, _>(
+                            self, message, &event_tx,
+                        )
+                        .ok();
+                    }
+                    S2CMessage::QualitiesUpdateFloat => {
+                        dispatch_message::<acprotocol::messages::s2c::QualitiesUpdateFloat, _>(
+                            self, message, &event_tx,
+                        )
+                        .ok();
+                    }
+                    S2CMessage::QualitiesPrivateUpdateFloat => {
+                        dispatch_message::<acprotocol::messages::s2c::QualitiesPrivateUpdateFloat, _>(
+                            self, message, &event_tx,
+                        )
+                        .ok();
+                    }
+                    S2CMessage::QualitiesUpdateString => {
+                        dispatch_message::<acprotocol::messages::s2c::QualitiesUpdateString, _>(
+                            self, message, &event_tx,
+                        )
+                        .ok();
+                    }
+                    S2CMessage::QualitiesPrivateUpdateString => {
+                        dispatch_message::<
+                            acprotocol::messages::s2c::QualitiesPrivateUpdateString,
+                            _,
+                        >(self, message, &event_tx)
+                        .ok();
+                    }
+                    S2CMessage::QualitiesUpdateDataId => {
+                        dispatch_message::<acprotocol::messages::s2c::QualitiesUpdateDataId, _>(
+                            self, message, &event_tx,
+                        )
+                        .ok();
+                    }
+                    S2CMessage::QualitiesPrivateUpdateDataId => {
+                        dispatch_message::<
+                            acprotocol::messages::s2c::QualitiesPrivateUpdateDataId,
+                            _,
+                        >(self, message, &event_tx)
+                        .ok();
+                    }
+                    S2CMessage::QualitiesUpdateInstanceId => {
+                        dispatch_message::<acprotocol::messages::s2c::QualitiesUpdateInstanceId, _>(
+                            self, message, &event_tx,
+                        )
+                        .ok();
+                    }
+                    S2CMessage::QualitiesPrivateUpdateInstanceId => {
+                        dispatch_message::<
+                            acprotocol::messages::s2c::QualitiesPrivateUpdateInstanceId,
+                            _,
+                        >(self, message, &event_tx)
+                        .ok();
+                    }
+                    // Communication
+                    S2CMessage::CommunicationHearEmote => {
+                        dispatch_message::<acprotocol::messages::s2c::CommunicationHearEmote, _>(
+                            self, message, &event_tx,
+                        )
+                        .ok();
+                    }
+                    S2CMessage::CommunicationHearSoulEmote => {
+                        dispatch_message::<acprotocol::messages::s2c::CommunicationHearSoulEmote, _>(
+                            self, message, &event_tx,
+                        )
+                        .ok();
+                    }
+                    // Items/Inventory
+                    S2CMessage::ItemUpdateStackSize => {
+                        dispatch_message::<acprotocol::messages::s2c::ItemUpdateStackSize, _>(
+                            self, message, &event_tx,
+                        )
+                        .ok();
+                    }
+                    S2CMessage::ItemServerSaysRemove => {
+                        dispatch_message::<acprotocol::messages::s2c::ItemServerSaysRemove, _>(
+                            self, message, &event_tx,
+                        )
+                        .ok();
+                    }
+                    S2CMessage::InventoryPickupEvent => {
+                        dispatch_message::<acprotocol::messages::s2c::InventoryPickupEvent, _>(
+                            self, message, &event_tx,
+                        )
+                        .ok();
+                    }
+                    // Effects
+                    S2CMessage::EffectsSoundEvent => {
+                        dispatch_message::<acprotocol::messages::s2c::EffectsSoundEvent, _>(
+                            self, message, &event_tx,
+                        )
+                        .ok();
+                    }
+                    // Movement
+                    S2CMessage::MovementPositionAndMovementEvent => {
+                        dispatch_message::<
+                            acprotocol::messages::s2c::MovementPositionAndMovementEvent,
+                            _,
+                        >(self, message, &event_tx)
+                        .ok();
+                    }
+                    S2CMessage::MovementPositionEvent => {
+                        dispatch_message::<acprotocol::messages::s2c::MovementPositionEvent, _>(
+                            self, message, &event_tx,
+                        )
+                        .ok();
+                    }
+                    S2CMessage::MovementSetObjectMovement => {
+                        dispatch_message::<acprotocol::messages::s2c::MovementSetObjectMovement, _>(
+                            self, message, &event_tx,
+                        )
+                        .ok();
+                    }
+                    S2CMessage::MovementVectorUpdate => {
+                        dispatch_message::<acprotocol::messages::s2c::MovementVectorUpdate, _>(
+                            self, message, &event_tx,
+                        )
+                        .ok();
+                    }
+                    // Combat
+                    S2CMessage::CombatHandlePlayerDeathEvent => {
+                        dispatch_message::<
+                            acprotocol::messages::s2c::CombatHandlePlayerDeathEvent,
+                            _,
+                        >(self, message, &event_tx)
+                        .ok();
+                    }
                     // Add more handlers as needed
                     _ => {
-                        info!(target: "net", "Unhandled S2CMessage: {:?} (0x{:04X})", msg_type, message.opcode);
+                        debug!(target: "net", "Unhandled S2CMessage: {:?} (0x{:04X})", msg_type, message.opcode);
                     }
                 }
             }
@@ -1248,6 +1408,982 @@ impl Client {
                     object_id,
                     sequence,
                     transient_string_to_game_event_msg,
+                )
+                .ok();
+            }
+            GameEventType::ItemOnViewContents => {
+                dispatch_game_event::<ItemOnViewContents, _, _>(
+                    self,
+                    &mut cursor,
+                    &event_tx,
+                    object_id,
+                    sequence,
+                    item_on_view_contents_to_game_event_msg,
+                )
+                .ok();
+            }
+            GameEventType::MagicUpdateSpell => {
+                dispatch_game_event::<MagicUpdateSpell, _, _>(
+                    self,
+                    &mut cursor,
+                    &event_tx,
+                    object_id,
+                    sequence,
+                    magic_update_spell_to_game_event_msg,
+                )
+                .ok();
+            }
+            GameEventType::FellowshipFullUpdate => {
+                dispatch_game_event::<FellowshipFullUpdate, _, _>(
+                    self,
+                    &mut cursor,
+                    &event_tx,
+                    object_id,
+                    sequence,
+                    fellowship_full_update_to_game_event_msg,
+                )
+                .ok();
+            }
+            GameEventType::TradeRegisterTrade => {
+                dispatch_game_event::<TradeRegisterTrade, _, _>(
+                    self,
+                    &mut cursor,
+                    &event_tx,
+                    object_id,
+                    sequence,
+                    trade_register_trade_to_game_event_msg,
+                )
+                .ok();
+            }
+            GameEventType::CombatHandleAttackDoneEvent => {
+                dispatch_game_event::<CombatHandleAttackDoneEvent, _, _>(
+                    self,
+                    &mut cursor,
+                    &event_tx,
+                    object_id,
+                    sequence,
+                    combat_handle_attack_done_to_game_event_msg,
+                )
+                .ok();
+            }
+            GameEventType::CombatHandleCommenceAttackEvent => {
+                dispatch_game_event::<CombatHandleCommenceAttackEvent, _, _>(
+                    self,
+                    &mut cursor,
+                    &event_tx,
+                    object_id,
+                    sequence,
+                    combat_handle_commence_attack_to_game_event_msg,
+                )
+                .ok();
+            }
+            GameEventType::CombatHandleVictimNotificationEventSelf => {
+                dispatch_game_event::<CombatHandleVictimNotificationEventSelf, _, _>(
+                    self,
+                    &mut cursor,
+                    &event_tx,
+                    object_id,
+                    sequence,
+                    combat_handle_victim_notification_self_to_game_event_msg,
+                )
+                .ok();
+            }
+            GameEventType::CombatHandleVictimNotificationEventOther => {
+                dispatch_game_event::<CombatHandleVictimNotificationEventOther, _, _>(
+                    self,
+                    &mut cursor,
+                    &event_tx,
+                    object_id,
+                    sequence,
+                    combat_handle_victim_notification_other_to_game_event_msg,
+                )
+                .ok();
+            }
+            GameEventType::CombatHandleAttackerNotificationEvent => {
+                dispatch_game_event::<CombatHandleAttackerNotificationEvent, _, _>(
+                    self,
+                    &mut cursor,
+                    &event_tx,
+                    object_id,
+                    sequence,
+                    combat_handle_attacker_notification_to_game_event_msg,
+                )
+                .ok();
+            }
+            GameEventType::CombatHandleDefenderNotificationEvent => {
+                dispatch_game_event::<CombatHandleDefenderNotificationEvent, _, _>(
+                    self,
+                    &mut cursor,
+                    &event_tx,
+                    object_id,
+                    sequence,
+                    combat_handle_defender_notification_to_game_event_msg,
+                )
+                .ok();
+            }
+            GameEventType::CombatHandleEvasionAttackerNotificationEvent => {
+                dispatch_game_event::<CombatHandleEvasionAttackerNotificationEvent, _, _>(
+                    self,
+                    &mut cursor,
+                    &event_tx,
+                    object_id,
+                    sequence,
+                    combat_handle_evasion_attacker_notification_to_game_event_msg,
+                )
+                .ok();
+            }
+            GameEventType::CombatHandleEvasionDefenderNotificationEvent => {
+                dispatch_game_event::<CombatHandleEvasionDefenderNotificationEvent, _, _>(
+                    self,
+                    &mut cursor,
+                    &event_tx,
+                    object_id,
+                    sequence,
+                    combat_handle_evasion_defender_notification_to_game_event_msg,
+                )
+                .ok();
+            }
+            GameEventType::CombatQueryHealthResponse => {
+                dispatch_game_event::<CombatQueryHealthResponse, _, _>(
+                    self,
+                    &mut cursor,
+                    &event_tx,
+                    object_id,
+                    sequence,
+                    combat_query_health_response_to_game_event_msg,
+                )
+                .ok();
+            }
+            // ===== Phase 2: Magic & Items =====
+            GameEventType::MagicUpdateEnchantment => {
+                dispatch_game_event::<acprotocol::gameevents::MagicUpdateEnchantment, _, _>(
+                    self,
+                    &mut cursor,
+                    &event_tx,
+                    object_id,
+                    sequence,
+                    magic_update_enchantment_to_game_event_msg,
+                )
+                .ok();
+            }
+            GameEventType::MagicRemoveEnchantment => {
+                dispatch_game_event::<acprotocol::gameevents::MagicRemoveEnchantment, _, _>(
+                    self,
+                    &mut cursor,
+                    &event_tx,
+                    object_id,
+                    sequence,
+                    magic_remove_enchantment_to_game_event_msg,
+                )
+                .ok();
+            }
+            GameEventType::ItemSetAppraiseInfo => {
+                dispatch_game_event::<acprotocol::gameevents::ItemSetAppraiseInfo, _, _>(
+                    self,
+                    &mut cursor,
+                    &event_tx,
+                    object_id,
+                    sequence,
+                    item_set_appraise_info_to_game_event_msg,
+                )
+                .ok();
+            }
+            GameEventType::ItemAppraiseDone => {
+                dispatch_game_event::<acprotocol::gameevents::ItemAppraiseDone, _, _>(
+                    self,
+                    &mut cursor,
+                    &event_tx,
+                    object_id,
+                    sequence,
+                    item_appraise_done_to_game_event_msg,
+                )
+                .ok();
+            }
+            GameEventType::ItemWearItem => {
+                dispatch_game_event::<acprotocol::gameevents::ItemWearItem, _, _>(
+                    self,
+                    &mut cursor,
+                    &event_tx,
+                    object_id,
+                    sequence,
+                    item_wear_item_to_game_event_msg,
+                )
+                .ok();
+            }
+            GameEventType::ItemQueryItemManaResponse => {
+                dispatch_game_event::<acprotocol::gameevents::ItemQueryItemManaResponse, _, _>(
+                    self,
+                    &mut cursor,
+                    &event_tx,
+                    object_id,
+                    sequence,
+                    item_query_item_mana_response_to_game_event_msg,
+                )
+                .ok();
+            }
+            // ===== Phase 3: Trade Events =====
+            GameEventType::TradeOpenTrade => {
+                dispatch_game_event::<acprotocol::gameevents::TradeOpenTrade, _, _>(
+                    self,
+                    &mut cursor,
+                    &event_tx,
+                    object_id,
+                    sequence,
+                    trade_open_trade_to_game_event_msg,
+                )
+                .ok();
+            }
+            GameEventType::TradeCloseTrade => {
+                dispatch_game_event::<acprotocol::gameevents::TradeCloseTrade, _, _>(
+                    self,
+                    &mut cursor,
+                    &event_tx,
+                    object_id,
+                    sequence,
+                    trade_close_trade_to_game_event_msg,
+                )
+                .ok();
+            }
+            GameEventType::TradeAddToTrade => {
+                dispatch_game_event::<acprotocol::gameevents::TradeAddToTrade, _, _>(
+                    self,
+                    &mut cursor,
+                    &event_tx,
+                    object_id,
+                    sequence,
+                    trade_add_to_trade_to_game_event_msg,
+                )
+                .ok();
+            }
+            GameEventType::TradeRemoveFromTrade => {
+                dispatch_game_event::<acprotocol::gameevents::TradeRemoveFromTrade, _, _>(
+                    self,
+                    &mut cursor,
+                    &event_tx,
+                    object_id,
+                    sequence,
+                    trade_remove_from_trade_to_game_event_msg,
+                )
+                .ok();
+            }
+            GameEventType::TradeAcceptTrade => {
+                dispatch_game_event::<acprotocol::gameevents::TradeAcceptTrade, _, _>(
+                    self,
+                    &mut cursor,
+                    &event_tx,
+                    object_id,
+                    sequence,
+                    trade_accept_trade_to_game_event_msg,
+                )
+                .ok();
+            }
+            GameEventType::TradeDeclineTrade => {
+                dispatch_game_event::<acprotocol::gameevents::TradeDeclineTrade, _, _>(
+                    self,
+                    &mut cursor,
+                    &event_tx,
+                    object_id,
+                    sequence,
+                    trade_decline_trade_to_game_event_msg,
+                )
+                .ok();
+            }
+            GameEventType::TradeResetTrade => {
+                dispatch_game_event::<acprotocol::gameevents::TradeResetTrade, _, _>(
+                    self,
+                    &mut cursor,
+                    &event_tx,
+                    object_id,
+                    sequence,
+                    trade_reset_trade_to_game_event_msg,
+                )
+                .ok();
+            }
+            GameEventType::TradeTradeFailure => {
+                dispatch_game_event::<acprotocol::gameevents::TradeTradeFailure, _, _>(
+                    self,
+                    &mut cursor,
+                    &event_tx,
+                    object_id,
+                    sequence,
+                    trade_trade_failure_to_game_event_msg,
+                )
+                .ok();
+            }
+            GameEventType::TradeClearTradeAcceptance => {
+                dispatch_game_event::<acprotocol::gameevents::TradeClearTradeAcceptance, _, _>(
+                    self,
+                    &mut cursor,
+                    &event_tx,
+                    object_id,
+                    sequence,
+                    trade_clear_trade_acceptance_to_game_event_msg,
+                )
+                .ok();
+            }
+            // ===== Phase 3: Fellowship Events =====
+            GameEventType::FellowshipUpdateFellow => {
+                dispatch_game_event::<acprotocol::gameevents::FellowshipUpdateFellow, _, _>(
+                    self,
+                    &mut cursor,
+                    &event_tx,
+                    object_id,
+                    sequence,
+                    fellowship_update_fellow_to_game_event_msg,
+                )
+                .ok();
+            }
+            GameEventType::FellowshipDisband => {
+                dispatch_game_event::<acprotocol::gameevents::FellowshipDisband, _, _>(
+                    self,
+                    &mut cursor,
+                    &event_tx,
+                    object_id,
+                    sequence,
+                    fellowship_disband_to_game_event_msg,
+                )
+                .ok();
+            }
+            GameEventType::FellowshipQuit => {
+                dispatch_game_event::<acprotocol::gameevents::FellowshipQuit, _, _>(
+                    self,
+                    &mut cursor,
+                    &event_tx,
+                    object_id,
+                    sequence,
+                    fellowship_quit_to_game_event_msg,
+                )
+                .ok();
+            }
+            GameEventType::FellowshipDismiss => {
+                dispatch_game_event::<acprotocol::gameevents::FellowshipDismiss, _, _>(
+                    self,
+                    &mut cursor,
+                    &event_tx,
+                    object_id,
+                    sequence,
+                    fellowship_dismiss_to_game_event_msg,
+                )
+                .ok();
+            }
+            GameEventType::FellowshipFellowUpdateDone => {
+                dispatch_game_event::<acprotocol::gameevents::FellowshipFellowUpdateDone, _, _>(
+                    self,
+                    &mut cursor,
+                    &event_tx,
+                    object_id,
+                    sequence,
+                    fellowship_update_done_to_game_event_msg,
+                )
+                .ok();
+            }
+            GameEventType::FellowshipFellowStatsDone => {
+                dispatch_game_event::<acprotocol::gameevents::FellowshipFellowStatsDone, _, _>(
+                    self,
+                    &mut cursor,
+                    &event_tx,
+                    object_id,
+                    sequence,
+                    fellowship_stats_done_to_game_event_msg,
+                )
+                .ok();
+            }
+            // ===== Phase 3: Social Events =====
+            GameEventType::SocialFriendsUpdate => {
+                dispatch_game_event::<acprotocol::gameevents::SocialFriendsUpdate, _, _>(
+                    self,
+                    &mut cursor,
+                    &event_tx,
+                    object_id,
+                    sequence,
+                    social_friends_update_to_game_event_msg,
+                )
+                .ok();
+            }
+            GameEventType::SocialCharacterTitleTable => {
+                dispatch_game_event::<acprotocol::gameevents::SocialCharacterTitleTable, _, _>(
+                    self,
+                    &mut cursor,
+                    &event_tx,
+                    object_id,
+                    sequence,
+                    social_character_title_table_to_game_event_msg,
+                )
+                .ok();
+            }
+            GameEventType::SocialAddOrSetCharacterTitle => {
+                dispatch_game_event::<acprotocol::gameevents::SocialAddOrSetCharacterTitle, _, _>(
+                    self,
+                    &mut cursor,
+                    &event_tx,
+                    object_id,
+                    sequence,
+                    social_add_or_set_character_title_to_game_event_msg,
+                )
+                .ok();
+            }
+            GameEventType::SocialSendClientContractTrackerTable => {
+                dispatch_game_event::<
+                    acprotocol::gameevents::SocialSendClientContractTrackerTable,
+                    _,
+                    _,
+                >(
+                    self,
+                    &mut cursor,
+                    &event_tx,
+                    object_id,
+                    sequence,
+                    social_send_client_contract_tracker_table_to_game_event_msg,
+                )
+                .ok();
+            }
+            GameEventType::SocialSendClientContractTracker => {
+                dispatch_game_event::<acprotocol::gameevents::SocialSendClientContractTracker, _, _>(
+                    self,
+                    &mut cursor,
+                    &event_tx,
+                    object_id,
+                    sequence,
+                    social_send_client_contract_tracker_to_game_event_msg,
+                )
+                .ok();
+            }
+            // ===== Phase 3: Allegiance Events =====
+            GameEventType::AllegianceAllegianceUpdate => {
+                dispatch_game_event::<acprotocol::gameevents::AllegianceAllegianceUpdate, _, _>(
+                    self,
+                    &mut cursor,
+                    &event_tx,
+                    object_id,
+                    sequence,
+                    allegiance_update_to_game_event_msg,
+                )
+                .ok();
+            }
+            GameEventType::AllegianceAllegianceUpdateDone => {
+                dispatch_game_event::<acprotocol::gameevents::AllegianceAllegianceUpdateDone, _, _>(
+                    self,
+                    &mut cursor,
+                    &event_tx,
+                    object_id,
+                    sequence,
+                    allegiance_update_done_to_game_event_msg,
+                )
+                .ok();
+            }
+            GameEventType::AllegianceAllegianceUpdateAborted => {
+                dispatch_game_event::<
+                    acprotocol::gameevents::AllegianceAllegianceUpdateAborted,
+                    _,
+                    _,
+                >(
+                    self,
+                    &mut cursor,
+                    &event_tx,
+                    object_id,
+                    sequence,
+                    allegiance_update_aborted_to_game_event_msg,
+                )
+                .ok();
+            }
+            GameEventType::AllegianceAllegianceLoginNotificationEvent => {
+                dispatch_game_event::<
+                    acprotocol::gameevents::AllegianceAllegianceLoginNotificationEvent,
+                    _,
+                    _,
+                >(
+                    self,
+                    &mut cursor,
+                    &event_tx,
+                    object_id,
+                    sequence,
+                    allegiance_login_notification_to_game_event_msg,
+                )
+                .ok();
+            }
+            GameEventType::AllegianceAllegianceInfoResponseEvent => {
+                dispatch_game_event::<
+                    acprotocol::gameevents::AllegianceAllegianceInfoResponseEvent,
+                    _,
+                    _,
+                >(
+                    self,
+                    &mut cursor,
+                    &event_tx,
+                    object_id,
+                    sequence,
+                    allegiance_info_response_to_game_event_msg,
+                )
+                .ok();
+            }
+            // ===== Phase 3: Vendor Events =====
+            GameEventType::VendorVendorInfo => {
+                dispatch_game_event::<acprotocol::gameevents::VendorVendorInfo, _, _>(
+                    self,
+                    &mut cursor,
+                    &event_tx,
+                    object_id,
+                    sequence,
+                    vendor_info_to_game_event_msg,
+                )
+                .ok();
+            }
+            // Phase 4: Housing
+            GameEventType::HouseHouseProfile => {
+                dispatch_game_event::<acprotocol::gameevents::HouseHouseProfile, _, _>(
+                    self,
+                    &mut cursor,
+                    &event_tx,
+                    object_id,
+                    sequence,
+                    house_profile_to_game_event_msg,
+                )
+                .ok();
+            }
+            GameEventType::HouseHouseData => {
+                dispatch_game_event::<acprotocol::gameevents::HouseHouseData, _, _>(
+                    self,
+                    &mut cursor,
+                    &event_tx,
+                    object_id,
+                    sequence,
+                    house_data_to_game_event_msg,
+                )
+                .ok();
+            }
+            GameEventType::HouseHouseStatus => {
+                dispatch_game_event::<acprotocol::gameevents::HouseHouseStatus, _, _>(
+                    self,
+                    &mut cursor,
+                    &event_tx,
+                    object_id,
+                    sequence,
+                    house_status_to_game_event_msg,
+                )
+                .ok();
+            }
+            GameEventType::HouseUpdateRentTime => {
+                dispatch_game_event::<acprotocol::gameevents::HouseUpdateRentTime, _, _>(
+                    self,
+                    &mut cursor,
+                    &event_tx,
+                    object_id,
+                    sequence,
+                    house_update_rent_time_to_game_event_msg,
+                )
+                .ok();
+            }
+            GameEventType::HouseUpdateRentPayment => {
+                dispatch_game_event::<acprotocol::gameevents::HouseUpdateRentPayment, _, _>(
+                    self,
+                    &mut cursor,
+                    &event_tx,
+                    object_id,
+                    sequence,
+                    house_update_rent_payment_to_game_event_msg,
+                )
+                .ok();
+            }
+            GameEventType::HouseUpdateRestrictions => {
+                dispatch_game_event::<acprotocol::gameevents::HouseUpdateRestrictions, _, _>(
+                    self,
+                    &mut cursor,
+                    &event_tx,
+                    object_id,
+                    sequence,
+                    house_update_restrictions_to_game_event_msg,
+                )
+                .ok();
+            }
+            GameEventType::HouseUpdateHAR => {
+                dispatch_game_event::<acprotocol::gameevents::HouseUpdateHAR, _, _>(
+                    self,
+                    &mut cursor,
+                    &event_tx,
+                    object_id,
+                    sequence,
+                    house_update_har_to_game_event_msg,
+                )
+                .ok();
+            }
+            GameEventType::HouseHouseTransaction => {
+                dispatch_game_event::<acprotocol::gameevents::HouseHouseTransaction, _, _>(
+                    self,
+                    &mut cursor,
+                    &event_tx,
+                    object_id,
+                    sequence,
+                    house_transaction_to_game_event_msg,
+                )
+                .ok();
+            }
+            GameEventType::HouseAvailableHouses => {
+                dispatch_game_event::<acprotocol::gameevents::HouseAvailableHouses, _, _>(
+                    self,
+                    &mut cursor,
+                    &event_tx,
+                    object_id,
+                    sequence,
+                    house_available_houses_to_game_event_msg,
+                )
+                .ok();
+            }
+            // Phase 4: Writing
+            GameEventType::WritingBookOpen => {
+                dispatch_game_event::<acprotocol::gameevents::WritingBookOpen, _, _>(
+                    self,
+                    &mut cursor,
+                    &event_tx,
+                    object_id,
+                    sequence,
+                    writing_book_open_to_game_event_msg,
+                )
+                .ok();
+            }
+            GameEventType::WritingBookAddPageResponse => {
+                dispatch_game_event::<acprotocol::gameevents::WritingBookAddPageResponse, _, _>(
+                    self,
+                    &mut cursor,
+                    &event_tx,
+                    object_id,
+                    sequence,
+                    writing_book_add_page_response_to_game_event_msg,
+                )
+                .ok();
+            }
+            GameEventType::WritingBookDeletePageResponse => {
+                dispatch_game_event::<acprotocol::gameevents::WritingBookDeletePageResponse, _, _>(
+                    self,
+                    &mut cursor,
+                    &event_tx,
+                    object_id,
+                    sequence,
+                    writing_book_delete_page_response_to_game_event_msg,
+                )
+                .ok();
+            }
+            GameEventType::WritingBookPageDataResponse => {
+                dispatch_game_event::<acprotocol::gameevents::WritingBookPageDataResponse, _, _>(
+                    self,
+                    &mut cursor,
+                    &event_tx,
+                    object_id,
+                    sequence,
+                    writing_book_page_data_response_to_game_event_msg,
+                )
+                .ok();
+            }
+            // Phase 4: Character
+            GameEventType::CharacterStartBarber => {
+                dispatch_game_event::<acprotocol::gameevents::CharacterStartBarber, _, _>(
+                    self,
+                    &mut cursor,
+                    &event_tx,
+                    object_id,
+                    sequence,
+                    character_start_barber_to_game_event_msg,
+                )
+                .ok();
+            }
+            GameEventType::CharacterQueryAgeResponse => {
+                dispatch_game_event::<acprotocol::gameevents::CharacterQueryAgeResponse, _, _>(
+                    self,
+                    &mut cursor,
+                    &event_tx,
+                    object_id,
+                    sequence,
+                    character_query_age_response_to_game_event_msg,
+                )
+                .ok();
+            }
+            GameEventType::CharacterConfirmationRequest => {
+                dispatch_game_event::<acprotocol::gameevents::CharacterConfirmationRequest, _, _>(
+                    self,
+                    &mut cursor,
+                    &event_tx,
+                    object_id,
+                    sequence,
+                    character_confirmation_request_to_game_event_msg,
+                )
+                .ok();
+            }
+            // Phase 4: Games
+            GameEventType::GameJoinGameResponse => {
+                dispatch_game_event::<acprotocol::gameevents::GameJoinGameResponse, _, _>(
+                    self,
+                    &mut cursor,
+                    &event_tx,
+                    object_id,
+                    sequence,
+                    game_join_game_response_to_game_event_msg,
+                )
+                .ok();
+            }
+            GameEventType::GameStartGame => {
+                dispatch_game_event::<acprotocol::gameevents::GameStartGame, _, _>(
+                    self,
+                    &mut cursor,
+                    &event_tx,
+                    object_id,
+                    sequence,
+                    game_start_game_to_game_event_msg,
+                )
+                .ok();
+            }
+            GameEventType::GameMoveResponse => {
+                dispatch_game_event::<acprotocol::gameevents::GameMoveResponse, _, _>(
+                    self,
+                    &mut cursor,
+                    &event_tx,
+                    object_id,
+                    sequence,
+                    game_move_response_to_game_event_msg,
+                )
+                .ok();
+            }
+            GameEventType::GameOpponentTurn => {
+                dispatch_game_event::<acprotocol::gameevents::GameOpponentTurn, _, _>(
+                    self,
+                    &mut cursor,
+                    &event_tx,
+                    object_id,
+                    sequence,
+                    game_opponent_turn_to_game_event_msg,
+                )
+                .ok();
+            }
+            GameEventType::GameOpponentStalemateState => {
+                dispatch_game_event::<acprotocol::gameevents::GameOpponentStalemateState, _, _>(
+                    self,
+                    &mut cursor,
+                    &event_tx,
+                    object_id,
+                    sequence,
+                    game_opponent_stalemate_state_to_game_event_msg,
+                )
+                .ok();
+            }
+            GameEventType::GameGameOver => {
+                dispatch_game_event::<acprotocol::gameevents::GameGameOver, _, _>(
+                    self,
+                    &mut cursor,
+                    &event_tx,
+                    object_id,
+                    sequence,
+                    game_game_over_to_game_event_msg,
+                )
+                .ok();
+            }
+            // Phase 4: Channels
+            GameEventType::CommunicationChannelBroadcast => {
+                dispatch_game_event::<acprotocol::gameevents::CommunicationChannelBroadcast, _, _>(
+                    self,
+                    &mut cursor,
+                    &event_tx,
+                    object_id,
+                    sequence,
+                    channel_broadcast_to_game_event_msg,
+                )
+                .ok();
+            }
+            GameEventType::CommunicationChannelList => {
+                dispatch_game_event::<acprotocol::gameevents::CommunicationChannelList, _, _>(
+                    self,
+                    &mut cursor,
+                    &event_tx,
+                    object_id,
+                    sequence,
+                    channel_list_to_game_event_msg,
+                )
+                .ok();
+            }
+            GameEventType::CommunicationChannelIndex => {
+                dispatch_game_event::<acprotocol::gameevents::CommunicationChannelIndex, _, _>(
+                    self,
+                    &mut cursor,
+                    &event_tx,
+                    object_id,
+                    sequence,
+                    channel_index_to_game_event_msg,
+                )
+                .ok();
+            }
+            // Phase 5: Admin
+            GameEventType::AdminQueryPlugin => {
+                dispatch_game_event::<acprotocol::gameevents::AdminQueryPlugin, _, _>(
+                    self,
+                    &mut cursor,
+                    &event_tx,
+                    object_id,
+                    sequence,
+                    admin_query_plugin_to_game_event_msg,
+                )
+                .ok();
+            }
+            GameEventType::AdminQueryPluginList => {
+                dispatch_game_event::<acprotocol::gameevents::AdminQueryPluginList, _, _>(
+                    self,
+                    &mut cursor,
+                    &event_tx,
+                    object_id,
+                    sequence,
+                    admin_query_plugin_list_to_game_event_msg,
+                )
+                .ok();
+            }
+            GameEventType::AdminQueryPluginResponse2 => {
+                dispatch_game_event::<acprotocol::gameevents::AdminQueryPluginResponse2, _, _>(
+                    self,
+                    &mut cursor,
+                    &event_tx,
+                    object_id,
+                    sequence,
+                    admin_query_plugin_response_to_game_event_msg,
+                )
+                .ok();
+            }
+            // Phase 5: Portal Storms
+            GameEventType::MiscPortalStormBrewing => {
+                dispatch_game_event::<acprotocol::gameevents::MiscPortalStormBrewing, _, _>(
+                    self,
+                    &mut cursor,
+                    &event_tx,
+                    object_id,
+                    sequence,
+                    misc_portal_storm_brewing_to_game_event_msg,
+                )
+                .ok();
+            }
+            GameEventType::MiscPortalStormImminent => {
+                dispatch_game_event::<acprotocol::gameevents::MiscPortalStormImminent, _, _>(
+                    self,
+                    &mut cursor,
+                    &event_tx,
+                    object_id,
+                    sequence,
+                    misc_portal_storm_imminent_to_game_event_msg,
+                )
+                .ok();
+            }
+            GameEventType::MiscPortalStorm => {
+                dispatch_game_event::<acprotocol::gameevents::MiscPortalStorm, _, _>(
+                    self,
+                    &mut cursor,
+                    &event_tx,
+                    object_id,
+                    sequence,
+                    misc_portal_storm_to_game_event_msg,
+                )
+                .ok();
+            }
+            GameEventType::MiscPortalStormSubsided => {
+                dispatch_game_event::<acprotocol::gameevents::MiscPortalStormSubsided, _, _>(
+                    self,
+                    &mut cursor,
+                    &event_tx,
+                    object_id,
+                    sequence,
+                    misc_portal_storm_subsided_to_game_event_msg,
+                )
+                .ok();
+            }
+            // Phase 5: Additional Communication
+            GameEventType::CommunicationPopUpString => {
+                dispatch_game_event::<acprotocol::gameevents::CommunicationPopUpString, _, _>(
+                    self,
+                    &mut cursor,
+                    &event_tx,
+                    object_id,
+                    sequence,
+                    communication_popup_string_to_game_event_msg,
+                )
+                .ok();
+            }
+            GameEventType::CommunicationWeenieError => {
+                dispatch_game_event::<acprotocol::gameevents::CommunicationWeenieError, _, _>(
+                    self,
+                    &mut cursor,
+                    &event_tx,
+                    object_id,
+                    sequence,
+                    communication_weenie_error_to_game_event_msg,
+                )
+                .ok();
+            }
+            GameEventType::CommunicationWeenieErrorWithString => {
+                dispatch_game_event::<
+                    acprotocol::gameevents::CommunicationWeenieErrorWithString,
+                    _,
+                    _,
+                >(
+                    self,
+                    &mut cursor,
+                    &event_tx,
+                    object_id,
+                    sequence,
+                    communication_weenie_error_with_string_to_game_event_msg,
+                )
+                .ok();
+            }
+            GameEventType::CommunicationSetSquelchDB => {
+                dispatch_game_event::<acprotocol::gameevents::CommunicationSetSquelchDB, _, _>(
+                    self,
+                    &mut cursor,
+                    &event_tx,
+                    object_id,
+                    sequence,
+                    communication_set_squelch_db_to_game_event_msg,
+                )
+                .ok();
+            }
+            GameEventType::CommunicationChatRoomTracker => {
+                dispatch_game_event::<acprotocol::gameevents::CommunicationChatRoomTracker, _, _>(
+                    self,
+                    &mut cursor,
+                    &event_tx,
+                    object_id,
+                    sequence,
+                    communication_chat_room_tracker_to_game_event_msg,
+                )
+                .ok();
+            }
+            // Phase 5: Salvage
+            GameEventType::InventorySalvageOperationsResultData => {
+                dispatch_game_event::<
+                    acprotocol::gameevents::InventorySalvageOperationsResultData,
+                    _,
+                    _,
+                >(
+                    self,
+                    &mut cursor,
+                    &event_tx,
+                    object_id,
+                    sequence,
+                    inventory_salvage_operations_result_to_game_event_msg,
+                )
+                .ok();
+            }
+            // Phase 5: Login
+            GameEventType::LoginPlayerDescription => {
+                dispatch_game_event::<acprotocol::gameevents::LoginPlayerDescription, _, _>(
+                    self,
+                    &mut cursor,
+                    &event_tx,
+                    object_id,
+                    sequence,
+                    login_player_description_to_game_event_msg,
+                )
+                .ok();
+            }
+            // Phase 5: Character
+            GameEventType::CharacterReturnPing => {
+                dispatch_game_event::<acprotocol::gameevents::CharacterReturnPing, _, _>(
+                    self,
+                    &mut cursor,
+                    &event_tx,
+                    object_id,
+                    sequence,
+                    character_return_ping_to_game_event_msg,
                 )
                 .ok();
             }
@@ -1807,9 +2943,7 @@ impl Client {
     }
 }
 
-// ============================================================================
 // GameEventHandler implementations
-// ============================================================================
 
 use crate::client::game_event_handler::GameEventHandler;
 
@@ -1844,5 +2978,157 @@ impl GameEventHandler<acprotocol::gameevents::CommunicationTransientString> for 
             message,
             message_type: 0x05, // System message type
         })
+    }
+}
+
+/// Handle Item_OnViewContents game events (CRITICAL for inventory)
+impl GameEventHandler<acprotocol::gameevents::ItemOnViewContents> for Client {
+    fn handle(&mut self, event: acprotocol::gameevents::ItemOnViewContents) -> Option<GameEvent> {
+        let container_id = event.container_id.0;
+        let items: Vec<u32> = event.items.list.iter().map(|cp| cp.object_id.0).collect();
+
+        info!(target: "net", "ViewContents: Container 0x{:08X} contains {} items",
+              container_id, items.len());
+
+        // Return an event indicating we received container contents
+        Some(GameEvent::ItemOnViewContents {
+            container_id,
+            items: items.clone(),
+        })
+    }
+}
+
+/// Handle Magic_UpdateSpell game events
+impl GameEventHandler<acprotocol::gameevents::MagicUpdateSpell> for Client {
+    fn handle(&mut self, event: acprotocol::gameevents::MagicUpdateSpell) -> Option<GameEvent> {
+        info!(target: "net", "MagicUpdateSpell: Spell {:?}", event.spell_id.id);
+        None // Most magic events are handled automatically via protocol events
+    }
+}
+
+/// Handle Fellowship_FullUpdate game events
+impl GameEventHandler<acprotocol::gameevents::FellowshipFullUpdate> for Client {
+    fn handle(&mut self, event: acprotocol::gameevents::FellowshipFullUpdate) -> Option<GameEvent> {
+        info!(target: "net", "FellowshipFullUpdate: {}", event.fellowship.name);
+        None // Handled via protocol events
+    }
+}
+
+/// Handle Trade_RegisterTrade game events
+impl GameEventHandler<acprotocol::gameevents::TradeRegisterTrade> for Client {
+    fn handle(&mut self, event: acprotocol::gameevents::TradeRegisterTrade) -> Option<GameEvent> {
+        info!(target: "net", "TradeRegisterTrade: {} <-> {}",
+              event.initiator_id.0, event.partner_id.0);
+        None // Handled via protocol events
+    }
+}
+
+// Combat Game Event Handlers
+
+/// Handle CombatHandleAttackDone game events
+impl GameEventHandler<acprotocol::gameevents::CombatHandleAttackDoneEvent> for Client {
+    fn handle(
+        &mut self,
+        event: acprotocol::gameevents::CombatHandleAttackDoneEvent,
+    ) -> Option<GameEvent> {
+        info!(target: "net", "CombatHandleAttackDone: target {}", event.number);
+        None
+    }
+}
+
+/// Handle CombatHandleCommenceAttack game events
+impl GameEventHandler<acprotocol::gameevents::CombatHandleCommenceAttackEvent> for Client {
+    fn handle(
+        &mut self,
+        _event: acprotocol::gameevents::CombatHandleCommenceAttackEvent,
+    ) -> Option<GameEvent> {
+        info!(target: "net", "CombatHandleCommenceAttack");
+        None
+    }
+}
+
+/// Handle CombatHandleVictimNotificationSelf game events
+impl GameEventHandler<acprotocol::gameevents::CombatHandleVictimNotificationEventSelf> for Client {
+    fn handle(
+        &mut self,
+        event: acprotocol::gameevents::CombatHandleVictimNotificationEventSelf,
+    ) -> Option<GameEvent> {
+        info!(target: "net", "CombatHandleVictimNotificationSelf: {}", event.message);
+        None
+    }
+}
+
+/// Handle CombatHandleVictimNotificationOther game events
+impl GameEventHandler<acprotocol::gameevents::CombatHandleVictimNotificationEventOther> for Client {
+    fn handle(
+        &mut self,
+        event: acprotocol::gameevents::CombatHandleVictimNotificationEventOther,
+    ) -> Option<GameEvent> {
+        info!(target: "net", "CombatHandleVictimNotificationOther: {}", event.message);
+        None
+    }
+}
+
+/// Handle CombatHandleAttackerNotification game events
+impl GameEventHandler<acprotocol::gameevents::CombatHandleAttackerNotificationEvent> for Client {
+    fn handle(
+        &mut self,
+        event: acprotocol::gameevents::CombatHandleAttackerNotificationEvent,
+    ) -> Option<GameEvent> {
+        info!(target: "net", "CombatHandleAttackerNotification: hit {} for {} damage",
+              event.defender_name, event.damage);
+        None
+    }
+}
+
+/// Handle CombatHandleDefenderNotification game events
+impl GameEventHandler<acprotocol::gameevents::CombatHandleDefenderNotificationEvent> for Client {
+    fn handle(
+        &mut self,
+        event: acprotocol::gameevents::CombatHandleDefenderNotificationEvent,
+    ) -> Option<GameEvent> {
+        info!(target: "net", "CombatHandleDefenderNotification: {} hit for {} damage",
+              event.attacker_name, event.damage);
+        None
+    }
+}
+
+/// Handle CombatHandleEvasionAttackerNotification game events
+impl GameEventHandler<acprotocol::gameevents::CombatHandleEvasionAttackerNotificationEvent>
+    for Client
+{
+    fn handle(
+        &mut self,
+        event: acprotocol::gameevents::CombatHandleEvasionAttackerNotificationEvent,
+    ) -> Option<GameEvent> {
+        info!(target: "net", "CombatHandleEvasionAttackerNotification: {} evaded",
+              event.defender_name);
+        None
+    }
+}
+
+/// Handle CombatHandleEvasionDefenderNotification game events
+impl GameEventHandler<acprotocol::gameevents::CombatHandleEvasionDefenderNotificationEvent>
+    for Client
+{
+    fn handle(
+        &mut self,
+        event: acprotocol::gameevents::CombatHandleEvasionDefenderNotificationEvent,
+    ) -> Option<GameEvent> {
+        info!(target: "net", "CombatHandleEvasionDefenderNotification: evaded {}",
+              event.attacker_name);
+        None
+    }
+}
+
+/// Handle CombatQueryHealthResponse game events
+impl GameEventHandler<acprotocol::gameevents::CombatQueryHealthResponse> for Client {
+    fn handle(
+        &mut self,
+        event: acprotocol::gameevents::CombatQueryHealthResponse,
+    ) -> Option<GameEvent> {
+        info!(target: "net", "CombatQueryHealthResponse: target 0x{:08X} health {:.1}%",
+              event.object_id.0, event.health * 100.0);
+        None
     }
 }

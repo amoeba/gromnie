@@ -1200,6 +1200,7 @@ dependencies = [
  "rand_isaac",
  "ratatui",
  "serde",
+ "serde_json",
  "serenity",
  "strum_macros 0.26.4",
  "tokio",
