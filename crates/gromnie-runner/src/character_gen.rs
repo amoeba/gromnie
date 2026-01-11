@@ -36,7 +36,7 @@ impl CharacterBuilder {
                 headgear_shade: 0,
                 shirt_shade: 0,
                 trousers_shade: 0,
-                tootwear_shade: 0,
+                footwear_shade: 0,
                 template_num: 0,
                 strength: 10,
                 endurance: 10,

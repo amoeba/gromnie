@@ -26,15 +26,18 @@ impl MessageHandler<acprotocol::messages::s2c::LoginCreatePlayer> for Client {
 
         // Emit protocol event
         let protocol_event = ProtocolEvent::S2C(create_player.to_protocol_event());
-        let _ = self
+        if let Err(e) = self
             .raw_event_tx
-            .try_send(ClientEvent::Protocol(protocol_event));
+            .try_send(ClientEvent::Protocol(protocol_event))
+        {
+            warn!(target: "net", "Failed to send protocol event: {}", e);
+        }
 
         // Check if we're in the process of entering the world
         if let Some(entering) = self
             .scene
             .as_character_select()
-            .and_then(|scene| scene.entering_world.as_ref().cloned())
+            .and_then(|scene| scene.entering_world.clone())
         {
             // Send the login complete notification
             // This will also handle the transition to InWorld and emit LoginSucceeded event
@@ -66,9 +69,12 @@ impl MessageHandler<acprotocol::messages::s2c::ItemCreateObject> for Client {
 
         // Emit protocol event
         let protocol_event = ProtocolEvent::S2C(create_obj.to_protocol_event());
-        let _ = self
+        if let Err(e) = self
             .raw_event_tx
-            .try_send(ClientEvent::Protocol(protocol_event));
+            .try_send(ClientEvent::Protocol(protocol_event))
+        {
+            warn!(target: "net", "Failed to send protocol event: {}", e);
+        }
 
         Some(GameEvent::ItemCreateObject {
             object_id,
@@ -102,9 +108,12 @@ impl MessageHandler<acprotocol::messages::s2c::CommunicationHearSpeech> for Clie
 
         // Emit protocol event
         let protocol_event = ProtocolEvent::S2C(speech.to_protocol_event());
-        let _ = self
+        if let Err(e) = self
             .raw_event_tx
-            .try_send(ClientEvent::Protocol(protocol_event));
+            .try_send(ClientEvent::Protocol(protocol_event))
+        {
+            warn!(target: "net", "Failed to send protocol event: {}", e);
+        }
 
         Some(GameEvent::ChatMessageReceived {
             message: chat_text,
@@ -126,9 +135,12 @@ impl MessageHandler<acprotocol::messages::s2c::CommunicationHearRangedSpeech> fo
 
         // Emit protocol event
         let protocol_event = ProtocolEvent::S2C(speech.to_protocol_event());
-        let _ = self
+        if let Err(e) = self
             .raw_event_tx
-            .try_send(ClientEvent::Protocol(protocol_event));
+            .try_send(ClientEvent::Protocol(protocol_event))
+        {
+            warn!(target: "net", "Failed to send protocol event: {}", e);
+        }
 
         Some(GameEvent::ChatMessageReceived {
             message: chat_text,
@@ -150,9 +162,12 @@ impl MessageHandler<acprotocol::messages::s2c::CharacterCharacterError> for Clie
 
         // Emit protocol event
         let protocol_event = ProtocolEvent::S2C(char_error.to_protocol_event());
-        let _ = self
+        if let Err(e) = self
             .raw_event_tx
-            .try_send(ClientEvent::Protocol(protocol_event));
+            .try_send(ClientEvent::Protocol(protocol_event))
+        {
+            warn!(target: "net", "Failed to send protocol event: {}", e);
+        }
 
         // ServerCrash (0x0004) means the server is going down - trigger reconnection
         if error_code == 0x0004 {
@@ -202,9 +217,12 @@ impl MessageHandler<acprotocol::messages::s2c::LoginLoginCharacterSet> for Clien
 
         // Emit protocol event
         let protocol_event = ProtocolEvent::S2C(char_list.to_protocol_event());
-        let _ = self
+        if let Err(e) = self
             .raw_event_tx
-            .try_send(ClientEvent::Protocol(protocol_event));
+            .try_send(ClientEvent::Protocol(protocol_event))
+        {
+            warn!(target: "net", "Failed to send protocol event: {}", e);
+        }
 
         // Use characters directly from acprotocol message
         let characters = char_list.characters.list.clone();
@@ -217,9 +235,12 @@ impl MessageHandler<acprotocol::messages::s2c::LoginLoginCharacterSet> for Clien
 
         // Update progress to 100% after transitioning
         let progress_event = GameEvent::UpdatingSetProgress { progress: 1.0 };
-        let _ = self
+        if let Err(e) = self
             .raw_event_tx
-            .try_send(ClientEvent::Game(progress_event));
+            .try_send(ClientEvent::Game(progress_event))
+        {
+            warn!(target: "net", "Failed to send game event: {}", e);
+        }
         info!(target: "net", "Progress: CharacterList received (100%)");
 
         // Clear cached DDD response since we successfully received character list
@@ -299,15 +320,20 @@ impl MessageHandler<acprotocol::messages::s2c::DDDInterrogationMessage> for Clie
 
         // Emit protocol event
         let protocol_event = ProtocolEvent::S2C(ddd_msg.to_protocol_event());
-        let _ = self
+        if let Err(e) = self
             .raw_event_tx
-            .try_send(ClientEvent::Protocol(protocol_event));
+            .try_send(ClientEvent::Protocol(protocol_event))
+        {
+            warn!(target: "net", "Failed to send protocol event: {}", e);
+        }
 
         // Update progress to ReceivedDDD using new scene API
         use crate::client::scene::PatchingProgress as ScenePatchingProgress;
         self.update_patch_progress(ScenePatchingProgress::ReceivedDDD);
         let game_event = GameEvent::UpdatingSetProgress { progress: 0.33 };
-        let _ = self.raw_event_tx.try_send(ClientEvent::Game(game_event));
+        if let Err(e) = self.raw_event_tx.try_send(ClientEvent::Game(game_event)) {
+            warn!(target: "net", "Failed to send game event: {}", e);
+        }
         info!(target: "net", "Progress: DDDInterrogation received (33%)");
 
         // Send static DDD response indicating client is up-to-date
@@ -337,9 +363,12 @@ impl MessageHandler<acprotocol::messages::s2c::CharacterCharGenVerificationRespo
 
         // Emit protocol event
         let protocol_event = ProtocolEvent::S2C(response.to_protocol_event());
-        let _ = self
+        if let Err(e) = self
             .raw_event_tx
-            .try_send(ClientEvent::Protocol(protocol_event));
+            .try_send(ClientEvent::Protocol(protocol_event))
+        {
+            warn!(target: "net", "Failed to send protocol event: {}", e);
+        }
 
         // Delay emitting CharacterListReceived event
         let game_event = GameEvent::CharacterListReceived {
@@ -388,13 +417,17 @@ impl MessageHandler<acprotocol::messages::s2c::QualitiesPrivateUpdateInt> for Cl
         let property_name = format!("{:?}", quality_msg.key);
         let value = quality_msg.value;
 
-        info!(target: "net", "QualitiesPrivateUpdateInt: Property {} = {}", property_name, value);
+        // Private quality updates apply to the player's character
+        let object_id = self
+            .scene
+            .as_in_world()
+            .map(|scene| scene.character_id)
+            .unwrap_or(0);
 
-        // This is a global quality update, not tied to a specific object
-        // For now we'll emit with object_id 0 (or handle this differently)
-        // In reality, this might update the player or a specific object
+        info!(target: "net", "QualitiesPrivateUpdateInt: Property {} = {} for object 0x{:08X}", property_name, value, object_id);
+
         Some(GameEvent::QualitiesPrivateUpdateInt {
-            object_id: 0, // TODO: determine which object this applies to
+            object_id,
             property_name,
             value,
         })
@@ -413,9 +446,12 @@ impl MessageHandler<acprotocol::messages::s2c::ItemDeleteObject> for Client {
 
         // Emit protocol event
         let protocol_event = ProtocolEvent::S2C(delete_obj.to_protocol_event());
-        let _ = self
+        if let Err(e) = self
             .raw_event_tx
-            .try_send(ClientEvent::Protocol(protocol_event));
+            .try_send(ClientEvent::Protocol(protocol_event))
+        {
+            warn!(target: "net", "Failed to send protocol event: {}", e);
+        }
 
         Some(GameEvent::ItemDeleteObject { object_id })
     }
