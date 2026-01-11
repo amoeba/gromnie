@@ -107,6 +107,8 @@ pub struct ClientStatus {
     pub session_state: SessionState,
     /// Scene state from the client (UI-level state)
     pub scene_state: SceneState,
+    /// World name from the LoginWorldInfo packet
+    pub world_name: Option<String>,
 }
 
 impl ClientStatus {
@@ -136,6 +138,7 @@ impl Default for ClientStatus {
             characters: Vec::new(),
             session_state: SessionState::Unknown,
             scene_state: SceneState::Unknown,
+            world_name: None,
         }
     }
 }
@@ -735,6 +738,15 @@ impl App {
                         "ItemSetState: Object {} {} = {}",
                         object_id, property_name, value
                     ),
+                    timestamp: chrono::Utc::now(),
+                });
+            }
+            GameEvent::WorldNameReceived { world_name } => {
+                self.client_status.world_name = Some(world_name.clone());
+
+                self.add_network_message(NetworkMessage::Received {
+                    opcode: "0xF7E1".to_string(),
+                    description: format!("World name received: {}", world_name),
                     timestamp: chrono::Utc::now(),
                 });
             }

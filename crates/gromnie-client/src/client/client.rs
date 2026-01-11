@@ -1182,6 +1182,12 @@ impl Client {
                         )
                         .ok();
                     }
+                    S2CMessage::LoginWorldInfo => {
+                        dispatch_message::<acprotocol::messages::s2c::LoginWorldInfo, _>(
+                            self, message, &event_tx,
+                        )
+                        .ok();
+                    }
                     // Add more handlers as needed
                     _ => {
                         info!(target: "net", "Unhandled S2CMessage: {:?} (0x{:04X})", msg_type, message.opcode);

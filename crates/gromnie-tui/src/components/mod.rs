@@ -55,13 +55,24 @@ pub fn render_tab_bar(frame: &mut Frame, area: Rect, app: &crate::app::App) {
         default_style
     };
 
-    let spans = vec![
+    // Build the tab bar spans
+    let mut spans = vec![
         Span::styled(" ", default_style),
         Span::styled("1 Game", game_style),
         Span::styled(" | ", default_style),
         Span::styled("2 Debug", debug_style),
-        Span::styled(" ", default_style),
     ];
+
+    // Add world name if available
+    if let Some(ref world_name) = app.client_status.world_name {
+        spans.push(Span::styled(" | ", default_style));
+        spans.push(Span::styled(
+            format!("World: {}", world_name),
+            Style::default().bg(Color::Gray).fg(Color::Black).bold(),
+        ));
+    }
+
+    spans.push(Span::styled(" ", default_style));
 
     let line = Line::from(spans);
     let paragraph = Paragraph::new(line).style(default_style);

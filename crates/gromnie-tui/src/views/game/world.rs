@@ -36,7 +36,11 @@ pub fn render_game_world_view(
     state: &GameWorldState,
     created_objects: &[(u32, String)],
 ) {
-    let title = format!("{}: Game World", app.client_status.account_name);
+    let title = if let Some(ref world_name) = app.client_status.world_name {
+        format!("{}: {}", world_name, app.client_status.account_name)
+    } else {
+        format!("?: {}", app.client_status.account_name)
+    };
 
     let block = Block::default().title(title).borders(Borders::ALL);
 
