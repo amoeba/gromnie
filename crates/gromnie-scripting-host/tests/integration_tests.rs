@@ -23,7 +23,8 @@ async fn create_mock_client() -> Arc<RwLock<Client>> {
         mpsc::channel(100).0,
         false,
     )
-    .await;
+    .await
+    .expect("Failed to create client");
     Arc::new(RwLock::new(client))
 }
 

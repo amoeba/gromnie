@@ -431,7 +431,8 @@ impl ClientRunner {
             raw_event_tx,
             config.reconnect,
         )
-        .await;
+        .await
+        .expect("Failed to create client");
 
         // Wrap client in Arc<RwLock<>> for shared access
         let client = Arc::new(tokio::sync::RwLock::new(client));

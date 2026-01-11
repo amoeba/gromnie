@@ -13,7 +13,7 @@ impl ServerInfo {
         ServerInfo {
             host,
             login_port,
-            world_port: login_port + 1,
+            world_port: login_port.saturating_add(1),
         }
     }
 
@@ -24,29 +24,41 @@ impl ServerInfo {
     }
 
     /// Get the login server address for sending standard messages
+    /// Prefers IPv4 but falls back to IPv6 if IPv4 is not available
     pub async fn login_addr(&self) -> Result<SocketAddr, std::io::Error> {
         let addr = format!("{}:{}", self.host, self.login_port);
-        tokio::net::lookup_host(addr)
-            .await?
+        let addrs: Vec<SocketAddr> = tokio::net::lookup_host(&addr).await?.collect();
+
+        // Prefer IPv4, but accept IPv6 if no IPv4 address is available
+        addrs
+            .iter()
             .find(|a| a.is_ipv4())
+            .or_else(|| addrs.first())
+            .copied()
             .ok_or_else(|| {
                 std::io::Error::new(
                     std::io::ErrorKind::NotFound,
-                    "Could not resolve IPv4 address",
+                    format!("Could not resolve address: {}", addr),
                 )
             })
     }
 
     /// Get the world server address for sending ConnectResponse
+    /// Prefers IPv4 but falls back to IPv6 if IPv4 is not available
     pub async fn world_addr(&self) -> Result<SocketAddr, std::io::Error> {
         let addr = format!("{}:{}", self.host, self.world_port);
-        tokio::net::lookup_host(addr)
-            .await?
+        let addrs: Vec<SocketAddr> = tokio::net::lookup_host(&addr).await?.collect();
+
+        // Prefer IPv4, but accept IPv6 if no IPv4 address is available
+        addrs
+            .iter()
             .find(|a| a.is_ipv4())
+            .or_else(|| addrs.first())
+            .copied()
             .ok_or_else(|| {
                 std::io::Error::new(
                     std::io::ErrorKind::NotFound,
-                    "Could not resolve IPv4 address",
+                    format!("Could not resolve address: {}", addr),
                 )
             })
     }

@@ -314,7 +314,8 @@ pub async fn run_client<C, F>(
         raw_event_tx,
         config.reconnect,
     )
-    .await;
+    .await
+    .expect("Failed to create client");
 
     // Wrap client in Arc<RwLock<>> for shared access
     let client = Arc::new(RwLock::new(client));
@@ -360,7 +361,8 @@ pub async fn run_client_with_consumers<F>(
         raw_event_tx,
         config.reconnect,
     )
-    .await;
+    .await
+    .expect("Failed to create client");
 
     // Wrap client in Arc<RwLock<>> for shared access
     let client = Arc::new(RwLock::new(client));
@@ -459,7 +461,8 @@ pub async fn run_client_with_action_channel<C, F>(
         raw_event_tx,
         config.reconnect,
     )
-    .await;
+    .await
+    .expect("Failed to create client");
 
     // Wrap client in Arc<RwLock<>> for shared access
     let client = Arc::new(RwLock::new(client));
@@ -789,7 +792,8 @@ where
                 raw_event_tx,
                 client_config.reconnect,
             )
-            .await;
+            .await
+            .expect("Failed to create client");
 
             // Wrap client in Arc<RwLock<>> for shared access
             let client = Arc::new(RwLock::new(client));
@@ -965,7 +969,8 @@ where
                 raw_event_tx,
                 client.reconnect,
             )
-            .await;
+            .await
+            .expect("Failed to create client");
 
             // Wrap client in Arc<RwLock<>> for shared access
             let client_obj = Arc::new(RwLock::new(client_obj));

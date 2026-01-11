@@ -19,7 +19,12 @@ impl Clone for ConnectionState {
             cookie: self.cookie,
             client_id: self.client_id,
             table: self.table,
-            send_generator: Mutex::new(self.send_generator.lock().unwrap().clone()),
+            send_generator: Mutex::new(
+                self.send_generator
+                    .lock()
+                    .unwrap_or_else(|poisoned| poisoned.into_inner())
+                    .clone(),
+            ),
         }
     }
 }
