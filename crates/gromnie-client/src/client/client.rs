@@ -18,9 +18,8 @@ use crate::client::connection::ServerInfo;
 use crate::client::messages::{OutgoingMessage, OutgoingMessageContent};
 use crate::client::protocol::{C2SPacketExt, CustomLoginRequest};
 use crate::client::scene::{
-    CharacterCreateScene, CharacterSelectScene, ClientError,
-    ConnectingProgress as SceneConnectingProgress, ConnectingScene, EnteringWorldState, ErrorScene,
-    InWorldScene, PatchingProgress as ScenePatchingProgress, Scene,
+    CharacterCreateScene, CharacterSelectScene, ClientError, ConnectingProgress, ConnectingScene,
+    EnteringWorldState, ErrorScene, InWorldScene, PatchingProgress, Scene,
 };
 use crate::client::session::{Account, ClientSession, ConnectionState, SessionState};
 
@@ -47,10 +46,6 @@ use acprotocol::gameevents::{CommunicationHearDirectSpeech, CommunicationTransie
 
 /// Maximum number of packets we can send without receiving before considering connection dead
 const MAX_UNACKED_SENDS: u32 = 20;
-
-// NOTE: ConnectingProgress and PatchingProgress are now defined in scene.rs
-// Import them from there instead
-use crate::client::scene::{ConnectingProgress, PatchingProgress};
 
 // TODO: Don't require both bind_address and connect_address. I had to do this
 // to get things to work but I should be able to listen on any random port so
@@ -98,10 +93,13 @@ impl Client {
         character: Option<String>,
         raw_event_tx: mpsc::Sender<ClientEvent>, // Raw event sender to runner
         reconnect: bool,
-    ) -> (
-        Client,
-        mpsc::UnboundedSender<gromnie_events::SimpleClientAction>,
-    ) {
+    ) -> Result<
+        (
+            Client,
+            mpsc::UnboundedSender<gromnie_events::SimpleClientAction>,
+        ),
+        std::io::Error,
+    > {
         Self::new_with_reconnect(
             id,
             address,
@@ -122,16 +120,39 @@ impl Client {
         character: Option<String>,
         raw_event_tx: mpsc::Sender<ClientEvent>, // Raw event sender to runner
         reconnect_enabled: bool,
-    ) -> (
-        Client,
-        mpsc::UnboundedSender<gromnie_events::SimpleClientAction>,
-    ) {
-        let sok = UdpSocket::bind("0.0.0.0:0").await.unwrap();
+    ) -> Result<
+        (
+            Client,
+            mpsc::UnboundedSender<gromnie_events::SimpleClientAction>,
+        ),
+        std::io::Error,
+    > {
+        let sok = UdpSocket::bind("0.0.0.0:0").await?;
 
         // Parse address to extract host and port
         let parts: Vec<&str> = address.split(':').collect();
-        let host = parts[0].to_string();
-        let login_port = parts.get(1).and_then(|p| p.parse().ok()).unwrap_or(9000);
+        let host = parts
+            .first()
+            .filter(|h| !h.is_empty())
+            .ok_or_else(|| {
+                std::io::Error::new(
+                    std::io::ErrorKind::InvalidInput,
+                    "Invalid address: host is empty",
+                )
+            })?
+            .to_string();
+        let login_port = match parts.get(1) {
+            Some(port_str) => port_str.parse().map_err(|_| {
+                std::io::Error::new(
+                    std::io::ErrorKind::InvalidInput,
+                    format!(
+                        "Invalid port '{}': must be a number between 0 and 65535",
+                        port_str
+                    ),
+                )
+            })?,
+            None => 9000, // Default port when not specified
+        };
 
         // Action channel: Handlers send actions back to client
         let (action_tx, action_rx) = mpsc::unbounded_channel();
@@ -177,7 +198,7 @@ impl Client {
             pending_auto_login: None,
         };
 
-        (client, action_tx)
+        Ok((client, action_tx))
     }
 
     /// Centralized packet sending with sequence management
@@ -868,8 +889,11 @@ impl Client {
         let fragment_size = (FRAGMENT_HEADER_SIZE + message_data.len()) as u16;
         let blob_fragment = BlobFragments {
             sequence: frag_sequence,
-            id: 0x80000000, // Object ID (0x80000000 for game messages)
-            count: 1,       // Single fragment
+            // Object ID 0x80000000 is a special protocol constant used for system messages
+            // and game actions that aren't associated with a specific game object.
+            // This is required by the AC protocol for client-to-server GameAction messages.
+            id: 0x80000000,
+            count: 1, // Single fragment
             size: fragment_size,
             index: 0, // First (and only) fragment
             group,
@@ -878,11 +902,12 @@ impl Client {
 
         // Extract session values
         let (client_id, table) = {
-            let connection = self
-                .session
-                .connection
-                .as_ref()
-                .expect("Session not established");
+            let connection = self.session.connection.as_ref().ok_or_else(|| {
+                std::io::Error::new(
+                    std::io::ErrorKind::NotConnected,
+                    "Cannot send fragmented message: session not established",
+                )
+            })?;
             (connection.client_id, connection.table)
         };
 
@@ -1694,7 +1719,7 @@ impl Client {
     }
 
     /// Update connecting progress within the Connecting scene
-    pub fn update_connect_progress(&mut self, progress: SceneConnectingProgress) {
+    pub fn update_connect_progress(&mut self, progress: ConnectingProgress) {
         if let Scene::Connecting(ref mut scene) = self.scene {
             scene.connect_progress = progress;
         }
@@ -1704,12 +1729,12 @@ impl Client {
     pub fn start_patching(&mut self) {
         self.session.transition_to(SessionState::AuthConnected);
         if let Scene::Connecting(ref mut scene) = self.scene {
-            scene.patch_progress = ScenePatchingProgress::WaitingForDDD;
+            scene.patch_progress = PatchingProgress::WaitingForDDD;
         }
     }
 
     /// Update patching progress within the Connecting scene
-    pub fn update_patch_progress(&mut self, progress: ScenePatchingProgress) {
+    pub fn update_patch_progress(&mut self, progress: PatchingProgress) {
         if let Scene::Connecting(ref mut scene) = self.scene {
             scene.patch_progress = progress;
         }

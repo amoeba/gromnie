@@ -422,7 +422,7 @@ impl ClientRunner {
         let event_rx = event_bus_manager.subscribe();
 
         // Create the client
-        let (client, action_tx) = Client::new(
+        let (client, action_tx) = match Client::new(
             config.id,
             config.address.clone(),
             config.account_name.clone(),
@@ -431,7 +431,14 @@ impl ClientRunner {
             raw_event_tx,
             config.reconnect,
         )
-        .await;
+        .await
+        {
+            Ok(result) => result,
+            Err(e) => {
+                tracing::error!(target: "net", "Failed to create client: {}", e);
+                return RunResult::Single;
+            }
+        };
 
         // Wrap client in Arc<RwLock<>> for shared access
         let client = Arc::new(tokio::sync::RwLock::new(client));
