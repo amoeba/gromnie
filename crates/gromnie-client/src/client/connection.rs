@@ -1,5 +1,7 @@
 use std::net::SocketAddr;
 
+use tracing::warn;
+
 /// Server information tracking both login and world ports
 #[derive(Clone, Debug)]
 pub struct ServerInfo {
@@ -10,10 +12,14 @@ pub struct ServerInfo {
 
 impl ServerInfo {
     pub fn new(host: String, login_port: u16) -> Self {
+        let world_port = login_port.saturating_add(1);
+        if login_port == u16::MAX {
+            warn!(target: "net", "login_port is {}, world_port will be the same value due to saturation (expected world_port = login_port + 1)", login_port);
+        }
         ServerInfo {
             host,
             login_port,
-            world_port: login_port.saturating_add(1),
+            world_port,
         }
     }
 

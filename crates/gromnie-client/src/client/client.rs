@@ -141,7 +141,15 @@ impl Client {
                 )
             })?
             .to_string();
-        let login_port = parts.get(1).and_then(|p| p.parse().ok()).unwrap_or(9000);
+        let login_port = match parts.get(1) {
+            Some(port_str) => port_str.parse().map_err(|_| {
+                std::io::Error::new(
+                    std::io::ErrorKind::InvalidInput,
+                    format!("Invalid port '{}': must be a number between 0 and 65535", port_str),
+                )
+            })?,
+            None => 9000, // Default port when not specified
+        };
 
         // Action channel: Handlers send actions back to client
         let (action_tx, action_rx) = mpsc::unbounded_channel();

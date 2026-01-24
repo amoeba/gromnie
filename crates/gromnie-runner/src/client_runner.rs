@@ -305,7 +305,7 @@ pub async fn run_client<C, F>(
     // Subscribe to the event bus for the consumer
     let event_rx = event_bus_manager.subscribe();
 
-    let (client, action_tx) = Client::new_with_reconnect(
+    let (client, action_tx) = match Client::new_with_reconnect(
         config.id,
         config.address.clone(),
         config.account_name.clone(),
@@ -315,7 +315,13 @@ pub async fn run_client<C, F>(
         config.reconnect,
     )
     .await
-    .expect("Failed to create client");
+    {
+        Ok(result) => result,
+        Err(e) => {
+            error!(target: "net", "Failed to create client: {}", e);
+            return;
+        }
+    };
 
     // Wrap client in Arc<RwLock<>> for shared access
     let client = Arc::new(RwLock::new(client));
@@ -352,7 +358,7 @@ pub async fn run_client_with_consumers<F>(
         event_wrapper.run(raw_event_rx).await;
     });
 
-    let (client, action_tx) = Client::new_with_reconnect(
+    let (client, action_tx) = match Client::new_with_reconnect(
         config.id,
         config.address.clone(),
         config.account_name.clone(),
@@ -362,7 +368,13 @@ pub async fn run_client_with_consumers<F>(
         config.reconnect,
     )
     .await
-    .expect("Failed to create client");
+    {
+        Ok(result) => result,
+        Err(e) => {
+            error!(target: "net", "Failed to create client: {}", e);
+            return;
+        }
+    };
 
     // Wrap client in Arc<RwLock<>> for shared access
     let client = Arc::new(RwLock::new(client));
@@ -452,7 +464,7 @@ pub async fn run_client_with_action_channel<C, F>(
     // Subscribe to the event bus for the consumer
     let event_rx = event_bus_manager.subscribe();
 
-    let (client, action_tx) = Client::new_with_reconnect(
+    let (client, action_tx) = match Client::new_with_reconnect(
         config.id,
         config.address.clone(),
         config.account_name.clone(),
@@ -462,7 +474,13 @@ pub async fn run_client_with_action_channel<C, F>(
         config.reconnect,
     )
     .await
-    .expect("Failed to create client");
+    {
+        Ok(result) => result,
+        Err(e) => {
+            error!(target: "net", "Failed to create client: {}", e);
+            return;
+        }
+    };
 
     // Wrap client in Arc<RwLock<>> for shared access
     let client = Arc::new(RwLock::new(client));
@@ -783,7 +801,7 @@ where
             let event_rx = event_bus_manager.subscribe();
 
             // Create the client
-            let (client, action_tx) = Client::new(
+            let (client, action_tx) = match Client::new(
                 client_config.id,
                 client_config.address.clone(),
                 client_config.account_name.clone(),
@@ -793,7 +811,14 @@ where
                 client_config.reconnect,
             )
             .await
-            .expect("Failed to create client");
+            {
+                Ok(result) => result,
+                Err(e) => {
+                    error!(target: "net", "Failed to create client {}: {}", client_config.id, e);
+                    stats.errors.fetch_add(1, Ordering::SeqCst);
+                    return;
+                }
+            };
 
             // Wrap client in Arc<RwLock<>> for shared access
             let client = Arc::new(RwLock::new(client));
@@ -960,7 +985,7 @@ where
 
             let event_rx = event_bus_manager.subscribe();
 
-            let (client_obj, action_tx) = Client::new(
+            let (client_obj, action_tx) = match Client::new(
                 client.id,
                 client.address.clone(),
                 client.account_name.clone(),
@@ -970,7 +995,13 @@ where
                 client.reconnect,
             )
             .await
-            .expect("Failed to create client");
+            {
+                Ok(result) => result,
+                Err(e) => {
+                    error!(target: "net", "Failed to create client: {}", e);
+                    return RunResult::Single;
+                }
+            };
 
             // Wrap client in Arc<RwLock<>> for shared access
             let client_obj = Arc::new(RwLock::new(client_obj));

@@ -418,11 +418,13 @@ impl MessageHandler<acprotocol::messages::s2c::QualitiesPrivateUpdateInt> for Cl
         let value = quality_msg.value;
 
         // Private quality updates apply to the player's character
-        let object_id = self
-            .scene
-            .as_in_world()
-            .map(|scene| scene.character_id)
-            .unwrap_or(0);
+        let object_id = match self.scene.as_in_world() {
+            Some(scene) => scene.character_id,
+            None => {
+                warn!(target: "net", "QualitiesPrivateUpdateInt received but not in InWorld scene (current scene: {:?}), using object_id 0", self.scene);
+                0
+            }
+        };
 
         info!(target: "net", "QualitiesPrivateUpdateInt: Property {} = {} for object 0x{:08X}", property_name, value, object_id);
 
