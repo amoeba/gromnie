@@ -145,7 +145,10 @@ impl Client {
             Some(port_str) => port_str.parse().map_err(|_| {
                 std::io::Error::new(
                     std::io::ErrorKind::InvalidInput,
-                    format!("Invalid port '{}': must be a number between 0 and 65535", port_str),
+                    format!(
+                        "Invalid port '{}': must be a number between 0 and 65535",
+                        port_str
+                    ),
                 )
             })?,
             None => 9000, // Default port when not specified
