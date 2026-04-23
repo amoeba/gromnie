@@ -85,6 +85,7 @@ fn handle_protocol_event(protocol_event: ProtocolEvent) {
                 GameEventMsg::TransientString(msg) => {
                     gromnie::log(&format!("  -> TransientString: {}", msg.message));
                 }
+                _ => {}
             }
         }
     }

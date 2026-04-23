@@ -39,11 +39,24 @@ use crate::client::game_event_handler::dispatch_game_event;
 use crate::client::message_handler::dispatch_message;
 use crate::client::protocol_conversions::{
     hear_direct_speech_to_game_event_msg, transient_string_to_game_event_msg,
+    trade_register_trade_to_game_event_msg, trade_open_trade_to_game_event_msg,
+    trade_close_trade_to_game_event_msg, trade_add_to_trade_to_game_event_msg,
+    trade_remove_from_trade_to_game_event_msg, trade_accept_trade_event_to_game_event_msg,
+    trade_decline_trade_event_to_game_event_msg, trade_reset_trade_event_to_game_event_msg,
+    trade_failure_to_game_event_msg, magic_update_enchantment_to_game_event_msg,
+    magic_remove_enchantment_to_game_event_msg,
 };
 use crate::client::{ClientEvent, ClientSystemEvent, GameEvent};
 use crate::crypto::crypto_system::CryptoSystem;
 use crate::crypto::magic_number::get_magic_number;
-use acprotocol::gameevents::{CommunicationHearDirectSpeech, CommunicationTransientString};
+use acprotocol::gameevents::{
+    CommunicationHearDirectSpeech, CommunicationTransientString,
+    MagicUpdateEnchantment, MagicRemoveEnchantment,
+    TradeRegisterTrade, TradeOpenTrade, TradeCloseTrade,
+    TradeAddToTrade, TradeRemoveFromTrade,
+    TradeAcceptTrade as TradeAcceptTradeEvent, TradeDeclineTrade as TradeDeclineTradeEvent,
+    TradeResetTrade as TradeResetTradeEvent, TradeTradeFailure,
+};
 
 /// Maximum number of packets we can send without receiving before considering connection dead
 const MAX_UNACKED_SENDS: u32 = 20;
@@ -87,6 +100,16 @@ pub struct Client {
     pub(crate) character: Option<String>,
     /// Pending auto-login action to be processed after character list is received
     pub(crate) pending_auto_login: Option<gromnie_events::SimpleClientAction>,
+    /// Cached trade registration data (set when server sends TradeRegisterTrade)
+    pub(crate) pending_trade: Option<PendingTradeState>,
+}
+
+/// Cached state from a server TradeRegisterTrade event, needed to accept the trade
+#[derive(Debug, Clone)]
+pub struct PendingTradeState {
+    pub initiator_id: u32,
+    pub partner_id: u32,
+    pub stamp: i64,
 }
 
 impl Client {
@@ -175,6 +198,7 @@ impl Client {
             reconnect_at: None,
             character,
             pending_auto_login: None,
+            pending_trade: None,
         };
 
         (client, action_tx)
@@ -484,6 +508,196 @@ impl Client {
             OutgoingMessageContent::GameAction(message_data),
         ));
         info!(target: "net", "Chat tell message queued for sending");
+    }
+
+    // ===== Trading =====
+
+    fn send_trade_open(&mut self, partner_id: u32) {
+        info!(target: "net", "Opening trade with partner 0x{:08X}", partner_id);
+        let mut message_data = Vec::new();
+        {
+            let mut cursor = Cursor::new(&mut message_data);
+            use acprotocol::gameactions::TradeOpenTradeNegotiations;
+            let action = GameActionMessage::TradeOpenTradeNegotiations(TradeOpenTradeNegotiations {
+                object_id: acprotocol::types::ObjectId(partner_id),
+            });
+            let msg = C2SMessage::OrderedGameAction {
+                sequence: self.next_game_action_sequence,
+                action,
+            };
+            self.next_game_action_sequence += 1;
+            msg.write(&mut cursor).expect("write failed");
+        }
+        self.outgoing_message_queue.push_back(OutgoingMessage::new(
+            OutgoingMessageContent::GameAction(message_data),
+        ));
+    }
+
+    fn send_trade_add(&mut self, item_id: u32, slot: u32) {
+        info!(target: "net", "Adding item 0x{:08X} to trade slot {}", item_id, slot);
+        let mut message_data = Vec::new();
+        {
+            let mut cursor = Cursor::new(&mut message_data);
+            use acprotocol::gameactions::TradeAddToTrade;
+            let action = GameActionMessage::TradeAddToTrade(TradeAddToTrade {
+                object_id: acprotocol::types::ObjectId(item_id),
+                slot_index: slot,
+            });
+            let msg = C2SMessage::OrderedGameAction {
+                sequence: self.next_game_action_sequence,
+                action,
+            };
+            self.next_game_action_sequence += 1;
+            msg.write(&mut cursor).expect("write failed");
+        }
+        self.outgoing_message_queue.push_back(OutgoingMessage::new(
+            OutgoingMessageContent::GameAction(message_data),
+        ));
+    }
+
+    fn send_trade_accept(&mut self) {
+        let Some(trade) = self.pending_trade.clone() else {
+            warn!(target: "net", "AcceptTrade action received but no pending trade");
+            return;
+        };
+        info!(target: "net", "Accepting trade (stamp={})", trade.stamp);
+        let mut message_data = Vec::new();
+        {
+            let mut cursor = Cursor::new(&mut message_data);
+            use acprotocol::gameactions::TradeAcceptTrade;
+            use acprotocol::types::Trade;
+            let action = GameActionMessage::TradeAcceptTrade(TradeAcceptTrade {
+                contents: Trade {
+                    partner_id: acprotocol::types::ObjectId(trade.partner_id),
+                    sequence: trade.stamp as u64,
+                    status: 0,
+                    initiator_id: acprotocol::types::ObjectId(trade.initiator_id),
+                    accepted: true,
+                    partner_accepted: false,
+                },
+            });
+            let msg = C2SMessage::OrderedGameAction {
+                sequence: self.next_game_action_sequence,
+                action,
+            };
+            self.next_game_action_sequence += 1;
+            msg.write(&mut cursor).expect("write failed");
+        }
+        self.outgoing_message_queue.push_back(OutgoingMessage::new(
+            OutgoingMessageContent::GameAction(message_data),
+        ));
+    }
+
+    fn send_trade_decline(&mut self) {
+        info!(target: "net", "Declining trade");
+        let mut message_data = Vec::new();
+        {
+            let mut cursor = Cursor::new(&mut message_data);
+            use acprotocol::gameactions::TradeDeclineTrade;
+            let action = GameActionMessage::TradeDeclineTrade(TradeDeclineTrade {});
+            let msg = C2SMessage::OrderedGameAction {
+                sequence: self.next_game_action_sequence,
+                action,
+            };
+            self.next_game_action_sequence += 1;
+            msg.write(&mut cursor).expect("write failed");
+        }
+        self.outgoing_message_queue.push_back(OutgoingMessage::new(
+            OutgoingMessageContent::GameAction(message_data),
+        ));
+    }
+
+    fn send_trade_reset(&mut self) {
+        info!(target: "net", "Resetting trade");
+        let mut message_data = Vec::new();
+        {
+            let mut cursor = Cursor::new(&mut message_data);
+            use acprotocol::gameactions::TradeResetTrade;
+            let action = GameActionMessage::TradeResetTrade(TradeResetTrade {});
+            let msg = C2SMessage::OrderedGameAction {
+                sequence: self.next_game_action_sequence,
+                action,
+            };
+            self.next_game_action_sequence += 1;
+            msg.write(&mut cursor).expect("write failed");
+        }
+        self.outgoing_message_queue.push_back(OutgoingMessage::new(
+            OutgoingMessageContent::GameAction(message_data),
+        ));
+    }
+
+    fn send_trade_close(&mut self) {
+        info!(target: "net", "Closing trade negotiations");
+        self.pending_trade = None;
+        let mut message_data = Vec::new();
+        {
+            let mut cursor = Cursor::new(&mut message_data);
+            use acprotocol::gameactions::TradeCloseTradeNegotiations;
+            let action =
+                GameActionMessage::TradeCloseTradeNegotiations(TradeCloseTradeNegotiations {});
+            let msg = C2SMessage::OrderedGameAction {
+                sequence: self.next_game_action_sequence,
+                action,
+            };
+            self.next_game_action_sequence += 1;
+            msg.write(&mut cursor).expect("write failed");
+        }
+        self.outgoing_message_queue.push_back(OutgoingMessage::new(
+            OutgoingMessageContent::GameAction(message_data),
+        ));
+    }
+
+    // ===== Spell Casting =====
+
+    fn send_cast_targeted_spell(&mut self, target_id: u32, spell_id: u32) {
+        info!(target: "net", "Casting spell {} at target 0x{:08X}", spell_id, target_id);
+        let mut message_data = Vec::new();
+        {
+            let mut cursor = Cursor::new(&mut message_data);
+            use acprotocol::gameactions::MagicCastTargetedSpell;
+            use acprotocol::types::{LayeredSpellId, SpellId};
+            let action = GameActionMessage::MagicCastTargetedSpell(MagicCastTargetedSpell {
+                object_id: acprotocol::types::ObjectId(target_id),
+                spell_id: LayeredSpellId {
+                    id: SpellId(spell_id as u16),
+                    layer: 0,
+                },
+            });
+            let msg = C2SMessage::OrderedGameAction {
+                sequence: self.next_game_action_sequence,
+                action,
+            };
+            self.next_game_action_sequence += 1;
+            msg.write(&mut cursor).expect("write failed");
+        }
+        self.outgoing_message_queue.push_back(OutgoingMessage::new(
+            OutgoingMessageContent::GameAction(message_data),
+        ));
+    }
+
+    fn send_cast_untargeted_spell(&mut self, spell_id: u32) {
+        info!(target: "net", "Casting untargeted spell {}", spell_id);
+        let mut message_data = Vec::new();
+        {
+            let mut cursor = Cursor::new(&mut message_data);
+            use acprotocol::gameactions::MagicCastUntargetedSpell;
+            use acprotocol::types::{LayeredSpellId, SpellId};
+            let action = GameActionMessage::MagicCastUntargetedSpell(MagicCastUntargetedSpell {
+                spell_id: LayeredSpellId {
+                    id: SpellId(spell_id as u16),
+                    layer: 0,
+                },
+            });
+            let msg = C2SMessage::OrderedGameAction {
+                sequence: self.next_game_action_sequence,
+                action,
+            };
+            self.next_game_action_sequence += 1;
+            msg.write(&mut cursor).expect("write failed");
+        }
+        self.outgoing_message_queue.push_back(OutgoingMessage::new(
+            OutgoingMessageContent::GameAction(message_data),
+        ));
     }
 
     /// Send a TimeSync packet to keep connection alive
@@ -815,6 +1029,38 @@ impl Client {
                 }
                 gromnie_events::SimpleClientAction::LogScriptMessage { script_id, message } => {
                     info!(target: "script", "[{}] {}", script_id, message);
+                }
+                gromnie_events::SimpleClientAction::OpenTrade { partner_id } => {
+                    debug!(target: "events", "Action: Opening trade with 0x{:08X}", partner_id);
+                    self.send_trade_open(partner_id);
+                }
+                gromnie_events::SimpleClientAction::AddToTrade { item_id, slot } => {
+                    debug!(target: "events", "Action: Adding item 0x{:08X} to trade slot {}", item_id, slot);
+                    self.send_trade_add(item_id, slot);
+                }
+                gromnie_events::SimpleClientAction::AcceptTrade => {
+                    debug!(target: "events", "Action: Accepting trade");
+                    self.send_trade_accept();
+                }
+                gromnie_events::SimpleClientAction::DeclineTrade => {
+                    debug!(target: "events", "Action: Declining trade");
+                    self.send_trade_decline();
+                }
+                gromnie_events::SimpleClientAction::ResetTrade => {
+                    debug!(target: "events", "Action: Resetting trade");
+                    self.send_trade_reset();
+                }
+                gromnie_events::SimpleClientAction::CloseTrade => {
+                    debug!(target: "events", "Action: Closing trade");
+                    self.send_trade_close();
+                }
+                gromnie_events::SimpleClientAction::CastTargetedSpell { target_id, spell_id } => {
+                    debug!(target: "events", "Action: Casting spell {} at 0x{:08X}", spell_id, target_id);
+                    self.send_cast_targeted_spell(target_id, spell_id);
+                }
+                gromnie_events::SimpleClientAction::CastUntargetedSpell { spell_id } => {
+                    debug!(target: "events", "Action: Casting untargeted spell {}", spell_id);
+                    self.send_cast_untargeted_spell(spell_id);
                 }
             }
         }
@@ -1250,6 +1496,72 @@ impl Client {
                     transient_string_to_game_event_msg,
                 )
                 .ok();
+            }
+            GameEventType::TradeRegisterTrade => {
+                dispatch_game_event::<TradeRegisterTrade, _, _>(
+                    self, &mut cursor, &event_tx, object_id, sequence,
+                    trade_register_trade_to_game_event_msg,
+                ).ok();
+            }
+            GameEventType::TradeOpenTrade => {
+                dispatch_game_event::<TradeOpenTrade, _, _>(
+                    self, &mut cursor, &event_tx, object_id, sequence,
+                    trade_open_trade_to_game_event_msg,
+                ).ok();
+            }
+            GameEventType::TradeCloseTrade => {
+                dispatch_game_event::<TradeCloseTrade, _, _>(
+                    self, &mut cursor, &event_tx, object_id, sequence,
+                    trade_close_trade_to_game_event_msg,
+                ).ok();
+            }
+            GameEventType::TradeAddToTrade => {
+                dispatch_game_event::<TradeAddToTrade, _, _>(
+                    self, &mut cursor, &event_tx, object_id, sequence,
+                    trade_add_to_trade_to_game_event_msg,
+                ).ok();
+            }
+            GameEventType::TradeRemoveFromTrade => {
+                dispatch_game_event::<TradeRemoveFromTrade, _, _>(
+                    self, &mut cursor, &event_tx, object_id, sequence,
+                    trade_remove_from_trade_to_game_event_msg,
+                ).ok();
+            }
+            GameEventType::TradeAcceptTrade => {
+                dispatch_game_event::<TradeAcceptTradeEvent, _, _>(
+                    self, &mut cursor, &event_tx, object_id, sequence,
+                    trade_accept_trade_event_to_game_event_msg,
+                ).ok();
+            }
+            GameEventType::TradeDeclineTrade => {
+                dispatch_game_event::<TradeDeclineTradeEvent, _, _>(
+                    self, &mut cursor, &event_tx, object_id, sequence,
+                    trade_decline_trade_event_to_game_event_msg,
+                ).ok();
+            }
+            GameEventType::TradeResetTrade => {
+                dispatch_game_event::<TradeResetTradeEvent, _, _>(
+                    self, &mut cursor, &event_tx, object_id, sequence,
+                    trade_reset_trade_event_to_game_event_msg,
+                ).ok();
+            }
+            GameEventType::TradeTradeFailure => {
+                dispatch_game_event::<TradeTradeFailure, _, _>(
+                    self, &mut cursor, &event_tx, object_id, sequence,
+                    trade_failure_to_game_event_msg,
+                ).ok();
+            }
+            GameEventType::MagicUpdateEnchantment => {
+                dispatch_game_event::<MagicUpdateEnchantment, _, _>(
+                    self, &mut cursor, &event_tx, object_id, sequence,
+                    magic_update_enchantment_to_game_event_msg,
+                ).ok();
+            }
+            GameEventType::MagicRemoveEnchantment => {
+                dispatch_game_event::<MagicRemoveEnchantment, _, _>(
+                    self, &mut cursor, &event_tx, object_id, sequence,
+                    magic_remove_enchantment_to_game_event_msg,
+                ).ok();
             }
             _ => {
                 debug!(target: "net", "Unhandled GameEvent: {:?}", event_type);
@@ -1844,5 +2156,99 @@ impl GameEventHandler<acprotocol::gameevents::CommunicationTransientString> for 
             message,
             message_type: 0x05, // System message type
         })
+    }
+}
+
+// ============================================================================
+// Trade game event handlers
+// ============================================================================
+
+impl GameEventHandler<TradeRegisterTrade> for Client {
+    fn handle(&mut self, event: TradeRegisterTrade) -> Option<GameEvent> {
+        info!(target: "net", "Trade registered: initiator=0x{:08X}, partner=0x{:08X}, stamp={}",
+            event.initiator_id.0, event.partner_id.0, event.stamp);
+        self.pending_trade = Some(PendingTradeState {
+            initiator_id: event.initiator_id.0,
+            partner_id: event.partner_id.0,
+            stamp: event.stamp,
+        });
+        None
+    }
+}
+
+impl GameEventHandler<TradeOpenTrade> for Client {
+    fn handle(&mut self, event: TradeOpenTrade) -> Option<GameEvent> {
+        info!(target: "net", "Trade window opened: object_id=0x{:08X}", event.object_id.0);
+        None
+    }
+}
+
+impl GameEventHandler<TradeCloseTrade> for Client {
+    fn handle(&mut self, _event: TradeCloseTrade) -> Option<GameEvent> {
+        info!(target: "net", "Trade closed");
+        self.pending_trade = None;
+        None
+    }
+}
+
+impl GameEventHandler<TradeAddToTrade> for Client {
+    fn handle(&mut self, event: TradeAddToTrade) -> Option<GameEvent> {
+        info!(target: "net", "Item added to trade: item_id=0x{:08X}", event.object_id.0);
+        None
+    }
+}
+
+impl GameEventHandler<TradeRemoveFromTrade> for Client {
+    fn handle(&mut self, event: TradeRemoveFromTrade) -> Option<GameEvent> {
+        info!(target: "net", "Item removed from trade: item_id=0x{:08X}", event.object_id.0);
+        None
+    }
+}
+
+impl GameEventHandler<TradeAcceptTradeEvent> for Client {
+    fn handle(&mut self, _event: TradeAcceptTradeEvent) -> Option<GameEvent> {
+        info!(target: "net", "Trade accepted by a participant");
+        None
+    }
+}
+
+impl GameEventHandler<TradeDeclineTradeEvent> for Client {
+    fn handle(&mut self, _event: TradeDeclineTradeEvent) -> Option<GameEvent> {
+        info!(target: "net", "Trade declined");
+        self.pending_trade = None;
+        None
+    }
+}
+
+impl GameEventHandler<TradeResetTradeEvent> for Client {
+    fn handle(&mut self, _event: TradeResetTradeEvent) -> Option<GameEvent> {
+        info!(target: "net", "Trade reset");
+        None
+    }
+}
+
+impl GameEventHandler<TradeTradeFailure> for Client {
+    fn handle(&mut self, event: TradeTradeFailure) -> Option<GameEvent> {
+        info!(target: "net", "Trade failure: {:?}", event);
+        self.pending_trade = None;
+        None
+    }
+}
+
+// ============================================================================
+// Spell / enchantment game event handlers
+// ============================================================================
+
+impl GameEventHandler<MagicUpdateEnchantment> for Client {
+    fn handle(&mut self, event: MagicUpdateEnchantment) -> Option<GameEvent> {
+        info!(target: "net", "Enchantment updated: spell_id={}", event.enchantment.id.id.0);
+        None
+    }
+}
+
+impl GameEventHandler<MagicRemoveEnchantment> for Client {
+    fn handle(&mut self, event: MagicRemoveEnchantment) -> Option<GameEvent> {
+        info!(target: "net", "Enchantment removed: spell_id={}", event.spell_id.id.0);
+        None
     }
 }

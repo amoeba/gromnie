@@ -205,6 +205,43 @@ interface host {
         message: string,
     }
 
+    // ----- Trade Event Records -----
+
+    record trade-registered-msg {
+        initiator-id: u32,
+        partner-id: u32,
+        stamp: s64,
+    }
+
+    record trade-opened-msg {
+        object-id: u32,
+    }
+
+    record trade-item-added-msg {
+        item-id: u32,
+    }
+
+    record trade-item-removed-msg {
+        item-id: u32,
+    }
+
+    record trade-failure-msg {
+        reason: u32,
+    }
+
+    // ----- Spell / Enchantment Event Records -----
+
+    record enchantment-updated-msg {
+        spell-id: u32,
+        duration: f64,
+        caster-id: u32,
+        power-level: u32,
+    }
+
+    record enchantment-removed-msg {
+        spell-id: u32,
+    }
+
     // ----- Top-level S2C Messages -----
 
     /// Top-level server-to-client messages
@@ -225,6 +262,19 @@ interface host {
     variant game-event-msg {
         hear-direct-speech(hear-direct-speech-msg),
         transient-string(transient-string-msg),
+        // Trading events
+        trade-registered(trade-registered-msg),
+        trade-opened(trade-opened-msg),
+        trade-closed,
+        trade-item-added(trade-item-added-msg),
+        trade-item-removed(trade-item-removed-msg),
+        trade-accepted,
+        trade-declined,
+        trade-reset,
+        trade-failure(trade-failure-msg),
+        // Spell / enchantment events
+        enchantment-updated(enchantment-updated-msg),
+        enchantment-removed(enchantment-removed-msg),
     }
 
     // ----- Unified Protocol Event -----
@@ -303,11 +353,42 @@ interface host {
 
     /// ===== Action Methods =====
 
-    /// Send a chat message to the server
+    /// Send a chat message to the server (say, visible to nearby players)
     send-chat: func(message: string);
+
+    /// Send a direct tell to a specific player by name
+    send-tell: func(recipient: string, message: string);
 
     /// Login as a specific character
     login-character: func(account-name: string, character-id: u32, character-name: string);
+
+    // ===== Trading Actions =====
+
+    /// Open trade negotiations with another player by their object ID
+    open-trade: func(partner-id: u32);
+
+    /// Add an item to the trade window at the given slot index
+    add-to-trade: func(item-id: u32, slot: u32);
+
+    /// Accept the current trade (uses trade data received from server)
+    accept-trade: func();
+
+    /// Decline the current trade
+    decline-trade: func();
+
+    /// Reset the current trade (clear all items)
+    reset-trade: func();
+
+    /// Close the trade window
+    close-trade: func();
+
+    // ===== Spell Casting Actions =====
+
+    /// Cast a spell at a specific target object
+    cast-targeted-spell: func(target-id: u32, spell-id: u32);
+
+    /// Cast an untargeted (self or area) spell
+    cast-untargeted-spell: func(spell-id: u32);
 
     /// Log a message from the script (will be displayed with script name)
     log: func(message: string);

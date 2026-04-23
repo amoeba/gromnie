@@ -103,6 +103,42 @@ impl ScriptContext {
         });
     }
 
+    // ===== Trading =====
+
+    pub fn open_trade(&self, partner_id: u32) {
+        let _ = self.action_tx.send(SimpleClientAction::OpenTrade { partner_id });
+    }
+
+    pub fn add_to_trade(&self, item_id: u32, slot: u32) {
+        let _ = self.action_tx.send(SimpleClientAction::AddToTrade { item_id, slot });
+    }
+
+    pub fn accept_trade(&self) {
+        let _ = self.action_tx.send(SimpleClientAction::AcceptTrade);
+    }
+
+    pub fn decline_trade(&self) {
+        let _ = self.action_tx.send(SimpleClientAction::DeclineTrade);
+    }
+
+    pub fn reset_trade(&self) {
+        let _ = self.action_tx.send(SimpleClientAction::ResetTrade);
+    }
+
+    pub fn close_trade(&self) {
+        let _ = self.action_tx.send(SimpleClientAction::CloseTrade);
+    }
+
+    // ===== Spell Casting =====
+
+    pub fn cast_targeted_spell(&self, target_id: u32, spell_id: u32) {
+        let _ = self.action_tx.send(SimpleClientAction::CastTargetedSpell { target_id, spell_id });
+    }
+
+    pub fn cast_untargeted_spell(&self, spell_id: u32) {
+        let _ = self.action_tx.send(SimpleClientAction::CastUntargetedSpell { spell_id });
+    }
+
     /// Send a client action
     pub fn send_action(&self, action: SimpleClientAction) {
         let _ = self.action_tx.send(action);

@@ -45,7 +45,11 @@ pub use gromnie::scripting::host::Scene;
 // Re-export host functions for WASM scripts
 pub use gromnie::scripting::host::{
     cancel_timer, check_timer, get_client_state, get_event_time_millis, log, login_character,
-    schedule_recurring, schedule_timer, send_chat,
+    schedule_recurring, schedule_timer, send_chat, send_tell,
+    // Trading
+    open_trade, add_to_trade, accept_trade, decline_trade, reset_trade, close_trade,
+    // Spell casting
+    cast_targeted_spell, cast_untargeted_spell,
 };
 
 /// Trait for WASM script implementations

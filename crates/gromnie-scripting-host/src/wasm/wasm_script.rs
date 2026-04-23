@@ -519,7 +519,9 @@ fn s2c_event_to_wit(event: &S2CEvent) -> gromnie::scripting::host::S2cEvent {
 /// Convert Rust GameEventMsg to WIT GameEventMsg
 fn game_event_msg_to_wit(event: &GameEventMsg) -> gromnie::scripting::host::GameEventMsg {
     use gromnie::scripting::host::{
-        GameEventMsg as WitGameEventMsg, HearDirectSpeechMsg, TransientStringMsg,
+        EnchantmentRemovedMsg, EnchantmentUpdatedMsg, GameEventMsg as WitGameEventMsg,
+        HearDirectSpeechMsg, TradeFailureMsg, TradeItemAddedMsg, TradeItemRemovedMsg,
+        TradeOpenedMsg, TradeRegisteredMsg, TransientStringMsg,
     };
 
     match event {
@@ -539,6 +541,49 @@ fn game_event_msg_to_wit(event: &GameEventMsg) -> gromnie::scripting::host::Game
         GameEventMsg::TransientString { message } => {
             WitGameEventMsg::TransientString(TransientStringMsg {
                 message: message.clone(),
+            })
+        }
+        GameEventMsg::TradeRegistered {
+            initiator_id,
+            partner_id,
+            stamp,
+        } => WitGameEventMsg::TradeRegistered(TradeRegisteredMsg {
+            initiator_id: *initiator_id,
+            partner_id: *partner_id,
+            stamp: *stamp,
+        }),
+        GameEventMsg::TradeOpened { object_id } => {
+            WitGameEventMsg::TradeOpened(TradeOpenedMsg {
+                object_id: *object_id,
+            })
+        }
+        GameEventMsg::TradeClosed => WitGameEventMsg::TradeClosed,
+        GameEventMsg::TradeItemAdded { item_id } => {
+            WitGameEventMsg::TradeItemAdded(TradeItemAddedMsg { item_id: *item_id })
+        }
+        GameEventMsg::TradeItemRemoved { item_id } => {
+            WitGameEventMsg::TradeItemRemoved(TradeItemRemovedMsg { item_id: *item_id })
+        }
+        GameEventMsg::TradeAccepted => WitGameEventMsg::TradeAccepted,
+        GameEventMsg::TradeDeclined => WitGameEventMsg::TradeDeclined,
+        GameEventMsg::TradeReset => WitGameEventMsg::TradeReset,
+        GameEventMsg::TradeFailure { reason } => {
+            WitGameEventMsg::TradeFailure(TradeFailureMsg { reason: *reason })
+        }
+        GameEventMsg::EnchantmentUpdated {
+            spell_id,
+            duration,
+            caster_id,
+            power_level,
+        } => WitGameEventMsg::EnchantmentUpdated(EnchantmentUpdatedMsg {
+            spell_id: *spell_id,
+            duration: *duration,
+            caster_id: *caster_id,
+            power_level: *power_level,
+        }),
+        GameEventMsg::EnchantmentRemoved { spell_id } => {
+            WitGameEventMsg::EnchantmentRemoved(EnchantmentRemovedMsg {
+                spell_id: *spell_id,
             })
         }
         // Ignore unknown game event messages (future variants added via #[non_exhaustive])

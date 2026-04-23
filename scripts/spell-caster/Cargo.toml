@@ -1,0 +1,12 @@
+[package]
+name = "gromnie-script-spell-caster"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+crate-type = ["cdylib"]
+path = "src/lib.rs"
+
+[dependencies]
+gromnie-scripting-api = { path = "../../crates/gromnie-scripting-api" }
+wit-bindgen = { version = "0.36", default-features = false }

@@ -145,6 +145,100 @@ pub fn transient_string_to_game_event_msg(
     }
 }
 
+// ============================================================================
+// Trade game event conversions
+// ============================================================================
+
+pub fn trade_register_trade_to_game_event_msg(
+    event: acprotocol::gameevents::TradeRegisterTrade,
+) -> GameEventMsg {
+    GameEventMsg::TradeRegistered {
+        initiator_id: event.initiator_id.0,
+        partner_id: event.partner_id.0,
+        stamp: event.stamp,
+    }
+}
+
+pub fn trade_open_trade_to_game_event_msg(
+    event: acprotocol::gameevents::TradeOpenTrade,
+) -> GameEventMsg {
+    GameEventMsg::TradeOpened {
+        object_id: event.object_id.0,
+    }
+}
+
+pub fn trade_close_trade_to_game_event_msg(
+    _event: acprotocol::gameevents::TradeCloseTrade,
+) -> GameEventMsg {
+    GameEventMsg::TradeClosed
+}
+
+pub fn trade_add_to_trade_to_game_event_msg(
+    event: acprotocol::gameevents::TradeAddToTrade,
+) -> GameEventMsg {
+    GameEventMsg::TradeItemAdded {
+        item_id: event.object_id.0,
+    }
+}
+
+pub fn trade_remove_from_trade_to_game_event_msg(
+    event: acprotocol::gameevents::TradeRemoveFromTrade,
+) -> GameEventMsg {
+    GameEventMsg::TradeItemRemoved {
+        item_id: event.object_id.0,
+    }
+}
+
+pub fn trade_accept_trade_event_to_game_event_msg(
+    _event: acprotocol::gameevents::TradeAcceptTrade,
+) -> GameEventMsg {
+    GameEventMsg::TradeAccepted
+}
+
+pub fn trade_decline_trade_event_to_game_event_msg(
+    _event: acprotocol::gameevents::TradeDeclineTrade,
+) -> GameEventMsg {
+    GameEventMsg::TradeDeclined
+}
+
+pub fn trade_reset_trade_event_to_game_event_msg(
+    _event: acprotocol::gameevents::TradeResetTrade,
+) -> GameEventMsg {
+    GameEventMsg::TradeReset
+}
+
+pub fn trade_failure_to_game_event_msg(
+    event: acprotocol::gameevents::TradeTradeFailure,
+) -> GameEventMsg {
+    GameEventMsg::TradeFailure {
+        reason: event.reason,
+    }
+}
+
+// ============================================================================
+// Spell / enchantment game event conversions
+// ============================================================================
+
+pub fn magic_update_enchantment_to_game_event_msg(
+    event: acprotocol::gameevents::MagicUpdateEnchantment,
+) -> GameEventMsg {
+    let enc = &event.enchantment;
+    GameEventMsg::EnchantmentUpdated {
+        spell_id: enc.id.id.0 as u32,
+        duration: enc.duration,
+        caster_id: enc.caster_id.0,
+        power_level: enc.power_level,
+    }
+}
+
+pub fn magic_remove_enchantment_to_game_event_msg(
+    event: acprotocol::gameevents::MagicRemoveEnchantment,
+) -> GameEventMsg {
+    GameEventMsg::EnchantmentRemoved {
+        spell_id: event.spell_id.id.0 as u32,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use gromnie_events::{GameEventMsg, S2CEvent};
