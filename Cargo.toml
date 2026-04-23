@@ -9,7 +9,9 @@ members = [
   "crates/gromnie-scripting-host",
   "crates/gromnie-tui",
   "crates/xtask",
-  "tests/scripting"
+  "tests/scripting",
+  "examples/position-tracker",
+  "examples/movement-demo"
 ]
 default-members = [
   "crates/gromnie-cli",

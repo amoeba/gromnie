@@ -79,6 +79,39 @@ pub enum S2CEvent {
         property: String,
         value: i32,
     },
+    /// Movement_PositionEvent (0xF748) - position/motion update for an object
+    MovementPositionEvent {
+        object_id: u32,
+        landcell: u32,
+        x: f32,
+        y: f32,
+        z: f32,
+        quat_w: Option<f32>,
+        quat_x: Option<f32>,
+        quat_y: Option<f32>,
+        quat_z: Option<f32>,
+    },
+    /// Movement_PositionAndMovementEvent (0xF619) - position + movement (e.g. lifestone recall)
+    MovementPositionAndMovementEvent {
+        object_id: u32,
+        landcell: u32,
+        x: f32,
+        y: f32,
+        z: f32,
+        quat_w: Option<f32>,
+        quat_x: Option<f32>,
+        quat_y: Option<f32>,
+        quat_z: Option<f32>,
+    },
+    /// Movement_SetObjectMovement (0xF74C) - animation/movement state for an object
+    MovementSetObjectMovement {
+        object_id: u32,
+        object_instance_sequence: u16,
+    },
+    /// Effects_PlayerTeleport (0xF751) - server signals a teleport occurred
+    EffectsPlayerTeleport {
+        object_teleport_sequence: u16,
+    },
 }
 
 /// Nested game events with OrderedGameEvent metadata

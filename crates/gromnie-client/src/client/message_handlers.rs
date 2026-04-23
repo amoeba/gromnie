@@ -420,3 +420,77 @@ impl MessageHandler<acprotocol::messages::s2c::ItemDeleteObject> for Client {
         Some(GameEvent::ItemDeleteObject { object_id })
     }
 }
+
+/// Handle MovementPositionEvent messages (0xF748)
+impl MessageHandler<acprotocol::messages::s2c::MovementPositionEvent> for Client {
+    fn handle(
+        &mut self,
+        msg: acprotocol::messages::s2c::MovementPositionEvent,
+    ) -> Option<GameEvent> {
+        let object_id = msg.object_id.0;
+        let landcell = msg.position.origin.landcell.0;
+        info!(target: "net", "Position update: 0x{:08X} at cell 0x{:08X} ({}, {}, {})",
+            object_id, landcell,
+            msg.position.origin.location.x,
+            msg.position.origin.location.y,
+            msg.position.origin.location.z);
+
+        let protocol_event = ProtocolEvent::S2C(msg.to_protocol_event());
+        let _ = self.raw_event_tx.try_send(ClientEvent::Protocol(protocol_event));
+
+        None
+    }
+}
+
+/// Handle MovementPositionAndMovementEvent messages (0xF619)
+impl MessageHandler<acprotocol::messages::s2c::MovementPositionAndMovementEvent> for Client {
+    fn handle(
+        &mut self,
+        msg: acprotocol::messages::s2c::MovementPositionAndMovementEvent,
+    ) -> Option<GameEvent> {
+        let object_id = msg.object_id.0;
+        let landcell = msg.position.origin.landcell.0;
+        info!(target: "net", "Position+movement update: 0x{:08X} at cell 0x{:08X} ({}, {}, {})",
+            object_id, landcell,
+            msg.position.origin.location.x,
+            msg.position.origin.location.y,
+            msg.position.origin.location.z);
+
+        let protocol_event = ProtocolEvent::S2C(msg.to_protocol_event());
+        let _ = self.raw_event_tx.try_send(ClientEvent::Protocol(protocol_event));
+
+        None
+    }
+}
+
+/// Handle MovementSetObjectMovement messages (0xF74C)
+impl MessageHandler<acprotocol::messages::s2c::MovementSetObjectMovement> for Client {
+    fn handle(
+        &mut self,
+        msg: acprotocol::messages::s2c::MovementSetObjectMovement,
+    ) -> Option<GameEvent> {
+        let object_id = msg.object_id.0;
+        info!(target: "net", "Object movement update: 0x{:08X} (seq {})",
+            object_id, msg.object_instance_sequence);
+
+        let protocol_event = ProtocolEvent::S2C(msg.to_protocol_event());
+        let _ = self.raw_event_tx.try_send(ClientEvent::Protocol(protocol_event));
+
+        None
+    }
+}
+
+/// Handle EffectsPlayerTeleport messages (0xF751)
+impl MessageHandler<acprotocol::messages::s2c::EffectsPlayerTeleport> for Client {
+    fn handle(
+        &mut self,
+        msg: acprotocol::messages::s2c::EffectsPlayerTeleport,
+    ) -> Option<GameEvent> {
+        info!(target: "net", "Player teleport effect (seq {})", msg.object_teleport_sequence);
+
+        let protocol_event = ProtocolEvent::S2C(msg.to_protocol_event());
+        let _ = self.raw_event_tx.try_send(ClientEvent::Protocol(protocol_event));
+
+        None
+    }
+}

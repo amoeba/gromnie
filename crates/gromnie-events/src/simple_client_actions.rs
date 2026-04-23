@@ -22,4 +22,20 @@ pub enum SimpleClientAction {
     ReloadScripts { script_dir: std::path::PathBuf },
     /// Log a message from a script
     LogScriptMessage { script_id: String, message: String },
+    /// Send a movement command to the server (MovementDoMovementCommand)
+    DoMovementCommand {
+        /// Motion command value (see acprotocol Motion enum constants)
+        motion: u32,
+        /// Speed multiplier (1.0 = normal speed)
+        speed: f32,
+        /// Hold key modifier: 0=Invalid, 1=None, 2=Run
+        hold_key: u32,
+    },
+    /// Stop a movement command (MovementStopMovementCommand)
+    StopMovementCommand {
+        /// Motion command to stop (must match the motion from DoMovementCommand)
+        motion: u32,
+        /// Hold key modifier (must match)
+        hold_key: u32,
+    },
 }

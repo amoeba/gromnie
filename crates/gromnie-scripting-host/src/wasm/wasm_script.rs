@@ -508,6 +508,72 @@ fn s2c_event_to_wit(event: &S2CEvent) -> gromnie::scripting::host::S2cEvent {
             product: product.clone(),
         }),
         S2CEvent::CharGenVerificationResponse => WitS2cEvent::ChargenVerificationResponse,
+        S2CEvent::MovementPositionEvent {
+            object_id,
+            landcell,
+            x,
+            y,
+            z,
+            quat_w,
+            quat_x,
+            quat_y,
+            quat_z,
+        } => WitS2cEvent::MovementPosition(
+            gromnie::scripting::host::MovementPositionEventMsg {
+                object_id: *object_id,
+                position: gromnie::scripting::host::PositionPack {
+                    landcell: *landcell,
+                    x: *x,
+                    y: *y,
+                    z: *z,
+                    quat_w: *quat_w,
+                    quat_x: *quat_x,
+                    quat_y: *quat_y,
+                    quat_z: *quat_z,
+                },
+            },
+        ),
+        S2CEvent::MovementPositionAndMovementEvent {
+            object_id,
+            landcell,
+            x,
+            y,
+            z,
+            quat_w,
+            quat_x,
+            quat_y,
+            quat_z,
+        } => WitS2cEvent::MovementPositionAndMovement(
+            gromnie::scripting::host::MovementPositionAndMovementEventMsg {
+                object_id: *object_id,
+                position: gromnie::scripting::host::PositionPack {
+                    landcell: *landcell,
+                    x: *x,
+                    y: *y,
+                    z: *z,
+                    quat_w: *quat_w,
+                    quat_x: *quat_x,
+                    quat_y: *quat_y,
+                    quat_z: *quat_z,
+                },
+            },
+        ),
+        S2CEvent::MovementSetObjectMovement {
+            object_id,
+            object_instance_sequence,
+        } => WitS2cEvent::MovementSetObjectMovement(
+            gromnie::scripting::host::MovementSetObjectMovementMsg {
+                object_id: *object_id,
+                object_instance_sequence: *object_instance_sequence,
+            },
+        ),
+        S2CEvent::EffectsPlayerTeleport {
+            object_teleport_sequence,
+        } => WitS2cEvent::EffectsPlayerTeleport(
+            gromnie::scripting::host::EffectsPlayerTeleportMsg {
+                object_teleport_sequence: *object_teleport_sequence,
+            },
+        ),
         // Ignore unknown S2C events (future variants added via #[non_exhaustive])
         _ => {
             warn!(target: "scripting", "Unknown S2C event variant, returning placeholder");
