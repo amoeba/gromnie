@@ -552,11 +552,9 @@ fn game_event_msg_to_wit(event: &GameEventMsg) -> gromnie::scripting::host::Game
             partner_id: *partner_id,
             stamp: *stamp,
         }),
-        GameEventMsg::TradeOpened { object_id } => {
-            WitGameEventMsg::TradeOpened(TradeOpenedMsg {
-                object_id: *object_id,
-            })
-        }
+        GameEventMsg::TradeOpened { object_id } => WitGameEventMsg::TradeOpened(TradeOpenedMsg {
+            object_id: *object_id,
+        }),
         GameEventMsg::TradeClosed => WitGameEventMsg::TradeClosed,
         GameEventMsg::TradeItemAdded { item_id } => {
             WitGameEventMsg::TradeItemAdded(TradeItemAddedMsg { item_id: *item_id })

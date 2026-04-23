@@ -12,9 +12,9 @@
 //!
 //! Note: In a real script you would inspect the items offered before accepting.
 
-use gromnie_scripting_api as gromnie;
 use gromnie::host_interface::ProtocolEvent;
 use gromnie::ScriptEvent;
+use gromnie_scripting_api as gromnie;
 
 #[derive(Default)]
 pub struct TradeAcceptorScript {
@@ -79,10 +79,7 @@ impl gromnie::Script for TradeAcceptorScript {
                         gromnie::accept_trade();
                     }
                     GameEventMsg::TradeItemAdded(msg) => {
-                        gromnie::log(&format!(
-                            "Item 0x{:08X} added to trade window",
-                            msg.item_id
-                        ));
+                        gromnie::log(&format!("Item 0x{:08X} added to trade window", msg.item_id));
                     }
                     GameEventMsg::TradeItemRemoved(msg) => {
                         gromnie::log(&format!(

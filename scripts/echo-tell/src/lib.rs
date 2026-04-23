@@ -6,9 +6,9 @@
 //! Usage: Load this script while in-world. Any player who sends you a tell will
 //! receive an automatic reply.
 
-use gromnie_scripting_api as gromnie;
 use gromnie::host_interface::ProtocolEvent;
 use gromnie::ScriptEvent;
+use gromnie_scripting_api as gromnie;
 
 #[derive(Default)]
 pub struct EchoTellScript;

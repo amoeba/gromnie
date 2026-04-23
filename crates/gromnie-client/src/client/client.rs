@@ -38,24 +38,23 @@ use crate::client::constants::*;
 use crate::client::game_event_handler::dispatch_game_event;
 use crate::client::message_handler::dispatch_message;
 use crate::client::protocol_conversions::{
-    hear_direct_speech_to_game_event_msg, transient_string_to_game_event_msg,
-    trade_register_trade_to_game_event_msg, trade_open_trade_to_game_event_msg,
-    trade_close_trade_to_game_event_msg, trade_add_to_trade_to_game_event_msg,
-    trade_remove_from_trade_to_game_event_msg, trade_accept_trade_event_to_game_event_msg,
-    trade_decline_trade_event_to_game_event_msg, trade_reset_trade_event_to_game_event_msg,
-    trade_failure_to_game_event_msg, magic_update_enchantment_to_game_event_msg,
-    magic_remove_enchantment_to_game_event_msg,
+    hear_direct_speech_to_game_event_msg, magic_remove_enchantment_to_game_event_msg,
+    magic_update_enchantment_to_game_event_msg, trade_accept_trade_event_to_game_event_msg,
+    trade_add_to_trade_to_game_event_msg, trade_close_trade_to_game_event_msg,
+    trade_decline_trade_event_to_game_event_msg, trade_failure_to_game_event_msg,
+    trade_open_trade_to_game_event_msg, trade_register_trade_to_game_event_msg,
+    trade_remove_from_trade_to_game_event_msg, trade_reset_trade_event_to_game_event_msg,
+    transient_string_to_game_event_msg,
 };
 use crate::client::{ClientEvent, ClientSystemEvent, GameEvent};
 use crate::crypto::crypto_system::CryptoSystem;
 use crate::crypto::magic_number::get_magic_number;
 use acprotocol::gameevents::{
-    CommunicationHearDirectSpeech, CommunicationTransientString,
-    MagicUpdateEnchantment, MagicRemoveEnchantment,
-    TradeRegisterTrade, TradeOpenTrade, TradeCloseTrade,
-    TradeAddToTrade, TradeRemoveFromTrade,
-    TradeAcceptTrade as TradeAcceptTradeEvent, TradeDeclineTrade as TradeDeclineTradeEvent,
-    TradeResetTrade as TradeResetTradeEvent, TradeTradeFailure,
+    CommunicationHearDirectSpeech, CommunicationTransientString, MagicRemoveEnchantment,
+    MagicUpdateEnchantment, TradeAcceptTrade as TradeAcceptTradeEvent, TradeAddToTrade,
+    TradeCloseTrade, TradeDeclineTrade as TradeDeclineTradeEvent, TradeOpenTrade,
+    TradeRegisterTrade, TradeRemoveFromTrade, TradeResetTrade as TradeResetTradeEvent,
+    TradeTradeFailure,
 };
 
 /// Maximum number of packets we can send without receiving before considering connection dead
@@ -91,8 +90,8 @@ pub struct Client {
     pub(crate) raw_event_tx: mpsc::Sender<ClientEvent>,           // Raw event sender to runner
     action_rx: mpsc::UnboundedReceiver<gromnie_events::SimpleClientAction>, // Receive actions from handlers
     pub game_action_tx: mpsc::UnboundedSender<GameActionMessage>, // Direct game action sender for scripting
-    game_action_rx: mpsc::UnboundedReceiver<GameActionMessage>, // Receive direct game actions
-    pub(crate) ddd_response: Option<OutgoingMessageContent>, // Cached DDD response for retries
+    game_action_rx: mpsc::UnboundedReceiver<GameActionMessage>,   // Receive direct game actions
+    pub(crate) ddd_response: Option<OutgoingMessageContent>,      // Cached DDD response for retries
     pub(crate) known_characters: Vec<acprotocol::types::CharacterIdentity>, // Track characters from list and creation
     // Reconnection state
     reconnect_config: crate::config::ReconnectConfig,
@@ -1315,69 +1314,124 @@ impl Client {
             }
             GameEventType::TradeRegisterTrade => {
                 dispatch_game_event::<TradeRegisterTrade, _, _>(
-                    self, &mut cursor, &event_tx, object_id, sequence,
+                    self,
+                    &mut cursor,
+                    &event_tx,
+                    object_id,
+                    sequence,
                     trade_register_trade_to_game_event_msg,
-                ).ok();
+                )
+                .ok();
             }
             GameEventType::TradeOpenTrade => {
                 dispatch_game_event::<TradeOpenTrade, _, _>(
-                    self, &mut cursor, &event_tx, object_id, sequence,
+                    self,
+                    &mut cursor,
+                    &event_tx,
+                    object_id,
+                    sequence,
                     trade_open_trade_to_game_event_msg,
-                ).ok();
+                )
+                .ok();
             }
             GameEventType::TradeCloseTrade => {
                 dispatch_game_event::<TradeCloseTrade, _, _>(
-                    self, &mut cursor, &event_tx, object_id, sequence,
+                    self,
+                    &mut cursor,
+                    &event_tx,
+                    object_id,
+                    sequence,
                     trade_close_trade_to_game_event_msg,
-                ).ok();
+                )
+                .ok();
             }
             GameEventType::TradeAddToTrade => {
                 dispatch_game_event::<TradeAddToTrade, _, _>(
-                    self, &mut cursor, &event_tx, object_id, sequence,
+                    self,
+                    &mut cursor,
+                    &event_tx,
+                    object_id,
+                    sequence,
                     trade_add_to_trade_to_game_event_msg,
-                ).ok();
+                )
+                .ok();
             }
             GameEventType::TradeRemoveFromTrade => {
                 dispatch_game_event::<TradeRemoveFromTrade, _, _>(
-                    self, &mut cursor, &event_tx, object_id, sequence,
+                    self,
+                    &mut cursor,
+                    &event_tx,
+                    object_id,
+                    sequence,
                     trade_remove_from_trade_to_game_event_msg,
-                ).ok();
+                )
+                .ok();
             }
             GameEventType::TradeAcceptTrade => {
                 dispatch_game_event::<TradeAcceptTradeEvent, _, _>(
-                    self, &mut cursor, &event_tx, object_id, sequence,
+                    self,
+                    &mut cursor,
+                    &event_tx,
+                    object_id,
+                    sequence,
                     trade_accept_trade_event_to_game_event_msg,
-                ).ok();
+                )
+                .ok();
             }
             GameEventType::TradeDeclineTrade => {
                 dispatch_game_event::<TradeDeclineTradeEvent, _, _>(
-                    self, &mut cursor, &event_tx, object_id, sequence,
+                    self,
+                    &mut cursor,
+                    &event_tx,
+                    object_id,
+                    sequence,
                     trade_decline_trade_event_to_game_event_msg,
-                ).ok();
+                )
+                .ok();
             }
             GameEventType::TradeResetTrade => {
                 dispatch_game_event::<TradeResetTradeEvent, _, _>(
-                    self, &mut cursor, &event_tx, object_id, sequence,
+                    self,
+                    &mut cursor,
+                    &event_tx,
+                    object_id,
+                    sequence,
                     trade_reset_trade_event_to_game_event_msg,
-                ).ok();
+                )
+                .ok();
             }
             GameEventType::TradeTradeFailure => {
                 dispatch_game_event::<TradeTradeFailure, _, _>(
-                    self, &mut cursor, &event_tx, object_id, sequence,
+                    self,
+                    &mut cursor,
+                    &event_tx,
+                    object_id,
+                    sequence,
                     trade_failure_to_game_event_msg,
-                ).ok();
+                )
+                .ok();
             }
             GameEventType::MagicUpdateEnchantment => {
                 dispatch_game_event::<MagicUpdateEnchantment, _, _>(
-                    self, &mut cursor, &event_tx, object_id, sequence,
+                    self,
+                    &mut cursor,
+                    &event_tx,
+                    object_id,
+                    sequence,
                     magic_update_enchantment_to_game_event_msg,
-                ).ok();
+                )
+                .ok();
             }
             GameEventType::MagicRemoveEnchantment => {
                 dispatch_game_event::<MagicRemoveEnchantment, _, _>(
-                    self, &mut cursor, &event_tx, object_id, sequence,
+                    self,
+                    &mut cursor,
+                    &event_tx,
+                    object_id,
+                    sequence,
                     magic_remove_enchantment_to_game_event_msg,
-                ).ok();
+                )
+                .ok();
             }
             _ => {
                 debug!(target: "net", "Unhandled GameEvent: {:?}", event_type);

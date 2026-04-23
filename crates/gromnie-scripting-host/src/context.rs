@@ -3,8 +3,8 @@ use std::time::{Duration, SystemTime};
 use tokio::sync::RwLock;
 use tokio::sync::mpsc::UnboundedSender;
 
-use acprotocol::message::GameActionMessage;
 use super::timer::TimerId;
+use acprotocol::message::GameActionMessage;
 use gromnie_client::client::Client;
 use gromnie_events::SimpleClientAction;
 
@@ -113,17 +113,24 @@ impl ScriptContext {
     pub fn open_trade(&self, partner_id: u32) {
         use acprotocol::gameactions::TradeOpenTradeNegotiations;
         use acprotocol::types::ObjectId;
-        let _ = self.game_action_tx.send(GameActionMessage::TradeOpenTradeNegotiations(
-            TradeOpenTradeNegotiations { object_id: ObjectId(partner_id) },
-        ));
+        let _ = self
+            .game_action_tx
+            .send(GameActionMessage::TradeOpenTradeNegotiations(
+                TradeOpenTradeNegotiations {
+                    object_id: ObjectId(partner_id),
+                },
+            ));
     }
 
     pub fn add_to_trade(&self, item_id: u32, slot: u32) {
         use acprotocol::gameactions::TradeAddToTrade;
         use acprotocol::types::ObjectId;
-        let _ = self.game_action_tx.send(GameActionMessage::TradeAddToTrade(
-            TradeAddToTrade { object_id: ObjectId(item_id), slot_index: slot },
-        ));
+        let _ = self
+            .game_action_tx
+            .send(GameActionMessage::TradeAddToTrade(TradeAddToTrade {
+                object_id: ObjectId(item_id),
+                slot_index: slot,
+            }));
     }
 
     pub fn accept_trade(&self) {
@@ -134,33 +141,41 @@ impl ScriptContext {
             tracing::warn!(target: "scripting", "accept_trade called but no pending trade");
             return;
         };
-        let _ = self.game_action_tx.send(GameActionMessage::TradeAcceptTrade(TradeAcceptTrade {
-            contents: Trade {
-                partner_id: ObjectId(trade.partner_id),
-                sequence: trade.stamp as u64,
-                status: 0,
-                initiator_id: ObjectId(trade.initiator_id),
-                accepted: true,
-                partner_accepted: false,
-            },
-        }));
+        let _ = self
+            .game_action_tx
+            .send(GameActionMessage::TradeAcceptTrade(TradeAcceptTrade {
+                contents: Trade {
+                    partner_id: ObjectId(trade.partner_id),
+                    sequence: trade.stamp as u64,
+                    status: 0,
+                    initiator_id: ObjectId(trade.initiator_id),
+                    accepted: true,
+                    partner_accepted: false,
+                },
+            }));
     }
 
     pub fn decline_trade(&self) {
         use acprotocol::gameactions::TradeDeclineTrade;
-        let _ = self.game_action_tx.send(GameActionMessage::TradeDeclineTrade(TradeDeclineTrade {}));
+        let _ = self
+            .game_action_tx
+            .send(GameActionMessage::TradeDeclineTrade(TradeDeclineTrade {}));
     }
 
     pub fn reset_trade(&self) {
         use acprotocol::gameactions::TradeResetTrade;
-        let _ = self.game_action_tx.send(GameActionMessage::TradeResetTrade(TradeResetTrade {}));
+        let _ = self
+            .game_action_tx
+            .send(GameActionMessage::TradeResetTrade(TradeResetTrade {}));
     }
 
     pub fn close_trade(&self) {
         use acprotocol::gameactions::TradeCloseTradeNegotiations;
-        let _ = self.game_action_tx.send(GameActionMessage::TradeCloseTradeNegotiations(
-            TradeCloseTradeNegotiations {},
-        ));
+        let _ = self
+            .game_action_tx
+            .send(GameActionMessage::TradeCloseTradeNegotiations(
+                TradeCloseTradeNegotiations {},
+            ));
     }
 
     // ===== Spell Casting =====
@@ -168,22 +183,32 @@ impl ScriptContext {
     pub fn cast_targeted_spell(&self, target_id: u32, spell_id: u32) {
         use acprotocol::gameactions::MagicCastTargetedSpell;
         use acprotocol::types::{LayeredSpellId, ObjectId, SpellId};
-        let _ = self.game_action_tx.send(GameActionMessage::MagicCastTargetedSpell(
-            MagicCastTargetedSpell {
-                object_id: ObjectId(target_id),
-                spell_id: LayeredSpellId { id: SpellId(spell_id as u16), layer: 0 },
-            },
-        ));
+        let _ = self
+            .game_action_tx
+            .send(GameActionMessage::MagicCastTargetedSpell(
+                MagicCastTargetedSpell {
+                    object_id: ObjectId(target_id),
+                    spell_id: LayeredSpellId {
+                        id: SpellId(spell_id as u16),
+                        layer: 0,
+                    },
+                },
+            ));
     }
 
     pub fn cast_untargeted_spell(&self, spell_id: u32) {
         use acprotocol::gameactions::MagicCastUntargetedSpell;
         use acprotocol::types::{LayeredSpellId, SpellId};
-        let _ = self.game_action_tx.send(GameActionMessage::MagicCastUntargetedSpell(
-            MagicCastUntargetedSpell {
-                spell_id: LayeredSpellId { id: SpellId(spell_id as u16), layer: 0 },
-            },
-        ));
+        let _ = self
+            .game_action_tx
+            .send(GameActionMessage::MagicCastUntargetedSpell(
+                MagicCastUntargetedSpell {
+                    spell_id: LayeredSpellId {
+                        id: SpellId(spell_id as u16),
+                        layer: 0,
+                    },
+                },
+            ));
     }
 
     /// Send a client action

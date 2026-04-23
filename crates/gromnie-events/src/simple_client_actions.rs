@@ -22,5 +22,4 @@ pub enum SimpleClientAction {
     ReloadScripts { script_dir: std::path::PathBuf },
     /// Log a message from a script
     LogScriptMessage { script_id: String, message: String },
-
 }

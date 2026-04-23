@@ -12,9 +12,9 @@
 //!
 //! For targeted spells, supply a target object ID from ItemCreateObject events.
 
-use gromnie_scripting_api as gromnie;
 use gromnie::host_interface::ProtocolEvent;
 use gromnie::ScriptEvent;
+use gromnie_scripting_api as gromnie;
 
 // Spell ID to continuously maintain - change to suit your character
 const SELF_BUFF_SPELL_ID: u32 = 4; // Strength Self I
