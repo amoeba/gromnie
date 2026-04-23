@@ -3,6 +3,7 @@ use std::time::{Duration, SystemTime};
 use tokio::sync::RwLock;
 use tokio::sync::mpsc::UnboundedSender;
 
+use acprotocol::message::GameActionMessage;
 use super::timer::TimerId;
 use gromnie_client::client::Client;
 use gromnie_events::SimpleClientAction;
@@ -51,6 +52,8 @@ pub struct ScriptContext {
     client: Arc<RwLock<Client>>,
     /// Channel for sending client actions
     action_tx: UnboundedSender<SimpleClientAction>,
+    /// Channel for sending GameActionMessage directly to the client
+    game_action_tx: UnboundedSender<GameActionMessage>,
     /// Reference to the timer manager (will be updated by ScriptRunner)
     timer_manager: *mut super::timer::TimerManager,
     /// Timestamp when the current event occurred
@@ -68,9 +71,11 @@ impl ScriptContext {
         timer_manager: *mut super::timer::TimerManager,
         event_time: SystemTime,
     ) -> Self {
+        let game_action_tx = client.blocking_read().game_action_tx.clone();
         Self {
             client,
             action_tx,
+            game_action_tx,
             timer_manager,
             event_time,
         }
@@ -106,37 +111,79 @@ impl ScriptContext {
     // ===== Trading =====
 
     pub fn open_trade(&self, partner_id: u32) {
-        let _ = self.action_tx.send(SimpleClientAction::OpenTrade { partner_id });
+        use acprotocol::gameactions::TradeOpenTradeNegotiations;
+        use acprotocol::types::ObjectId;
+        let _ = self.game_action_tx.send(GameActionMessage::TradeOpenTradeNegotiations(
+            TradeOpenTradeNegotiations { object_id: ObjectId(partner_id) },
+        ));
     }
 
     pub fn add_to_trade(&self, item_id: u32, slot: u32) {
-        let _ = self.action_tx.send(SimpleClientAction::AddToTrade { item_id, slot });
+        use acprotocol::gameactions::TradeAddToTrade;
+        use acprotocol::types::ObjectId;
+        let _ = self.game_action_tx.send(GameActionMessage::TradeAddToTrade(
+            TradeAddToTrade { object_id: ObjectId(item_id), slot_index: slot },
+        ));
     }
 
     pub fn accept_trade(&self) {
-        let _ = self.action_tx.send(SimpleClientAction::AcceptTrade);
+        use acprotocol::gameactions::TradeAcceptTrade;
+        use acprotocol::types::{ObjectId, Trade};
+        let client = self.client.blocking_read();
+        let Some(trade) = client.pending_trade() else {
+            tracing::warn!(target: "scripting", "accept_trade called but no pending trade");
+            return;
+        };
+        let _ = self.game_action_tx.send(GameActionMessage::TradeAcceptTrade(TradeAcceptTrade {
+            contents: Trade {
+                partner_id: ObjectId(trade.partner_id),
+                sequence: trade.stamp as u64,
+                status: 0,
+                initiator_id: ObjectId(trade.initiator_id),
+                accepted: true,
+                partner_accepted: false,
+            },
+        }));
     }
 
     pub fn decline_trade(&self) {
-        let _ = self.action_tx.send(SimpleClientAction::DeclineTrade);
+        use acprotocol::gameactions::TradeDeclineTrade;
+        let _ = self.game_action_tx.send(GameActionMessage::TradeDeclineTrade(TradeDeclineTrade {}));
     }
 
     pub fn reset_trade(&self) {
-        let _ = self.action_tx.send(SimpleClientAction::ResetTrade);
+        use acprotocol::gameactions::TradeResetTrade;
+        let _ = self.game_action_tx.send(GameActionMessage::TradeResetTrade(TradeResetTrade {}));
     }
 
     pub fn close_trade(&self) {
-        let _ = self.action_tx.send(SimpleClientAction::CloseTrade);
+        use acprotocol::gameactions::TradeCloseTradeNegotiations;
+        let _ = self.game_action_tx.send(GameActionMessage::TradeCloseTradeNegotiations(
+            TradeCloseTradeNegotiations {},
+        ));
     }
 
     // ===== Spell Casting =====
 
     pub fn cast_targeted_spell(&self, target_id: u32, spell_id: u32) {
-        let _ = self.action_tx.send(SimpleClientAction::CastTargetedSpell { target_id, spell_id });
+        use acprotocol::gameactions::MagicCastTargetedSpell;
+        use acprotocol::types::{LayeredSpellId, ObjectId, SpellId};
+        let _ = self.game_action_tx.send(GameActionMessage::MagicCastTargetedSpell(
+            MagicCastTargetedSpell {
+                object_id: ObjectId(target_id),
+                spell_id: LayeredSpellId { id: SpellId(spell_id as u16), layer: 0 },
+            },
+        ));
     }
 
     pub fn cast_untargeted_spell(&self, spell_id: u32) {
-        let _ = self.action_tx.send(SimpleClientAction::CastUntargetedSpell { spell_id });
+        use acprotocol::gameactions::MagicCastUntargetedSpell;
+        use acprotocol::types::{LayeredSpellId, SpellId};
+        let _ = self.game_action_tx.send(GameActionMessage::MagicCastUntargetedSpell(
+            MagicCastUntargetedSpell {
+                spell_id: LayeredSpellId { id: SpellId(spell_id as u16), layer: 0 },
+            },
+        ));
     }
 
     /// Send a client action

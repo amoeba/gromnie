@@ -90,6 +90,8 @@ pub struct Client {
     pub(crate) outgoing_message_queue: VecDeque<OutgoingMessage>, // Queue of messages to send with optional delays
     pub(crate) raw_event_tx: mpsc::Sender<ClientEvent>,           // Raw event sender to runner
     action_rx: mpsc::UnboundedReceiver<gromnie_events::SimpleClientAction>, // Receive actions from handlers
+    pub game_action_tx: mpsc::UnboundedSender<GameActionMessage>, // Direct game action sender for scripting
+    game_action_rx: mpsc::UnboundedReceiver<GameActionMessage>, // Receive direct game actions
     pub(crate) ddd_response: Option<OutgoingMessageContent>, // Cached DDD response for retries
     pub(crate) known_characters: Vec<acprotocol::types::CharacterIdentity>, // Track characters from list and creation
     // Reconnection state
@@ -159,6 +161,9 @@ impl Client {
         // Action channel: Handlers send actions back to client
         let (action_tx, action_rx) = mpsc::unbounded_channel();
 
+        // Direct game action channel: scripting host sends GameActionMessage directly
+        let (game_action_tx, game_action_rx) = mpsc::unbounded_channel();
+
         // Build reconnect config from bool
         let reconnect_config = if reconnect_enabled {
             crate::config::ReconnectConfig {
@@ -191,6 +196,8 @@ impl Client {
             outgoing_message_queue: VecDeque::new(),
             raw_event_tx, // Raw event sender to runner
             action_rx,
+            game_action_tx,
+            game_action_rx,
             ddd_response: None,
             known_characters: Vec::new(),
             reconnect_config,
@@ -510,17 +517,18 @@ impl Client {
         info!(target: "net", "Chat tell message queued for sending");
     }
 
-    // ===== Trading =====
+    // ===== Direct Game Actions =====
 
-    fn send_trade_open(&mut self, partner_id: u32) {
-        info!(target: "net", "Opening trade with partner 0x{:08X}", partner_id);
+    /// Get a reference to cached pending trade data (needed by scripting host to build AcceptTrade)
+    pub fn pending_trade(&self) -> Option<&PendingTradeState> {
+        self.pending_trade.as_ref()
+    }
+
+    /// Serialize and enqueue a GameActionMessage for sending to the server
+    pub fn queue_game_action(&mut self, action: GameActionMessage) {
         let mut message_data = Vec::new();
         {
             let mut cursor = Cursor::new(&mut message_data);
-            use acprotocol::gameactions::TradeOpenTradeNegotiations;
-            let action = GameActionMessage::TradeOpenTradeNegotiations(TradeOpenTradeNegotiations {
-                object_id: acprotocol::types::ObjectId(partner_id),
-            });
             let msg = C2SMessage::OrderedGameAction {
                 sequence: self.next_game_action_sequence,
                 action,
@@ -533,171 +541,11 @@ impl Client {
         ));
     }
 
-    fn send_trade_add(&mut self, item_id: u32, slot: u32) {
-        info!(target: "net", "Adding item 0x{:08X} to trade slot {}", item_id, slot);
-        let mut message_data = Vec::new();
-        {
-            let mut cursor = Cursor::new(&mut message_data);
-            use acprotocol::gameactions::TradeAddToTrade;
-            let action = GameActionMessage::TradeAddToTrade(TradeAddToTrade {
-                object_id: acprotocol::types::ObjectId(item_id),
-                slot_index: slot,
-            });
-            let msg = C2SMessage::OrderedGameAction {
-                sequence: self.next_game_action_sequence,
-                action,
-            };
-            self.next_game_action_sequence += 1;
-            msg.write(&mut cursor).expect("write failed");
+    /// Drain the direct game action channel and queue each message for sending
+    pub fn process_game_actions(&mut self) {
+        while let Ok(action) = self.game_action_rx.try_recv() {
+            self.queue_game_action(action);
         }
-        self.outgoing_message_queue.push_back(OutgoingMessage::new(
-            OutgoingMessageContent::GameAction(message_data),
-        ));
-    }
-
-    fn send_trade_accept(&mut self) {
-        let Some(trade) = self.pending_trade.clone() else {
-            warn!(target: "net", "AcceptTrade action received but no pending trade");
-            return;
-        };
-        info!(target: "net", "Accepting trade (stamp={})", trade.stamp);
-        let mut message_data = Vec::new();
-        {
-            let mut cursor = Cursor::new(&mut message_data);
-            use acprotocol::gameactions::TradeAcceptTrade;
-            use acprotocol::types::Trade;
-            let action = GameActionMessage::TradeAcceptTrade(TradeAcceptTrade {
-                contents: Trade {
-                    partner_id: acprotocol::types::ObjectId(trade.partner_id),
-                    sequence: trade.stamp as u64,
-                    status: 0,
-                    initiator_id: acprotocol::types::ObjectId(trade.initiator_id),
-                    accepted: true,
-                    partner_accepted: false,
-                },
-            });
-            let msg = C2SMessage::OrderedGameAction {
-                sequence: self.next_game_action_sequence,
-                action,
-            };
-            self.next_game_action_sequence += 1;
-            msg.write(&mut cursor).expect("write failed");
-        }
-        self.outgoing_message_queue.push_back(OutgoingMessage::new(
-            OutgoingMessageContent::GameAction(message_data),
-        ));
-    }
-
-    fn send_trade_decline(&mut self) {
-        info!(target: "net", "Declining trade");
-        let mut message_data = Vec::new();
-        {
-            let mut cursor = Cursor::new(&mut message_data);
-            use acprotocol::gameactions::TradeDeclineTrade;
-            let action = GameActionMessage::TradeDeclineTrade(TradeDeclineTrade {});
-            let msg = C2SMessage::OrderedGameAction {
-                sequence: self.next_game_action_sequence,
-                action,
-            };
-            self.next_game_action_sequence += 1;
-            msg.write(&mut cursor).expect("write failed");
-        }
-        self.outgoing_message_queue.push_back(OutgoingMessage::new(
-            OutgoingMessageContent::GameAction(message_data),
-        ));
-    }
-
-    fn send_trade_reset(&mut self) {
-        info!(target: "net", "Resetting trade");
-        let mut message_data = Vec::new();
-        {
-            let mut cursor = Cursor::new(&mut message_data);
-            use acprotocol::gameactions::TradeResetTrade;
-            let action = GameActionMessage::TradeResetTrade(TradeResetTrade {});
-            let msg = C2SMessage::OrderedGameAction {
-                sequence: self.next_game_action_sequence,
-                action,
-            };
-            self.next_game_action_sequence += 1;
-            msg.write(&mut cursor).expect("write failed");
-        }
-        self.outgoing_message_queue.push_back(OutgoingMessage::new(
-            OutgoingMessageContent::GameAction(message_data),
-        ));
-    }
-
-    fn send_trade_close(&mut self) {
-        info!(target: "net", "Closing trade negotiations");
-        self.pending_trade = None;
-        let mut message_data = Vec::new();
-        {
-            let mut cursor = Cursor::new(&mut message_data);
-            use acprotocol::gameactions::TradeCloseTradeNegotiations;
-            let action =
-                GameActionMessage::TradeCloseTradeNegotiations(TradeCloseTradeNegotiations {});
-            let msg = C2SMessage::OrderedGameAction {
-                sequence: self.next_game_action_sequence,
-                action,
-            };
-            self.next_game_action_sequence += 1;
-            msg.write(&mut cursor).expect("write failed");
-        }
-        self.outgoing_message_queue.push_back(OutgoingMessage::new(
-            OutgoingMessageContent::GameAction(message_data),
-        ));
-    }
-
-    // ===== Spell Casting =====
-
-    fn send_cast_targeted_spell(&mut self, target_id: u32, spell_id: u32) {
-        info!(target: "net", "Casting spell {} at target 0x{:08X}", spell_id, target_id);
-        let mut message_data = Vec::new();
-        {
-            let mut cursor = Cursor::new(&mut message_data);
-            use acprotocol::gameactions::MagicCastTargetedSpell;
-            use acprotocol::types::{LayeredSpellId, SpellId};
-            let action = GameActionMessage::MagicCastTargetedSpell(MagicCastTargetedSpell {
-                object_id: acprotocol::types::ObjectId(target_id),
-                spell_id: LayeredSpellId {
-                    id: SpellId(spell_id as u16),
-                    layer: 0,
-                },
-            });
-            let msg = C2SMessage::OrderedGameAction {
-                sequence: self.next_game_action_sequence,
-                action,
-            };
-            self.next_game_action_sequence += 1;
-            msg.write(&mut cursor).expect("write failed");
-        }
-        self.outgoing_message_queue.push_back(OutgoingMessage::new(
-            OutgoingMessageContent::GameAction(message_data),
-        ));
-    }
-
-    fn send_cast_untargeted_spell(&mut self, spell_id: u32) {
-        info!(target: "net", "Casting untargeted spell {}", spell_id);
-        let mut message_data = Vec::new();
-        {
-            let mut cursor = Cursor::new(&mut message_data);
-            use acprotocol::gameactions::MagicCastUntargetedSpell;
-            use acprotocol::types::{LayeredSpellId, SpellId};
-            let action = GameActionMessage::MagicCastUntargetedSpell(MagicCastUntargetedSpell {
-                spell_id: LayeredSpellId {
-                    id: SpellId(spell_id as u16),
-                    layer: 0,
-                },
-            });
-            let msg = C2SMessage::OrderedGameAction {
-                sequence: self.next_game_action_sequence,
-                action,
-            };
-            self.next_game_action_sequence += 1;
-            msg.write(&mut cursor).expect("write failed");
-        }
-        self.outgoing_message_queue.push_back(OutgoingMessage::new(
-            OutgoingMessageContent::GameAction(message_data),
-        ));
     }
 
     /// Send a TimeSync packet to keep connection alive
@@ -1029,38 +877,6 @@ impl Client {
                 }
                 gromnie_events::SimpleClientAction::LogScriptMessage { script_id, message } => {
                     info!(target: "script", "[{}] {}", script_id, message);
-                }
-                gromnie_events::SimpleClientAction::OpenTrade { partner_id } => {
-                    debug!(target: "events", "Action: Opening trade with 0x{:08X}", partner_id);
-                    self.send_trade_open(partner_id);
-                }
-                gromnie_events::SimpleClientAction::AddToTrade { item_id, slot } => {
-                    debug!(target: "events", "Action: Adding item 0x{:08X} to trade slot {}", item_id, slot);
-                    self.send_trade_add(item_id, slot);
-                }
-                gromnie_events::SimpleClientAction::AcceptTrade => {
-                    debug!(target: "events", "Action: Accepting trade");
-                    self.send_trade_accept();
-                }
-                gromnie_events::SimpleClientAction::DeclineTrade => {
-                    debug!(target: "events", "Action: Declining trade");
-                    self.send_trade_decline();
-                }
-                gromnie_events::SimpleClientAction::ResetTrade => {
-                    debug!(target: "events", "Action: Resetting trade");
-                    self.send_trade_reset();
-                }
-                gromnie_events::SimpleClientAction::CloseTrade => {
-                    debug!(target: "events", "Action: Closing trade");
-                    self.send_trade_close();
-                }
-                gromnie_events::SimpleClientAction::CastTargetedSpell { target_id, spell_id } => {
-                    debug!(target: "events", "Action: Casting spell {} at 0x{:08X}", spell_id, target_id);
-                    self.send_cast_targeted_spell(target_id, spell_id);
-                }
-                gromnie_events::SimpleClientAction::CastUntargetedSpell { spell_id } => {
-                    debug!(target: "events", "Action: Casting untargeted spell {}", spell_id);
-                    self.send_cast_untargeted_spell(spell_id);
                 }
             }
         }
