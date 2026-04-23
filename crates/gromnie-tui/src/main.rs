@@ -347,9 +347,7 @@ fn handle_tui_event(
                         // Delete last character
                         app.chat_input.pop();
                     }
-                    KeyCode::Char(c)
-                        if !key.modifiers.contains(KeyModifiers::CONTROL) =>
-                    {
+                    KeyCode::Char(c) if !key.modifiers.contains(KeyModifiers::CONTROL) => {
                         app.chat_input.push(c);
                     }
                     _ => {}
