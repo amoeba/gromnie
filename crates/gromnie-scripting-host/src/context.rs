@@ -71,7 +71,11 @@ impl ScriptContext {
         timer_manager: *mut super::timer::TimerManager,
         event_time: SystemTime,
     ) -> Self {
-        let game_action_tx = client.blocking_read().game_action_tx.clone();
+        let game_action_tx = client
+            .try_read()
+            .expect("client lock should not be contended at context creation")
+            .game_action_tx
+            .clone();
         Self {
             client,
             action_tx,
@@ -83,8 +87,10 @@ impl ScriptContext {
 
     /// Get current client state (clones session and scene from the client)
     pub fn client(&self) -> ClientState {
-        // This blocks but should be very fast since we're just cloning
-        let client_guard = self.client.blocking_read();
+        let client_guard = self
+            .client
+            .try_read()
+            .expect("client lock should not be contended during script event handling");
         ClientState {
             session: client_guard.session.clone(),
             scene: client_guard.scene.clone(),
@@ -136,7 +142,10 @@ impl ScriptContext {
     pub fn accept_trade(&self) {
         use acprotocol::gameactions::TradeAcceptTrade;
         use acprotocol::types::{ObjectId, Trade};
-        let client = self.client.blocking_read();
+        let client = self
+            .client
+            .try_read()
+            .expect("client lock should not be contended during accept_trade");
         let Some(trade) = client.pending_trade() else {
             tracing::warn!(target: "scripting", "accept_trade called but no pending trade");
             return;
