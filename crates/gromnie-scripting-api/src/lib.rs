@@ -44,8 +44,8 @@ pub use gromnie::scripting::host::Scene;
 
 // Re-export host functions for WASM scripts
 pub use gromnie::scripting::host::{
-    cancel_timer, check_timer, get_client_state, get_event_time_millis, log, login_character,
-    schedule_recurring, schedule_timer, send_chat,
+    cancel_timer, check_timer, do_movement_command, get_client_state, get_event_time_millis, log,
+    login_character, schedule_recurring, schedule_timer, send_chat, stop_movement_command,
 };
 
 /// Trait for WASM script implementations

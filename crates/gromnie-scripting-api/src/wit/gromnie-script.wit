@@ -205,6 +205,52 @@ interface host {
         message: string,
     }
 
+    // ----- Movement Types -----
+
+    /// World position (landcell + local coordinates + optional orientation)
+    record position-pack {
+        /// Landcell ID (encodes region + block + cell)
+        landcell: u32,
+        /// Local X coordinate within the landcell
+        x: f32,
+        /// Local Y coordinate within the landcell
+        y: f32,
+        /// Local Z coordinate within the landcell
+        z: f32,
+        /// Orientation quaternion W component (present when object has orientation)
+        quat-w: option<f32>,
+        /// Orientation quaternion X component
+        quat-x: option<f32>,
+        /// Orientation quaternion Y component
+        quat-y: option<f32>,
+        /// Orientation quaternion Z component
+        quat-z: option<f32>,
+    }
+
+    /// Movement_PositionEvent (0xF748) - sets position/motion of an object
+    record movement-position-event-msg {
+        object-id: u32,
+        position: position-pack,
+    }
+
+    /// Movement_PositionAndMovementEvent (0xF619) - sets both position and movement
+    /// Sent when an object materializes at a new location (e.g. lifestone recall, portal)
+    record movement-position-and-movement-event-msg {
+        object-id: u32,
+        position: position-pack,
+    }
+
+    /// Movement_SetObjectMovement (0xF74C) - animation/movement state for an object
+    record movement-set-object-movement-msg {
+        object-id: u32,
+        object-instance-sequence: u16,
+    }
+
+    /// Effects_PlayerTeleport (0xF751) - server notifies client teleport occurred
+    record effects-player-teleport-msg {
+        object-teleport-sequence: u16,
+    }
+
     // ----- Top-level S2C Messages -----
 
     /// Top-level server-to-client messages
@@ -217,6 +263,10 @@ interface host {
         hear-ranged-speech(hear-ranged-speech-msg),
         ddd-interrogation(ddd-interrogation-msg),
         chargen-verification-response,
+        movement-position(movement-position-event-msg),
+        movement-position-and-movement(movement-position-and-movement-event-msg),
+        movement-set-object-movement(movement-set-object-movement-msg),
+        effects-player-teleport(effects-player-teleport-msg),
     }
 
     // ----- Nested Game Events -----
@@ -311,6 +361,19 @@ interface host {
 
     /// Log a message from the script (will be displayed with script name)
     log: func(message: string);
+
+    /// ===== Movement Methods =====
+
+    /// Send a movement command (start moving in a direction)
+    /// motion: motion command value (see acprotocol Motion enum)
+    /// speed: movement speed multiplier (1.0 = normal)
+    /// hold-key: hold key modifier (0=Invalid, 1=None, 2=Run)
+    do-movement-command: func(motion: u32, speed: f32, hold-key: u32);
+
+    /// Stop a movement command
+    /// motion: the motion command to stop (must match the one passed to do-movement-command)
+    /// hold-key: hold key modifier (must match)
+    stop-movement-command: func(motion: u32, hold-key: u32);
 
     /// ===== Timer Methods =====
 
