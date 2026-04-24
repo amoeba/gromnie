@@ -68,6 +68,32 @@ fn handle_protocol_event(protocol_event: ProtocolEvent) {
                     "[Protocol] CharGenVerificationResponse - Character creation verified",
                 );
             }
+            S2cEvent::MovementPosition(msg) => {
+                gromnie::log(&format!(
+                    "[Protocol] MovementPosition - obj=0x{:08X} cell=0x{:08X} ({:.2}, {:.2}, {:.2})",
+                    msg.object_id, msg.position.landcell,
+                    msg.position.x, msg.position.y, msg.position.z
+                ));
+            }
+            S2cEvent::MovementPositionAndMovement(msg) => {
+                gromnie::log(&format!(
+                    "[Protocol] MovementPositionAndMovement - obj=0x{:08X} cell=0x{:08X} ({:.2}, {:.2}, {:.2})",
+                    msg.object_id, msg.position.landcell,
+                    msg.position.x, msg.position.y, msg.position.z
+                ));
+            }
+            S2cEvent::MovementSetObjectMovement(msg) => {
+                gromnie::log(&format!(
+                    "[Protocol] MovementSetObjectMovement - obj=0x{:08X} seq={}",
+                    msg.object_id, msg.object_instance_sequence
+                ));
+            }
+            S2cEvent::EffectsPlayerTeleport(msg) => {
+                gromnie::log(&format!(
+                    "[Protocol] EffectsPlayerTeleport - seq={}",
+                    msg.object_teleport_sequence
+                ));
+            }
         },
         // Nested game events with metadata
         ProtocolEvent::GameEvent(game_event) => {
