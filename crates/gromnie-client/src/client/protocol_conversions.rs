@@ -116,6 +116,84 @@ impl ToProtocolEvent for acprotocol::messages::s2c::ItemDeleteObject {
     }
 }
 
+type PositionPackFields = (
+    u32,
+    f32,
+    f32,
+    f32,
+    Option<f32>,
+    Option<f32>,
+    Option<f32>,
+    Option<f32>,
+);
+
+/// Extract position fields from an acprotocol PositionPack
+fn position_pack_fields(pos: &acprotocol::types::PositionPack) -> PositionPackFields {
+    (
+        pos.origin.landcell.0,
+        pos.origin.location.x,
+        pos.origin.location.y,
+        pos.origin.location.z,
+        pos.w_quat,
+        pos.x_quat,
+        pos.y_quat,
+        pos.z_quat,
+    )
+}
+
+impl ToProtocolEvent for acprotocol::messages::s2c::MovementPositionEvent {
+    fn to_protocol_event(&self) -> S2CEvent {
+        let (landcell, x, y, z, quat_w, quat_x, quat_y, quat_z) =
+            position_pack_fields(&self.position);
+        S2CEvent::MovementPositionEvent {
+            object_id: self.object_id.0,
+            landcell,
+            x,
+            y,
+            z,
+            quat_w,
+            quat_x,
+            quat_y,
+            quat_z,
+        }
+    }
+}
+
+impl ToProtocolEvent for acprotocol::messages::s2c::MovementPositionAndMovementEvent {
+    fn to_protocol_event(&self) -> S2CEvent {
+        let (landcell, x, y, z, quat_w, quat_x, quat_y, quat_z) =
+            position_pack_fields(&self.position);
+        S2CEvent::MovementPositionAndMovementEvent {
+            object_id: self.object_id.0,
+            landcell,
+            x,
+            y,
+            z,
+            quat_w,
+            quat_x,
+            quat_y,
+            quat_z,
+        }
+    }
+}
+
+impl ToProtocolEvent for acprotocol::messages::s2c::MovementSetObjectMovement {
+    fn to_protocol_event(&self) -> S2CEvent {
+        S2CEvent::MovementSetObjectMovement {
+            object_id: self.object_id.0,
+            object_instance_sequence: self.object_instance_sequence,
+        }
+    }
+}
+
+impl ToProtocolEvent for acprotocol::messages::s2c::EffectsPlayerTeleport {
+    fn to_protocol_event(&self) -> S2CEvent {
+        S2CEvent::EffectsPlayerTeleport {
+            object_teleport_sequence: self.object_teleport_sequence,
+        }
+    }
+}
+
 // ============================================================================
 // Conversion from game event types to GameEventMsg
 // ============================================================================

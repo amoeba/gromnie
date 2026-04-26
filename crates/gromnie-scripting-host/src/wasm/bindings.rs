@@ -97,6 +97,20 @@ impl gromnie::scripting::host::Host for WasmScriptState {
         ctx.send_action(SimpleClientAction::LogScriptMessage { script_id, message });
     }
 
+    fn do_movement_command(&mut self, motion: u32, speed: f32, hold_key: u32) {
+        let ctx = get_context(self);
+        ctx.send_action(SimpleClientAction::DoMovementCommand {
+            motion,
+            speed,
+            hold_key,
+        });
+    }
+
+    fn stop_movement_command(&mut self, motion: u32, hold_key: u32) {
+        let ctx = get_context(self);
+        ctx.send_action(SimpleClientAction::StopMovementCommand { motion, hold_key });
+    }
+
     fn schedule_timer(&mut self, delay_secs: u64, name: String) -> u64 {
         let ctx = get_context(self);
         let timer_id = ctx.schedule_timer(delay_secs, name);

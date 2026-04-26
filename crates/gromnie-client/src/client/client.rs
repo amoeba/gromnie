@@ -528,6 +528,7 @@ impl Client {
         let mut message_data = Vec::new();
         {
             let mut cursor = Cursor::new(&mut message_data);
+
             let msg = C2SMessage::OrderedGameAction {
                 sequence: self.next_game_action_sequence,
                 action,
@@ -535,6 +536,7 @@ impl Client {
             self.next_game_action_sequence += 1;
             msg.write(&mut cursor).expect("write failed");
         }
+
         self.outgoing_message_queue.push_back(OutgoingMessage::new(
             OutgoingMessageContent::GameAction(message_data),
         ));
@@ -545,6 +547,37 @@ impl Client {
         while let Ok(action) = self.game_action_rx.try_recv() {
             self.queue_game_action(action);
         }
+    }
+
+    fn send_do_movement_command(&mut self, motion: u32, speed: f32, hold_key: u32) {
+        use acprotocol::enums::HoldKey;
+        use acprotocol::gameactions::MovementDoMovementCommand;
+
+        let hold_key_enum = HoldKey::try_from(hold_key).unwrap_or(HoldKey::None);
+        info!(target: "net", "Sending movement command: motion=0x{:08X}, speed={}, hold_key={:?}",
+            motion, speed, hold_key_enum);
+        self.queue_game_action(GameActionMessage::MovementDoMovementCommand(
+            MovementDoMovementCommand {
+                motion,
+                speed,
+                hold_key: hold_key_enum,
+            },
+        ));
+    }
+
+    fn send_stop_movement_command(&mut self, motion: u32, hold_key: u32) {
+        use acprotocol::enums::HoldKey;
+        use acprotocol::gameactions::MovementStopMovementCommand;
+
+        let hold_key_enum = HoldKey::try_from(hold_key).unwrap_or(HoldKey::None);
+        info!(target: "net", "Sending stop movement command: motion=0x{:08X}, hold_key={:?}",
+            motion, hold_key_enum);
+        self.queue_game_action(GameActionMessage::MovementStopMovementCommand(
+            MovementStopMovementCommand {
+                motion,
+                hold_key: hold_key_enum,
+            },
+        ));
     }
 
     /// Send a TimeSync packet to keep connection alive
@@ -876,6 +909,18 @@ impl Client {
                 }
                 gromnie_events::SimpleClientAction::LogScriptMessage { script_id, message } => {
                     info!(target: "script", "[{}] {}", script_id, message);
+                }
+                gromnie_events::SimpleClientAction::DoMovementCommand {
+                    motion,
+                    speed,
+                    hold_key,
+                } => {
+                    debug!(target: "events", "Action: DoMovementCommand motion=0x{:08X}", motion);
+                    self.send_do_movement_command(motion, speed, hold_key);
+                }
+                gromnie_events::SimpleClientAction::StopMovementCommand { motion, hold_key } => {
+                    debug!(target: "events", "Action: StopMovementCommand motion=0x{:08X}", motion);
+                    self.send_stop_movement_command(motion, hold_key);
                 }
             }
         }
@@ -1239,6 +1284,32 @@ impl Client {
                     }
                     S2CMessage::ItemSetState => {
                         dispatch_message::<acprotocol::messages::s2c::ItemSetState, _>(
+                            self, message, &event_tx,
+                        )
+                        .ok();
+                    }
+                    S2CMessage::MovementPositionEvent => {
+                        dispatch_message::<acprotocol::messages::s2c::MovementPositionEvent, _>(
+                            self, message, &event_tx,
+                        )
+                        .ok();
+                    }
+                    S2CMessage::MovementPositionAndMovementEvent => {
+                        dispatch_message::<
+                            acprotocol::messages::s2c::MovementPositionAndMovementEvent,
+                            _,
+                        >(self, message, &event_tx)
+                        .ok();
+                    }
+                    S2CMessage::MovementSetObjectMovement => {
+                        dispatch_message::<
+                            acprotocol::messages::s2c::MovementSetObjectMovement,
+                            _,
+                        >(self, message, &event_tx)
+                        .ok();
+                    }
+                    S2CMessage::EffectsPlayerTeleport => {
+                        dispatch_message::<acprotocol::messages::s2c::EffectsPlayerTeleport, _>(
                             self, message, &event_tx,
                         )
                         .ok();
