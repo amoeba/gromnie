@@ -139,6 +139,9 @@ impl EventConsumer for LoggingConsumer {
                 } => {
                     info!(target: "events", "ITEM SET STATE: Object {} property {} = {}", object_id, property_name, value);
                 }
+                GameEvent::WorldNameReceived { world_name } => {
+                    info!(target: "events", "WORLD NAME: {}", world_name);
+                }
             },
             EventType::State(state_event) => {
                 // Log state changes (new granular states)
@@ -461,7 +464,8 @@ impl EventConsumer for DiscordConsumer {
                     | GameEvent::ItemDeleteObject { .. }
                     | GameEvent::ItemMovedObject { .. }
                     | GameEvent::QualitiesPrivateUpdateInt { .. }
-                    | GameEvent::ItemSetState { .. } => {
+                    | GameEvent::ItemSetState { .. }
+                    | GameEvent::WorldNameReceived { .. } => {
                         // Ignore inventory events in Discord consumer
                     }
                 }

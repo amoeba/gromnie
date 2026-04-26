@@ -51,6 +51,27 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let cli = Cli::parse();
 
+    // Initialize tracing subscriber with file logging if GROMNIE_DEBUG=1
+    if std::env::var("GROMNIE_DEBUG").is_ok() {
+        let log_file = std::fs::File::create("gromnie_debug.log")?;
+        let env_filter = tracing_subscriber::EnvFilter::from_default_env()
+            .add_directive(tracing::level_filters::LevelFilter::DEBUG.into());
+        tracing_subscriber::fmt()
+            .with_env_filter(env_filter)
+            .with_writer(std::sync::Mutex::new(log_file))
+            .init();
+        info!("Debug logging enabled: writing to gromnie_debug.log");
+    } else {
+        // Minimal logging to stderr when not in debug mode
+        tracing_subscriber::fmt()
+            .with_env_filter(
+                tracing_subscriber::EnvFilter::try_from_default_env()
+                    .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new("info")),
+            )
+            .with_writer(std::io::stderr)
+            .init();
+    }
+
     // Load configuration if available, but only require it when using --server/--account aliases
     let config = match GromnieConfig::load() {
         Ok(cfg) => {
