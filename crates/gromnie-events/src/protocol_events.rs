@@ -107,6 +107,51 @@ pub enum GameEventMsg {
     TransientString {
         message: String,
     },
+
+    // ===== Trading Events =====
+    /// Server confirmed trade registration (both players notified)
+    TradeRegistered {
+        initiator_id: u32,
+        partner_id: u32,
+        stamp: i64,
+    },
+    /// Trade window was opened on this character's side
+    TradeOpened {
+        object_id: u32,
+    },
+    /// Trade was closed (window closed)
+    TradeClosed,
+    /// An item was added to the trade window (by either side)
+    TradeItemAdded {
+        item_id: u32,
+    },
+    /// An item was removed from the trade window
+    TradeItemRemoved {
+        item_id: u32,
+    },
+    /// A trade participant accepted the trade
+    TradeAccepted,
+    /// A trade participant declined the trade
+    TradeDeclined,
+    /// Trade was reset (items removed, acceptance cleared)
+    TradeReset,
+    /// Trade failed for some reason
+    TradeFailure {
+        reason: u32,
+    },
+
+    // ===== Spell / Enchantment Events =====
+    /// An enchantment (buff/debuff) was applied or refreshed on this character
+    EnchantmentUpdated {
+        spell_id: u32,
+        duration: f64,
+        caster_id: u32,
+        power_level: u32,
+    },
+    /// An enchantment was removed from this character
+    EnchantmentRemoved {
+        spell_id: u32,
+    },
 }
 
 // ============================================================================

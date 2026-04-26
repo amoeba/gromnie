@@ -115,19 +115,19 @@ impl App {
                                     }
                                 }
                                 KeyCode::Enter => match wizard.stage {
-                                    ConfigWizardStage::EnteringServerName => {
-                                        if !wizard.current_input.is_empty() {
-                                            wizard.server_name = wizard.current_input.clone();
-                                            wizard.current_input.clear();
-                                            wizard.stage = ConfigWizardStage::EnteringServerHost;
-                                        }
+                                    ConfigWizardStage::EnteringServerName
+                                        if !wizard.current_input.is_empty() =>
+                                    {
+                                        wizard.server_name = wizard.current_input.clone();
+                                        wizard.current_input.clear();
+                                        wizard.stage = ConfigWizardStage::EnteringServerHost;
                                     }
-                                    ConfigWizardStage::EnteringServerHost => {
-                                        if !wizard.current_input.is_empty() {
-                                            wizard.server_host = wizard.current_input.clone();
-                                            wizard.current_input.clear();
-                                            wizard.stage = ConfigWizardStage::EnteringServerPort;
-                                        }
+                                    ConfigWizardStage::EnteringServerHost
+                                        if !wizard.current_input.is_empty() =>
+                                    {
+                                        wizard.server_host = wizard.current_input.clone();
+                                        wizard.current_input.clear();
+                                        wizard.stage = ConfigWizardStage::EnteringServerPort;
                                     }
                                     ConfigWizardStage::EnteringServerPort => {
                                         wizard.server_port = if wizard.current_input.is_empty() {
@@ -138,20 +138,19 @@ impl App {
                                         wizard.current_input.clear();
                                         wizard.stage = ConfigWizardStage::EnteringAccountUsername;
                                     }
-                                    ConfigWizardStage::EnteringAccountUsername => {
-                                        if !wizard.current_input.is_empty() {
-                                            wizard.account_username = wizard.current_input.clone();
-                                            wizard.current_input.clear();
-                                            wizard.stage =
-                                                ConfigWizardStage::EnteringAccountPassword;
-                                        }
+                                    ConfigWizardStage::EnteringAccountUsername
+                                        if !wizard.current_input.is_empty() =>
+                                    {
+                                        wizard.account_username = wizard.current_input.clone();
+                                        wizard.current_input.clear();
+                                        wizard.stage = ConfigWizardStage::EnteringAccountPassword;
                                     }
-                                    ConfigWizardStage::EnteringAccountPassword => {
-                                        if !wizard.current_input.is_empty() {
-                                            wizard.account_password = wizard.current_input.clone();
-                                            wizard.current_input.clear();
-                                            wizard.stage = ConfigWizardStage::EnteringCharacterName;
-                                        }
+                                    ConfigWizardStage::EnteringAccountPassword
+                                        if !wizard.current_input.is_empty() =>
+                                    {
+                                        wizard.account_password = wizard.current_input.clone();
+                                        wizard.current_input.clear();
+                                        wizard.stage = ConfigWizardStage::EnteringCharacterName;
                                     }
                                     ConfigWizardStage::EnteringCharacterName => {
                                         // Allow empty input (skip character config)
@@ -194,31 +193,30 @@ impl App {
                         {
                             match key.code {
                                 KeyCode::Up => match wizard.stage {
-                                    WizardStage::SelectingServer => {
-                                        if wizard.selected_server_idx > 0 {
-                                            wizard.selected_server_idx -= 1;
-                                        }
+                                    WizardStage::SelectingServer
+                                        if wizard.selected_server_idx > 0 =>
+                                    {
+                                        wizard.selected_server_idx -= 1;
                                     }
-                                    WizardStage::SelectingAccount => {
-                                        if wizard.selected_account_idx > 0 {
-                                            wizard.selected_account_idx -= 1;
-                                        }
+                                    WizardStage::SelectingAccount
+                                        if wizard.selected_account_idx > 0 =>
+                                    {
+                                        wizard.selected_account_idx -= 1;
                                     }
                                     _ => {}
                                 },
                                 KeyCode::Down => match wizard.stage {
-                                    WizardStage::SelectingServer => {
-                                        if wizard.selected_server_idx < wizard.server_list.len() - 1
-                                        {
-                                            wizard.selected_server_idx += 1;
-                                        }
+                                    WizardStage::SelectingServer
+                                        if wizard.selected_server_idx
+                                            < wizard.server_list.len() - 1 =>
+                                    {
+                                        wizard.selected_server_idx += 1;
                                     }
-                                    WizardStage::SelectingAccount => {
+                                    WizardStage::SelectingAccount
                                         if wizard.selected_account_idx
-                                            < wizard.account_list.len() - 1
-                                        {
-                                            wizard.selected_account_idx += 1;
-                                        }
+                                            < wizard.account_list.len() - 1 =>
+                                    {
+                                        wizard.selected_account_idx += 1;
                                     }
                                     _ => {}
                                 },

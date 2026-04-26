@@ -37,6 +37,51 @@ impl gromnie::scripting::host::Host for WasmScriptState {
         ctx.send_chat(message);
     }
 
+    fn send_tell(&mut self, recipient: String, message: String) {
+        let ctx = get_context(self);
+        ctx.send_tell(recipient, message);
+    }
+
+    fn open_trade(&mut self, partner_id: u32) {
+        let ctx = get_context(self);
+        ctx.open_trade(partner_id);
+    }
+
+    fn add_to_trade(&mut self, item_id: u32, slot: u32) {
+        let ctx = get_context(self);
+        ctx.add_to_trade(item_id, slot);
+    }
+
+    fn accept_trade(&mut self) {
+        let ctx = get_context(self);
+        ctx.accept_trade();
+    }
+
+    fn decline_trade(&mut self) {
+        let ctx = get_context(self);
+        ctx.decline_trade();
+    }
+
+    fn reset_trade(&mut self) {
+        let ctx = get_context(self);
+        ctx.reset_trade();
+    }
+
+    fn close_trade(&mut self) {
+        let ctx = get_context(self);
+        ctx.close_trade();
+    }
+
+    fn cast_targeted_spell(&mut self, target_id: u32, spell_id: u32) {
+        let ctx = get_context(self);
+        ctx.cast_targeted_spell(target_id, spell_id);
+    }
+
+    fn cast_untargeted_spell(&mut self, spell_id: u32) {
+        let ctx = get_context(self);
+        ctx.cast_untargeted_spell(spell_id);
+    }
+
     fn login_character(&mut self, account_name: String, character_id: u32, character_name: String) {
         let ctx = get_context(self);
         ctx.send_action(SimpleClientAction::LoginCharacter {

@@ -582,6 +582,7 @@ async fn run_client_loop(
                         }
 
                         client_guard.process_actions();
+                        client_guard.process_game_actions();
 
                         if client_guard.has_pending_outgoing_messages()
                             && let Err(e) = client_guard.send_pending_messages().await {

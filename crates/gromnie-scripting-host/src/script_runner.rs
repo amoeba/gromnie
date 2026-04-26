@@ -736,7 +736,10 @@ impl ScriptRunner {
 
 impl Drop for ScriptRunner {
     fn drop(&mut self) {
-        // Create context once before the loop
+        if self.scripts.is_empty() {
+            return;
+        }
+
         let mut ctx = Self::create_script_context(
             self.client.clone(),
             self.action_tx.clone(),
@@ -744,7 +747,6 @@ impl Drop for ScriptRunner {
             SystemTime::now(),
         );
 
-        // Call on_unload for all scripts
         for script in &mut self.scripts {
             let script: &mut WasmScript = script;
             script.on_unload(&mut ctx);

@@ -347,11 +347,8 @@ fn handle_tui_event(
                         // Delete last character
                         app.chat_input.pop();
                     }
-                    KeyCode::Char(c) => {
-                        // Add character to input (but don't process control keys like Ctrl+C)
-                        if !key.modifiers.contains(KeyModifiers::CONTROL) {
-                            app.chat_input.push(c);
-                        }
+                    KeyCode::Char(c) if !key.modifiers.contains(KeyModifiers::CONTROL) => {
+                        app.chat_input.push(c);
                     }
                     _ => {}
                 }
