@@ -53,6 +53,8 @@ pub use gromnie::scripting::host::{
     check_timer,
     close_trade,
     decline_trade,
+    // Movement
+    do_movement_command,
     get_client_state,
     get_event_time_millis,
     log,
@@ -64,6 +66,7 @@ pub use gromnie::scripting::host::{
     schedule_timer,
     send_chat,
     send_tell,
+    stop_movement_command,
 };
 
 /// Trait for WASM script implementations
