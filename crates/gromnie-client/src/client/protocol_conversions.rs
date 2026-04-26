@@ -116,7 +116,16 @@ impl ToProtocolEvent for acprotocol::messages::s2c::ItemDeleteObject {
     }
 }
 
-type PositionPackFields = (u32, f32, f32, f32, Option<f32>, Option<f32>, Option<f32>, Option<f32>);
+type PositionPackFields = (
+    u32,
+    f32,
+    f32,
+    f32,
+    Option<f32>,
+    Option<f32>,
+    Option<f32>,
+    Option<f32>,
+);
 
 /// Extract position fields from an acprotocol PositionPack
 fn position_pack_fields(pos: &acprotocol::types::PositionPack) -> PositionPackFields {
