@@ -242,7 +242,7 @@ fn render_objects_tab(frame: &mut Frame, area: Rect, app: &App) {
 
     // Sort objects by most recently modified (most recent first)
     let mut objects: Vec<_> = app.object_tracker.objects.values().collect();
-    objects.sort_by(|a, b| b.last_updated.cmp(&a.last_updated));
+    objects.sort_by_key(|b| std::cmp::Reverse(b.last_updated));
 
     // Create rows for each object
     let rows: Vec<Row> = objects

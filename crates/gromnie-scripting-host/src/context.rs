@@ -4,6 +4,7 @@ use tokio::sync::RwLock;
 use tokio::sync::mpsc::UnboundedSender;
 
 use super::timer::TimerId;
+use acprotocol::message::GameActionMessage;
 use gromnie_client::client::Client;
 use gromnie_events::SimpleClientAction;
 
@@ -51,6 +52,8 @@ pub struct ScriptContext {
     client: Arc<RwLock<Client>>,
     /// Channel for sending client actions
     action_tx: UnboundedSender<SimpleClientAction>,
+    /// Channel for sending GameActionMessage directly to the client
+    game_action_tx: UnboundedSender<GameActionMessage>,
     /// Reference to the timer manager (will be updated by ScriptRunner)
     timer_manager: *mut super::timer::TimerManager,
     /// Timestamp when the current event occurred
@@ -68,9 +71,15 @@ impl ScriptContext {
         timer_manager: *mut super::timer::TimerManager,
         event_time: SystemTime,
     ) -> Self {
+        let game_action_tx = client
+            .try_read()
+            .expect("client lock should not be contended at context creation")
+            .game_action_tx
+            .clone();
         Self {
             client,
             action_tx,
+            game_action_tx,
             timer_manager,
             event_time,
         }
@@ -78,8 +87,10 @@ impl ScriptContext {
 
     /// Get current client state (clones session and scene from the client)
     pub fn client(&self) -> ClientState {
-        // This blocks but should be very fast since we're just cloning
-        let client_guard = self.client.blocking_read();
+        let client_guard = self
+            .client
+            .try_read()
+            .expect("client lock should not be contended during script event handling");
         ClientState {
             session: client_guard.session.clone(),
             scene: client_guard.scene.clone(),
@@ -101,6 +112,112 @@ impl ScriptContext {
             recipient_name: recipient.into(),
             message: message.into(),
         });
+    }
+
+    // ===== Trading =====
+
+    pub fn open_trade(&self, partner_id: u32) {
+        use acprotocol::gameactions::TradeOpenTradeNegotiations;
+        use acprotocol::types::ObjectId;
+        let _ = self
+            .game_action_tx
+            .send(GameActionMessage::TradeOpenTradeNegotiations(
+                TradeOpenTradeNegotiations {
+                    object_id: ObjectId(partner_id),
+                },
+            ));
+    }
+
+    pub fn add_to_trade(&self, item_id: u32, slot: u32) {
+        use acprotocol::gameactions::TradeAddToTrade;
+        use acprotocol::types::ObjectId;
+        let _ = self
+            .game_action_tx
+            .send(GameActionMessage::TradeAddToTrade(TradeAddToTrade {
+                object_id: ObjectId(item_id),
+                slot_index: slot,
+            }));
+    }
+
+    pub fn accept_trade(&self) {
+        use acprotocol::gameactions::TradeAcceptTrade;
+        use acprotocol::types::{ObjectId, Trade};
+        let client = self
+            .client
+            .try_read()
+            .expect("client lock should not be contended during accept_trade");
+        let Some(trade) = client.pending_trade() else {
+            tracing::warn!(target: "scripting", "accept_trade called but no pending trade");
+            return;
+        };
+        let _ = self
+            .game_action_tx
+            .send(GameActionMessage::TradeAcceptTrade(TradeAcceptTrade {
+                contents: Trade {
+                    partner_id: ObjectId(trade.partner_id),
+                    sequence: trade.stamp as u64,
+                    status: 0,
+                    initiator_id: ObjectId(trade.initiator_id),
+                    accepted: true,
+                    partner_accepted: false,
+                },
+            }));
+    }
+
+    pub fn decline_trade(&self) {
+        use acprotocol::gameactions::TradeDeclineTrade;
+        let _ = self
+            .game_action_tx
+            .send(GameActionMessage::TradeDeclineTrade(TradeDeclineTrade {}));
+    }
+
+    pub fn reset_trade(&self) {
+        use acprotocol::gameactions::TradeResetTrade;
+        let _ = self
+            .game_action_tx
+            .send(GameActionMessage::TradeResetTrade(TradeResetTrade {}));
+    }
+
+    pub fn close_trade(&self) {
+        use acprotocol::gameactions::TradeCloseTradeNegotiations;
+        let _ = self
+            .game_action_tx
+            .send(GameActionMessage::TradeCloseTradeNegotiations(
+                TradeCloseTradeNegotiations {},
+            ));
+    }
+
+    // ===== Spell Casting =====
+
+    pub fn cast_targeted_spell(&self, target_id: u32, spell_id: u32) {
+        use acprotocol::gameactions::MagicCastTargetedSpell;
+        use acprotocol::types::{LayeredSpellId, ObjectId, SpellId};
+        let _ = self
+            .game_action_tx
+            .send(GameActionMessage::MagicCastTargetedSpell(
+                MagicCastTargetedSpell {
+                    object_id: ObjectId(target_id),
+                    spell_id: LayeredSpellId {
+                        id: SpellId(spell_id as u16),
+                        layer: 0,
+                    },
+                },
+            ));
+    }
+
+    pub fn cast_untargeted_spell(&self, spell_id: u32) {
+        use acprotocol::gameactions::MagicCastUntargetedSpell;
+        use acprotocol::types::{LayeredSpellId, SpellId};
+        let _ = self
+            .game_action_tx
+            .send(GameActionMessage::MagicCastUntargetedSpell(
+                MagicCastUntargetedSpell {
+                    spell_id: LayeredSpellId {
+                        id: SpellId(spell_id as u16),
+                        layer: 0,
+                    },
+                },
+            ));
     }
 
     /// Send a client action
