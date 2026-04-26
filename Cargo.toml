@@ -10,8 +10,6 @@ members = [
   "crates/gromnie-tui",
   "crates/xtask",
   "tests/scripting",
-  "examples/position-tracker",
-  "examples/movement-demo"
 ]
 default-members = [
   "crates/gromnie-cli",
