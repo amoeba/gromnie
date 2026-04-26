@@ -1915,14 +1915,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "movement-demo"
-version = "0.1.0"
-dependencies = [
- "gromnie-scripting-api",
- "wit-bindgen 0.36.0",
-]
-
-[[package]]
 name = "nu-ansi-term"
 version = "0.50.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2084,14 +2076,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d8a2f0d8d040d7848a709caf78912debcc3f33ee4b3cac47d73d1e1069e83507"
 dependencies = [
  "portable-atomic",
-]
-
-[[package]]
-name = "position-tracker"
-version = "0.1.0"
-dependencies = [
- "gromnie-scripting-api",
- "wit-bindgen 0.36.0",
 ]
 
 [[package]]
