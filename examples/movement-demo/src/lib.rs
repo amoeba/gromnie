@@ -14,8 +14,8 @@
 //!   1 = None  (walk speed)
 //!   2 = Run   (run speed)
 
-use gromnie_scripting_api as gromnie;
 use gromnie::ScriptEvent;
+use gromnie_scripting_api as gromnie;
 
 const MOTION_WALK_FORWARD: u32 = 0x41000003;
 const HOLD_KEY_NONE: u32 = 1;
@@ -73,13 +73,11 @@ impl gromnie::Script for MovementDemo {
         match event {
             ScriptEvent::Game(GameEvent::Protocol(ProtocolEvent::S2c(s2c_event))) => {
                 match s2c_event {
-                    S2cEvent::HearSpeech(msg) => {
-                        match msg.message.trim() {
-                            "/walk" => self.start_walk(),
-                            "/stop" => self.stop_walk(),
-                            _ => {}
-                        }
-                    }
+                    S2cEvent::HearSpeech(msg) => match msg.message.trim() {
+                        "/walk" => self.start_walk(),
+                        "/stop" => self.stop_walk(),
+                        _ => {}
+                    },
                     // Cancel walk on teleport to avoid getting stuck in motion state
                     S2cEvent::EffectsPlayerTeleport(_) => {
                         if self.state == State::Walking {

@@ -436,7 +436,9 @@ impl MessageHandler<acprotocol::messages::s2c::MovementPositionEvent> for Client
             msg.position.origin.location.z);
 
         let protocol_event = ProtocolEvent::S2C(msg.to_protocol_event());
-        let _ = self.raw_event_tx.try_send(ClientEvent::Protocol(protocol_event));
+        let _ = self
+            .raw_event_tx
+            .try_send(ClientEvent::Protocol(protocol_event));
 
         None
     }
@@ -457,7 +459,9 @@ impl MessageHandler<acprotocol::messages::s2c::MovementPositionAndMovementEvent>
             msg.position.origin.location.z);
 
         let protocol_event = ProtocolEvent::S2C(msg.to_protocol_event());
-        let _ = self.raw_event_tx.try_send(ClientEvent::Protocol(protocol_event));
+        let _ = self
+            .raw_event_tx
+            .try_send(ClientEvent::Protocol(protocol_event));
 
         None
     }
@@ -474,7 +478,9 @@ impl MessageHandler<acprotocol::messages::s2c::MovementSetObjectMovement> for Cl
             object_id, msg.object_instance_sequence);
 
         let protocol_event = ProtocolEvent::S2C(msg.to_protocol_event());
-        let _ = self.raw_event_tx.try_send(ClientEvent::Protocol(protocol_event));
+        let _ = self
+            .raw_event_tx
+            .try_send(ClientEvent::Protocol(protocol_event));
 
         None
     }
@@ -489,7 +495,9 @@ impl MessageHandler<acprotocol::messages::s2c::EffectsPlayerTeleport> for Client
         info!(target: "net", "Player teleport effect (seq {})", msg.object_teleport_sequence);
 
         let protocol_event = ProtocolEvent::S2C(msg.to_protocol_event());
-        let _ = self.raw_event_tx.try_send(ClientEvent::Protocol(protocol_event));
+        let _ = self
+            .raw_event_tx
+            .try_send(ClientEvent::Protocol(protocol_event));
 
         None
     }

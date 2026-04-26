@@ -8,8 +8,8 @@
 //!     teleport/recall/portal entry
 //!   - EffectsPlayerTeleport (0xF751): server signals a teleport has occurred
 
-use gromnie_scripting_api as gromnie;
 use gromnie::ScriptEvent;
+use gromnie_scripting_api as gromnie;
 
 #[derive(Default)]
 pub struct PositionTracker {
@@ -73,11 +73,7 @@ impl gromnie::Script for PositionTracker {
                     // Position + movement (portal, recall, lifestone) - filter to player
                     S2cEvent::MovementPositionAndMovement(msg) => {
                         if self.is_player(msg.object_id) {
-                            log_position(
-                                "PositionAndMovement",
-                                msg.object_id,
-                                &msg.position,
-                            );
+                            log_position("PositionAndMovement", msg.object_id, &msg.position);
                         }
                     }
 

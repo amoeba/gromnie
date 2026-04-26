@@ -528,6 +528,7 @@ impl Client {
         let mut message_data = Vec::new();
         {
             let mut cursor = Cursor::new(&mut message_data);
+
             let msg = C2SMessage::OrderedGameAction {
                 sequence: self.next_game_action_sequence,
                 action,
