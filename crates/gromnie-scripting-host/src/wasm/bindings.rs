@@ -321,9 +321,9 @@ impl gromnie::scripting::host::Host for WasmScriptState {
         &'life0 mut self,
     ) -> ::core::pin::Pin<
         Box<
-            dyn ::core::future::Future<
-                Output = gromnie::scripting::host::ClientState,
-            > + ::core::marker::Send + 'async_trait,
+            dyn ::core::future::Future<Output = gromnie::scripting::host::ClientState>
+                + ::core::marker::Send
+                + 'async_trait,
         >,
     >
     where

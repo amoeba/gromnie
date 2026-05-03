@@ -149,16 +149,12 @@ pub trait WasmScript {
     /// Called when the script is first loaded
     fn on_load<'a>(
         &'a mut self,
-    ) -> ::core::pin::Pin<
-        Box<dyn ::core::future::Future<Output = ()> + 'a>,
-    >;
+    ) -> ::core::pin::Pin<Box<dyn ::core::future::Future<Output = ()> + 'a>>;
 
     /// Called when the script is being unloaded
     fn on_unload<'a>(
         &'a mut self,
-    ) -> ::core::pin::Pin<
-        Box<dyn ::core::future::Future<Output = ()> + 'a>,
-    >;
+    ) -> ::core::pin::Pin<Box<dyn ::core::future::Future<Output = ()> + 'a>>;
 
     /// Return the list of event IDs this script wants to receive
     fn subscribed_events(&self) -> Vec<u32>;
@@ -167,17 +163,13 @@ pub trait WasmScript {
     fn on_event<'a>(
         &'a mut self,
         event: ScriptEvent,
-    ) -> ::core::pin::Pin<
-        Box<dyn ::core::future::Future<Output = ()> + 'a>,
-    >;
+    ) -> ::core::pin::Pin<Box<dyn ::core::future::Future<Output = ()> + 'a>>;
 
     /// Called periodically (delta_millis is time since last tick)
     fn on_tick<'a>(
         &'a mut self,
         delta_millis: u64,
-    ) -> ::core::pin::Pin<
-        Box<dyn ::core::future::Future<Output = ()> + 'a>,
-    >;
+    ) -> ::core::pin::Pin<Box<dyn ::core::future::Future<Output = ()> + 'a>>;
 }
 
 pub use WasmScript as Script;

@@ -81,7 +81,7 @@ async fn test_event_handling() {
 
     // Load test scripts
     let test_scripts_dir = Path::new("../../../tests/scripting");
-    runner.load_scripts(test_scripts_dir, &HashMap::new());
+    runner.load_scripts(test_scripts_dir, &HashMap::new()).await;
 
     if runner.script_count() == 0 {
         println!("Warning: No scripts loaded for event test");
@@ -96,7 +96,9 @@ async fn test_event_handling() {
 
     // Process events
     for event in test_events {
-        runner.handle_event(gromnie_events::ClientEvent::Game(event));
+        runner
+            .handle_event(gromnie_events::ClientEvent::Game(event))
+            .await;
     }
 
     // Give scripts time to process (in real scenario, we'd check actions)
@@ -111,7 +113,7 @@ async fn test_timer_functionality() {
 
     // Load test scripts
     let test_scripts_dir = Path::new("../../../tests/scripting");
-    runner.load_scripts(test_scripts_dir, &HashMap::new());
+    runner.load_scripts(test_scripts_dir, &HashMap::new()).await;
 
     if runner.script_count() == 0 {
         println!("Warning: No scripts loaded for timer test");
@@ -128,7 +130,9 @@ async fn test_timer_functionality() {
             message_type: 1,
         };
 
-        runner.handle_event(gromnie_events::ClientEvent::Game(event));
+        runner
+            .handle_event(gromnie_events::ClientEvent::Game(event))
+            .await;
 
         // Small delay to allow timers to progress
         tokio::time::sleep(Duration::from_millis(50)).await;
@@ -144,11 +148,13 @@ async fn test_script_reload() {
     let test_scripts_dir = Path::new("../../../tests/scripting");
 
     // First load
-    runner.load_scripts(test_scripts_dir, &HashMap::new());
+    runner.load_scripts(test_scripts_dir, &HashMap::new()).await;
     let first_count = runner.script_count();
 
     // Reload
-    runner.reload_scripts(test_scripts_dir, &HashMap::new());
+    runner
+        .reload_scripts(test_scripts_dir, &HashMap::new())
+        .await;
     let second_count = runner.script_count();
 
     // Should have same number of scripts after reload
@@ -166,7 +172,7 @@ async fn test_host_function_calls() {
 
     // Load test scripts
     let test_scripts_dir = Path::new("../../../tests/scripting");
-    runner.load_scripts(test_scripts_dir, &HashMap::new());
+    runner.load_scripts(test_scripts_dir, &HashMap::new()).await;
 
     if runner.script_count() == 0 {
         println!("Warning: No scripts loaded for host function test");
@@ -179,7 +185,9 @@ async fn test_host_function_calls() {
         message_type: 1,
     };
 
-    runner.handle_event(gromnie_events::ClientEvent::Game(event));
+    runner
+        .handle_event(gromnie_events::ClientEvent::Game(event))
+        .await;
 
     // Check if scripts generated any actions
     let mut action_count = 0;
@@ -209,7 +217,7 @@ async fn test_protocol_event_flow() {
 
     // Load test scripts
     let test_scripts_dir = Path::new("../../../tests/scripting");
-    runner.load_scripts(test_scripts_dir, &HashMap::new());
+    runner.load_scripts(test_scripts_dir, &HashMap::new()).await;
 
     if runner.script_count() == 0 {
         println!("Warning: No scripts loaded for protocol event test");
@@ -265,7 +273,7 @@ async fn test_protocol_event_flow() {
 
     // Process S2C events
     for event in s2c_events {
-        runner.handle_event(ClientEvent::Protocol(event));
+        runner.handle_event(ClientEvent::Protocol(event)).await;
     }
 
     // Test nested game events with metadata
@@ -294,7 +302,7 @@ async fn test_protocol_event_flow() {
 
     // Process game events
     for event in game_events {
-        runner.handle_event(ClientEvent::Protocol(event));
+        runner.handle_event(ClientEvent::Protocol(event)).await;
     }
 
     // Give scripts time to process
@@ -312,7 +320,7 @@ async fn test_protocol_event_data_integrity() {
 
     // Load test scripts
     let test_scripts_dir = Path::new("../../../tests/scripting");
-    runner.load_scripts(test_scripts_dir, &HashMap::new());
+    runner.load_scripts(test_scripts_dir, &HashMap::new()).await;
 
     if runner.script_count() == 0 {
         println!("Warning: No scripts loaded for data integrity test");
@@ -337,7 +345,9 @@ async fn test_protocol_event_data_integrity() {
         num_slots: 10,
     });
 
-    runner.handle_event(ClientEvent::Protocol(character_set_event));
+    runner
+        .handle_event(ClientEvent::Protocol(character_set_event))
+        .await;
 
     // Test game event with metadata preservation
     let game_event = ProtocolEvent::GameEvent(OrderedGameEvent {
@@ -352,7 +362,7 @@ async fn test_protocol_event_data_integrity() {
         },
     });
 
-    runner.handle_event(ClientEvent::Protocol(game_event));
+    runner.handle_event(ClientEvent::Protocol(game_event)).await;
 
     // Give scripts time to process
     tokio::time::sleep(Duration::from_millis(100)).await;

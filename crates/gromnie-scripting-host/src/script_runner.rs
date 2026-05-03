@@ -385,7 +385,8 @@ impl ScriptConsumer {
             let msg_tx_for_scanner = self.msg_tx.clone();
 
             let task = tokio::spawn(async move {
-                Self::hot_reload_task(msg_tx_for_scanner, script_dir, script_config, interval).await;
+                Self::hot_reload_task(msg_tx_for_scanner, script_dir, script_config, interval)
+                    .await;
             });
 
             self.hot_reload_task = Some(task);
@@ -514,7 +515,13 @@ impl ScriptConsumer {
                 );
 
                 let task = tokio::spawn(async move {
-                    Self::hot_reload_task(Some(hot_reload_msg_tx), dir, hot_reload_config, interval).await;
+                    Self::hot_reload_task(
+                        Some(hot_reload_msg_tx),
+                        dir,
+                        hot_reload_config,
+                        interval,
+                    )
+                    .await;
                 });
 
                 self.hot_reload_task = Some(task);
@@ -553,61 +560,57 @@ impl EventConsumer for ScriptConsumer {
         // Extract ClientEvent from EventEnvelope
         let client_event = match envelope.event {
             gromnie_events::EventType::Game(game_event) => ClientEvent::Game(game_event),
-            gromnie_events::EventType::State(state_event) => {
-                ClientEvent::State(state_event)
-            }
-            gromnie_events::EventType::System(system_event) => {
-                match system_event {
-                    gromnie_events::SystemEvent::AuthenticationSucceeded { .. } => {
-                        ClientEvent::System(ClientSystemEvent::AuthenticationSucceeded)
-                    }
-                    gromnie_events::SystemEvent::AuthenticationFailed { reason, .. } => {
-                        ClientEvent::System(ClientSystemEvent::AuthenticationFailed { reason })
-                    }
-                    gromnie_events::SystemEvent::ConnectingStarted { .. } => {
-                        ClientEvent::System(ClientSystemEvent::ConnectingStarted)
-                    }
-                    gromnie_events::SystemEvent::ConnectingDone { .. } => {
-                        ClientEvent::System(ClientSystemEvent::ConnectingDone)
-                    }
-                    gromnie_events::SystemEvent::UpdatingStarted { .. } => {
-                        ClientEvent::System(ClientSystemEvent::UpdatingStarted)
-                    }
-                    gromnie_events::SystemEvent::UpdatingDone { .. } => {
-                        ClientEvent::System(ClientSystemEvent::UpdatingDone)
-                    }
-                    gromnie_events::SystemEvent::LoginSucceeded {
-                        character_id,
-                        character_name,
-                    } => ClientEvent::System(ClientSystemEvent::LoginSucceeded {
-                        character_id,
-                        character_name,
-                    }),
-                    gromnie_events::SystemEvent::Disconnected {
-                        will_reconnect,
-                        reconnect_attempt,
-                        delay_secs,
-                        ..
-                    } => ClientEvent::System(ClientSystemEvent::Disconnected {
-                        will_reconnect,
-                        reconnect_attempt,
-                        delay_secs,
-                    }),
-                    gromnie_events::SystemEvent::Reconnecting {
-                        attempt,
-                        delay_secs,
-                        ..
-                    } => ClientEvent::System(ClientSystemEvent::Reconnecting {
-                        attempt,
-                        delay_secs,
-                    }),
-                    gromnie_events::SystemEvent::ReloadScripts { .. }
-                    | gromnie_events::SystemEvent::LogScriptMessage { .. }
-                    | gromnie_events::SystemEvent::Shutdown => {
-                        return;
-                    }
+            gromnie_events::EventType::State(state_event) => ClientEvent::State(state_event),
+            gromnie_events::EventType::System(system_event) => match system_event {
+                gromnie_events::SystemEvent::AuthenticationSucceeded { .. } => {
+                    ClientEvent::System(ClientSystemEvent::AuthenticationSucceeded)
                 }
-            }
+                gromnie_events::SystemEvent::AuthenticationFailed { reason, .. } => {
+                    ClientEvent::System(ClientSystemEvent::AuthenticationFailed { reason })
+                }
+                gromnie_events::SystemEvent::ConnectingStarted { .. } => {
+                    ClientEvent::System(ClientSystemEvent::ConnectingStarted)
+                }
+                gromnie_events::SystemEvent::ConnectingDone { .. } => {
+                    ClientEvent::System(ClientSystemEvent::ConnectingDone)
+                }
+                gromnie_events::SystemEvent::UpdatingStarted { .. } => {
+                    ClientEvent::System(ClientSystemEvent::UpdatingStarted)
+                }
+                gromnie_events::SystemEvent::UpdatingDone { .. } => {
+                    ClientEvent::System(ClientSystemEvent::UpdatingDone)
+                }
+                gromnie_events::SystemEvent::LoginSucceeded {
+                    character_id,
+                    character_name,
+                } => ClientEvent::System(ClientSystemEvent::LoginSucceeded {
+                    character_id,
+                    character_name,
+                }),
+                gromnie_events::SystemEvent::Disconnected {
+                    will_reconnect,
+                    reconnect_attempt,
+                    delay_secs,
+                    ..
+                } => ClientEvent::System(ClientSystemEvent::Disconnected {
+                    will_reconnect,
+                    reconnect_attempt,
+                    delay_secs,
+                }),
+                gromnie_events::SystemEvent::Reconnecting {
+                    attempt,
+                    delay_secs,
+                    ..
+                } => ClientEvent::System(ClientSystemEvent::Reconnecting {
+                    attempt,
+                    delay_secs,
+                }),
+                gromnie_events::SystemEvent::ReloadScripts { .. }
+                | gromnie_events::SystemEvent::LogScriptMessage { .. }
+                | gromnie_events::SystemEvent::Shutdown => {
+                    return;
+                }
+            },
         };
 
         let _ = tx.send(RunnerMessage::Event(client_event));

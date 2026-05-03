@@ -144,7 +144,9 @@ impl gromnie::Script for TestScript {
         })
     }
 
-    fn on_unload<'a>(&'a mut self) -> std::pin::Pin<Box<dyn std::future::Future<Output = ()> + 'a>> {
+    fn on_unload<'a>(
+        &'a mut self,
+    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = ()> + 'a>> {
         Box::pin(async move {
             gromnie::log("Test script unloaded successfully");
         })
@@ -155,7 +157,10 @@ impl gromnie::Script for TestScript {
         vec![0xFFFFFFFF] // All events
     }
 
-    fn on_event<'a>(&'a mut self, event: ScriptEvent) -> std::pin::Pin<Box<dyn std::future::Future<Output = ()> + 'a>> {
+    fn on_event<'a>(
+        &'a mut self,
+        event: ScriptEvent,
+    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = ()> + 'a>> {
         Box::pin(async move {
             use gromnie::GameEvent::*;
             use gromnie::ScriptEvent::*;
@@ -218,7 +223,10 @@ impl gromnie::Script for TestScript {
         })
     }
 
-    fn on_tick<'a>(&'a mut self, delta_millis: u64) -> std::pin::Pin<Box<dyn std::future::Future<Output = ()> + 'a>> {
+    fn on_tick<'a>(
+        &'a mut self,
+        delta_millis: u64,
+    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = ()> + 'a>> {
         Box::pin(async move {
             // Test periodic functionality
             let msg = format!("Tick: {}ms", delta_millis);

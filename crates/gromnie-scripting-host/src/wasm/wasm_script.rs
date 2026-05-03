@@ -190,9 +190,8 @@ impl HostScript for WasmScript {
     fn on_load<'a>(
         &'a mut self,
         ctx: &'a mut ScriptContext,
-    ) -> ::core::pin::Pin<
-        Box<dyn ::core::future::Future<Output = ()> + ::core::marker::Send + 'a>,
-    > {
+    ) -> ::core::pin::Pin<Box<dyn ::core::future::Future<Output = ()> + ::core::marker::Send + 'a>>
+    {
         self.set_context(ctx);
         Box::pin(async move {
             // SAFETY: we set the context above and clear it below.
@@ -206,9 +205,8 @@ impl HostScript for WasmScript {
     fn on_unload<'a>(
         &'a mut self,
         ctx: &'a mut ScriptContext,
-    ) -> ::core::pin::Pin<
-        Box<dyn ::core::future::Future<Output = ()> + ::core::marker::Send + 'a>,
-    > {
+    ) -> ::core::pin::Pin<Box<dyn ::core::future::Future<Output = ()> + ::core::marker::Send + 'a>>
+    {
         self.set_context(ctx);
         Box::pin(async move {
             let guest = self.script.gromnie_scripting_guest();
@@ -225,9 +223,8 @@ impl HostScript for WasmScript {
         &'a mut self,
         event: &'a ClientEvent,
         ctx: &'a mut ScriptContext,
-    ) -> ::core::pin::Pin<
-        Box<dyn ::core::future::Future<Output = ()> + ::core::marker::Send + 'a>,
-    > {
+    ) -> ::core::pin::Pin<Box<dyn ::core::future::Future<Output = ()> + ::core::marker::Send + 'a>>
+    {
         let wasm_event = client_event_to_wasm(event);
         self.set_context(ctx);
         Box::pin(async move {
@@ -241,9 +238,8 @@ impl HostScript for WasmScript {
         &'a mut self,
         ctx: &'a mut ScriptContext,
         delta: Duration,
-    ) -> ::core::pin::Pin<
-        Box<dyn ::core::future::Future<Output = ()> + ::core::marker::Send + 'a>,
-    > {
+    ) -> ::core::pin::Pin<Box<dyn ::core::future::Future<Output = ()> + ::core::marker::Send + 'a>>
+    {
         let delta_millis = delta.as_millis() as u64;
         self.set_context(ctx);
         Box::pin(async move {

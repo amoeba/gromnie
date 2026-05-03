@@ -94,10 +94,7 @@ impl ScriptContext {
 
     /// Get current client state (clones session and scene from the client)
     pub async fn client(&self) -> ClientState {
-        let client_guard = self
-            .client
-            .read()
-            .await;
+        let client_guard = self.client.read().await;
         ClientState {
             session: client_guard.session.clone(),
             scene: client_guard.scene.clone(),
@@ -114,6 +111,11 @@ impl ScriptContext {
             session: client_guard.session.clone(),
             scene: client_guard.scene.clone(),
         }
+    }
+
+    /// Get the shared client handle for callers that need to hold it across await boundaries.
+    pub fn client_arc(&self) -> Arc<RwLock<Client>> {
+        Arc::clone(&self.client)
     }
 
     // ===== Action Methods =====
