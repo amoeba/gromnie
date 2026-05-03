@@ -68,11 +68,7 @@ impl ScriptContext {
         timer_manager: Arc<super::timer::TimerManager>,
         event_time: SystemTime,
     ) -> Self {
-        let game_action_tx = client
-            .read()
-            .await
-            .game_action_tx
-            .clone();
+        let game_action_tx = client.read().await.game_action_tx.clone();
         Self {
             client,
             action_tx,
