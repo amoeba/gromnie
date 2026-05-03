@@ -42,8 +42,8 @@ toml = "0.8"
 tracing = "0.1"
 tracing-appender = "0.2"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
-wasmtime = { version = "28.0", features = ["component-model"] }
-wasmtime-wasi = "28.0"
+wasmtime = { version = "36.0", features = ["component-model"] }
+wasmtime-wasi = "36.0"
 wit-bindgen = "0.57"
 
 [profile.dist]
