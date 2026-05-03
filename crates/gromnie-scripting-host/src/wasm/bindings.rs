@@ -9,7 +9,10 @@ use gromnie_events::SimpleClientAction;
 /// Add all host imports to the linker
 pub fn add_host_imports(linker: &mut Linker<WasmScriptState>) -> Result<()> {
     // Link the host interface
-    gromnie::scripting::host::add_to_linker::<WasmScriptState, wasmtime::component::HasSelf<WasmScriptState>>(linker, |state| state)?;
+    gromnie::scripting::host::add_to_linker::<
+        WasmScriptState,
+        wasmtime::component::HasSelf<WasmScriptState>,
+    >(linker, |state| state)?;
 
     Ok(())
 }

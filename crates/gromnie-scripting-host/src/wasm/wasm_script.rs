@@ -100,7 +100,8 @@ impl WasmScript {
         let mut linker = Linker::new(engine);
 
         // Add WASI support
-        wasmtime_wasi::p2::add_to_linker_async(&mut linker).context("Failed to add WASI to linker")?;
+        wasmtime_wasi::p2::add_to_linker_async(&mut linker)
+            .context("Failed to add WASI to linker")?;
 
         // Add our host imports (will be implemented separately)
         crate::wasm::bindings::add_host_imports(&mut linker)?;
