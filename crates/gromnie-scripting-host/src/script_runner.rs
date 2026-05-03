@@ -31,7 +31,7 @@ enum RunnerMessage {
 }
 
 enum ReloadCandidate {
-    Loaded(WasmScript),
+    Loaded(Box<WasmScript>),
     Disabled { script_id: String },
     Failed,
 }
@@ -251,7 +251,7 @@ impl ScriptRunner {
             return ReloadCandidate::Disabled { script_id };
         }
 
-        ReloadCandidate::Loaded(script)
+        ReloadCandidate::Loaded(Box::new(script))
     }
 
     async fn unload_scripts_by_paths(&mut self, paths: &[PathBuf]) -> usize {
@@ -375,7 +375,7 @@ impl ScriptRunner {
 
         for path in changed_paths {
             match Self::load_reload_candidate(engine, &path, script_config).await {
-                ReloadCandidate::Loaded(script) => pending_scripts.push((path, script)),
+                ReloadCandidate::Loaded(script) => pending_scripts.push((path, *script)),
                 ReloadCandidate::Disabled { script_id } => {
                     info!(
                         target: "scripting",
@@ -399,7 +399,7 @@ impl ScriptRunner {
             if let ReloadCandidate::Loaded(script) =
                 Self::load_reload_candidate(engine, &path, script_config).await
             {
-                pending_scripts.push((path, script));
+                pending_scripts.push((path, *script));
             }
         }
 
