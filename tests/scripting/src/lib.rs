@@ -137,13 +137,19 @@ impl gromnie::Script for TestScript {
         "Comprehensive test script for scripting system"
     }
 
-    fn on_load(&mut self) {
-        gromnie::log("Test script loaded successfully");
-        gromnie::send_chat("Hello from test script!");
+    fn on_load<'a>(&'a mut self) -> std::pin::Pin<Box<dyn std::future::Future<Output = ()> + 'a>> {
+        Box::pin(async move {
+            gromnie::log("Test script loaded successfully");
+            gromnie::send_chat("Hello from test script!");
+        })
     }
 
-    fn on_unload(&mut self) {
-        gromnie::log("Test script unloaded successfully");
+    fn on_unload<'a>(
+        &'a mut self,
+    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = ()> + 'a>> {
+        Box::pin(async move {
+            gromnie::log("Test script unloaded successfully");
+        })
     }
 
     fn subscribed_events(&self) -> Vec<u32> {
@@ -151,70 +157,89 @@ impl gromnie::Script for TestScript {
         vec![0xFFFFFFFF] // All events
     }
 
-    fn on_event(&mut self, event: ScriptEvent) {
-        use gromnie::GameEvent::*;
-        use gromnie::ScriptEvent::*;
-        use gromnie::SystemEvent::*;
+    fn on_event<'a>(
+        &'a mut self,
+        event: ScriptEvent,
+    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = ()> + 'a>> {
+        Box::pin(async move {
+            use gromnie::GameEvent::*;
+            use gromnie::ScriptEvent::*;
+            use gromnie::SystemEvent::*;
 
-        match event {
-            Game(game_event) => match game_event {
-                CharacterListReceived(account_data) => {
-                    gromnie::log(&format!(
-                        "Character list received for account: {} with {} characters",
-                        account_data.account,
-                        account_data.characters.len()
-                    ));
+            match event {
+                Game(game_event) => match game_event {
+                    CharacterListReceived(account_data) => {
+                        let msg = format!(
+                            "Character list received for account: {} with {} characters",
+                            account_data.account,
+                            account_data.characters.len()
+                        );
+                        gromnie::log(&msg);
+                    }
+                    CharacterError(error_data) => {
+                        let msg = format!(
+                            "Character error: code={}, msg={}",
+                            error_data.error_code, error_data.error_message
+                        );
+                        gromnie::log(&msg);
+                    }
+                    CreateObject(object_data) => {
+                        let msg = format!(
+                            "Object created: {} (ID: {})",
+                            object_data.name, object_data.id
+                        );
+                        gromnie::log(&msg);
+                    }
+                    ChatMessageReceived(chat_data) => {
+                        let msg = format!("Chat message: {}", chat_data.message);
+                        gromnie::log(&msg);
+                    }
+                    Protocol(protocol_event) => {
+                        // Demonstrate full protocol event handling
+                        handle_protocol_event(protocol_event);
+                    }
+                },
+                State(state_event) => {
+                    let msg = format!("State event: {:?}", state_event);
+                    gromnie::log(&msg);
                 }
-                CharacterError(error_data) => {
-                    gromnie::log(&format!(
-                        "Character error: code={}, msg={}",
-                        error_data.error_code, error_data.error_message
-                    ));
-                }
-                CreateObject(object_data) => {
-                    gromnie::log(&format!(
-                        "Object created: {} (ID: {})",
-                        object_data.name, object_data.id
-                    ));
-                }
-                ChatMessageReceived(chat_data) => {
-                    gromnie::log(&format!("Chat message: {}", chat_data.message));
-                }
-                Protocol(protocol_event) => {
-                    // Demonstrate full protocol event handling
-                    handle_protocol_event(protocol_event);
-                }
-            },
-            State(state_event) => {
-                gromnie::log(&format!("State event: {:?}", state_event));
+                System(system_event) => match system_event {
+                    AuthenticationSucceeded => {
+                        gromnie::log("System: AuthenticationSucceeded");
+                    }
+                    LoginSucceeded(login_info) => {
+                        let msg = format!(
+                            "System: LoginSucceeded - {} (ID: {})",
+                            login_info.character_name, login_info.character_id
+                        );
+                        gromnie::log(&msg);
+                    }
+                    _ => {
+                        let msg = format!("System event: {:?}", system_event);
+                        gromnie::log(&msg);
+                    }
+                },
             }
-            System(system_event) => match system_event {
-                AuthenticationSucceeded => {
-                    gromnie::log("System: AuthenticationSucceeded");
-                }
-                LoginSucceeded(login_info) => {
-                    gromnie::log(&format!(
-                        "System: LoginSucceeded - {} (ID: {})",
-                        login_info.character_name, login_info.character_id
-                    ));
-                }
-                _ => {
-                    gromnie::log(&format!("System event: {:?}", system_event));
-                }
-            },
-        }
+        })
     }
 
-    fn on_tick(&mut self, delta_millis: u64) {
-        // Test periodic functionality
-        gromnie::log(&format!("Tick: {}ms", delta_millis));
+    fn on_tick<'a>(
+        &'a mut self,
+        delta_millis: u64,
+    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = ()> + 'a>> {
+        Box::pin(async move {
+            // Test periodic functionality
+            let msg = format!("Tick: {}ms", delta_millis);
+            gromnie::log(&msg);
 
-        // Test client state access
-        let state = gromnie::get_client_state();
-        gromnie::log(&format!(
-            "Client state: session={:?}, scene={:?}",
-            state.session.state, state.scene
-        ));
+            // Test client state access
+            let state = gromnie::get_client_state();
+            let msg = format!(
+                "Client state: session={:?}, scene={:?}",
+                state.session.state, state.scene
+            );
+            gromnie::log(&msg);
+        })
     }
 }
 

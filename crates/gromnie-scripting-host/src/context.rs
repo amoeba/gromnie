@@ -60,6 +60,13 @@ pub struct ScriptContext {
     event_time: SystemTime,
 }
 
+// SAFETY: ScriptContext is Send because:
+// 1. Arc<RwLock<Client>> is Send
+// 2. UnboundedSender is Send
+// 3. The timer_manager raw pointer is only used on the owning thread
+// 4. SystemTime is Send
+unsafe impl Send for ScriptContext {}
+
 impl ScriptContext {
     /// Create a new script context
     ///
@@ -86,7 +93,16 @@ impl ScriptContext {
     }
 
     /// Get current client state (clones session and scene from the client)
-    pub fn client(&self) -> ClientState {
+    pub async fn client(&self) -> ClientState {
+        let client_guard = self.client.read().await;
+        ClientState {
+            session: client_guard.session.clone(),
+            scene: client_guard.scene.clone(),
+        }
+    }
+
+    /// Get current client state synchronously (uses try_read)
+    pub fn client_sync(&self) -> ClientState {
         let client_guard = self
             .client
             .try_read()
@@ -95,6 +111,11 @@ impl ScriptContext {
             session: client_guard.session.clone(),
             scene: client_guard.scene.clone(),
         }
+    }
+
+    /// Get the shared client handle for callers that need to hold it across await boundaries.
+    pub fn client_arc(&self) -> Arc<RwLock<Client>> {
+        Arc::clone(&self.client)
     }
 
     // ===== Action Methods =====
