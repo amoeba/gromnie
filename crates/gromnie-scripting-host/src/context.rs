@@ -54,33 +54,23 @@ pub struct ScriptContext {
     action_tx: UnboundedSender<SimpleClientAction>,
     /// Channel for sending GameActionMessage directly to the client
     game_action_tx: UnboundedSender<GameActionMessage>,
-    /// Reference to the timer manager (will be updated by ScriptRunner)
-    timer_manager: *mut super::timer::TimerManager,
+    /// Shared timer manager
+    timer_manager: Arc<super::timer::TimerManager>,
     /// Timestamp when the current event occurred
     event_time: SystemTime,
 }
 
-// SAFETY: ScriptContext is Send because:
-// 1. Arc<RwLock<Client>> is Send
-// 2. UnboundedSender is Send
-// 3. The timer_manager raw pointer is only used on the owning thread
-// 4. SystemTime is Send
-unsafe impl Send for ScriptContext {}
-
 impl ScriptContext {
     /// Create a new script context
-    ///
-    /// # Safety
-    /// The timer_manager pointer must remain valid for the lifetime of this context
-    pub(crate) unsafe fn new(
+    pub(crate) async fn new(
         client: Arc<RwLock<Client>>,
         action_tx: UnboundedSender<SimpleClientAction>,
-        timer_manager: *mut super::timer::TimerManager,
+        timer_manager: Arc<super::timer::TimerManager>,
         event_time: SystemTime,
     ) -> Self {
         let game_action_tx = client
-            .try_read()
-            .expect("client lock should not be contended at context creation")
+            .read()
+            .await
             .game_action_tx
             .clone();
         Self {
@@ -255,28 +245,25 @@ impl ScriptContext {
     // ===== Timer Methods =====
 
     /// Schedule a one-shot timer that fires after a delay
-    pub fn schedule_timer(&mut self, delay_secs: u64, name: impl Into<String>) -> TimerId {
-        unsafe {
-            (*self.timer_manager).schedule_timer(Duration::from_secs(delay_secs), name.into())
-        }
+    pub fn schedule_timer(&self, delay_secs: u64, name: impl Into<String>) -> TimerId {
+        self.timer_manager
+            .schedule_timer(Duration::from_secs(delay_secs), name.into())
     }
 
     /// Schedule a recurring timer that fires repeatedly at an interval
-    pub fn schedule_recurring(&mut self, interval_secs: u64, name: impl Into<String>) -> TimerId {
-        unsafe {
-            (*self.timer_manager)
-                .schedule_recurring(Duration::from_secs(interval_secs), name.into())
-        }
+    pub fn schedule_recurring(&self, interval_secs: u64, name: impl Into<String>) -> TimerId {
+        self.timer_manager
+            .schedule_recurring(Duration::from_secs(interval_secs), name.into())
     }
 
     /// Cancel a timer
-    pub fn cancel_timer(&mut self, timer_id: TimerId) -> bool {
-        unsafe { (*self.timer_manager).cancel_timer(timer_id) }
+    pub fn cancel_timer(&self, timer_id: TimerId) -> bool {
+        self.timer_manager.cancel_timer(timer_id)
     }
 
     /// Check if a timer has fired (consumes the fired state)
-    pub fn check_timer(&mut self, timer_id: TimerId) -> bool {
-        unsafe { (*self.timer_manager).check_timer(timer_id) }
+    pub fn check_timer(&self, timer_id: TimerId) -> bool {
+        self.timer_manager.check_timer(timer_id)
     }
 
     // ===== State Access =====

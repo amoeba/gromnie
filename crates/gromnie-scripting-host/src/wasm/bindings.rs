@@ -1,4 +1,5 @@
 use anyhow::Result;
+use std::sync::Arc;
 use wasmtime::component::Linker;
 
 use super::wasm_script::{WasmScriptState, gromnie};
@@ -13,22 +14,14 @@ pub fn add_host_imports(linker: &mut Linker<WasmScriptState>) -> Result<()> {
     Ok(())
 }
 
-/// Get the ScriptContext from the WasmScriptState
-///
-/// # Safety
-/// This is safe because:
-/// 1. The host_context pointer is set by WasmScript before each WASM call
-/// 2. The ScriptContext lives in ScriptRunner which owns the WasmScript
-/// 3. The pointer is cleared after each WASM call
-/// 4. WASM scripts cannot store the context or use it across calls
-fn get_context(state: &mut WasmScriptState) -> &mut ScriptContext {
-    unsafe {
+/// Get the current ScriptContext from the WasmScriptState.
+fn get_context(state: &WasmScriptState) -> Arc<ScriptContext> {
+    Arc::clone(
         state
             .host_context
-            .expect("host_context not set - this is a bug in WasmScript")
-            .as_mut()
-            .expect("host_context is null - this is a bug in WasmScript")
-    }
+            .as_ref()
+            .expect("host_context not set - this is a bug in WasmScript"),
+    )
 }
 
 impl gromnie::scripting::host::Host for WasmScriptState {
@@ -380,15 +373,12 @@ impl gromnie::scripting::host::Host for WasmScriptState {
 
 /// Convert TimerId to u64 for WASM ABI
 fn timer_id_to_u64(timer_id: crate::TimerId) -> u64 {
-    // TimerId is a newtype wrapper around u64
-    // We need to extract the inner value
-    // Since TimerId doesn't expose this, we use unsafe transmute
-    unsafe { std::mem::transmute(timer_id) }
+    timer_id.into()
 }
 
 /// Convert u64 to TimerId
 fn timer_id_from_u64(id: u64) -> crate::TimerId {
-    unsafe { std::mem::transmute(id) }
+    id.into()
 }
 
 /// Convert Rust Scene to WIT Scene

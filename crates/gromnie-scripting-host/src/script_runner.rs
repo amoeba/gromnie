@@ -47,7 +47,7 @@ pub struct ScriptRunner {
     /// Channel for sending client actions
     action_tx: UnboundedSender<SimpleClientAction>,
     /// Timer manager shared across all scripts
-    timer_manager: TimerManager,
+    timer_manager: Arc<TimerManager>,
     /// Last time scripts were ticked
     last_tick: Instant,
     /// Interval between ticks (default 50ms for 20Hz)
@@ -78,7 +78,7 @@ impl ScriptRunner {
             scripts: Vec::new(),
             wasm_engine: None,
             action_tx,
-            timer_manager: TimerManager::new(),
+            timer_manager: Arc::new(TimerManager::new()),
             last_tick: Instant::now(),
             tick_interval,
             script_config: None,
@@ -107,7 +107,7 @@ impl ScriptRunner {
             scripts: Vec::new(),
             wasm_engine,
             action_tx,
-            timer_manager: TimerManager::new(),
+            timer_manager: Arc::new(TimerManager::new()),
             last_tick: Instant::now(),
             tick_interval: DEFAULT_TICK_INTERVAL,
             script_config: None,
@@ -120,16 +120,17 @@ impl ScriptRunner {
         debug!(target: "scripting", "Registering script: {} ({})", script.name(), script.id());
 
         // Create context for on_load
-        let mut ctx = Self::create_script_context(
+        let ctx = Self::create_script_context(
             self.client.clone(),
             self.action_tx.clone(),
-            &mut self.timer_manager,
+            Arc::clone(&self.timer_manager),
             SystemTime::now(),
-        );
+        )
+        .await;
 
         // Call on_load
         let mut script = script;
-        script.on_load(&mut ctx).await;
+        script.on_load(Arc::clone(&ctx)).await;
 
         self.scripts.push(script);
     }
@@ -150,13 +151,13 @@ impl ScriptRunner {
     }
 
     /// Create a script context for the current state
-    fn create_script_context(
+    async fn create_script_context(
         client: Arc<RwLock<Client>>,
         action_tx: UnboundedSender<SimpleClientAction>,
-        timer_manager: &mut TimerManager,
+        timer_manager: Arc<TimerManager>,
         now: SystemTime,
-    ) -> ScriptContext {
-        unsafe { ScriptContext::new(client, action_tx, timer_manager as *mut TimerManager, now) }
+    ) -> Arc<ScriptContext> {
+        Arc::new(ScriptContext::new(client, action_tx, timer_manager, now).await)
     }
 
     fn is_script_enabled(script_id: &str, script_config: &HashMap<String, toml::Value>) -> bool {
@@ -270,12 +271,13 @@ impl ScriptRunner {
         let mut unloaded = 0;
         for index in removed_indices.into_iter().rev() {
             let mut script = self.scripts.remove(index);
-            let mut ctx = Self::create_script_context(
+            let ctx = Self::create_script_context(
                 self.client.clone(),
                 self.action_tx.clone(),
-                &mut self.timer_manager,
+                Arc::clone(&self.timer_manager),
                 SystemTime::now(),
-            );
+            )
+            .await;
 
             debug!(
                 target: "scripting",
@@ -283,7 +285,7 @@ impl ScriptRunner {
                 script.name(),
                 script.id()
             );
-            script.on_unload(&mut ctx).await;
+            script.on_unload(Arc::clone(&ctx)).await;
             unloaded += 1;
         }
 
@@ -451,29 +453,31 @@ impl ScriptRunner {
                 script.id()
             );
 
-            let mut ctx = Self::create_script_context(
+            let ctx = Self::create_script_context(
                 self.client.clone(),
                 self.action_tx.clone(),
-                &mut self.timer_manager,
+                Arc::clone(&self.timer_manager),
                 SystemTime::now(),
-            );
-            script.on_load(&mut ctx).await;
+            )
+            .await;
+            script.on_load(Arc::clone(&ctx)).await;
 
             if let Some(index) = self.script_index_by_path(&path) {
                 let mut old_script = std::mem::replace(&mut self.scripts[index], script);
-                let mut unload_ctx = Self::create_script_context(
+                let unload_ctx = Self::create_script_context(
                     self.client.clone(),
                     self.action_tx.clone(),
-                    &mut self.timer_manager,
+                    Arc::clone(&self.timer_manager),
                     SystemTime::now(),
-                );
+                )
+                .await;
                 debug!(
                     target: "scripting",
                     "Calling on_unload for replaced script: {} ({})",
                     old_script.name(),
                     old_script.id()
                 );
-                old_script.on_unload(&mut unload_ctx).await;
+                old_script.on_unload(Arc::clone(&unload_ctx)).await;
             } else {
                 self.scripts.push(script);
             }
@@ -519,17 +523,18 @@ impl ScriptRunner {
         debug!(target: "scripting", "Unloading {} script(s)", count);
 
         // Create context once before the loop
-        let mut ctx = Self::create_script_context(
+        let ctx = Self::create_script_context(
             self.client.clone(),
             self.action_tx.clone(),
-            &mut self.timer_manager,
+            Arc::clone(&self.timer_manager),
             SystemTime::now(),
-        );
+        )
+        .await;
 
         // Unload all scripts
         for script in self.scripts.iter_mut() {
             debug!(target: "scripting", "Calling on_unload for: {} ({})", script.name(), script.id());
-            script.on_unload(&mut ctx).await;
+            script.on_unload(Arc::clone(&ctx)).await;
         }
 
         self.scripts.clear();
@@ -551,14 +556,15 @@ impl ScriptRunner {
         self.last_tick = now;
 
         for script in &mut self.scripts {
-            let mut ctx = Self::create_script_context(
+            let ctx = Self::create_script_context(
                 self.client.clone(),
                 self.action_tx.clone(),
-                &mut self.timer_manager,
+                Arc::clone(&self.timer_manager),
                 SystemTime::now(),
-            );
+            )
+            .await;
 
-            script.on_tick(&mut ctx, elapsed).await;
+            script.on_tick(Arc::clone(&ctx), elapsed).await;
         }
     }
 
@@ -582,12 +588,13 @@ impl ScriptRunner {
         self.tick_scripts(now).await;
 
         // Create context once before the loop
-        let mut ctx = Self::create_script_context(
+        let ctx = Self::create_script_context(
             self.client.clone(),
             self.action_tx.clone(),
-            &mut self.timer_manager,
+            Arc::clone(&self.timer_manager),
             SystemTime::now(),
-        );
+        )
+        .await;
 
         // Dispatch event to each script that's interested
         for script in &mut self.scripts {
@@ -609,7 +616,7 @@ impl ScriptRunner {
                 continue;
             }
 
-            script.on_event(&raw_event, &mut ctx).await;
+            script.on_event(&raw_event, Arc::clone(&ctx)).await;
         }
     }
 }
