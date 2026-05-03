@@ -505,27 +505,20 @@ impl ScriptConsumer {
         }));
 
         // Update hot reload task with the new msg_tx
-        if hot_reload {
-            if let Some(dir) = hot_reload_dir {
-                let interval = Duration::from_millis(hot_reload_interval);
-                info!(
-                    target: "scripting",
-                    "Enabling hot reload with interval: {}ms",
-                    hot_reload_interval
-                );
+        if hot_reload && let Some(dir) = hot_reload_dir {
+            let interval = Duration::from_millis(hot_reload_interval);
+            info!(
+                target: "scripting",
+                "Enabling hot reload with interval: {}ms",
+                hot_reload_interval
+            );
 
-                let task = tokio::spawn(async move {
-                    Self::hot_reload_task(
-                        Some(hot_reload_msg_tx),
-                        dir,
-                        hot_reload_config,
-                        interval,
-                    )
+            let task = tokio::spawn(async move {
+                Self::hot_reload_task(Some(hot_reload_msg_tx), dir, hot_reload_config, interval)
                     .await;
-                });
+            });
 
-                self.hot_reload_task = Some(task);
-            }
+            self.hot_reload_task = Some(task);
         }
     }
 }
