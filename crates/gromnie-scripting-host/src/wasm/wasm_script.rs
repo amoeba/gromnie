@@ -18,7 +18,7 @@ use gromnie_events::{
 wasmtime::component::bindgen!({
     path: "../gromnie-scripting-api/src/wit",
     world: "script",
-    async: false,
+    async: true,
 });
 
 /// State held in the WASM store
@@ -72,7 +72,7 @@ pub struct WasmScript {
 
 impl WasmScript {
     /// Load a WASM component from a file
-    pub fn from_file(engine: &Engine, path: impl AsRef<std::path::Path>) -> Result<Self> {
+    pub async fn from_file(engine: &Engine, path: impl AsRef<std::path::Path>) -> Result<Self> {
         let path = path.as_ref();
 
         // Get file metadata for hot reload tracking
@@ -103,13 +103,14 @@ impl WasmScript {
         let mut linker = Linker::new(engine);
 
         // Add WASI support
-        wasmtime_wasi::add_to_linker_sync(&mut linker).context("Failed to add WASI to linker")?;
+        wasmtime_wasi::add_to_linker_async(&mut linker).context("Failed to add WASI to linker")?;
 
         // Add our host imports (will be implemented separately)
         crate::wasm::bindings::add_host_imports(&mut linker)?;
 
-        // Instantiate the component
-        let script = Script::instantiate(&mut store, &component, &linker)
+        // Instantiate the component (async)
+        let script = Script::instantiate_async(&mut store, &component, &linker)
+            .await
             .context("Failed to instantiate WASM script")?;
 
         // Call metadata functions to cache values
@@ -118,10 +119,12 @@ impl WasmScript {
         // Initialize the script first
         guest
             .call_init(&mut store)
+            .await
             .context("Failed to initialize script")?;
 
         let id = guest
             .call_get_id(&mut store)
+            .await
             .context("Failed to get script ID")?;
 
         // Update the script_id in the store state now that we have it
@@ -129,14 +132,17 @@ impl WasmScript {
 
         let name = guest
             .call_get_name(&mut store)
+            .await
             .context("Failed to get script name")?;
 
         let description = guest
             .call_get_description(&mut store)
+            .await
             .context("Failed to get script description")?;
 
         let subscribed_event_ids = guest
             .call_subscribed_events(&mut store)
+            .await
             .context("Failed to get subscribed events")?;
 
         // Convert u32 discriminants to EventFilter enum
@@ -166,111 +172,85 @@ impl WasmScript {
     fn clear_context(&mut self) {
         self.store.data_mut().host_context = None;
     }
-
-    /// Execute a WASM function call outside of the tokio runtime context
-    ///
-    /// This is necessary because wasmtime-wasi's sync filesystem operations
-    /// internally try to use tokio::runtime::Handle::block_on, which panics
-    /// if called from within an existing tokio runtime.
-    fn call_wasm<F, R>(&mut self, f: F) -> R
-    where
-        F: FnOnce(&mut Self) -> R + Send,
-        R: Send,
-    {
-        // Check if we're in a tokio runtime context
-        if tokio::runtime::Handle::try_current().is_ok() {
-            // We're in a tokio runtime, use block_in_place to move off the runtime thread
-            tokio::task::block_in_place(|| f(self))
-        } else {
-            // Not in a tokio runtime, call directly
-            f(self)
-        }
-    }
-
-    /// Execute a WASM lifecycle method with proper context management
-    fn with_context<F>(&mut self, ctx: &mut ScriptContext, f: F)
-    where
-        F: FnOnce(&mut Self) + Send,
-    {
-        self.set_context(ctx);
-        self.call_wasm(|this| f(this));
-        self.clear_context();
-    }
 }
 
 impl HostScript for WasmScript {
     fn id(&self) -> &'static str {
-        // SAFETY: This is safe because:
-        // 1. The string data is stored in self.id (a String field)
-        // 2. WasmScript implements 'static (scripts are loaded once and kept alive)
-        // 3. The string content never changes after initialization
-        // 4. The WasmScript struct is not moved after creation
         unsafe { std::mem::transmute(self.id.as_str()) }
     }
 
     fn name(&self) -> &'static str {
-        // SAFETY: Same reasoning as id() - string is stored in struct and never changes
         unsafe { std::mem::transmute(self.name.as_str()) }
     }
 
     fn description(&self) -> &'static str {
-        // SAFETY: Same reasoning as id() - string is stored in struct and never changes
         unsafe { std::mem::transmute(self.description.as_str()) }
     }
 
-    fn on_load(&mut self, ctx: &mut ScriptContext) {
-        self.with_context(ctx, |this| {
-            let guest = this.script.gromnie_scripting_guest();
-            if let Err(e) = guest.call_on_load(&mut this.store) {
-                tracing::error!(target: "scripting", "Script {} on_load failed: {:#}", this.id, e);
-            }
-        });
+    fn on_load<'a>(
+        &'a mut self,
+        ctx: &'a mut ScriptContext,
+    ) -> ::core::pin::Pin<
+        Box<dyn ::core::future::Future<Output = ()> + ::core::marker::Send + 'a>,
+    > {
+        self.set_context(ctx);
+        Box::pin(async move {
+            // SAFETY: we set the context above and clear it below.
+            // The context pointer is valid for the duration of this call.
+            let guest = self.script.gromnie_scripting_guest();
+            let _ = guest.call_on_load(&mut self.store).await;
+            self.clear_context();
+        })
     }
 
-    fn on_unload(&mut self, ctx: &mut ScriptContext) {
-        self.with_context(ctx, |this| {
-            let guest = this.script.gromnie_scripting_guest();
-            if let Err(e) = guest.call_on_unload(&mut this.store) {
-                tracing::error!(target: "scripting", "Script {} on_unload failed: {:#}", this.id, e);
-            }
-        });
+    fn on_unload<'a>(
+        &'a mut self,
+        ctx: &'a mut ScriptContext,
+    ) -> ::core::pin::Pin<
+        Box<dyn ::core::future::Future<Output = ()> + ::core::marker::Send + 'a>,
+    > {
+        self.set_context(ctx);
+        Box::pin(async move {
+            let guest = self.script.gromnie_scripting_guest();
+            let _ = guest.call_on_unload(&mut self.store).await;
+            self.clear_context();
+        })
     }
 
     fn subscribed_events(&self) -> &[EventFilter] {
         &self.subscribed_events
     }
 
-    fn on_event(&mut self, event: &ClientEvent, ctx: &mut ScriptContext) {
-        // Convert Rust ClientEvent to WIT ScriptEvent
+    fn on_event<'a>(
+        &'a mut self,
+        event: &'a ClientEvent,
+        ctx: &'a mut ScriptContext,
+    ) -> ::core::pin::Pin<
+        Box<dyn ::core::future::Future<Output = ()> + ::core::marker::Send + 'a>,
+    > {
         let wasm_event = client_event_to_wasm(event);
-
-        self.with_context(ctx, move |this| {
-            let guest = this.script.gromnie_scripting_guest();
-            if let Err(e) = guest.call_on_event(&mut this.store, &wasm_event) {
-                tracing::error!(
-                    target: "scripting",
-                    "Script {} on_event failed: {:#}",
-                    this.id,
-                    e
-                );
-            }
-        });
+        self.set_context(ctx);
+        Box::pin(async move {
+            let guest = self.script.gromnie_scripting_guest();
+            let _ = guest.call_on_event(&mut self.store, &wasm_event).await;
+            self.clear_context();
+        })
     }
 
-    fn on_tick(&mut self, ctx: &mut ScriptContext, delta: Duration) {
+    fn on_tick<'a>(
+        &'a mut self,
+        ctx: &'a mut ScriptContext,
+        delta: Duration,
+    ) -> ::core::pin::Pin<
+        Box<dyn ::core::future::Future<Output = ()> + ::core::marker::Send + 'a>,
+    > {
         let delta_millis = delta.as_millis() as u64;
-
-        self.with_context(ctx, move |this| {
-            let guest = this.script.gromnie_scripting_guest();
-            if let Err(e) = guest.call_on_tick(&mut this.store, delta_millis) {
-                tracing::error!(
-                    target: "scripting",
-                    "Script {} on_tick failed: {:#}",
-                    this.id,
-                    e
-                );
-            }
-        });
+        self.set_context(ctx);
+        Box::pin(async move {
+            let guest = self.script.gromnie_scripting_guest();
+            let _ = guest.call_on_tick(&mut self.store, delta_millis).await;
+            self.clear_context();
+        })
     }
 
     fn as_any_mut(&mut self) -> &mut dyn Any {

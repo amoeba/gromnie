@@ -8,43 +8,17 @@ use crate::Script;
 
 /// Load all scripts from a directory, filtering by config
 ///
-/// This function must run outside of an async runtime context because wasmtime-wasi
-/// tries to set up its own runtime. We spawn a separate thread to avoid conflicts.
-pub fn load_wasm_scripts(
+/// This is an async function that loads WASM scripts directly without needing
+/// a separate thread, since the engine now uses async support.
+pub async fn load_wasm_scripts(
     engine: &Engine,
     dir: &Path,
     script_config: &HashMap<String, toml::Value>,
 ) -> Vec<WasmScript> {
-    // Clone the engine for the thread (Engine is cheaply cloneable)
-    let engine = engine.clone();
-    let dir = dir.to_path_buf();
-    let script_config = script_config.clone();
-
-    // Spawn a thread to load scripts outside the async runtime
-    let handle =
-        std::thread::spawn(move || load_wasm_scripts_blocking(&engine, &dir, &script_config));
-
-    // Wait for the thread to complete and return the result
-    match handle.join() {
-        Ok(scripts) => scripts,
-        Err(panic_payload) => {
-            // Try to extract panic message
-            let panic_msg = if let Some(s) = panic_payload.downcast_ref::<&str>() {
-                s.to_string()
-            } else if let Some(s) = panic_payload.downcast_ref::<String>() {
-                s.clone()
-            } else {
-                "Unknown panic".to_string()
-            };
-
-            tracing::error!(target: "scripting", "Script loading thread panicked: {}", panic_msg);
-            Vec::new()
-        }
-    }
+    load_wasm_scripts_inner(engine, dir, script_config).await
 }
 
-/// Internal blocking implementation of script loading
-fn load_wasm_scripts_blocking(
+async fn load_wasm_scripts_inner(
     engine: &Engine,
     dir: &Path,
     script_config: &HashMap<String, toml::Value>,
@@ -86,7 +60,7 @@ fn load_wasm_scripts_blocking(
         }
 
         // Try to load the script to get its ID
-        let script = match WasmScript::from_file(engine, &path) {
+        let script = match WasmScript::from_file(engine, &path).await {
             Ok(s) => s,
             Err(e) => {
                 tracing::error!(
