@@ -19,7 +19,12 @@ use gromnie_events::{
 wasmtime::component::bindgen!({
     path: "../gromnie-scripting-api/src/wit",
     world: "script",
-    async: true,
+    imports: {
+        default: async,
+    },
+    exports: {
+        default: async,
+    },
 });
 
 /// State held in the WASM store
@@ -35,12 +40,11 @@ pub struct WasmScriptState {
 }
 
 impl WasiView for WasmScriptState {
-    fn ctx(&mut self) -> &mut WasiCtx {
-        &mut self.wasi
-    }
-
-    fn table(&mut self) -> &mut ResourceTable {
-        &mut self.table
+    fn ctx(&mut self) -> wasmtime_wasi::WasiCtxView<'_> {
+        wasmtime_wasi::WasiCtxView {
+            ctx: &mut self.wasi,
+            table: &mut self.table,
+        }
     }
 }
 
@@ -96,7 +100,7 @@ impl WasmScript {
         let mut linker = Linker::new(engine);
 
         // Add WASI support
-        wasmtime_wasi::add_to_linker_async(&mut linker).context("Failed to add WASI to linker")?;
+        wasmtime_wasi::p2::add_to_linker_async(&mut linker).context("Failed to add WASI to linker")?;
 
         // Add our host imports (will be implemented separately)
         crate::wasm::bindings::add_host_imports(&mut linker)?;

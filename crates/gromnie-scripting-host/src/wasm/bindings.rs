@@ -9,7 +9,7 @@ use gromnie_events::SimpleClientAction;
 /// Add all host imports to the linker
 pub fn add_host_imports(linker: &mut Linker<WasmScriptState>) -> Result<()> {
     // Link the host interface
-    gromnie::scripting::host::add_to_linker(linker, |state| state)?;
+    gromnie::scripting::host::add_to_linker::<WasmScriptState, wasmtime::component::HasSelf<WasmScriptState>>(linker, |state| state)?;
 
     Ok(())
 }
@@ -25,304 +25,115 @@ fn get_context(state: &WasmScriptState) -> Arc<ScriptContext> {
 }
 
 impl gromnie::scripting::host::Host for WasmScriptState {
-    fn send_chat<'life0, 'async_trait>(
-        &'life0 mut self,
-        message: wasmtime::component::__internal::String,
-    ) -> ::core::pin::Pin<
-        Box<dyn ::core::future::Future<Output = ()> + ::core::marker::Send + 'async_trait>,
-    >
-    where
-        'life0: 'async_trait,
-        Self: 'async_trait,
-    {
+    async fn send_chat(&mut self, message: String) {
         let ctx = get_context(self);
         ctx.send_chat(message);
-        Box::pin(std::future::ready(()))
     }
 
-    fn send_tell<'life0, 'async_trait>(
-        &'life0 mut self,
-        recipient: wasmtime::component::__internal::String,
-        message: wasmtime::component::__internal::String,
-    ) -> ::core::pin::Pin<
-        Box<dyn ::core::future::Future<Output = ()> + ::core::marker::Send + 'async_trait>,
-    >
-    where
-        'life0: 'async_trait,
-        Self: 'async_trait,
-    {
+    async fn send_tell(&mut self, recipient: String, message: String) {
         let ctx = get_context(self);
         ctx.send_tell(recipient, message);
-        Box::pin(std::future::ready(()))
     }
 
-    fn open_trade<'life0, 'async_trait>(
-        &'life0 mut self,
-        partner_id: u32,
-    ) -> ::core::pin::Pin<
-        Box<dyn ::core::future::Future<Output = ()> + ::core::marker::Send + 'async_trait>,
-    >
-    where
-        'life0: 'async_trait,
-        Self: 'async_trait,
-    {
+    async fn open_trade(&mut self, partner_id: u32) {
         let ctx = get_context(self);
         ctx.open_trade(partner_id);
-        Box::pin(std::future::ready(()))
     }
 
-    fn add_to_trade<'life0, 'async_trait>(
-        &'life0 mut self,
-        item_id: u32,
-        slot: u32,
-    ) -> ::core::pin::Pin<
-        Box<dyn ::core::future::Future<Output = ()> + ::core::marker::Send + 'async_trait>,
-    >
-    where
-        'life0: 'async_trait,
-        Self: 'async_trait,
-    {
+    async fn add_to_trade(&mut self, item_id: u32, slot: u32) {
         let ctx = get_context(self);
         ctx.add_to_trade(item_id, slot);
-        Box::pin(std::future::ready(()))
     }
 
-    fn accept_trade<'life0, 'async_trait>(
-        &'life0 mut self,
-    ) -> ::core::pin::Pin<
-        Box<dyn ::core::future::Future<Output = ()> + ::core::marker::Send + 'async_trait>,
-    >
-    where
-        'life0: 'async_trait,
-        Self: 'async_trait,
-    {
+    async fn accept_trade(&mut self) {
         let ctx = get_context(self);
         ctx.accept_trade();
-        Box::pin(std::future::ready(()))
     }
 
-    fn decline_trade<'life0, 'async_trait>(
-        &'life0 mut self,
-    ) -> ::core::pin::Pin<
-        Box<dyn ::core::future::Future<Output = ()> + ::core::marker::Send + 'async_trait>,
-    >
-    where
-        'life0: 'async_trait,
-        Self: 'async_trait,
-    {
+    async fn decline_trade(&mut self) {
         let ctx = get_context(self);
         ctx.decline_trade();
-        Box::pin(std::future::ready(()))
     }
 
-    fn reset_trade<'life0, 'async_trait>(
-        &'life0 mut self,
-    ) -> ::core::pin::Pin<
-        Box<dyn ::core::future::Future<Output = ()> + ::core::marker::Send + 'async_trait>,
-    >
-    where
-        'life0: 'async_trait,
-        Self: 'async_trait,
-    {
+    async fn reset_trade(&mut self) {
         let ctx = get_context(self);
         ctx.reset_trade();
-        Box::pin(std::future::ready(()))
     }
 
-    fn close_trade<'life0, 'async_trait>(
-        &'life0 mut self,
-    ) -> ::core::pin::Pin<
-        Box<dyn ::core::future::Future<Output = ()> + ::core::marker::Send + 'async_trait>,
-    >
-    where
-        'life0: 'async_trait,
-        Self: 'async_trait,
-    {
+    async fn close_trade(&mut self) {
         let ctx = get_context(self);
         ctx.close_trade();
-        Box::pin(std::future::ready(()))
     }
 
-    fn cast_targeted_spell<'life0, 'async_trait>(
-        &'life0 mut self,
-        target_id: u32,
-        spell_id: u32,
-    ) -> ::core::pin::Pin<
-        Box<dyn ::core::future::Future<Output = ()> + ::core::marker::Send + 'async_trait>,
-    >
-    where
-        'life0: 'async_trait,
-        Self: 'async_trait,
-    {
+    async fn cast_targeted_spell(&mut self, target_id: u32, spell_id: u32) {
         let ctx = get_context(self);
         ctx.cast_targeted_spell(target_id, spell_id);
-        Box::pin(std::future::ready(()))
     }
 
-    fn cast_untargeted_spell<'life0, 'async_trait>(
-        &'life0 mut self,
-        spell_id: u32,
-    ) -> ::core::pin::Pin<
-        Box<dyn ::core::future::Future<Output = ()> + ::core::marker::Send + 'async_trait>,
-    >
-    where
-        'life0: 'async_trait,
-        Self: 'async_trait,
-    {
+    async fn cast_untargeted_spell(&mut self, spell_id: u32) {
         let ctx = get_context(self);
         ctx.cast_untargeted_spell(spell_id);
-        Box::pin(std::future::ready(()))
     }
 
-    fn login_character<'life0, 'async_trait>(
-        &'life0 mut self,
-        account_name: wasmtime::component::__internal::String,
+    async fn login_character(
+        &mut self,
+        account_name: String,
         character_id: u32,
-        character_name: wasmtime::component::__internal::String,
-    ) -> ::core::pin::Pin<
-        Box<dyn ::core::future::Future<Output = ()> + ::core::marker::Send + 'async_trait>,
-    >
-    where
-        'life0: 'async_trait,
-        Self: 'async_trait,
-    {
+        character_name: String,
+    ) {
         let ctx = get_context(self);
         ctx.send_action(SimpleClientAction::LoginCharacter {
             character_id,
             character_name,
             account: account_name,
         });
-        Box::pin(std::future::ready(()))
     }
 
-    fn log<'life0, 'async_trait>(
-        &'life0 mut self,
-        message: wasmtime::component::__internal::String,
-    ) -> ::core::pin::Pin<
-        Box<dyn ::core::future::Future<Output = ()> + ::core::marker::Send + 'async_trait>,
-    >
-    where
-        'life0: 'async_trait,
-        Self: 'async_trait,
-    {
+    async fn log(&mut self, message: String) {
         let script_id = self.script_id.clone();
         let ctx = get_context(self);
         ctx.send_action(SimpleClientAction::LogScriptMessage { script_id, message });
-        Box::pin(std::future::ready(()))
     }
 
-    fn do_movement_command<'life0, 'async_trait>(
-        &'life0 mut self,
-        motion: u32,
-        speed: f32,
-        hold_key: u32,
-    ) -> ::core::pin::Pin<
-        Box<dyn ::core::future::Future<Output = ()> + ::core::marker::Send + 'async_trait>,
-    >
-    where
-        'life0: 'async_trait,
-        Self: 'async_trait,
-    {
+    async fn do_movement_command(&mut self, motion: u32, speed: f32, hold_key: u32) {
         let ctx = get_context(self);
         ctx.send_action(SimpleClientAction::DoMovementCommand {
             motion,
             speed,
             hold_key,
         });
-        Box::pin(std::future::ready(()))
     }
 
-    fn stop_movement_command<'life0, 'async_trait>(
-        &'life0 mut self,
-        motion: u32,
-        hold_key: u32,
-    ) -> ::core::pin::Pin<
-        Box<dyn ::core::future::Future<Output = ()> + ::core::marker::Send + 'async_trait>,
-    >
-    where
-        'life0: 'async_trait,
-        Self: 'async_trait,
-    {
+    async fn stop_movement_command(&mut self, motion: u32, hold_key: u32) {
         let ctx = get_context(self);
         ctx.send_action(SimpleClientAction::StopMovementCommand { motion, hold_key });
-        Box::pin(std::future::ready(()))
     }
 
-    fn schedule_timer<'life0, 'async_trait>(
-        &'life0 mut self,
-        delay_secs: u64,
-        name: wasmtime::component::__internal::String,
-    ) -> ::core::pin::Pin<
-        Box<dyn ::core::future::Future<Output = u64> + ::core::marker::Send + 'async_trait>,
-    >
-    where
-        'life0: 'async_trait,
-        Self: 'async_trait,
-    {
+    async fn schedule_timer(&mut self, delay_secs: u64, name: String) -> u64 {
         let ctx = get_context(self);
         let timer_id = ctx.schedule_timer(delay_secs, name);
-        Box::pin(std::future::ready(timer_id_to_u64(timer_id)))
+        timer_id_to_u64(timer_id)
     }
 
-    fn schedule_recurring<'life0, 'async_trait>(
-        &'life0 mut self,
-        interval_secs: u64,
-        name: wasmtime::component::__internal::String,
-    ) -> ::core::pin::Pin<
-        Box<dyn ::core::future::Future<Output = u64> + ::core::marker::Send + 'async_trait>,
-    >
-    where
-        'life0: 'async_trait,
-        Self: 'async_trait,
-    {
+    async fn schedule_recurring(&mut self, interval_secs: u64, name: String) -> u64 {
         let ctx = get_context(self);
         let timer_id = ctx.schedule_recurring(interval_secs, name);
-        Box::pin(std::future::ready(timer_id_to_u64(timer_id)))
+        timer_id_to_u64(timer_id)
     }
 
-    fn cancel_timer<'life0, 'async_trait>(
-        &'life0 mut self,
-        timer_id: u64,
-    ) -> ::core::pin::Pin<
-        Box<dyn ::core::future::Future<Output = bool> + ::core::marker::Send + 'async_trait>,
-    >
-    where
-        'life0: 'async_trait,
-        Self: 'async_trait,
-    {
+    async fn cancel_timer(&mut self, timer_id: u64) -> bool {
         let ctx = get_context(self);
         let timer_id = timer_id_from_u64(timer_id);
-        Box::pin(std::future::ready(ctx.cancel_timer(timer_id)))
+        ctx.cancel_timer(timer_id)
     }
 
-    fn check_timer<'life0, 'async_trait>(
-        &'life0 mut self,
-        timer_id: u64,
-    ) -> ::core::pin::Pin<
-        Box<dyn ::core::future::Future<Output = bool> + ::core::marker::Send + 'async_trait>,
-    >
-    where
-        'life0: 'async_trait,
-        Self: 'async_trait,
-    {
+    async fn check_timer(&mut self, timer_id: u64) -> bool {
         let ctx = get_context(self);
         let timer_id = timer_id_from_u64(timer_id);
-        Box::pin(std::future::ready(ctx.check_timer(timer_id)))
+        ctx.check_timer(timer_id)
     }
 
-    fn get_client_state<'life0, 'async_trait>(
-        &'life0 mut self,
-    ) -> ::core::pin::Pin<
-        Box<
-            dyn ::core::future::Future<Output = gromnie::scripting::host::ClientState>
-                + ::core::marker::Send
-                + 'async_trait,
-        >,
-    >
-    where
-        'life0: 'async_trait,
-        Self: 'async_trait,
-    {
+    async fn get_client_state(&mut self) -> gromnie::scripting::host::ClientState {
         use gromnie_client::client::SessionState;
 
         let ctx = get_context(self);
@@ -348,26 +159,15 @@ impl gromnie::scripting::host::Host for WasmScriptState {
 
         let scene = convert_scene_to_wit(&client_state.scene);
 
-        let result = gromnie::scripting::host::ClientState { session, scene };
-        Box::pin(std::future::ready(result))
+        gromnie::scripting::host::ClientState { session, scene }
     }
 
-    fn get_event_time_millis<'life0, 'async_trait>(
-        &'life0 mut self,
-    ) -> ::core::pin::Pin<
-        Box<dyn ::core::future::Future<Output = u64> + ::core::marker::Send + 'async_trait>,
-    >
-    where
-        'life0: 'async_trait,
-        Self: 'async_trait,
-    {
+    async fn get_event_time_millis(&mut self) -> u64 {
         use std::time::SystemTime;
         let now = SystemTime::now();
-        let millis = now
-            .duration_since(SystemTime::UNIX_EPOCH)
+        now.duration_since(SystemTime::UNIX_EPOCH)
             .unwrap_or_default()
-            .as_millis() as u64;
-        Box::pin(std::future::ready(millis))
+            .as_millis() as u64
     }
 }
 
