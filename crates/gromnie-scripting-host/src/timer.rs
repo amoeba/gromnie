@@ -163,7 +163,7 @@ impl Drop for TimerManager {
 mod tests {
     use super::*;
 
-    #[tokio::test]
+    #[tokio::test(start_paused = true)]
     async fn test_one_shot_timer() {
         let manager = TimerManager::new();
         let id = manager.schedule_timer(Duration::from_millis(50), "test".to_string());
@@ -172,8 +172,12 @@ mod tests {
         let fired = manager.tick(Instant::now());
         assert!(fired.is_empty());
 
-        // Wait and tick again
-        tokio::time::sleep(Duration::from_millis(60)).await;
+        // 1) Yield so the spawned task runs and registers its sleep at T=50ms.
+        // 2) Advance the clock to T=60ms, waking that sleep.
+        // 3) Yield again so the now-ready timer task fires its event.
+        tokio::task::yield_now().await;
+        tokio::time::advance(Duration::from_millis(60)).await;
+        tokio::task::yield_now().await;
         let fired = manager.tick(Instant::now());
         assert_eq!(fired.len(), 1);
         assert_eq!(fired[0].0, id);
@@ -183,7 +187,7 @@ mod tests {
         assert_eq!(manager.active_count(), 0);
     }
 
-    #[tokio::test]
+    #[tokio::test(start_paused = true)]
     async fn test_recurring_timer() {
         let manager = TimerManager::new();
         let id = manager.schedule_recurring(Duration::from_millis(50), "recurring".to_string());
@@ -192,8 +196,12 @@ mod tests {
         let fired = manager.tick(Instant::now());
         assert!(fired.is_empty());
 
-        // Wait and tick - should fire
-        tokio::time::sleep(Duration::from_millis(60)).await;
+        // 1) Yield so the spawned task runs and registers its sleep at T=50ms.
+        // 2) Advance the clock to T=60ms, waking that sleep.
+        // 3) Yield again so the now-ready timer task fires its event.
+        tokio::task::yield_now().await;
+        tokio::time::advance(Duration::from_millis(60)).await;
+        tokio::task::yield_now().await;
         let fired = manager.tick(Instant::now());
         assert_eq!(fired.len(), 1);
         assert_eq!(fired[0].0, id);
@@ -201,14 +209,16 @@ mod tests {
         // Should still be active
         assert_eq!(manager.active_count(), 1);
 
-        // Wait and fire again
-        tokio::time::sleep(Duration::from_millis(60)).await;
+        // Repeat: the task re-registered its sleep at T=60ms+50ms=T=110ms.
+        tokio::task::yield_now().await;
+        tokio::time::advance(Duration::from_millis(60)).await;
+        tokio::task::yield_now().await;
         let fired = manager.tick(Instant::now());
         assert_eq!(fired.len(), 1);
         assert_eq!(fired[0].0, id);
     }
 
-    #[tokio::test]
+    #[tokio::test(start_paused = true)]
     async fn test_cancel_timer() {
         let manager = TimerManager::new();
         let id = manager.schedule_timer(Duration::from_secs(10), "test".to_string());
@@ -218,7 +228,7 @@ mod tests {
         assert!(!manager.cancel_timer(id)); // Already removed
     }
 
-    #[tokio::test]
+    #[tokio::test(start_paused = true)]
     async fn test_check_timer() {
         let manager = TimerManager::new();
         let id = manager.schedule_timer(Duration::from_millis(50), "test".to_string());
@@ -226,8 +236,12 @@ mod tests {
         // Not fired yet
         assert!(!manager.check_timer(id));
 
-        // Fire the timer
-        tokio::time::sleep(Duration::from_millis(60)).await;
+        // 1) Yield so the spawned task runs and registers its sleep at T=50ms.
+        // 2) Advance the clock to T=60ms, waking that sleep.
+        // 3) Yield again so the now-ready timer task fires its event.
+        tokio::task::yield_now().await;
+        tokio::time::advance(Duration::from_millis(60)).await;
+        tokio::task::yield_now().await;
         manager.tick(Instant::now());
 
         // Should return true once
