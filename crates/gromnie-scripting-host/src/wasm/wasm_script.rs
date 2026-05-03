@@ -197,8 +197,17 @@ impl HostScript for WasmScript {
             // SAFETY: we set the context above and clear it below.
             // The context pointer is valid for the duration of this call.
             let guest = self.script.gromnie_scripting_guest();
-            let _ = guest.call_on_load(&mut self.store).await;
+            let result = guest.call_on_load(&mut self.store).await;
             self.clear_context();
+            if let Err(err) = result {
+                warn!(
+                    target: "scripting",
+                    "Script {} ({}) on_load failed: {:#}",
+                    self.name,
+                    self.id,
+                    err
+                );
+            }
         })
     }
 
@@ -210,8 +219,17 @@ impl HostScript for WasmScript {
         self.set_context(ctx);
         Box::pin(async move {
             let guest = self.script.gromnie_scripting_guest();
-            let _ = guest.call_on_unload(&mut self.store).await;
+            let result = guest.call_on_unload(&mut self.store).await;
             self.clear_context();
+            if let Err(err) = result {
+                warn!(
+                    target: "scripting",
+                    "Script {} ({}) on_unload failed: {:#}",
+                    self.name,
+                    self.id,
+                    err
+                );
+            }
         })
     }
 
@@ -229,8 +247,17 @@ impl HostScript for WasmScript {
         self.set_context(ctx);
         Box::pin(async move {
             let guest = self.script.gromnie_scripting_guest();
-            let _ = guest.call_on_event(&mut self.store, &wasm_event).await;
+            let result = guest.call_on_event(&mut self.store, &wasm_event).await;
             self.clear_context();
+            if let Err(err) = result {
+                warn!(
+                    target: "scripting",
+                    "Script {} ({}) on_event failed: {:#}",
+                    self.name,
+                    self.id,
+                    err
+                );
+            }
         })
     }
 
@@ -244,8 +271,17 @@ impl HostScript for WasmScript {
         self.set_context(ctx);
         Box::pin(async move {
             let guest = self.script.gromnie_scripting_guest();
-            let _ = guest.call_on_tick(&mut self.store, delta_millis).await;
+            let result = guest.call_on_tick(&mut self.store, delta_millis).await;
             self.clear_context();
+            if let Err(err) = result {
+                warn!(
+                    target: "scripting",
+                    "Script {} ({}) on_tick failed: {:#}",
+                    self.name,
+                    self.id,
+                    err
+                );
+            }
         })
     }
 

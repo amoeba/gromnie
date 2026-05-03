@@ -1,6 +1,7 @@
 use gromnie_client::client::Client;
 use gromnie_client::config::scripting_config::ScriptingConfig;
 use std::collections::HashMap;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::{Duration, Instant, SystemTime};
 use tokio::sync::RwLock;
@@ -24,9 +25,15 @@ const DEFAULT_TICK_INTERVAL: Duration = Duration::from_millis(50);
 enum RunnerMessage {
     Event(ClientEvent),
     Reload {
-        dir: std::path::PathBuf,
+        dir: PathBuf,
         script_config: HashMap<String, toml::Value>,
     },
+}
+
+enum ReloadCandidate {
+    Loaded(WasmScript),
+    Disabled { script_id: String },
+    Failed,
 }
 
 /// Runs scripts and dispatches events to them — managed by a background tokio task
@@ -152,6 +159,135 @@ impl ScriptRunner {
         unsafe { ScriptContext::new(client, action_tx, timer_manager as *mut TimerManager, now) }
     }
 
+    fn is_script_enabled(script_id: &str, script_config: &HashMap<String, toml::Value>) -> bool {
+        script_config
+            .get(script_id)
+            .and_then(|config| config.get("enabled"))
+            .and_then(|value| value.as_bool())
+            .unwrap_or(true)
+    }
+
+    fn current_script_files(dir: &Path) -> HashMap<PathBuf, SystemTime> {
+        let mut scripts = HashMap::new();
+
+        if !dir.exists() {
+            debug!(
+                target: "scripting",
+                "Script directory does not exist: {}",
+                dir.display()
+            );
+            return scripts;
+        }
+
+        let entries = match std::fs::read_dir(dir) {
+            Ok(entries) => entries,
+            Err(err) => {
+                tracing::warn!(
+                    target: "scripting",
+                    "Failed to read script directory {}: {}",
+                    dir.display(),
+                    err
+                );
+                return scripts;
+            }
+        };
+
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path.extension().and_then(|ext| ext.to_str()) != Some("wasm") {
+                continue;
+            }
+
+            match std::fs::metadata(&path).and_then(|metadata| metadata.modified()) {
+                Ok(modified_time) => {
+                    scripts.insert(path, modified_time);
+                }
+                Err(err) => {
+                    tracing::warn!(
+                        target: "scripting",
+                        "Failed to read metadata for {}: {}",
+                        path.display(),
+                        err
+                    );
+                }
+            }
+        }
+
+        scripts
+    }
+
+    fn script_index_by_path(&self, path: &Path) -> Option<usize> {
+        self.scripts.iter().position(|script| script.file_path() == path)
+    }
+
+    async fn load_reload_candidate(
+        engine: &wasmtime::Engine,
+        path: &Path,
+        script_config: &HashMap<String, toml::Value>,
+    ) -> ReloadCandidate {
+        let script = match WasmScript::from_file(engine, path).await {
+            Ok(script) => script,
+            Err(err) => {
+                tracing::error!(
+                    target: "scripting",
+                    "Failed to reload script {}: {:#}",
+                    path.display(),
+                    err
+                );
+                return ReloadCandidate::Failed;
+            }
+        };
+
+        let script_id = script.id().to_string();
+        if !Self::is_script_enabled(&script_id, script_config) {
+            debug!(
+                target: "scripting",
+                "Skipping disabled script during reload: {} ({})",
+                script.name(),
+                script_id
+            );
+            return ReloadCandidate::Disabled { script_id };
+        }
+
+        ReloadCandidate::Loaded(script)
+    }
+
+    async fn unload_scripts_by_paths(&mut self, paths: &[PathBuf]) -> usize {
+        let mut removed_indices: Vec<usize> = paths
+            .iter()
+            .filter_map(|path| self.script_index_by_path(path))
+            .collect();
+
+        if removed_indices.is_empty() {
+            return 0;
+        }
+
+        removed_indices.sort_unstable();
+        removed_indices.dedup();
+
+        let mut unloaded = 0;
+        for index in removed_indices.into_iter().rev() {
+            let mut script = self.scripts.remove(index);
+            let mut ctx = Self::create_script_context(
+                self.client.clone(),
+                self.action_tx.clone(),
+                &mut self.timer_manager,
+                SystemTime::now(),
+            );
+
+            debug!(
+                target: "scripting",
+                "Calling on_unload for: {} ({})",
+                script.name(),
+                script.id()
+            );
+            script.on_unload(&mut ctx).await;
+            unloaded += 1;
+        }
+
+        unloaded
+    }
+
     /// Load scripts from a directory
     pub async fn load_scripts(
         &mut self,
@@ -185,20 +321,163 @@ impl ScriptRunner {
     /// Reload scripts (for hot-reload)
     pub async fn reload_scripts(
         &mut self,
-        dir: &std::path::Path,
+        dir: &Path,
         script_config: &HashMap<String, toml::Value>,
     ) {
         let old_script_count = self.scripts.len();
         debug!(target: "scripting", "Reloading scripts from {}", dir.display());
 
-        // Unload existing scripts
-        self.unload_scripts().await;
+        let Some(ref engine) = self.wasm_engine else {
+            tracing::warn!(target: "scripting", "Script engine not available, skipping script reload");
+            return;
+        };
 
-        // Give the system a moment to fully release WASM/WASI resources
-        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+        let current_files = Self::current_script_files(dir);
+        let mut removed_paths = Vec::new();
+        let mut changed_paths = Vec::new();
+        let mut added_paths = Vec::new();
 
-        // Load new ones
-        self.load_scripts(dir, script_config).await;
+        for script in &self.scripts {
+            let path = script.file_path().clone();
+            match current_files.get(&path) {
+                Some(modified_time) if Self::is_script_enabled(script.id(), script_config) => {
+                    if &script.modified_time() != modified_time {
+                        changed_paths.push(path);
+                    }
+                }
+                Some(_) | None => {
+                    removed_paths.push(path);
+                }
+            }
+        }
+
+        for path in current_files.keys() {
+            if self.script_index_by_path(path).is_none() {
+                added_paths.push(path.clone());
+            }
+        }
+
+        if removed_paths.is_empty() && changed_paths.is_empty() && added_paths.is_empty() {
+            debug!(target: "scripting", "No script changes detected during reload");
+            self.script_config = Some(script_config.clone());
+            self.script_dir = Some(dir.to_path_buf());
+            return;
+        }
+
+        changed_paths.sort();
+        added_paths.sort();
+        removed_paths.sort();
+
+        let mut paths_to_remove = removed_paths;
+        let mut pending_scripts = Vec::new();
+
+        for path in changed_paths {
+            match Self::load_reload_candidate(engine, &path, script_config).await {
+                ReloadCandidate::Loaded(script) => pending_scripts.push((path, script)),
+                ReloadCandidate::Disabled { script_id } => {
+                    info!(
+                        target: "scripting",
+                        "Unloading script at {} because {} is disabled",
+                        path.display(),
+                        script_id
+                    );
+                    paths_to_remove.push(path);
+                }
+                ReloadCandidate::Failed => {
+                    tracing::warn!(
+                        target: "scripting",
+                        "Keeping existing script at {} because the updated version failed to load",
+                        path.display()
+                    );
+                }
+            }
+        }
+
+        for path in added_paths {
+            if let ReloadCandidate::Loaded(script) =
+                Self::load_reload_candidate(engine, &path, script_config).await
+            {
+                pending_scripts.push((path, script));
+            }
+        }
+
+        let stable_ids: std::collections::HashSet<String> = self
+            .scripts
+            .iter()
+            .filter(|script| !paths_to_remove.iter().any(|path| path == script.file_path()))
+            .filter(|script| {
+                !pending_scripts
+                    .iter()
+                    .any(|(path, _)| path.as_path() == script.file_path())
+            })
+            .map(|script| script.id().to_string())
+            .collect();
+
+        let mut seen_ids = stable_ids;
+        let mut accepted_scripts = Vec::new();
+
+        for (path, script) in pending_scripts {
+            let script_id = script.id().to_string();
+            if !seen_ids.insert(script_id.clone()) {
+                tracing::warn!(
+                    target: "scripting",
+                    "Skipping reload of {} because script ID '{}' would duplicate an existing script",
+                    path.display(),
+                    script_id
+                );
+                continue;
+            }
+
+            accepted_scripts.push((path, script));
+        }
+
+        let unloaded_count = self.unload_scripts_by_paths(&paths_to_remove).await;
+        let mut reloaded_count = 0;
+        let mut added_count = 0;
+
+        for (path, mut script) in accepted_scripts {
+            let replacing_existing = self.script_index_by_path(&path).is_some();
+
+            debug!(
+                target: "scripting",
+                "Registering script: {} ({})",
+                script.name(),
+                script.id()
+            );
+
+            let mut ctx = Self::create_script_context(
+                self.client.clone(),
+                self.action_tx.clone(),
+                &mut self.timer_manager,
+                SystemTime::now(),
+            );
+            script.on_load(&mut ctx).await;
+
+            if let Some(index) = self.script_index_by_path(&path) {
+                let mut old_script = std::mem::replace(&mut self.scripts[index], script);
+                let mut unload_ctx = Self::create_script_context(
+                    self.client.clone(),
+                    self.action_tx.clone(),
+                    &mut self.timer_manager,
+                    SystemTime::now(),
+                );
+                debug!(
+                    target: "scripting",
+                    "Calling on_unload for replaced script: {} ({})",
+                    old_script.name(),
+                    old_script.id()
+                );
+                old_script.on_unload(&mut unload_ctx).await;
+            } else {
+                self.scripts.push(script);
+            }
+
+            if replacing_existing {
+                reloaded_count += 1;
+            } else {
+                added_count += 1;
+            }
+        }
 
         let new_script_count = self.scripts.len();
 
@@ -208,13 +487,19 @@ impl ScriptRunner {
                 "Script reload resulted in zero scripts (was {}). Check logs for loading errors.",
                 old_script_count
             );
-        } else if new_script_count > 0 {
+        } else {
             info!(
                 target: "scripting",
-                "Reloaded {} script(s)",
+                "Reloaded scripts: {} replaced, {} added, {} removed (total: {})",
+                reloaded_count,
+                added_count,
+                unloaded_count,
                 new_script_count
             );
         }
+
+        self.script_config = Some(script_config.clone());
+        self.script_dir = Some(dir.to_path_buf());
     }
 
     /// Unload all scripts
