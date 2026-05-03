@@ -12,7 +12,7 @@ name = "gromnie_client"
 path = "src/lib.rs"
 
 [dependencies]
-acprotocol.workspace = true
+asheron-rs.workspace = true
 anyhow.workspace = true
 bitflags = "2.6"
 byteorder = "1.5.0"
