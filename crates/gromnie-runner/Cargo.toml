@@ -12,7 +12,7 @@ name = "gromnie_runner"
 path = "src/mod.rs"
 
 [dependencies]
-acprotocol.workspace = true
+asheron-rs.workspace = true
 chrono.workspace = true
 gromnie-client = { path = "../gromnie-client" }
 gromnie-events = { path = "../gromnie-events" }

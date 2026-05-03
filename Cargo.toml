@@ -30,7 +30,7 @@ repository = "https://github.com/amoeba/gromnie.git"
 license = "MIT"
 
 [workspace.dependencies]
-acprotocol = { git = "https://github.com/amoeba/asheron-rs", rev = "ddbffb90f44ab2c8899d70f29d723025082815ad" }
+asheron-rs = { git = "https://github.com/amoeba/asheron-rs" }
 anyhow = "1.0"
 chrono = "0.4"
 clap = { version = "4.5.0", features = ["derive"] }

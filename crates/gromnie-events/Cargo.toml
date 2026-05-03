@@ -12,6 +12,6 @@ name = "gromnie_events"
 path = "src/lib.rs"
 
 [dependencies]
-acprotocol.workspace = true
+asheron-rs.workspace = true
 serde = { version = "1.0", features = ["derive"] }
 tokio = { version = "1.36.0", features = ["sync"] }
