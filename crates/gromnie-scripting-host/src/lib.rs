@@ -4,6 +4,7 @@
 /// Scripts should depend on gromnie-scripting-api, not this crate.
 use gromnie_scripting_api as api;
 use std::any::Any;
+use std::sync::Arc;
 use std::time::Duration;
 
 pub mod context;
@@ -28,24 +29,24 @@ pub use registry::create_runner_from_config;
 /// Trait that scripts must implement (combines API and host requirements)
 pub trait Script: Send + 'static {
     /// Unique identifier for this script (e.g., "hello_world")
-    fn id(&self) -> &'static str;
+    fn id(&self) -> &str;
 
     /// Human-readable name for this script
-    fn name(&self) -> &'static str;
+    fn name(&self) -> &str;
 
     /// Description of what this script does
-    fn description(&self) -> &'static str;
+    fn description(&self) -> &str;
 
     /// Called when the script is first loaded
     fn on_load<'a>(
         &'a mut self,
-        ctx: &'a mut ScriptContext,
+        ctx: Arc<ScriptContext>,
     ) -> ::core::pin::Pin<Box<dyn ::core::future::Future<Output = ()> + ::core::marker::Send + 'a>>;
 
     /// Called when the script is being unloaded
     fn on_unload<'a>(
         &'a mut self,
-        ctx: &'a mut ScriptContext,
+        ctx: Arc<ScriptContext>,
     ) -> ::core::pin::Pin<Box<dyn ::core::future::Future<Output = ()> + ::core::marker::Send + 'a>>;
 
     /// Return the list of events this script wants to receive
@@ -55,13 +56,13 @@ pub trait Script: Send + 'static {
     fn on_event<'a>(
         &'a mut self,
         event: &'a gromnie_events::ClientEvent,
-        ctx: &'a mut ScriptContext,
+        ctx: Arc<ScriptContext>,
     ) -> ::core::pin::Pin<Box<dyn ::core::future::Future<Output = ()> + ::core::marker::Send + 'a>>;
 
     /// Called periodically at a fixed rate (configurable, default ~20Hz)
     fn on_tick<'a>(
         &'a mut self,
-        ctx: &'a mut ScriptContext,
+        ctx: Arc<ScriptContext>,
         delta: Duration,
     ) -> ::core::pin::Pin<Box<dyn ::core::future::Future<Output = ()> + ::core::marker::Send + 'a>>;
 

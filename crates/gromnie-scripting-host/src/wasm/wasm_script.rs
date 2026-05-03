@@ -1,6 +1,7 @@
 use anyhow::{Context, Result};
 use std::any::Any;
 use std::path::PathBuf;
+use std::sync::Arc;
 use std::time::{Duration, SystemTime};
 use tracing::warn;
 use wasmtime::component::{Component, Linker, ResourceTable};
@@ -27,19 +28,11 @@ pub struct WasmScriptState {
     wasi: WasiCtx,
     /// Resource table for WASI
     table: ResourceTable,
-    /// Pointer to the current ScriptContext (set during callbacks)
-    pub(crate) host_context: Option<*mut ScriptContext>,
+    /// Current host context, set for the duration of each callback.
+    pub(crate) host_context: Option<Arc<ScriptContext>>,
     /// Script ID (for logging)
     pub(crate) script_id: String,
 }
-
-// SAFETY: WasmScriptState is Send because:
-// 1. WasiCtx and ResourceTable are both Send
-// 2. The host_context pointer is only used on the owning thread
-// 3. The pointer is set before each WASM call and cleared after
-// 4. WASM scripts cannot store or use the pointer across calls
-// 5. The ScriptContext it points to lives in ScriptRunner which owns the WasmScript
-unsafe impl Send for WasmScriptState {}
 
 impl WasiView for WasmScriptState {
     fn ctx(&mut self) -> &mut WasiCtx {
@@ -163,39 +156,37 @@ impl WasmScript {
         })
     }
 
-    /// Set the host context pointer for the current operation
-    fn set_context(&mut self, ctx: &mut ScriptContext) {
-        self.store.data_mut().host_context = Some(ctx as *mut ScriptContext);
+    /// Set the host context for the current operation.
+    fn set_context(&mut self, ctx: Arc<ScriptContext>) {
+        self.store.data_mut().host_context = Some(ctx);
     }
 
-    /// Clear the host context pointer
+    /// Clear the host context.
     fn clear_context(&mut self) {
         self.store.data_mut().host_context = None;
     }
 }
 
 impl HostScript for WasmScript {
-    fn id(&self) -> &'static str {
-        unsafe { std::mem::transmute(self.id.as_str()) }
+    fn id(&self) -> &str {
+        &self.id
     }
 
-    fn name(&self) -> &'static str {
-        unsafe { std::mem::transmute(self.name.as_str()) }
+    fn name(&self) -> &str {
+        &self.name
     }
 
-    fn description(&self) -> &'static str {
-        unsafe { std::mem::transmute(self.description.as_str()) }
+    fn description(&self) -> &str {
+        &self.description
     }
 
     fn on_load<'a>(
         &'a mut self,
-        ctx: &'a mut ScriptContext,
+        ctx: Arc<ScriptContext>,
     ) -> ::core::pin::Pin<Box<dyn ::core::future::Future<Output = ()> + ::core::marker::Send + 'a>>
     {
         self.set_context(ctx);
         Box::pin(async move {
-            // SAFETY: we set the context above and clear it below.
-            // The context pointer is valid for the duration of this call.
             let guest = self.script.gromnie_scripting_guest();
             let result = guest.call_on_load(&mut self.store).await;
             self.clear_context();
@@ -213,7 +204,7 @@ impl HostScript for WasmScript {
 
     fn on_unload<'a>(
         &'a mut self,
-        ctx: &'a mut ScriptContext,
+        ctx: Arc<ScriptContext>,
     ) -> ::core::pin::Pin<Box<dyn ::core::future::Future<Output = ()> + ::core::marker::Send + 'a>>
     {
         self.set_context(ctx);
@@ -240,7 +231,7 @@ impl HostScript for WasmScript {
     fn on_event<'a>(
         &'a mut self,
         event: &'a ClientEvent,
-        ctx: &'a mut ScriptContext,
+        ctx: Arc<ScriptContext>,
     ) -> ::core::pin::Pin<Box<dyn ::core::future::Future<Output = ()> + ::core::marker::Send + 'a>>
     {
         let wasm_event = client_event_to_wasm(event);
@@ -263,7 +254,7 @@ impl HostScript for WasmScript {
 
     fn on_tick<'a>(
         &'a mut self,
-        ctx: &'a mut ScriptContext,
+        ctx: Arc<ScriptContext>,
         delta: Duration,
     ) -> ::core::pin::Pin<Box<dyn ::core::future::Future<Output = ()> + ::core::marker::Send + 'a>>
     {

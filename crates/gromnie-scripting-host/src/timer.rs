@@ -5,7 +5,20 @@ use std::time::{Duration, Instant};
 
 /// Unique identifier for a timer
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[repr(transparent)]
 pub struct TimerId(u64);
+
+impl From<TimerId> for u64 {
+    fn from(value: TimerId) -> Self {
+        value.0
+    }
+}
+
+impl From<u64> for TimerId {
+    fn from(value: u64) -> Self {
+        Self(value)
+    }
+}
 
 #[derive(Debug)]
 struct Timer {
@@ -34,7 +47,7 @@ impl TimerManager {
     }
 
     /// Schedule a one-shot timer that fires after a delay
-    pub fn schedule_timer(&mut self, delay: Duration, name: String) -> TimerId {
+    pub fn schedule_timer(&self, delay: Duration, name: String) -> TimerId {
         let (id, cancel) = self.insert_timer();
         let state = Arc::clone(&self.state);
         tokio::spawn(async move {
@@ -52,7 +65,7 @@ impl TimerManager {
     }
 
     /// Schedule a recurring timer that fires repeatedly at an interval
-    pub fn schedule_recurring(&mut self, interval: Duration, name: String) -> TimerId {
+    pub fn schedule_recurring(&self, interval: Duration, name: String) -> TimerId {
         let (id, cancel) = self.insert_timer();
         let state = Arc::clone(&self.state);
         tokio::spawn(async move {
@@ -74,7 +87,7 @@ impl TimerManager {
     }
 
     /// Cancel a timer
-    pub fn cancel_timer(&mut self, id: TimerId) -> bool {
+    pub fn cancel_timer(&self, id: TimerId) -> bool {
         let mut state = self.state.lock().expect("timer state poisoned");
         let Some(timer) = state.timers.remove(&id) else {
             return false;
@@ -86,7 +99,7 @@ impl TimerManager {
     }
 
     /// Check if a timer has fired (and consume the fired state)
-    pub fn check_timer(&mut self, id: TimerId) -> bool {
+    pub fn check_timer(&self, id: TimerId) -> bool {
         self.state
             .lock()
             .expect("timer state poisoned")
@@ -95,7 +108,7 @@ impl TimerManager {
     }
 
     /// Drain fired timer notifications collected by async timer tasks.
-    pub fn tick(&mut self, _now: Instant) -> Vec<(TimerId, String)> {
+    pub fn tick(&self, _now: Instant) -> Vec<(TimerId, String)> {
         let mut state = self.state.lock().expect("timer state poisoned");
         std::mem::take(&mut state.fired_events)
     }
@@ -152,7 +165,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_one_shot_timer() {
-        let mut manager = TimerManager::new();
+        let manager = TimerManager::new();
         let id = manager.schedule_timer(Duration::from_millis(50), "test".to_string());
 
         // Should not fire immediately
@@ -172,7 +185,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_recurring_timer() {
-        let mut manager = TimerManager::new();
+        let manager = TimerManager::new();
         let id = manager.schedule_recurring(Duration::from_millis(50), "recurring".to_string());
 
         // Should not fire immediately
@@ -197,7 +210,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_cancel_timer() {
-        let mut manager = TimerManager::new();
+        let manager = TimerManager::new();
         let id = manager.schedule_timer(Duration::from_secs(10), "test".to_string());
 
         assert!(manager.cancel_timer(id));
@@ -207,7 +220,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_check_timer() {
-        let mut manager = TimerManager::new();
+        let manager = TimerManager::new();
         let id = manager.schedule_timer(Duration::from_millis(50), "test".to_string());
 
         // Not fired yet
