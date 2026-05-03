@@ -217,7 +217,9 @@ impl ScriptRunner {
     }
 
     fn script_index_by_path(&self, path: &Path) -> Option<usize> {
-        self.scripts.iter().position(|script| script.file_path() == path)
+        self.scripts
+            .iter()
+            .position(|script| script.file_path() == path)
     }
 
     async fn load_reload_candidate(
@@ -404,7 +406,11 @@ impl ScriptRunner {
         let stable_ids: std::collections::HashSet<String> = self
             .scripts
             .iter()
-            .filter(|script| !paths_to_remove.iter().any(|path| path == script.file_path()))
+            .filter(|script| {
+                !paths_to_remove
+                    .iter()
+                    .any(|path| path == script.file_path())
+            })
             .filter(|script| {
                 !pending_scripts
                     .iter()
