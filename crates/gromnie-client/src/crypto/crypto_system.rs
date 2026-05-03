@@ -15,14 +15,10 @@ impl CryptoSystem {
         // Convert u32 seed to [u8; 32] for IsaacRng::from_seed
         // Replicate the seed across the byte array
         let mut seed_array = [0u8; 32];
-        seed_array[0..4].copy_from_slice(&seed.to_le_bytes());
-        seed_array[4..8].copy_from_slice(&seed.to_le_bytes());
-        seed_array[8..12].copy_from_slice(&seed.to_le_bytes());
-        seed_array[12..16].copy_from_slice(&seed.to_le_bytes());
-        seed_array[16..20].copy_from_slice(&seed.to_le_bytes());
-        seed_array[20..24].copy_from_slice(&seed.to_le_bytes());
-        seed_array[24..28].copy_from_slice(&seed.to_le_bytes());
-        seed_array[28..32].copy_from_slice(&seed.to_le_bytes());
+        let seed_bytes = seed.to_le_bytes();
+        for chunk in seed_array.chunks_exact_mut(4) {
+            chunk.copy_from_slice(&seed_bytes);
+        }
 
         let rng = IsaacRng::from_seed(seed_array);
         CryptoSystem { rng }
@@ -42,16 +38,21 @@ mod tests {
 
     #[test]
     fn test_crypto_system_sequence() {
+        use std::collections::HashSet;
+
         let mut crypto = CryptoSystem::new(0x12345678);
 
         // Each call should produce a different value
-        let key1 = crypto.get_send_key();
-        let key2 = crypto.get_send_key();
-        let key3 = crypto.get_send_key();
+        // Test with a larger sequence to verify no duplicates
+        let keys: Vec<u32> = (0..100).map(|_| crypto.get_send_key()).collect();
+        let unique_keys: HashSet<_> = keys.iter().collect();
 
-        assert_ne!(key1, key2);
-        assert_ne!(key2, key3);
-        assert_ne!(key1, key3);
+        // All keys should be unique
+        assert_eq!(
+            keys.len(),
+            unique_keys.len(),
+            "Generated keys should all be unique"
+        );
     }
 
     #[test]

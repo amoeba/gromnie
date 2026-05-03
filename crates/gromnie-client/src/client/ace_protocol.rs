@@ -54,7 +54,7 @@ pub struct AceCharGenResult {
     pub headgear_shade: u64,
     pub shirt_shade: u64,
     pub trousers_shade: u64,
-    pub tootwear_shade: u64,
+    pub footwear_shade: u64,
     pub template_num: u32,
     pub strength: u32,
     pub endurance: u32,
@@ -95,7 +95,7 @@ pub struct AceCharGenConfig {
     pub headgear_shade: u64,
     pub shirt_shade: u64,
     pub trousers_shade: u64,
-    pub tootwear_shade: u64,
+    pub footwear_shade: u64,
     pub template_num: u32,
     pub strength: u32,
     pub endurance: u32,
@@ -137,7 +137,7 @@ impl AceCharGenResult {
             headgear_shade,
             shirt_shade,
             trousers_shade,
-            tootwear_shade,
+            footwear_shade,
             template_num,
             strength,
             endurance,
@@ -178,7 +178,7 @@ impl AceCharGenResult {
             headgear_shade,
             shirt_shade,
             trousers_shade,
-            tootwear_shade,
+            footwear_shade,
             template_num,
             strength,
             endurance,
@@ -225,7 +225,7 @@ impl ACWritable for AceCharGenResult {
         acprotocol::writers::write_u64(writer, self.headgear_shade)?;
         acprotocol::writers::write_u64(writer, self.shirt_shade)?;
         acprotocol::writers::write_u64(writer, self.trousers_shade)?;
-        acprotocol::writers::write_u64(writer, self.tootwear_shade)?;
+        acprotocol::writers::write_u64(writer, self.footwear_shade)?;
         acprotocol::writers::write_u32(writer, self.template_num)?;
         acprotocol::writers::write_u32(writer, self.strength)?;
         acprotocol::writers::write_u32(writer, self.endurance)?;
