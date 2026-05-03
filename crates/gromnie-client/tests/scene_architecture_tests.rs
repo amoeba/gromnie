@@ -5,7 +5,7 @@
 
 #[cfg(test)]
 mod scene_tests {
-    use acprotocol::types::CharacterIdentity;
+    use asheron_rs::types::CharacterIdentity;
     use gromnie_client::client::{
         CharacterSelectScene, ClientError, ConnectingProgress, ConnectingScene, EnteringWorldState,
         ErrorScene, InWorldScene, PatchingProgress, Scene,
@@ -128,12 +128,12 @@ mod scene_tests {
         let characters = vec![
             CharacterIdentity {
                 name: "Char1".to_string(),
-                character_id: acprotocol::types::ObjectId(1),
+                character_id: asheron_rs::types::ObjectId(1),
                 seconds_greyed_out: 0,
             },
             CharacterIdentity {
                 name: "Char2".to_string(),
-                character_id: acprotocol::types::ObjectId(2),
+                character_id: asheron_rs::types::ObjectId(2),
                 seconds_greyed_out: 0,
             },
         ];
@@ -410,7 +410,7 @@ mod session_tests {
 
 #[cfg(test)]
 mod transition_flow_tests {
-    use acprotocol::types::CharacterIdentity;
+    use asheron_rs::types::CharacterIdentity;
     use gromnie_client::client::{
         CharacterSelectScene, ClientSession, ConnectingProgress, ConnectingScene, InWorldScene,
         PatchingProgress, Scene, SessionState,
@@ -457,7 +457,7 @@ mod transition_flow_tests {
         // Step 7: Receive character list - transition to CharacterSelect scene
         let characters = vec![CharacterIdentity {
             name: "TestChar".to_string(),
-            character_id: acprotocol::types::ObjectId(1),
+            character_id: asheron_rs::types::ObjectId(1),
             seconds_greyed_out: 0,
         }];
         scene = Scene::CharacterSelect(CharacterSelectScene::new(

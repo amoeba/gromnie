@@ -1,5 +1,5 @@
 use crate::app::{App, GameScene};
-use acprotocol::types::CharacterIdentity;
+use asheron_rs::types::CharacterIdentity;
 use gromnie_events::SimpleClientAction;
 
 // Character selection functions that belong with the character selection view

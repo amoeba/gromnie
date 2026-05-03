@@ -2,13 +2,13 @@ use std::collections::{HashMap, VecDeque};
 use std::io::Cursor;
 use std::net::SocketAddr;
 
-use acprotocol::enums::{
+use asheron_rs::enums::{
     AuthFlags, FragmentGroup, GameEvent as GameEventType, PacketHeaderFlags, S2CMessage,
 };
 
-use acprotocol::gameactions::CharacterLoginCompleteNotification;
-use acprotocol::message::{C2SMessage, GameActionMessage};
-use acprotocol::messages::c2s::{
+use asheron_rs::gameactions::CharacterLoginCompleteNotification;
+use asheron_rs::message::{C2SMessage, GameActionMessage};
+use asheron_rs::messages::c2s::{
     CharacterSendCharGenResult, LoginSendEnterWorld, LoginSendEnterWorldRequest,
 };
 use tokio::sync::mpsc;
@@ -24,13 +24,13 @@ use crate::client::scene::{
 };
 use crate::client::session::{Account, ClientSession, ConnectionState, SessionState};
 
-use acprotocol::network::packet::PacketHeader;
-use acprotocol::network::{Fragment, RawMessage};
-use acprotocol::packets::c2s_packet::C2SPacket;
-use acprotocol::packets::s2c_packet::S2CPacket;
-use acprotocol::readers::ACDataType;
-use acprotocol::types::{BlobFragments, ConnectRequestHeader};
-use acprotocol::writers::{ACWritable, write_string, write_u32};
+use asheron_rs::network::packet::PacketHeader;
+use asheron_rs::network::{Fragment, RawMessage};
+use asheron_rs::packets::c2s_packet::C2SPacket;
+use asheron_rs::packets::s2c_packet::S2CPacket;
+use asheron_rs::readers::ACDataType;
+use asheron_rs::types::{BlobFragments, ConnectRequestHeader};
+use asheron_rs::writers::{ACWritable, write_string, write_u32};
 use tokio::net::UdpSocket;
 use tracing::{debug, error, info, warn};
 
@@ -49,7 +49,7 @@ use crate::client::protocol_conversions::{
 use crate::client::{ClientEvent, ClientSystemEvent, GameEvent};
 use crate::crypto::crypto_system::CryptoSystem;
 use crate::crypto::magic_number::get_magic_number;
-use acprotocol::gameevents::{
+use asheron_rs::gameevents::{
     CommunicationHearDirectSpeech, CommunicationTransientString, MagicRemoveEnchantment,
     MagicUpdateEnchantment, TradeAcceptTrade as TradeAcceptTradeEvent, TradeAddToTrade,
     TradeCloseTrade, TradeDeclineTrade as TradeDeclineTradeEvent, TradeOpenTrade,
@@ -92,7 +92,7 @@ pub struct Client {
     pub game_action_tx: mpsc::UnboundedSender<GameActionMessage>, // Direct game action sender for scripting
     game_action_rx: mpsc::UnboundedReceiver<GameActionMessage>,   // Receive direct game actions
     pub(crate) ddd_response: Option<OutgoingMessageContent>,      // Cached DDD response for retries
-    pub(crate) known_characters: Vec<acprotocol::types::CharacterIdentity>, // Track characters from list and creation
+    pub(crate) known_characters: Vec<asheron_rs::types::CharacterIdentity>, // Track characters from list and creation
     // Reconnection state
     reconnect_config: crate::config::ReconnectConfig,
     pub(crate) reconnect_attempt_count: u32, // Track reconnection attempts across state transitions
@@ -469,7 +469,7 @@ impl Client {
         let mut message_data = Vec::new();
         {
             let mut cursor = Cursor::new(&mut message_data);
-            use acprotocol::gameactions::CommunicationTalk;
+            use asheron_rs::gameactions::CommunicationTalk;
             let action = GameActionMessage::CommunicationTalk(CommunicationTalk {
                 message: message.clone(),
             });
@@ -495,7 +495,7 @@ impl Client {
         let mut message_data = Vec::new();
         {
             let mut cursor = Cursor::new(&mut message_data);
-            use acprotocol::gameactions::CommunicationTalkDirectByName;
+            use asheron_rs::gameactions::CommunicationTalkDirectByName;
             let action =
                 GameActionMessage::CommunicationTalkDirectByName(CommunicationTalkDirectByName {
                     message: message.clone(),
@@ -550,8 +550,8 @@ impl Client {
     }
 
     fn send_do_movement_command(&mut self, motion: u32, speed: f32, hold_key: u32) {
-        use acprotocol::enums::HoldKey;
-        use acprotocol::gameactions::MovementDoMovementCommand;
+        use asheron_rs::enums::HoldKey;
+        use asheron_rs::gameactions::MovementDoMovementCommand;
 
         let hold_key_enum = HoldKey::try_from(hold_key).unwrap_or(HoldKey::None);
         info!(target: "net", "Sending movement command: motion=0x{:08X}, speed={}, hold_key={:?}",
@@ -566,8 +566,8 @@ impl Client {
     }
 
     fn send_stop_movement_command(&mut self, motion: u32, hold_key: u32) {
-        use acprotocol::enums::HoldKey;
-        use acprotocol::gameactions::MovementStopMovementCommand;
+        use asheron_rs::enums::HoldKey;
+        use asheron_rs::gameactions::MovementStopMovementCommand;
 
         let hold_key_enum = HoldKey::try_from(hold_key).unwrap_or(HoldKey::None);
         info!(target: "net", "Sending stop movement command: motion=0x{:08X}, hold_key={:?}",
@@ -1217,26 +1217,26 @@ impl Client {
                         }
                     }
                     S2CMessage::LoginCreatePlayer => {
-                        dispatch_message::<acprotocol::messages::s2c::LoginCreatePlayer, _>(
+                        dispatch_message::<asheron_rs::messages::s2c::LoginCreatePlayer, _>(
                             self, message, &event_tx,
                         )
                         .ok();
                     }
                     S2CMessage::LoginLoginCharacterSet => {
-                        dispatch_message::<acprotocol::messages::s2c::LoginLoginCharacterSet, _>(
+                        dispatch_message::<asheron_rs::messages::s2c::LoginLoginCharacterSet, _>(
                             self, message, &event_tx,
                         )
                         .ok();
                     }
                     S2CMessage::DDDInterrogationMessage => {
-                        dispatch_message::<acprotocol::messages::s2c::DDDInterrogationMessage, _>(
+                        dispatch_message::<asheron_rs::messages::s2c::DDDInterrogationMessage, _>(
                             self, message, &event_tx,
                         )
                         .ok();
                     }
                     S2CMessage::CharacterCharGenVerificationResponse => {
                         dispatch_message::<
-                            acprotocol::messages::s2c::CharacterCharGenVerificationResponse,
+                            asheron_rs::messages::s2c::CharacterCharGenVerificationResponse,
                             _,
                         >(self, message, &event_tx)
                         .ok();
@@ -1245,71 +1245,71 @@ impl Client {
                         self.handle_enter_game_server_ready(message)
                     }
                     S2CMessage::ItemCreateObject => {
-                        dispatch_message::<acprotocol::messages::s2c::ItemCreateObject, _>(
+                        dispatch_message::<asheron_rs::messages::s2c::ItemCreateObject, _>(
                             self, message, &event_tx,
                         )
                         .ok();
                     }
                     S2CMessage::ItemDeleteObject => {
-                        dispatch_message::<acprotocol::messages::s2c::ItemDeleteObject, _>(
+                        dispatch_message::<asheron_rs::messages::s2c::ItemDeleteObject, _>(
                             self, message, &event_tx,
                         )
                         .ok();
                     }
                     S2CMessage::CommunicationTextboxString => self.handle_chat_message(message),
                     S2CMessage::CommunicationHearSpeech => {
-                        dispatch_message::<acprotocol::messages::s2c::CommunicationHearSpeech, _>(
+                        dispatch_message::<asheron_rs::messages::s2c::CommunicationHearSpeech, _>(
                             self, message, &event_tx,
                         )
                         .ok();
                     }
                     S2CMessage::CommunicationHearRangedSpeech => {
                         dispatch_message::<
-                            acprotocol::messages::s2c::CommunicationHearRangedSpeech,
+                            asheron_rs::messages::s2c::CommunicationHearRangedSpeech,
                             _,
                         >(self, message, &event_tx)
                         .ok();
                     }
                     S2CMessage::CharacterCharacterError => {
-                        dispatch_message::<acprotocol::messages::s2c::CharacterCharacterError, _>(
+                        dispatch_message::<asheron_rs::messages::s2c::CharacterCharacterError, _>(
                             self, message, &event_tx,
                         )
                         .ok();
                     }
                     S2CMessage::QualitiesPrivateUpdateInt => {
-                        dispatch_message::<acprotocol::messages::s2c::QualitiesPrivateUpdateInt, _>(
+                        dispatch_message::<asheron_rs::messages::s2c::QualitiesPrivateUpdateInt, _>(
                             self, message, &event_tx,
                         )
                         .ok();
                     }
                     S2CMessage::ItemSetState => {
-                        dispatch_message::<acprotocol::messages::s2c::ItemSetState, _>(
+                        dispatch_message::<asheron_rs::messages::s2c::ItemSetState, _>(
                             self, message, &event_tx,
                         )
                         .ok();
                     }
                     S2CMessage::MovementPositionEvent => {
-                        dispatch_message::<acprotocol::messages::s2c::MovementPositionEvent, _>(
+                        dispatch_message::<asheron_rs::messages::s2c::MovementPositionEvent, _>(
                             self, message, &event_tx,
                         )
                         .ok();
                     }
                     S2CMessage::MovementPositionAndMovementEvent => {
                         dispatch_message::<
-                            acprotocol::messages::s2c::MovementPositionAndMovementEvent,
+                            asheron_rs::messages::s2c::MovementPositionAndMovementEvent,
                             _,
                         >(self, message, &event_tx)
                         .ok();
                     }
                     S2CMessage::MovementSetObjectMovement => {
                         dispatch_message::<
-                            acprotocol::messages::s2c::MovementSetObjectMovement,
+                            asheron_rs::messages::s2c::MovementSetObjectMovement,
                             _,
                         >(self, message, &event_tx)
                         .ok();
                     }
                     S2CMessage::EffectsPlayerTeleport => {
-                        dispatch_message::<acprotocol::messages::s2c::EffectsPlayerTeleport, _>(
+                        dispatch_message::<asheron_rs::messages::s2c::EffectsPlayerTeleport, _>(
                             self, message, &event_tx,
                         )
                         .ok();
@@ -1527,7 +1527,7 @@ impl Client {
 
             // Create the enter world message with character ID
             let enter_world = LoginSendEnterWorld {
-                character_id: acprotocol::types::ObjectId(char_id),
+                character_id: asheron_rs::types::ObjectId(char_id),
                 account: acc,
             };
 
@@ -1554,7 +1554,7 @@ impl Client {
         // - String message (AC string format: i16 length + data + padding)
         // - i32 message_type (ChatMessageType enum)
 
-        use acprotocol::readers::ACDataType;
+        use asheron_rs::readers::ACDataType;
         match String::read(&mut cursor) {
             Ok(chat_text) => {
                 // Read the message type
@@ -1583,7 +1583,7 @@ impl Client {
     }
 
     /// Handle a fragment received from the server
-    fn handle_fragment(&mut self, blob_fragment: acprotocol::types::BlobFragments) {
+    fn handle_fragment(&mut self, blob_fragment: asheron_rs::types::BlobFragments) {
         let sequence = blob_fragment.sequence;
         let index = blob_fragment.index as usize;
         let count = blob_fragment.count;
@@ -1971,7 +1971,7 @@ impl Client {
     /// Transition to CharacterSelect scene
     pub fn transition_to_char_select(
         &mut self,
-        characters: Vec<acprotocol::types::CharacterIdentity>,
+        characters: Vec<asheron_rs::types::CharacterIdentity>,
     ) {
         // session.state should already be AuthConnected
         self.scene = Scene::CharacterSelect(CharacterSelectScene::new(
@@ -2067,10 +2067,10 @@ impl Client {
 use crate::client::game_event_handler::GameEventHandler;
 
 /// Handle Communication_HearDirectSpeech game events
-impl GameEventHandler<acprotocol::gameevents::CommunicationHearDirectSpeech> for Client {
+impl GameEventHandler<asheron_rs::gameevents::CommunicationHearDirectSpeech> for Client {
     fn handle(
         &mut self,
-        event: acprotocol::gameevents::CommunicationHearDirectSpeech,
+        event: asheron_rs::gameevents::CommunicationHearDirectSpeech,
     ) -> Option<GameEvent> {
         let chat_text = format!("{} tells you, \"{}\"", event.sender_name, event.message);
         let message_type = event.type_ as u32;
@@ -2085,10 +2085,10 @@ impl GameEventHandler<acprotocol::gameevents::CommunicationHearDirectSpeech> for
 }
 
 /// Handle Communication_TransientString game events
-impl GameEventHandler<acprotocol::gameevents::CommunicationTransientString> for Client {
+impl GameEventHandler<asheron_rs::gameevents::CommunicationTransientString> for Client {
     fn handle(
         &mut self,
-        event: acprotocol::gameevents::CommunicationTransientString,
+        event: asheron_rs::gameevents::CommunicationTransientString,
     ) -> Option<GameEvent> {
         let message = event.message;
         info!(target: "net", "Transient string: {}", message);

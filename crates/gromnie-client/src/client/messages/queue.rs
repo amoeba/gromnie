@@ -1,6 +1,6 @@
 use std::time::Instant;
 
-use acprotocol::messages::c2s::{CharacterSendCharGenResult, LoginSendEnterWorld};
+use asheron_rs::messages::c2s::{CharacterSendCharGenResult, LoginSendEnterWorld};
 
 /// Enum for outgoing messages to be sent in the network loop
 #[derive(Debug, Clone)]

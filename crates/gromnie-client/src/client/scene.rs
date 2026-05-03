@@ -1,5 +1,5 @@
-use acprotocol::enums::CharacterErrorType;
-use acprotocol::types::CharacterIdentity;
+use asheron_rs::enums::CharacterErrorType;
+use asheron_rs::types::CharacterIdentity;
 
 /// Sub-states for Connecting phase with progress tracking
 #[derive(Clone, Debug, PartialEq)]

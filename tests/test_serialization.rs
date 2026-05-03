@@ -1,5 +1,5 @@
-use acprotocol::enums::PacketHeaderFlags;
-use acprotocol::packets::c2s_packet::C2SPacket;
+use asheron_rs::enums::PacketHeaderFlags;
+use asheron_rs::packets::c2s_packet::C2SPacket;
 use byteorder::{ByteOrder, LittleEndian};
 /// Regression tests for packet checksum calculation
 ///

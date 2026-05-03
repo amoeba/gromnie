@@ -1,4 +1,4 @@
-use acprotocol::types::CharacterIdentity;
+use asheron_rs::types::CharacterIdentity;
 use gromnie_events::{ClientStateEvent, SimpleClientAction, SimpleGameEvent};
 
 // Type alias for backward compatibility
@@ -167,7 +167,7 @@ pub struct ChatMessage {
 pub struct InventoryState {
     pub player_id: Option<u32>,
     /// All items received via ItemCreateObject, keyed by object_id
-    /// We store the full acprotocol::messages::s2c::ItemCreateObject
+    /// We store the full asheron_rs::messages::s2c::ItemCreateObject
     pub items: HashMap<u32, InventoryItem>,
     /// Mapping of container_id -> list of child item ObjectIds
     /// Built from ItemOnViewContents messages

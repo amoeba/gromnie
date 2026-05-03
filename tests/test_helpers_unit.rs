@@ -2,7 +2,7 @@
 ///
 /// These tests verify that the helper functions used in other tests work correctly.
 mod helpers {
-    use acprotocol::enums::PacketHeaderFlags;
+    use asheron_rs::enums::PacketHeaderFlags;
     use byteorder::{ByteOrder, LittleEndian};
 
     // ============================================================================

@@ -16,10 +16,10 @@ use crate::client::{ClientEvent, GameEvent};
 use gromnie_events::ProtocolEvent;
 
 /// Handle LoginCreatePlayer messages
-impl MessageHandler<acprotocol::messages::s2c::LoginCreatePlayer> for Client {
+impl MessageHandler<asheron_rs::messages::s2c::LoginCreatePlayer> for Client {
     fn handle(
         &mut self,
-        create_player: acprotocol::messages::s2c::LoginCreatePlayer,
+        create_player: asheron_rs::messages::s2c::LoginCreatePlayer,
     ) -> Option<GameEvent> {
         let character_id = create_player.character_id.0;
         info!(target: "net", "Character in world: 0x{:08X}", character_id);
@@ -54,10 +54,10 @@ impl MessageHandler<acprotocol::messages::s2c::LoginCreatePlayer> for Client {
     }
 }
 /// Handle ItemCreateObject messages
-impl MessageHandler<acprotocol::messages::s2c::ItemCreateObject> for Client {
+impl MessageHandler<asheron_rs::messages::s2c::ItemCreateObject> for Client {
     fn handle(
         &mut self,
-        create_obj: acprotocol::messages::s2c::ItemCreateObject,
+        create_obj: asheron_rs::messages::s2c::ItemCreateObject,
     ) -> Option<GameEvent> {
         let object_id = create_obj.object_id.0;
         let object_name = create_obj.weenie_description.name.clone();
@@ -90,10 +90,10 @@ impl MessageHandler<acprotocol::messages::s2c::ItemCreateObject> for Client {
 }
 
 /// Handle CommunicationHearSpeech messages
-impl MessageHandler<acprotocol::messages::s2c::CommunicationHearSpeech> for Client {
+impl MessageHandler<asheron_rs::messages::s2c::CommunicationHearSpeech> for Client {
     fn handle(
         &mut self,
-        speech: acprotocol::messages::s2c::CommunicationHearSpeech,
+        speech: asheron_rs::messages::s2c::CommunicationHearSpeech,
     ) -> Option<GameEvent> {
         let chat_text = format!("{} says, \"{}\"", speech.sender_name, speech.message);
         let message_type = speech.type_.clone() as u32;
@@ -114,10 +114,10 @@ impl MessageHandler<acprotocol::messages::s2c::CommunicationHearSpeech> for Clie
 }
 
 /// Handle CommunicationHearRangedSpeech messages
-impl MessageHandler<acprotocol::messages::s2c::CommunicationHearRangedSpeech> for Client {
+impl MessageHandler<asheron_rs::messages::s2c::CommunicationHearRangedSpeech> for Client {
     fn handle(
         &mut self,
-        speech: acprotocol::messages::s2c::CommunicationHearRangedSpeech,
+        speech: asheron_rs::messages::s2c::CommunicationHearRangedSpeech,
     ) -> Option<GameEvent> {
         let chat_text = format!("{} says, \"{}\"", speech.sender_name, speech.message);
         let message_type = speech.type_.clone() as u32;
@@ -138,10 +138,10 @@ impl MessageHandler<acprotocol::messages::s2c::CommunicationHearRangedSpeech> fo
 }
 
 /// Handle CharacterCharacterError messages
-impl MessageHandler<acprotocol::messages::s2c::CharacterCharacterError> for Client {
+impl MessageHandler<asheron_rs::messages::s2c::CharacterCharacterError> for Client {
     fn handle(
         &mut self,
-        char_error: acprotocol::messages::s2c::CharacterCharacterError,
+        char_error: asheron_rs::messages::s2c::CharacterCharacterError,
     ) -> Option<GameEvent> {
         let error_code = char_error.reason.clone() as u32;
         let error_message = format!("{}", char_error.reason);
@@ -174,10 +174,10 @@ impl MessageHandler<acprotocol::messages::s2c::CharacterCharacterError> for Clie
 }
 
 /// Handle LoginLoginCharacterSet messages
-impl MessageHandler<acprotocol::messages::s2c::LoginLoginCharacterSet> for Client {
+impl MessageHandler<asheron_rs::messages::s2c::LoginLoginCharacterSet> for Client {
     fn handle(
         &mut self,
-        char_list: acprotocol::messages::s2c::LoginLoginCharacterSet,
+        char_list: asheron_rs::messages::s2c::LoginLoginCharacterSet,
     ) -> Option<GameEvent> {
         // Format character list for logging
         let chars = char_list
@@ -289,10 +289,10 @@ impl MessageHandler<acprotocol::messages::s2c::LoginLoginCharacterSet> for Clien
 }
 
 /// Handle DDDInterrogationMessage messages
-impl MessageHandler<acprotocol::messages::s2c::DDDInterrogationMessage> for Client {
+impl MessageHandler<asheron_rs::messages::s2c::DDDInterrogationMessage> for Client {
     fn handle(
         &mut self,
-        ddd_msg: acprotocol::messages::s2c::DDDInterrogationMessage,
+        ddd_msg: asheron_rs::messages::s2c::DDDInterrogationMessage,
     ) -> Option<GameEvent> {
         info!(target: "net", "Received DDD Interrogation - Language: {}, Region: {}, Product: {}",
             ddd_msg.name_rule_language, ddd_msg.servers_region, ddd_msg.product_id);
@@ -328,10 +328,10 @@ impl MessageHandler<acprotocol::messages::s2c::DDDInterrogationMessage> for Clie
 }
 
 /// Handle CharacterCharGenVerificationResponse messages
-impl MessageHandler<acprotocol::messages::s2c::CharacterCharGenVerificationResponse> for Client {
+impl MessageHandler<asheron_rs::messages::s2c::CharacterCharGenVerificationResponse> for Client {
     fn handle(
         &mut self,
-        response: acprotocol::messages::s2c::CharacterCharGenVerificationResponse,
+        response: asheron_rs::messages::s2c::CharacterCharGenVerificationResponse,
     ) -> Option<GameEvent> {
         info!(target: "net", "Character creation verification response received");
 
@@ -363,8 +363,8 @@ impl MessageHandler<acprotocol::messages::s2c::CharacterCharGenVerificationRespo
 }
 
 /// Handle ItemSetState messages
-impl MessageHandler<acprotocol::messages::s2c::ItemSetState> for Client {
-    fn handle(&mut self, state_msg: acprotocol::messages::s2c::ItemSetState) -> Option<GameEvent> {
+impl MessageHandler<asheron_rs::messages::s2c::ItemSetState> for Client {
+    fn handle(&mut self, state_msg: asheron_rs::messages::s2c::ItemSetState) -> Option<GameEvent> {
         let object_id = state_msg.object_id.0;
         let new_state = format!("{:?}", state_msg.new_state);
 
@@ -380,10 +380,10 @@ impl MessageHandler<acprotocol::messages::s2c::ItemSetState> for Client {
 }
 
 /// Handle QualitiesPrivateUpdateInt messages
-impl MessageHandler<acprotocol::messages::s2c::QualitiesPrivateUpdateInt> for Client {
+impl MessageHandler<asheron_rs::messages::s2c::QualitiesPrivateUpdateInt> for Client {
     fn handle(
         &mut self,
-        quality_msg: acprotocol::messages::s2c::QualitiesPrivateUpdateInt,
+        quality_msg: asheron_rs::messages::s2c::QualitiesPrivateUpdateInt,
     ) -> Option<GameEvent> {
         let property_name = format!("{:?}", quality_msg.key);
         let value = quality_msg.value;
@@ -402,10 +402,10 @@ impl MessageHandler<acprotocol::messages::s2c::QualitiesPrivateUpdateInt> for Cl
 }
 
 /// Handle ItemDeleteObject messages
-impl MessageHandler<acprotocol::messages::s2c::ItemDeleteObject> for Client {
+impl MessageHandler<asheron_rs::messages::s2c::ItemDeleteObject> for Client {
     fn handle(
         &mut self,
-        delete_obj: acprotocol::messages::s2c::ItemDeleteObject,
+        delete_obj: asheron_rs::messages::s2c::ItemDeleteObject,
     ) -> Option<GameEvent> {
         let object_id = delete_obj.object_id.0;
 
@@ -422,10 +422,10 @@ impl MessageHandler<acprotocol::messages::s2c::ItemDeleteObject> for Client {
 }
 
 /// Handle MovementPositionEvent messages (0xF748)
-impl MessageHandler<acprotocol::messages::s2c::MovementPositionEvent> for Client {
+impl MessageHandler<asheron_rs::messages::s2c::MovementPositionEvent> for Client {
     fn handle(
         &mut self,
-        msg: acprotocol::messages::s2c::MovementPositionEvent,
+        msg: asheron_rs::messages::s2c::MovementPositionEvent,
     ) -> Option<GameEvent> {
         let object_id = msg.object_id.0;
         let landcell = msg.position.origin.landcell.0;
@@ -445,10 +445,10 @@ impl MessageHandler<acprotocol::messages::s2c::MovementPositionEvent> for Client
 }
 
 /// Handle MovementPositionAndMovementEvent messages (0xF619)
-impl MessageHandler<acprotocol::messages::s2c::MovementPositionAndMovementEvent> for Client {
+impl MessageHandler<asheron_rs::messages::s2c::MovementPositionAndMovementEvent> for Client {
     fn handle(
         &mut self,
-        msg: acprotocol::messages::s2c::MovementPositionAndMovementEvent,
+        msg: asheron_rs::messages::s2c::MovementPositionAndMovementEvent,
     ) -> Option<GameEvent> {
         let object_id = msg.object_id.0;
         let landcell = msg.position.origin.landcell.0;
@@ -468,10 +468,10 @@ impl MessageHandler<acprotocol::messages::s2c::MovementPositionAndMovementEvent>
 }
 
 /// Handle MovementSetObjectMovement messages (0xF74C)
-impl MessageHandler<acprotocol::messages::s2c::MovementSetObjectMovement> for Client {
+impl MessageHandler<asheron_rs::messages::s2c::MovementSetObjectMovement> for Client {
     fn handle(
         &mut self,
-        msg: acprotocol::messages::s2c::MovementSetObjectMovement,
+        msg: asheron_rs::messages::s2c::MovementSetObjectMovement,
     ) -> Option<GameEvent> {
         let object_id = msg.object_id.0;
         info!(target: "net", "Object movement update: 0x{:08X} (seq {})",
@@ -487,10 +487,10 @@ impl MessageHandler<acprotocol::messages::s2c::MovementSetObjectMovement> for Cl
 }
 
 /// Handle EffectsPlayerTeleport messages (0xF751)
-impl MessageHandler<acprotocol::messages::s2c::EffectsPlayerTeleport> for Client {
+impl MessageHandler<asheron_rs::messages::s2c::EffectsPlayerTeleport> for Client {
     fn handle(
         &mut self,
-        msg: acprotocol::messages::s2c::EffectsPlayerTeleport,
+        msg: asheron_rs::messages::s2c::EffectsPlayerTeleport,
     ) -> Option<GameEvent> {
         info!(target: "net", "Player teleport effect (seq {})", msg.object_teleport_sequence);
 

@@ -4,7 +4,7 @@ use tokio::sync::RwLock;
 use tokio::sync::mpsc::UnboundedSender;
 
 use super::timer::TimerId;
-use acprotocol::message::GameActionMessage;
+use asheron_rs::message::GameActionMessage;
 use gromnie_client::client::Client;
 use gromnie_events::SimpleClientAction;
 
@@ -124,8 +124,8 @@ impl ScriptContext {
     // ===== Trading =====
 
     pub fn open_trade(&self, partner_id: u32) {
-        use acprotocol::gameactions::TradeOpenTradeNegotiations;
-        use acprotocol::types::ObjectId;
+        use asheron_rs::gameactions::TradeOpenTradeNegotiations;
+        use asheron_rs::types::ObjectId;
         let _ = self
             .game_action_tx
             .send(GameActionMessage::TradeOpenTradeNegotiations(
@@ -136,8 +136,8 @@ impl ScriptContext {
     }
 
     pub fn add_to_trade(&self, item_id: u32, slot: u32) {
-        use acprotocol::gameactions::TradeAddToTrade;
-        use acprotocol::types::ObjectId;
+        use asheron_rs::gameactions::TradeAddToTrade;
+        use asheron_rs::types::ObjectId;
         let _ = self
             .game_action_tx
             .send(GameActionMessage::TradeAddToTrade(TradeAddToTrade {
@@ -147,8 +147,8 @@ impl ScriptContext {
     }
 
     pub fn accept_trade(&self) {
-        use acprotocol::gameactions::TradeAcceptTrade;
-        use acprotocol::types::{ObjectId, Trade};
+        use asheron_rs::gameactions::TradeAcceptTrade;
+        use asheron_rs::types::{ObjectId, Trade};
         let client = self
             .client
             .try_read()
@@ -172,21 +172,21 @@ impl ScriptContext {
     }
 
     pub fn decline_trade(&self) {
-        use acprotocol::gameactions::TradeDeclineTrade;
+        use asheron_rs::gameactions::TradeDeclineTrade;
         let _ = self
             .game_action_tx
             .send(GameActionMessage::TradeDeclineTrade(TradeDeclineTrade {}));
     }
 
     pub fn reset_trade(&self) {
-        use acprotocol::gameactions::TradeResetTrade;
+        use asheron_rs::gameactions::TradeResetTrade;
         let _ = self
             .game_action_tx
             .send(GameActionMessage::TradeResetTrade(TradeResetTrade {}));
     }
 
     pub fn close_trade(&self) {
-        use acprotocol::gameactions::TradeCloseTradeNegotiations;
+        use asheron_rs::gameactions::TradeCloseTradeNegotiations;
         let _ = self
             .game_action_tx
             .send(GameActionMessage::TradeCloseTradeNegotiations(
@@ -197,8 +197,8 @@ impl ScriptContext {
     // ===== Spell Casting =====
 
     pub fn cast_targeted_spell(&self, target_id: u32, spell_id: u32) {
-        use acprotocol::gameactions::MagicCastTargetedSpell;
-        use acprotocol::types::{LayeredSpellId, ObjectId, SpellId};
+        use asheron_rs::gameactions::MagicCastTargetedSpell;
+        use asheron_rs::types::{LayeredSpellId, ObjectId, SpellId};
         let _ = self
             .game_action_tx
             .send(GameActionMessage::MagicCastTargetedSpell(
@@ -213,8 +213,8 @@ impl ScriptContext {
     }
 
     pub fn cast_untargeted_spell(&self, spell_id: u32) {
-        use acprotocol::gameactions::MagicCastUntargetedSpell;
-        use acprotocol::types::{LayeredSpellId, SpellId};
+        use asheron_rs::gameactions::MagicCastUntargetedSpell;
+        use asheron_rs::types::{LayeredSpellId, SpellId};
         let _ = self
             .game_action_tx
             .send(GameActionMessage::MagicCastUntargetedSpell(
