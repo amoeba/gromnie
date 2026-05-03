@@ -12,8 +12,8 @@ pub fn create_engine() -> Result<Engine> {
     // Enable component model support
     config.wasm_component_model(true);
 
-    // Disable async support - scripts run synchronously
-    config.async_support(false);
+    // Enable async support — scripts can perform long-running I/O without blocking
+    config.async_support(true);
 
     // Enable optimizations for release builds
     #[cfg(not(debug_assertions))]

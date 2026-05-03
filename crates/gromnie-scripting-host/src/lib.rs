@@ -37,25 +37,33 @@ pub trait Script: Send + 'static {
     fn description(&self) -> &'static str;
 
     /// Called when the script is first loaded
-    fn on_load(&mut self, ctx: &mut ScriptContext);
+    fn on_load<'a>(
+        &'a mut self,
+        ctx: &'a mut ScriptContext,
+    ) -> ::core::pin::Pin<Box<dyn ::core::future::Future<Output = ()> + ::core::marker::Send + 'a>>;
 
     /// Called when the script is being unloaded
-    fn on_unload(&mut self, ctx: &mut ScriptContext);
+    fn on_unload<'a>(
+        &'a mut self,
+        ctx: &'a mut ScriptContext,
+    ) -> ::core::pin::Pin<Box<dyn ::core::future::Future<Output = ()> + ::core::marker::Send + 'a>>;
 
     /// Return the list of events this script wants to receive
     fn subscribed_events(&self) -> &[EventFilter];
 
     /// Handle an event that matches one of the subscribed filters
-    /// This receives the full ClientEvent which can be a Game, State, or System event
-    fn on_event(&mut self, event: &gromnie_events::ClientEvent, ctx: &mut ScriptContext);
+    fn on_event<'a>(
+        &'a mut self,
+        event: &'a gromnie_events::ClientEvent,
+        ctx: &'a mut ScriptContext,
+    ) -> ::core::pin::Pin<Box<dyn ::core::future::Future<Output = ()> + ::core::marker::Send + 'a>>;
 
     /// Called periodically at a fixed rate (configurable, default ~20Hz)
-    /// Use this for timer checks, periodic updates, and time-based logic
-    ///
-    /// # Arguments
-    /// * `ctx` - Script context for accessing client state and sending actions
-    /// * `delta` - Time elapsed since last tick
-    fn on_tick(&mut self, ctx: &mut ScriptContext, delta: Duration);
+    fn on_tick<'a>(
+        &'a mut self,
+        ctx: &'a mut ScriptContext,
+        delta: Duration,
+    ) -> ::core::pin::Pin<Box<dyn ::core::future::Future<Output = ()> + ::core::marker::Send + 'a>>;
 
     /// Allow downcasting to concrete script type for state access
     fn as_any_mut(&mut self) -> &mut dyn Any;
