@@ -1,8 +1,8 @@
 use std::io::Cursor;
 
-use acprotocol::enums::PacketHeaderFlags;
-use acprotocol::packets::c2s_packet::C2SPacket;
-use acprotocol::writers::ACWritable;
+use asheron_rs::enums::PacketHeaderFlags;
+use asheron_rs::packets::c2s_packet::C2SPacket;
+use asheron_rs::writers::ACWritable;
 
 use crate::client::constants::*;
 use crate::client::session::ConnectionState;
@@ -18,16 +18,16 @@ pub trait C2SPacketExt {
     fn with_ack_sequence(self, ack_seq: u32) -> Self;
 
     /// Safely set the server switch header, ensuring both the field and flag are set together.
-    fn with_server_switch(self, header: acprotocol::types::ServerSwitchHeader) -> Self;
+    fn with_server_switch(self, header: asheron_rs::types::ServerSwitchHeader) -> Self;
 
     /// Safely set retransmit sequences, ensuring both the field and flag are set together.
-    fn with_retransmit_sequences(self, sequences: acprotocol::types::PackableList<u32>) -> Self;
+    fn with_retransmit_sequences(self, sequences: asheron_rs::types::PackableList<u32>) -> Self;
 
     /// Safely set reject sequences, ensuring both the field and flag are set together.
-    fn with_reject_sequences(self, sequences: acprotocol::types::PackableList<u32>) -> Self;
+    fn with_reject_sequences(self, sequences: asheron_rs::types::PackableList<u32>) -> Self;
 
     /// Safely set the login request header, ensuring both the field and flag are set together.
-    fn with_login_request(self, header: acprotocol::types::LoginRequestHeader) -> Self;
+    fn with_login_request(self, header: asheron_rs::types::LoginRequestHeader) -> Self;
 
     /// Safely set the world login request, ensuring both the field and flag are set together.
     fn with_world_login_request(self, value: u64) -> Self;
@@ -36,7 +36,7 @@ pub trait C2SPacketExt {
     fn with_connect_response(self, cookie: u64) -> Self;
 
     /// Safely set the CICMD command header, ensuring both the field and flag are set together.
-    fn with_cicmd_command(self, header: acprotocol::types::CICMDCommandHeader) -> Self;
+    fn with_cicmd_command(self, header: asheron_rs::types::CICMDCommandHeader) -> Self;
 
     /// Safely set the time sync value, ensuring both the field and flag are set together.
     fn with_time_sync(self, time: u64) -> Self;
@@ -48,10 +48,10 @@ pub trait C2SPacketExt {
     fn with_echo_response(self, time: f32) -> Self;
 
     /// Safely set the flow header, ensuring both the field and flag are set together.
-    fn with_flow(self, flow: acprotocol::types::FlowHeader) -> Self;
+    fn with_flow(self, flow: asheron_rs::types::FlowHeader) -> Self;
 
     /// Safely set the blob fragments, ensuring both the field and flag are set together.
-    fn with_fragments(self, fragments: acprotocol::types::BlobFragments) -> Self;
+    fn with_fragments(self, fragments: asheron_rs::types::BlobFragments) -> Self;
 
     /// Validate that the packet is properly formed (optional fields match their flags).
     fn validate(&self) -> Result<(), &'static str>;
@@ -111,7 +111,7 @@ impl C2SPacketExt for C2SPacket {
         )
     }
 
-    fn with_server_switch(self, header: acprotocol::types::ServerSwitchHeader) -> Self {
+    fn with_server_switch(self, header: asheron_rs::types::ServerSwitchHeader) -> Self {
         self.set_field_with_flag(
             |p| &mut p.server_switch,
             header,
@@ -119,7 +119,7 @@ impl C2SPacketExt for C2SPacket {
         )
     }
 
-    fn with_retransmit_sequences(self, sequences: acprotocol::types::PackableList<u32>) -> Self {
+    fn with_retransmit_sequences(self, sequences: asheron_rs::types::PackableList<u32>) -> Self {
         self.set_field_with_flag(
             |p| &mut p.retransmit_sequences,
             sequences,
@@ -127,7 +127,7 @@ impl C2SPacketExt for C2SPacket {
         )
     }
 
-    fn with_reject_sequences(self, sequences: acprotocol::types::PackableList<u32>) -> Self {
+    fn with_reject_sequences(self, sequences: asheron_rs::types::PackableList<u32>) -> Self {
         self.set_field_with_flag(
             |p| &mut p.reject_sequences,
             sequences,
@@ -135,7 +135,7 @@ impl C2SPacketExt for C2SPacket {
         )
     }
 
-    fn with_login_request(self, header: acprotocol::types::LoginRequestHeader) -> Self {
+    fn with_login_request(self, header: asheron_rs::types::LoginRequestHeader) -> Self {
         self.set_field_with_flag(
             |p| &mut p.login_request,
             header,
@@ -159,7 +159,7 @@ impl C2SPacketExt for C2SPacket {
         )
     }
 
-    fn with_cicmd_command(self, header: acprotocol::types::CICMDCommandHeader) -> Self {
+    fn with_cicmd_command(self, header: asheron_rs::types::CICMDCommandHeader) -> Self {
         self.set_field_with_flag(
             |p| &mut p.cicmd_command,
             header,
@@ -179,11 +179,11 @@ impl C2SPacketExt for C2SPacket {
         self.set_field_with_flag(|p| &mut p.echo_time, time, PacketHeaderFlags::ECHO_RESPONSE)
     }
 
-    fn with_flow(self, flow: acprotocol::types::FlowHeader) -> Self {
+    fn with_flow(self, flow: asheron_rs::types::FlowHeader) -> Self {
         self.set_field_with_flag(|p| &mut p.flow, flow, PacketHeaderFlags::FLOW)
     }
 
-    fn with_fragments(self, fragments: acprotocol::types::BlobFragments) -> Self {
+    fn with_fragments(self, fragments: asheron_rs::types::BlobFragments) -> Self {
         self.set_field_with_flag(
             |p| &mut p.fragments,
             fragments,

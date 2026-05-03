@@ -7,9 +7,9 @@
 /// Rather than modifying ACE (the reference implementation), we match its expectations
 /// by providing custom serialization here. This module contains structures that serialize
 /// in the format ACE expects.
-use acprotocol::enums::{Gender, HeritageGroup};
-use acprotocol::types::PackableList;
-use acprotocol::writers::{ACWritable, ACWriter, write_u32};
+use asheron_rs::enums::{Gender, HeritageGroup};
+use asheron_rs::types::PackableList;
+use asheron_rs::writers::{ACWritable, ACWriter, write_u32};
 
 /// Wrapper for raw u32 skill advancement class values
 /// ACE server defines Inactive = 0, but acprotocol only defines 1, 2, 3
@@ -203,44 +203,44 @@ impl ACWritable for AceCharGenResult {
         // NOTE: ACE does NOT expect the account string here. It reads the account
         // from the outer Character_SendCharGenResult message wrapper instead.
 
-        acprotocol::writers::write_u32(writer, self.one)?;
-        acprotocol::writers::write_u32(writer, self.heritage_group)?;
-        acprotocol::writers::write_u32(writer, self.gender)?;
-        acprotocol::writers::write_u32(writer, self.eyes_strip)?;
-        acprotocol::writers::write_u32(writer, self.nose_strip)?;
-        acprotocol::writers::write_u32(writer, self.mouth_strip)?;
-        acprotocol::writers::write_u32(writer, self.hair_color)?;
-        acprotocol::writers::write_u32(writer, self.eye_color)?;
-        acprotocol::writers::write_u32(writer, self.hair_style)?;
-        acprotocol::writers::write_u32(writer, self.headgear_style)?;
-        acprotocol::writers::write_u32(writer, self.headgear_color)?;
-        acprotocol::writers::write_u32(writer, self.shirt_style)?;
-        acprotocol::writers::write_u32(writer, self.shirt_color)?;
-        acprotocol::writers::write_u32(writer, self.trousers_style)?;
-        acprotocol::writers::write_u32(writer, self.trousers_color)?;
-        acprotocol::writers::write_u32(writer, self.footwear_style)?;
-        acprotocol::writers::write_u32(writer, self.footwear_color)?;
-        acprotocol::writers::write_u64(writer, self.skin_shade)?;
-        acprotocol::writers::write_u64(writer, self.hair_shade)?;
-        acprotocol::writers::write_u64(writer, self.headgear_shade)?;
-        acprotocol::writers::write_u64(writer, self.shirt_shade)?;
-        acprotocol::writers::write_u64(writer, self.trousers_shade)?;
-        acprotocol::writers::write_u64(writer, self.tootwear_shade)?;
-        acprotocol::writers::write_u32(writer, self.template_num)?;
-        acprotocol::writers::write_u32(writer, self.strength)?;
-        acprotocol::writers::write_u32(writer, self.endurance)?;
-        acprotocol::writers::write_u32(writer, self.coordination)?;
-        acprotocol::writers::write_u32(writer, self.quickness)?;
-        acprotocol::writers::write_u32(writer, self.focus)?;
-        acprotocol::writers::write_u32(writer, self.self_)?;
-        acprotocol::writers::write_u32(writer, self.slot)?;
-        acprotocol::writers::write_u32(writer, self.class_id)?;
-        acprotocol::writers::write_packable_list::<RawSkillAdvancementClass>(writer, &self.skills)?;
-        acprotocol::writers::write_string(writer, &self.name)?;
-        acprotocol::writers::write_u32(writer, self.start_area)?;
-        acprotocol::writers::write_u32(writer, self.is_admin)?;
-        acprotocol::writers::write_u32(writer, self.is_envoy)?;
-        acprotocol::writers::write_u32(writer, self.validation)?;
+        asheron_rs::writers::write_u32(writer, self.one)?;
+        asheron_rs::writers::write_u32(writer, self.heritage_group)?;
+        asheron_rs::writers::write_u32(writer, self.gender)?;
+        asheron_rs::writers::write_u32(writer, self.eyes_strip)?;
+        asheron_rs::writers::write_u32(writer, self.nose_strip)?;
+        asheron_rs::writers::write_u32(writer, self.mouth_strip)?;
+        asheron_rs::writers::write_u32(writer, self.hair_color)?;
+        asheron_rs::writers::write_u32(writer, self.eye_color)?;
+        asheron_rs::writers::write_u32(writer, self.hair_style)?;
+        asheron_rs::writers::write_u32(writer, self.headgear_style)?;
+        asheron_rs::writers::write_u32(writer, self.headgear_color)?;
+        asheron_rs::writers::write_u32(writer, self.shirt_style)?;
+        asheron_rs::writers::write_u32(writer, self.shirt_color)?;
+        asheron_rs::writers::write_u32(writer, self.trousers_style)?;
+        asheron_rs::writers::write_u32(writer, self.trousers_color)?;
+        asheron_rs::writers::write_u32(writer, self.footwear_style)?;
+        asheron_rs::writers::write_u32(writer, self.footwear_color)?;
+        asheron_rs::writers::write_u64(writer, self.skin_shade)?;
+        asheron_rs::writers::write_u64(writer, self.hair_shade)?;
+        asheron_rs::writers::write_u64(writer, self.headgear_shade)?;
+        asheron_rs::writers::write_u64(writer, self.shirt_shade)?;
+        asheron_rs::writers::write_u64(writer, self.trousers_shade)?;
+        asheron_rs::writers::write_u64(writer, self.tootwear_shade)?;
+        asheron_rs::writers::write_u32(writer, self.template_num)?;
+        asheron_rs::writers::write_u32(writer, self.strength)?;
+        asheron_rs::writers::write_u32(writer, self.endurance)?;
+        asheron_rs::writers::write_u32(writer, self.coordination)?;
+        asheron_rs::writers::write_u32(writer, self.quickness)?;
+        asheron_rs::writers::write_u32(writer, self.focus)?;
+        asheron_rs::writers::write_u32(writer, self.self_)?;
+        asheron_rs::writers::write_u32(writer, self.slot)?;
+        asheron_rs::writers::write_u32(writer, self.class_id)?;
+        asheron_rs::writers::write_packable_list::<RawSkillAdvancementClass>(writer, &self.skills)?;
+        asheron_rs::writers::write_string(writer, &self.name)?;
+        asheron_rs::writers::write_u32(writer, self.start_area)?;
+        asheron_rs::writers::write_u32(writer, self.is_admin)?;
+        asheron_rs::writers::write_u32(writer, self.is_envoy)?;
+        asheron_rs::writers::write_u32(writer, self.validation)?;
         Ok(())
     }
 }

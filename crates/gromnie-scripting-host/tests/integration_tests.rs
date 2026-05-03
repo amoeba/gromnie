@@ -1,6 +1,6 @@
 // Integration tests for scripting system
 
-use acprotocol::types::{CharacterIdentity, ObjectId};
+use asheron_rs::types::{CharacterIdentity, ObjectId};
 use gromnie_client::client::Client;
 use gromnie_events::{
     ClientEvent, GameEventMsg, OrderedGameEvent, ProtocolEvent, S2CEvent,

@@ -1,8 +1,8 @@
-use acprotocol::enums::PacketHeaderFlags;
+use asheron_rs::enums::PacketHeaderFlags;
 /// Shared helpers for regression testing
 ///
 /// This module provides utilities for building test packets and validating their structure.
-use acprotocol::packets::c2s_packet::C2SPacket;
+use asheron_rs::packets::c2s_packet::C2SPacket;
 use byteorder::{ByteOrder, LittleEndian};
 use gromnie::client::C2SPacketExt;
 

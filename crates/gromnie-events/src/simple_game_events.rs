@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 pub enum SimpleGameEvent {
     CharacterListReceived {
         account: String,
-        characters: Vec<acprotocol::types::CharacterIdentity>,
+        characters: Vec<asheron_rs::types::CharacterIdentity>,
         num_slots: u32,
     },
     /// Character login succeeded - received LoginComplete notification

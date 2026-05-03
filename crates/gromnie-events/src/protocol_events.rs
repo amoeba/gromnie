@@ -27,7 +27,7 @@ pub enum S2CEvent {
     },
     LoginCharacterSet {
         account: String,
-        characters: Vec<acprotocol::types::CharacterIdentity>,
+        characters: Vec<asheron_rs::types::CharacterIdentity>,
         num_slots: u32,
     },
     ItemCreateObject {

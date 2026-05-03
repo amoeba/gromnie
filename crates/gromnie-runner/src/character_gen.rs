@@ -1,5 +1,5 @@
-use acprotocol::enums::{Gender, HeritageGroup};
-use acprotocol::types::PackableList;
+use asheron_rs::enums::{Gender, HeritageGroup};
+use asheron_rs::types::PackableList;
 
 use gromnie_client::client::ace_protocol::{
     AceCharGenConfig, AceCharGenResult, RawSkillAdvancementClass,

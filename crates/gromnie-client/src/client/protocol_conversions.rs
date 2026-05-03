@@ -12,7 +12,7 @@ pub trait ToProtocolEvent {
     fn to_protocol_event(&self) -> S2CEvent;
 }
 
-impl ToProtocolEvent for acprotocol::messages::s2c::LoginCreatePlayer {
+impl ToProtocolEvent for asheron_rs::messages::s2c::LoginCreatePlayer {
     fn to_protocol_event(&self) -> S2CEvent {
         S2CEvent::LoginCreatePlayer {
             character_id: self.character_id.0,
@@ -20,7 +20,7 @@ impl ToProtocolEvent for acprotocol::messages::s2c::LoginCreatePlayer {
     }
 }
 
-impl ToProtocolEvent for acprotocol::messages::s2c::LoginLoginCharacterSet {
+impl ToProtocolEvent for asheron_rs::messages::s2c::LoginLoginCharacterSet {
     fn to_protocol_event(&self) -> S2CEvent {
         S2CEvent::LoginCharacterSet {
             account: self.account.clone(),
@@ -30,7 +30,7 @@ impl ToProtocolEvent for acprotocol::messages::s2c::LoginLoginCharacterSet {
     }
 }
 
-impl ToProtocolEvent for acprotocol::messages::s2c::ItemCreateObject {
+impl ToProtocolEvent for asheron_rs::messages::s2c::ItemCreateObject {
     fn to_protocol_event(&self) -> S2CEvent {
         S2CEvent::ItemCreateObject {
             object_id: self.object_id.0,
@@ -45,7 +45,7 @@ impl ToProtocolEvent for acprotocol::messages::s2c::ItemCreateObject {
     }
 }
 
-impl ToProtocolEvent for acprotocol::messages::s2c::CharacterCharacterError {
+impl ToProtocolEvent for asheron_rs::messages::s2c::CharacterCharacterError {
     fn to_protocol_event(&self) -> S2CEvent {
         S2CEvent::CharacterError {
             error_code: self.reason.clone() as u32,
@@ -54,7 +54,7 @@ impl ToProtocolEvent for acprotocol::messages::s2c::CharacterCharacterError {
     }
 }
 
-impl ToProtocolEvent for acprotocol::messages::s2c::CommunicationHearSpeech {
+impl ToProtocolEvent for asheron_rs::messages::s2c::CommunicationHearSpeech {
     fn to_protocol_event(&self) -> S2CEvent {
         S2CEvent::HearSpeech {
             sender_name: self.sender_name.clone(),
@@ -64,7 +64,7 @@ impl ToProtocolEvent for acprotocol::messages::s2c::CommunicationHearSpeech {
     }
 }
 
-impl ToProtocolEvent for acprotocol::messages::s2c::CommunicationHearRangedSpeech {
+impl ToProtocolEvent for asheron_rs::messages::s2c::CommunicationHearRangedSpeech {
     fn to_protocol_event(&self) -> S2CEvent {
         S2CEvent::HearRangedSpeech {
             sender_name: self.sender_name.clone(),
@@ -74,7 +74,7 @@ impl ToProtocolEvent for acprotocol::messages::s2c::CommunicationHearRangedSpeec
     }
 }
 
-impl ToProtocolEvent for acprotocol::messages::s2c::DDDInterrogationMessage {
+impl ToProtocolEvent for asheron_rs::messages::s2c::DDDInterrogationMessage {
     fn to_protocol_event(&self) -> S2CEvent {
         S2CEvent::DDDInterrogation {
             language: self.name_rule_language.to_string(),
@@ -84,13 +84,13 @@ impl ToProtocolEvent for acprotocol::messages::s2c::DDDInterrogationMessage {
     }
 }
 
-impl ToProtocolEvent for acprotocol::messages::s2c::CharacterCharGenVerificationResponse {
+impl ToProtocolEvent for asheron_rs::messages::s2c::CharacterCharGenVerificationResponse {
     fn to_protocol_event(&self) -> S2CEvent {
         S2CEvent::CharGenVerificationResponse
     }
 }
 
-impl ToProtocolEvent for acprotocol::messages::s2c::ItemSetState {
+impl ToProtocolEvent for asheron_rs::messages::s2c::ItemSetState {
     fn to_protocol_event(&self) -> S2CEvent {
         S2CEvent::ItemSetState {
             object_id: self.object_id.0,
@@ -99,7 +99,7 @@ impl ToProtocolEvent for acprotocol::messages::s2c::ItemSetState {
     }
 }
 
-impl ToProtocolEvent for acprotocol::messages::s2c::QualitiesPrivateUpdateInt {
+impl ToProtocolEvent for asheron_rs::messages::s2c::QualitiesPrivateUpdateInt {
     fn to_protocol_event(&self) -> S2CEvent {
         S2CEvent::QualitiesPrivateUpdateInt {
             property: format!("{:?}", self.key),
@@ -108,7 +108,7 @@ impl ToProtocolEvent for acprotocol::messages::s2c::QualitiesPrivateUpdateInt {
     }
 }
 
-impl ToProtocolEvent for acprotocol::messages::s2c::ItemDeleteObject {
+impl ToProtocolEvent for asheron_rs::messages::s2c::ItemDeleteObject {
     fn to_protocol_event(&self) -> S2CEvent {
         S2CEvent::ItemDeleteObject {
             object_id: self.object_id.0,
@@ -128,7 +128,7 @@ type PositionPackFields = (
 );
 
 /// Extract position fields from an acprotocol PositionPack
-fn position_pack_fields(pos: &acprotocol::types::PositionPack) -> PositionPackFields {
+fn position_pack_fields(pos: &asheron_rs::types::PositionPack) -> PositionPackFields {
     (
         pos.origin.landcell.0,
         pos.origin.location.x,
@@ -141,7 +141,7 @@ fn position_pack_fields(pos: &acprotocol::types::PositionPack) -> PositionPackFi
     )
 }
 
-impl ToProtocolEvent for acprotocol::messages::s2c::MovementPositionEvent {
+impl ToProtocolEvent for asheron_rs::messages::s2c::MovementPositionEvent {
     fn to_protocol_event(&self) -> S2CEvent {
         let (landcell, x, y, z, quat_w, quat_x, quat_y, quat_z) =
             position_pack_fields(&self.position);
@@ -159,7 +159,7 @@ impl ToProtocolEvent for acprotocol::messages::s2c::MovementPositionEvent {
     }
 }
 
-impl ToProtocolEvent for acprotocol::messages::s2c::MovementPositionAndMovementEvent {
+impl ToProtocolEvent for asheron_rs::messages::s2c::MovementPositionAndMovementEvent {
     fn to_protocol_event(&self) -> S2CEvent {
         let (landcell, x, y, z, quat_w, quat_x, quat_y, quat_z) =
             position_pack_fields(&self.position);
@@ -177,7 +177,7 @@ impl ToProtocolEvent for acprotocol::messages::s2c::MovementPositionAndMovementE
     }
 }
 
-impl ToProtocolEvent for acprotocol::messages::s2c::MovementSetObjectMovement {
+impl ToProtocolEvent for asheron_rs::messages::s2c::MovementSetObjectMovement {
     fn to_protocol_event(&self) -> S2CEvent {
         S2CEvent::MovementSetObjectMovement {
             object_id: self.object_id.0,
@@ -186,7 +186,7 @@ impl ToProtocolEvent for acprotocol::messages::s2c::MovementSetObjectMovement {
     }
 }
 
-impl ToProtocolEvent for acprotocol::messages::s2c::EffectsPlayerTeleport {
+impl ToProtocolEvent for asheron_rs::messages::s2c::EffectsPlayerTeleport {
     fn to_protocol_event(&self) -> S2CEvent {
         S2CEvent::EffectsPlayerTeleport {
             object_teleport_sequence: self.object_teleport_sequence,
@@ -203,7 +203,7 @@ impl ToProtocolEvent for acprotocol::messages::s2c::EffectsPlayerTeleport {
 
 /// Convert acprotocol CommunicationHearDirectSpeech to GameEventMsg
 pub fn hear_direct_speech_to_game_event_msg(
-    event: acprotocol::gameevents::CommunicationHearDirectSpeech,
+    event: asheron_rs::gameevents::CommunicationHearDirectSpeech,
 ) -> GameEventMsg {
     GameEventMsg::HearDirectSpeech {
         message: event.message,
@@ -216,7 +216,7 @@ pub fn hear_direct_speech_to_game_event_msg(
 
 /// Convert acprotocol CommunicationTransientString to GameEventMsg
 pub fn transient_string_to_game_event_msg(
-    event: acprotocol::gameevents::CommunicationTransientString,
+    event: asheron_rs::gameevents::CommunicationTransientString,
 ) -> GameEventMsg {
     GameEventMsg::TransientString {
         message: event.message,
@@ -228,7 +228,7 @@ pub fn transient_string_to_game_event_msg(
 // ============================================================================
 
 pub fn trade_register_trade_to_game_event_msg(
-    event: acprotocol::gameevents::TradeRegisterTrade,
+    event: asheron_rs::gameevents::TradeRegisterTrade,
 ) -> GameEventMsg {
     GameEventMsg::TradeRegistered {
         initiator_id: event.initiator_id.0,
@@ -238,7 +238,7 @@ pub fn trade_register_trade_to_game_event_msg(
 }
 
 pub fn trade_open_trade_to_game_event_msg(
-    event: acprotocol::gameevents::TradeOpenTrade,
+    event: asheron_rs::gameevents::TradeOpenTrade,
 ) -> GameEventMsg {
     GameEventMsg::TradeOpened {
         object_id: event.object_id.0,
@@ -246,13 +246,13 @@ pub fn trade_open_trade_to_game_event_msg(
 }
 
 pub fn trade_close_trade_to_game_event_msg(
-    _event: acprotocol::gameevents::TradeCloseTrade,
+    _event: asheron_rs::gameevents::TradeCloseTrade,
 ) -> GameEventMsg {
     GameEventMsg::TradeClosed
 }
 
 pub fn trade_add_to_trade_to_game_event_msg(
-    event: acprotocol::gameevents::TradeAddToTrade,
+    event: asheron_rs::gameevents::TradeAddToTrade,
 ) -> GameEventMsg {
     GameEventMsg::TradeItemAdded {
         item_id: event.object_id.0,
@@ -260,7 +260,7 @@ pub fn trade_add_to_trade_to_game_event_msg(
 }
 
 pub fn trade_remove_from_trade_to_game_event_msg(
-    event: acprotocol::gameevents::TradeRemoveFromTrade,
+    event: asheron_rs::gameevents::TradeRemoveFromTrade,
 ) -> GameEventMsg {
     GameEventMsg::TradeItemRemoved {
         item_id: event.object_id.0,
@@ -268,25 +268,25 @@ pub fn trade_remove_from_trade_to_game_event_msg(
 }
 
 pub fn trade_accept_trade_event_to_game_event_msg(
-    _event: acprotocol::gameevents::TradeAcceptTrade,
+    _event: asheron_rs::gameevents::TradeAcceptTrade,
 ) -> GameEventMsg {
     GameEventMsg::TradeAccepted
 }
 
 pub fn trade_decline_trade_event_to_game_event_msg(
-    _event: acprotocol::gameevents::TradeDeclineTrade,
+    _event: asheron_rs::gameevents::TradeDeclineTrade,
 ) -> GameEventMsg {
     GameEventMsg::TradeDeclined
 }
 
 pub fn trade_reset_trade_event_to_game_event_msg(
-    _event: acprotocol::gameevents::TradeResetTrade,
+    _event: asheron_rs::gameevents::TradeResetTrade,
 ) -> GameEventMsg {
     GameEventMsg::TradeReset
 }
 
 pub fn trade_failure_to_game_event_msg(
-    event: acprotocol::gameevents::TradeTradeFailure,
+    event: asheron_rs::gameevents::TradeTradeFailure,
 ) -> GameEventMsg {
     GameEventMsg::TradeFailure {
         reason: event.reason,
@@ -298,7 +298,7 @@ pub fn trade_failure_to_game_event_msg(
 // ============================================================================
 
 pub fn magic_update_enchantment_to_game_event_msg(
-    event: acprotocol::gameevents::MagicUpdateEnchantment,
+    event: asheron_rs::gameevents::MagicUpdateEnchantment,
 ) -> GameEventMsg {
     let enc = &event.enchantment;
     GameEventMsg::EnchantmentUpdated {
@@ -310,7 +310,7 @@ pub fn magic_update_enchantment_to_game_event_msg(
 }
 
 pub fn magic_remove_enchantment_to_game_event_msg(
-    event: acprotocol::gameevents::MagicRemoveEnchantment,
+    event: asheron_rs::gameevents::MagicRemoveEnchantment,
 ) -> GameEventMsg {
     GameEventMsg::EnchantmentRemoved {
         spell_id: event.spell_id.id.0 as u32,
@@ -328,8 +328,8 @@ mod tests {
     /// Test LoginCreatePlayer conversion extracts character_id correctly
     #[test]
     fn test_login_create_player_conversion() {
-        let msg = acprotocol::messages::s2c::LoginCreatePlayer {
-            character_id: acprotocol::types::ObjectId(0x12345678),
+        let msg = asheron_rs::messages::s2c::LoginCreatePlayer {
+            character_id: asheron_rs::types::ObjectId(0x12345678),
         };
 
         let result = msg.to_protocol_event();
@@ -345,8 +345,8 @@ mod tests {
     /// Test CharacterError conversion includes both code and message
     #[test]
     fn test_character_error_conversion() {
-        use acprotocol::enums::CharacterErrorType;
-        use acprotocol::messages::s2c::CharacterCharacterError;
+        use asheron_rs::enums::CharacterErrorType;
+        use asheron_rs::messages::s2c::CharacterCharacterError;
 
         let msg = CharacterCharacterError {
             reason: CharacterErrorType::LogonServerFull,
@@ -369,10 +369,10 @@ mod tests {
     /// Test HearDirectSpeech game event conversion preserves all fields
     #[test]
     fn test_hear_direct_speech_game_event_conversion() {
-        use acprotocol::enums::ChatFragmentType;
-        use acprotocol::types::ObjectId;
+        use asheron_rs::enums::ChatFragmentType;
+        use asheron_rs::types::ObjectId;
 
-        let event = acprotocol::gameevents::CommunicationHearDirectSpeech {
+        let event = asheron_rs::gameevents::CommunicationHearDirectSpeech {
             message: "Secret message".to_string(),
             sender_name: "Spy".to_string(),
             sender_id: ObjectId(0x111),
@@ -404,7 +404,7 @@ mod tests {
     /// Test TransientString game event conversion
     #[test]
     fn test_transient_string_game_event_conversion() {
-        let event = acprotocol::gameevents::CommunicationTransientString {
+        let event = asheron_rs::gameevents::CommunicationTransientString {
             message: "System notification".to_string(),
         };
 
@@ -422,7 +422,7 @@ mod tests {
     /// This is a critical test that verifies the character deletion status mapping
     #[test]
     fn test_character_delete_pending_mapping() {
-        use acprotocol::types::{CharacterIdentity, ObjectId, PackableList};
+        use asheron_rs::types::{CharacterIdentity, ObjectId, PackableList};
 
         let characters = vec![
             CharacterIdentity {
@@ -437,7 +437,7 @@ mod tests {
             },
         ];
 
-        let msg = acprotocol::messages::s2c::LoginLoginCharacterSet {
+        let msg = asheron_rs::messages::s2c::LoginLoginCharacterSet {
             status: 0,
             characters: PackableList {
                 count: characters.len() as u32,

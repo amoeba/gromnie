@@ -249,16 +249,16 @@ pub enum ClientEvent {
 Add conversion functions from acprotocol types:
 
 ```rust
-impl From<&acprotocol::messages::s2c::LoginCreatePlayer> for S2CEvent {
-    fn from(msg: &acprotocol::messages::s2c::LoginCreatePlayer) -> Self {
+impl From<&asheron_rs::messages::s2c::LoginCreatePlayer> for S2CEvent {
+    fn from(msg: &asheron_rs::messages::s2c::LoginCreatePlayer) -> Self {
         S2CEvent::LoginCreatePlayer {
             character_id: msg.character_id.0,
         }
     }
 }
 
-impl From<&acprotocol::messages::s2c::LoginLoginCharacterSet> for S2CEvent {
-    fn from(msg: &acprotocol::messages::s2c::LoginLoginCharacterSet) -> Self {
+impl From<&asheron_rs::messages::s2c::LoginLoginCharacterSet> for S2CEvent {
+    fn from(msg: &asheron_rs::messages::s2c::LoginLoginCharacterSet) -> Self {
         S2CEvent::LoginCharacterSet {
             account: msg.account.clone(),
             characters: msg.characters.list.iter()
@@ -298,10 +298,10 @@ impl From<&crate::client::game_event_handlers::CommunicationHearDirectSpeech> fo
 Update each handler to emit protocol events. For example:
 
 ```rust
-impl MessageHandler<acprotocol::messages::s2c::LoginCreatePlayer> for Client {
+impl MessageHandler<asheron_rs::messages::s2c::LoginCreatePlayer> for Client {
     fn handle(
         &mut self,
-        create_player: acprotocol::messages::s2c::LoginCreatePlayer,
+        create_player: asheron_rs::messages::s2c::LoginCreatePlayer,
     ) -> Option<GameEvent> {
         let character_id = create_player.character_id.0;
 
