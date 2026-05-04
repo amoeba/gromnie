@@ -22,9 +22,17 @@ pub struct ScriptingConfig {
     #[serde(default = "default_hot_reload")]
     pub hot_reload: bool,
 
-    /// Hot reload scan interval in milliseconds (default: 500ms)
+    /// Hot reload scan interval in milliseconds (default: 1000ms)
     #[serde(default = "default_hot_reload_interval")]
     pub hot_reload_interval_ms: u64,
+
+    /// Script execution timeout in milliseconds (default: 100ms)
+    ///
+    /// Each script's event handler and tick function will be terminated if it
+    /// exceeds this timeout. This prevents misbehaving scripts from blocking
+    /// the entire scripting system. Set to 0 to disable timeouts (not recommended).
+    #[serde(default = "default_script_timeout")]
+    pub script_timeout_ms: u64,
 }
 
 fn default_hot_reload() -> bool {
@@ -35,6 +43,10 @@ fn default_hot_reload_interval() -> u64 {
     1000
 }
 
+fn default_script_timeout() -> u64 {
+    100
+}
+
 impl Default for ScriptingConfig {
     fn default() -> Self {
         Self {
@@ -43,6 +55,7 @@ impl Default for ScriptingConfig {
             config: HashMap::new(),
             hot_reload: true,
             hot_reload_interval_ms: 1000,
+            script_timeout_ms: 100,
         }
     }
 }

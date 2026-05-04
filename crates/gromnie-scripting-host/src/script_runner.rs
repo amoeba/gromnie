@@ -52,6 +52,8 @@ pub struct ScriptRunner {
     last_tick: Instant,
     /// Interval between ticks (default 50ms for 20Hz)
     tick_interval: Duration,
+    /// Script execution timeout
+    script_timeout: Duration,
     /// Script configuration for reload operations
     script_config: Option<HashMap<String, toml::Value>>,
     /// Script directory path
@@ -59,19 +61,25 @@ pub struct ScriptRunner {
 }
 
 impl ScriptRunner {
-    /// Create a new script runner with default tick rate (20Hz)
+    /// Create a new script runner with default tick rate (20Hz) and default timeout (100ms)
     pub fn new(
         client: Arc<RwLock<Client>>,
         action_tx: UnboundedSender<SimpleClientAction>,
     ) -> Self {
-        Self::new_with_tick_rate(client, action_tx, DEFAULT_TICK_INTERVAL)
+        Self::new_with_config(
+            client,
+            action_tx,
+            DEFAULT_TICK_INTERVAL,
+            Duration::from_millis(100),
+        )
     }
 
-    /// Create a new script runner with custom tick rate
-    pub fn new_with_tick_rate(
+    /// Create a new script runner with custom tick rate and timeout
+    pub fn new_with_config(
         client: Arc<RwLock<Client>>,
         action_tx: UnboundedSender<SimpleClientAction>,
         tick_interval: Duration,
+        script_timeout: Duration,
     ) -> Self {
         Self {
             client,
@@ -81,15 +89,34 @@ impl ScriptRunner {
             timer_manager: Arc::new(TimerManager::new()),
             last_tick: Instant::now(),
             tick_interval,
+            script_timeout,
             script_config: None,
             script_dir: None,
         }
+    }
+
+    /// Create a new script runner with custom tick rate
+    pub fn new_with_tick_rate(
+        client: Arc<RwLock<Client>>,
+        action_tx: UnboundedSender<SimpleClientAction>,
+        tick_interval: Duration,
+    ) -> Self {
+        Self::new_with_config(client, action_tx, tick_interval, Duration::from_millis(100))
     }
 
     /// Create a new script runner with WASM support enabled
     pub fn new_with_wasm(
         client: Arc<RwLock<Client>>,
         action_tx: UnboundedSender<SimpleClientAction>,
+    ) -> Self {
+        Self::new_with_wasm_and_config(client, action_tx, Duration::from_millis(100))
+    }
+
+    /// Create a new script runner with WASM support and custom timeout
+    pub fn new_with_wasm_and_config(
+        client: Arc<RwLock<Client>>,
+        action_tx: UnboundedSender<SimpleClientAction>,
+        script_timeout: Duration,
     ) -> Self {
         let wasm_engine = match super::wasm::create_engine() {
             Ok(engine) => {
@@ -110,6 +137,7 @@ impl ScriptRunner {
             timer_manager: Arc::new(TimerManager::new()),
             last_tick: Instant::now(),
             tick_interval: DEFAULT_TICK_INTERVAL,
+            script_timeout,
             script_config: None,
             script_dir: None,
         }
@@ -133,6 +161,18 @@ impl ScriptRunner {
         script.on_load(Arc::clone(&ctx)).await;
 
         self.scripts.push(script);
+    }
+
+    /// Register a trait object script (for testing) - only available for WASM scripts
+    /// This is a testing convenience method - normal scripts are loaded from files
+    #[cfg(test)]
+    pub async fn register_script_trait(&mut self, _script: Box<dyn crate::Script>) {
+        // For now, only WASM scripts are supported in the runtime
+        // This method exists for testing interface compatibility but doesn't actually work
+        // since we can't convert trait objects to WasmScript
+        unimplemented!(
+            "register_script_trait is a placeholder for testing - use register_script with WasmScript instead"
+        );
     }
 
     /// Get the number of registered scripts
@@ -555,16 +595,43 @@ impl ScriptRunner {
 
         self.last_tick = now;
 
-        for script in &mut self.scripts {
-            let ctx = Self::create_script_context(
-                self.client.clone(),
-                self.action_tx.clone(),
-                Arc::clone(&self.timer_manager),
-                SystemTime::now(),
-            )
-            .await;
+        // Create context once for all scripts
+        let ctx = Self::create_script_context(
+            self.client.clone(),
+            self.action_tx.clone(),
+            Arc::clone(&self.timer_manager),
+            SystemTime::now(),
+        )
+        .await;
 
-            script.on_tick(Arc::clone(&ctx), elapsed).await;
+        // Execute each script's tick with timeout protection
+        for script in &mut self.scripts {
+            let script_name = script.name().to_string();
+            let script_id = script.id().to_string();
+            let ctx_clone = Arc::clone(&ctx);
+            let timeout = self.script_timeout;
+
+            let result = tokio::time::timeout(timeout, script.on_tick(ctx_clone, elapsed)).await;
+
+            match result {
+                Ok(()) => {
+                    debug!(
+                        target: "scripting",
+                        "Script {} ({}) completed tick",
+                        script_name,
+                        script_id
+                    );
+                }
+                Err(_) => {
+                    tracing::warn!(
+                        target: "scripting",
+                        "Script {} ({}) timed out after {}ms during tick",
+                        script_name,
+                        script_id,
+                        timeout.as_millis()
+                    );
+                }
+            }
         }
     }
 
@@ -596,27 +663,61 @@ impl ScriptRunner {
         )
         .await;
 
-        // Dispatch event to each script that's interested
-        for script in &mut self.scripts {
-            let subscribed = script
-                .subscribed_events()
-                .iter()
-                .any(|filter: &EventFilter| filter.matches(&raw_event));
+        // Collect scripts that are subscribed to this event and execute them in parallel
+        let subscribed_scripts: Vec<_> = self
+            .scripts
+            .iter_mut()
+            .enumerate()
+            .filter(|(_, script)| {
+                let subscribed = script
+                    .subscribed_events()
+                    .iter()
+                    .any(|filter: &EventFilter| filter.matches(&raw_event));
 
-            debug!(
-                target: "scripting",
-                "Script {} ({}) subscribed to {:?}, event matches: {}",
-                script.name(),
-                script.id(),
-                script.subscribed_events(),
+                debug!(
+                    target: "scripting",
+                    "Script {} ({}) subscribed to {:?}, event matches: {}",
+                    script.name(),
+                    script.id(),
+                    script.subscribed_events(),
+                    subscribed
+                );
+
                 subscribed
-            );
+            })
+            .collect();
 
-            if !subscribed {
-                continue;
+        // Execute each subscribed script with timeout protection
+        for (_index, script) in subscribed_scripts {
+            let script_name = script.name().to_string();
+            let script_id = script.id().to_string();
+            let ctx = Arc::clone(&ctx);
+            let event_copy = raw_event.clone();
+            let timeout = self.script_timeout;
+
+            // We need to handle this carefully since we can't move mutable references across tasks
+            // For now, we'll execute them sequentially but with timeout protection
+            let result = tokio::time::timeout(timeout, script.on_event(&event_copy, ctx)).await;
+
+            match result {
+                Ok(()) => {
+                    debug!(
+                        target: "scripting",
+                        "Script {} ({}) completed event handling",
+                        script_name,
+                        script_id
+                    );
+                }
+                Err(_) => {
+                    tracing::warn!(
+                        target: "scripting",
+                        "Script {} ({}) timed out after {}ms during event handling",
+                        script_name,
+                        script_id,
+                        timeout.as_millis()
+                    );
+                }
             }
-
-            script.on_event(&raw_event, Arc::clone(&ctx)).await;
         }
     }
 }
