@@ -15,9 +15,10 @@ use gromnie_events::SimpleClientAction;
 pub fn create_runner_from_config(
     client: Arc<RwLock<Client>>,
     action_tx: UnboundedSender<SimpleClientAction>,
-    _config: &ScriptingConfig,
+    config: &ScriptingConfig,
 ) -> ScriptRunner {
-    // Create runner with script support
-    debug!(target: "scripting", "Creating script runner");
-    ScriptRunner::new_with_wasm(client, action_tx)
+    // Create runner with script support and configured timeout
+    debug!(target: "scripting", "Creating script runner with {}ms timeout", config.script_timeout_ms);
+    let timeout = std::time::Duration::from_millis(config.script_timeout_ms);
+    ScriptRunner::new_with_wasm_and_config(client, action_tx, timeout)
 }

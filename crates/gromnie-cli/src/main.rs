@@ -60,6 +60,9 @@ password = "pass"
 
 [scripting]
 enabled = true
+# Script execution timeout in milliseconds (default: 100ms)
+# Prevents misbehaving scripts from blocking the entire scripting system
+# script_timeout_ms = 100
 "#;
 
     fs::write(&config_path, example_config)?;
