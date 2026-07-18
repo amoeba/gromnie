@@ -1,4 +1,5 @@
 pub mod app;
+pub mod cli_runtime;
 pub mod draw;
 pub mod load_tester;
 pub mod wizards;
