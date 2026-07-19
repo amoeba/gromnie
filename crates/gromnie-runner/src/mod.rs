@@ -8,7 +8,7 @@ mod event_wrapper;
 pub mod logging;
 
 pub use character_gen::CharacterBuilder;
-pub use client_naming::{ClientNaming, encode_client_id};
+pub use client_naming::{ClientNaming, decode_client_id, encode_client_id};
 pub use client_runner::{
     ClientConfig, ConsumerBuilder, EventBusManager, FnConsumerBuilder, FnConsumerFactory,
     MultiClientConfig, MultiClientConsumerFactory, MultiClientStats, RunConfig, RunResult,

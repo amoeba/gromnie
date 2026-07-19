@@ -120,15 +120,59 @@ mod tests {
     }
 
     #[test]
+    fn test_encode_higher_values() {
+        assert_eq!(encode_client_id(675), "AAZZ");
+        assert_eq!(encode_client_id(456975), "ZZZZ");
+        assert_eq!(encode_client_id(456976), "ZZZZ"); // Clamped
+    }
+
+    #[test]
+    fn test_decode_known_values() {
+        assert_eq!(decode_client_id("AAAA"), Some(0));
+        assert_eq!(decode_client_id("AAAB"), Some(1));
+        assert_eq!(decode_client_id("AAAZ"), Some(25));
+        assert_eq!(decode_client_id("AABA"), Some(26));
+        assert_eq!(decode_client_id("AABB"), Some(27));
+        assert_eq!(decode_client_id("ZZZZ"), Some(456975));
+    }
+
+    #[test]
+    fn test_decode_invalid_input() {
+        assert_eq!(decode_client_id("AAA"), None);
+        assert_eq!(decode_client_id("AAAAA"), None);
+        assert_eq!(decode_client_id("AAAa"), None);
+        assert_eq!(decode_client_id("AA!A"), None);
+        assert_eq!(decode_client_id(""), None);
+    }
+
+    #[test]
+    fn test_client_naming_higher_id() {
+        let naming = ClientNaming::new(123);
+        let encoded = encode_client_id(123);
+        assert_eq!(naming.code(), encoded.as_str());
+        assert_eq!(naming.account_name(), format!("Load-{}", encoded));
+        assert_eq!(naming.character_name(), format!("Load-{}-A", encoded));
+    }
+
+    #[test]
     fn test_max_clients() {
-        // Verify we can handle the max number of clients
         let max_id = 456975; // 26^4 - 1
         let naming = ClientNaming::new(max_id);
         assert_eq!(naming.code(), "ZZZZ");
         assert_eq!(naming.account_name(), "Load-ZZZZ");
 
-        // Verify clamp behavior for values beyond max
         let over_max = ClientNaming::new(456976);
         assert_eq!(over_max.code(), "ZZZZ");
+    }
+
+    #[test]
+    fn test_encode_sequential() {
+        let expected = vec![
+            "AAAA", "AAAB", "AAAC", "AAAD", "AAAE", "AAAF", "AAAG", "AAAH", "AAAI", "AAAJ",
+        ];
+
+        for (i, &exp) in expected.iter().enumerate() {
+            assert_eq!(encode_client_id(i as u32), exp, "Failed at index {}", i);
+        }
     }
 }
