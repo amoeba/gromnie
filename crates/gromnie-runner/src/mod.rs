@@ -12,7 +12,7 @@ pub use client_naming::{ClientNaming, encode_client_id};
 pub use client_runner::{
     ClientConfig, ConsumerBuilder, EventBusManager, FnConsumerBuilder, FnConsumerFactory,
     MultiClientConfig, MultiClientConsumerFactory, MultiClientStats, RunConfig, RunResult,
-    create_event_bus_manager, run, run_client, run_client_with_action_channel,
+    TransportFactory, create_event_bus_manager, run, run_client, run_client_with_action_channel,
     run_client_with_consumers, run_multi_client,
 };
 pub use client_runner_builder::{

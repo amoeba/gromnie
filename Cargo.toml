@@ -4,10 +4,12 @@ members = [
   "crates/gromnie-cli",
   "crates/gromnie-client",
   "crates/gromnie-events",
+  "crates/gromnie-proxy",
   "crates/gromnie-runner",
   "crates/gromnie-scripting-api",
   "crates/gromnie-scripting-host",
   "crates/gromnie-tui",
+  "crates/gromnie-web",
   "crates/xtask",
   "tests/scripting",
 ]
@@ -15,6 +17,7 @@ default-members = [
   "crates/gromnie-cli",
   "crates/gromnie-client",
   "crates/gromnie-events",
+  "crates/gromnie-proxy",
   "crates/gromnie-runner",
   "crates/gromnie-scripting-api",
   "crates/gromnie-scripting-host",
@@ -45,6 +48,7 @@ tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 wasmtime = { version = "36.0", features = ["component-model"] }
 wasmtime-wasi = "36.0"
 wit-bindgen = "0.57"
+wisp-mux = { git = "https://github.com/MercuryWorkshop/epoxy-tls", package = "wisp-mux", rev = "0c11678d72a636c3a4bc723db87e03e7b888eaf9", default-features = false, features = ["wasm", "tokio-tungstenite"] }
 
 [profile.dist]
 inherits = "release"

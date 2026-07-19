@@ -11,29 +11,45 @@ license.workspace = true
 name = "gromnie_client"
 path = "src/lib.rs"
 
+[features]
+default = ["native"]
+native = [
+  "dep:crossterm",
+  "dep:directories",
+  "dep:ratatui",
+  "dep:serenity",
+  "dep:tracing-appender",
+  "dep:wasmtime",
+  "dep:wasmtime-wasi",
+  "dep:wit-bindgen",
+]
+wasm = ["dep:js-sys", "dep:wasm-bindgen-futures", "gromnie-events/wasm"]
+
 [dependencies]
 asheron-rs.workspace = true
 anyhow.workspace = true
 bitflags = "2.6"
 byteorder = "1.5.0"
+js-sys = { version = "0.3", optional = true }
+wasm-bindgen-futures = { version = "0.4", optional = true }
 chrono.workspace = true
 clap.workspace = true
-crossterm.workspace = true
-directories.workspace = true
+crossterm = { workspace = true, optional = true }
+directories = { workspace = true, optional = true }
 gromnie-events = { path = "../gromnie-events" }
 rand = "0.8"
 rand_isaac = "0.3"
-ratatui.workspace = true
+ratatui = { workspace = true, optional = true }
 serde = { version = "1.0", features = ["derive"] }
-serenity.workspace = true
+serenity = { workspace = true, optional = true }
 strum_macros = "0.26.1"
-tokio = { version = "1.36.0", features = ["full"] }
+tokio = { version = "1.36.0", features = ["sync", "rt", "macros", "io-util"] }
 toml = "0.8"
 tracing.workspace = true
-tracing-appender.workspace = true
+tracing-appender = { workspace = true, optional = true }
 tracing-subscriber.workspace = true
-wasmtime.workspace = true
-wasmtime-wasi.workspace = true
-wit-bindgen.workspace = true
+wasmtime = { workspace = true, optional = true }
+wasmtime-wasi = { workspace = true, optional = true }
+wit-bindgen = { workspace = true, optional = true }
 
 [dev-dependencies]

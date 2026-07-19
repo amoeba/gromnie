@@ -1,5 +1,5 @@
+use crate::instant::Instant;
 use std::sync::Mutex;
-use std::time::Instant;
 
 use crate::crypto::crypto_system::CryptoSystem;
 
