@@ -5,6 +5,7 @@
 use std::sync::Arc;
 use tokio::sync::{mpsc, watch};
 
+use crate::client_runner::TransportFactory;
 use crate::event_consumer::EventConsumer;
 use gromnie_events::SimpleClientAction;
 
@@ -72,6 +73,7 @@ pub struct ClientRunnerBuilder {
     shutdown_rx: Option<watch::Receiver<bool>>,
     event_bus_capacity: usize,
     app_config: Option<gromnie_client::config::GromnieConfig>,
+    transport_factory: Option<TransportFactory>,
 }
 
 impl ClientRunnerBuilder {
@@ -84,6 +86,7 @@ impl ClientRunnerBuilder {
             shutdown_rx: None,
             event_bus_capacity: 100,
             app_config: None,
+            transport_factory: None,
         }
     }
 
@@ -233,6 +236,21 @@ impl ClientRunnerBuilder {
         self
     }
 
+    /// Provide a custom transport factory for client creation.
+    ///
+    /// By default, clients use native UDP transport. Supplying this allows
+    /// alternate transport implementations.
+    pub fn with_transport_factory<F>(mut self, factory: F) -> Self
+    where
+        F: Fn(&ClientConfig) -> Box<dyn gromnie_client::transport::ClientTransport>
+            + Send
+            + Sync
+            + 'static,
+    {
+        self.transport_factory = Some(Arc::new(factory));
+        self
+    }
+
     /// Build the ClientRunner
     ///
     /// If config was not provided via `with_config()`, it will be loaded
@@ -299,6 +317,7 @@ impl ClientRunnerBuilder {
             shutdown_rx: self.shutdown_rx,
             event_bus_capacity: self.event_bus_capacity,
             app_config: Some(config),
+            transport_factory: self.transport_factory,
         })
     }
 }
@@ -318,6 +337,7 @@ pub struct ClientRunner {
     pub(crate) shutdown_rx: Option<watch::Receiver<bool>>,
     pub(crate) event_bus_capacity: usize,
     pub(crate) app_config: Option<gromnie_client::config::GromnieConfig>,
+    pub(crate) transport_factory: Option<TransportFactory>,
 }
 
 /// Result from running clients
@@ -384,7 +404,6 @@ impl ClientRunner {
     async fn run_single(self, config: ClientConfig) -> RunResult {
         use crate::EventBusManager;
         use crate::event_wrapper::EventWrapper;
-        use gromnie_client::client::Client;
         use gromnie_events::{EventEnvelope, EventSource, SystemEvent};
 
         // Create event bus
@@ -422,14 +441,10 @@ impl ClientRunner {
         let event_rx = event_bus_manager.subscribe();
 
         // Create the client
-        let (client, action_tx) = Client::new(
-            config.id,
-            config.address.clone(),
-            config.account_name.clone(),
-            config.password.clone(),
-            config.character_name.clone(),
+        let (client, action_tx) = crate::client_runner::create_client_from_config(
+            &config,
             raw_event_tx,
-            config.reconnect,
+            self.transport_factory.as_ref(),
         )
         .await;
 
@@ -548,6 +563,7 @@ impl ClientRunner {
             factory,
             generator,
             self.shutdown_rx,
+            self.transport_factory,
         )
         .await;
 

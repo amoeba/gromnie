@@ -52,8 +52,8 @@ pub enum Scene {
 pub struct ConnectingScene {
     pub connect_progress: ConnectingProgress,
     pub patch_progress: PatchingProgress,
-    pub started_at: std::time::Instant,
-    pub last_retry_at: std::time::Instant,
+    pub started_at: crate::instant::Instant,
+    pub last_retry_at: crate::instant::Instant,
 }
 
 #[derive(Clone, Debug)]
@@ -97,7 +97,7 @@ impl Default for ConnectingScene {
 
 impl ConnectingScene {
     pub fn new() -> Self {
-        let now = std::time::Instant::now();
+        let now = crate::instant::Instant::now();
         Self {
             connect_progress: ConnectingProgress::Initial,
             patch_progress: PatchingProgress::NotStarted,
@@ -108,7 +108,7 @@ impl ConnectingScene {
 
     /// Reset to initial state for reconnection attempts
     pub fn reset(&mut self) {
-        let now = std::time::Instant::now();
+        let now = crate::instant::Instant::now();
         self.connect_progress = ConnectingProgress::Initial;
         self.patch_progress = PatchingProgress::NotStarted;
         self.started_at = now;
@@ -127,7 +127,7 @@ impl ConnectingScene {
 
     /// Update the last retry time
     pub fn update_retry_time(&mut self) {
-        self.last_retry_at = std::time::Instant::now();
+        self.last_retry_at = crate::instant::Instant::now();
     }
 }
 

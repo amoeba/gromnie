@@ -8,9 +8,46 @@ use crate::event_bus::{EventBus, EventEnvelope};
 use crate::event_consumer::EventConsumer;
 use crate::event_wrapper::EventWrapper;
 use gromnie_client::client::Client;
+use gromnie_client::transport::ClientTransport;
 
 // Re-export ClientConfig from gromnie-client
 pub use gromnie_client::config::ClientConfig;
+
+pub type TransportFactory = Arc<dyn Fn(&ClientConfig) -> Box<dyn ClientTransport> + Send + Sync>;
+
+pub(crate) async fn create_client_from_config(
+    config: &ClientConfig,
+    raw_event_tx: mpsc::Sender<gromnie_events::ClientEvent>,
+    transport_factory: Option<&TransportFactory>,
+) -> (
+    Client,
+    mpsc::UnboundedSender<gromnie_events::SimpleClientAction>,
+) {
+    if let Some(factory) = transport_factory {
+        Client::new_with_transport(
+            config.id,
+            config.address.clone(),
+            config.account_name.clone(),
+            config.password.clone(),
+            config.character_name.clone(),
+            raw_event_tx,
+            config.reconnect,
+            factory(config),
+        )
+        .await
+    } else {
+        Client::new_with_reconnect(
+            config.id,
+            config.address.clone(),
+            config.account_name.clone(),
+            config.password.clone(),
+            config.character_name.clone(),
+            raw_event_tx,
+            config.reconnect,
+        )
+        .await
+    }
+}
 
 /// Configuration for running clients - either single or multi-client
 #[derive(Clone, Debug)]
@@ -305,16 +342,7 @@ pub async fn run_client<C, F>(
     // Subscribe to the event bus for the consumer
     let event_rx = event_bus_manager.subscribe();
 
-    let (client, action_tx) = Client::new_with_reconnect(
-        config.id,
-        config.address.clone(),
-        config.account_name.clone(),
-        config.password.clone(),
-        config.character_name.clone(),
-        raw_event_tx,
-        config.reconnect,
-    )
-    .await;
+    let (client, action_tx) = create_client_from_config(&config, raw_event_tx, None).await;
 
     // Wrap client in Arc<RwLock<>> for shared access
     let client = Arc::new(RwLock::new(client));
@@ -351,16 +379,7 @@ pub async fn run_client_with_consumers<F>(
         event_wrapper.run(raw_event_rx).await;
     });
 
-    let (client, action_tx) = Client::new_with_reconnect(
-        config.id,
-        config.address.clone(),
-        config.account_name.clone(),
-        config.password.clone(),
-        config.character_name.clone(),
-        raw_event_tx,
-        config.reconnect,
-    )
-    .await;
+    let (client, action_tx) = create_client_from_config(&config, raw_event_tx, None).await;
 
     // Wrap client in Arc<RwLock<>> for shared access
     let client = Arc::new(RwLock::new(client));
@@ -450,16 +469,7 @@ pub async fn run_client_with_action_channel<C, F>(
     // Subscribe to the event bus for the consumer
     let event_rx = event_bus_manager.subscribe();
 
-    let (client, action_tx) = Client::new_with_reconnect(
-        config.id,
-        config.address.clone(),
-        config.account_name.clone(),
-        config.password.clone(),
-        config.character_name.clone(),
-        raw_event_tx,
-        config.reconnect,
-    )
-    .await;
+    let (client, action_tx) = create_client_from_config(&config, raw_event_tx, None).await;
 
     // Wrap client in Arc<RwLock<>> for shared access
     let client = Arc::new(RwLock::new(client));
@@ -567,10 +577,10 @@ async fn run_client_loop(
 
     loop {
         tokio::select! {
-            // Add a timeout to recv_from so we can respond to shutdown signals
+            // Add a timeout to transport recv so we can respond to shutdown signals
             recv_result = async {
-                let client_guard = client.write().await;
-                tokio::time::timeout(tokio::time::Duration::from_millis(100), client_guard.socket.recv_from(&mut buf)).await
+                let mut client_guard = client.write().await;
+                tokio::time::timeout(tokio::time::Duration::from_millis(100), client_guard.recv_packet(&mut buf)).await
             } => {
                 match recv_result {
                     Ok(Ok((size, peer))) => {
@@ -591,8 +601,7 @@ async fn run_client_loop(
                     }
                     Ok(Err(e)) => {
                         error!("Error in receive loop: {}", e);
-                        // Always transition to disconnected state on socket error
-                        // UDP socket errors are serious and indicate network problems
+                        // Always transition to disconnected state on transport error
                         client.write().await.enter_disconnected();
                     }
                     Err(_) => {
@@ -711,6 +720,7 @@ pub async fn run_multi_client<G>(
     consumer_factory: Arc<dyn MultiClientConsumerFactory>,
     client_config_generator: G,
     shutdown_rx: Option<watch::Receiver<bool>>,
+    transport_factory: Option<TransportFactory>,
 ) -> Arc<MultiClientStats>
 where
     G: Fn(u32) -> ClientConfig + Send + Sync + 'static,
@@ -753,6 +763,7 @@ where
         let stats = stats.clone();
         let mut shutdown_rx = shutdown_rx.clone();
         let spawn_interval = config.spawn_interval_ms;
+        let transport_factory = transport_factory.clone();
 
         let handle = tokio::spawn(async move {
             // Rate limiting: stagger client connections
@@ -781,16 +792,9 @@ where
             let event_rx = event_bus_manager.subscribe();
 
             // Create the client
-            let (client, action_tx) = Client::new(
-                client_config.id,
-                client_config.address.clone(),
-                client_config.account_name.clone(),
-                client_config.password.clone(),
-                client_config.character_name.clone(),
-                raw_event_tx,
-                client_config.reconnect,
-            )
-            .await;
+            let (client, action_tx) =
+                create_client_from_config(&client_config, raw_event_tx, transport_factory.as_ref())
+                    .await;
 
             // Wrap client in Arc<RwLock<>> for shared access
             let client = Arc::new(RwLock::new(client));
@@ -957,16 +961,8 @@ where
 
             let event_rx = event_bus_manager.subscribe();
 
-            let (client_obj, action_tx) = Client::new(
-                client.id,
-                client.address.clone(),
-                client.account_name.clone(),
-                client.password.clone(),
-                client.character_name.clone(),
-                raw_event_tx,
-                client.reconnect,
-            )
-            .await;
+            let (client_obj, action_tx) =
+                create_client_from_config(&client, raw_event_tx, None).await;
 
             // Wrap client in Arc<RwLock<>> for shared access
             let client_obj = Arc::new(RwLock::new(client_obj));
@@ -1012,7 +1008,14 @@ where
 
             let stats = match client_config_generator {
                 Some(config_gen) => {
-                    run_multi_client(multi_config, Arc::new(factory), config_gen, shutdown_rx).await
+                    run_multi_client(
+                        multi_config,
+                        Arc::new(factory),
+                        config_gen,
+                        shutdown_rx,
+                        None,
+                    )
+                    .await
                 }
                 None => {
                     let default_gen = |id| {
@@ -1024,8 +1027,14 @@ where
                         )
                         .with_reconnect(Default::default())
                     };
-                    run_multi_client(multi_config, Arc::new(factory), default_gen, shutdown_rx)
-                        .await
+                    run_multi_client(
+                        multi_config,
+                        Arc::new(factory),
+                        default_gen,
+                        shutdown_rx,
+                        None,
+                    )
+                    .await
                 }
             };
 

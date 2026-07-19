@@ -3,15 +3,17 @@
 /// This crate provides the foundational types for the event system,
 /// allowing different crates to implement consumers without circular dependencies.
 use std::collections::HashMap;
-use std::time::Instant;
 use tokio::sync::mpsc::UnboundedSender;
 
 pub mod client_events;
+mod instant;
 pub mod protocol_events;
 pub mod script_events;
 pub mod simple_client_actions;
 pub mod simple_game_events;
 pub mod system_events;
+
+use instant::Instant;
 
 // Re-export key types for convenience
 pub use client_events::{ClientEvent, ClientStateEvent, ClientSystemEvent};

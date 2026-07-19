@@ -11,7 +11,13 @@ license.workspace = true
 name = "gromnie_events"
 path = "src/lib.rs"
 
+[features]
+default = ["native"]
+native = []
+wasm = ["js-sys"]
+
 [dependencies]
 asheron-rs.workspace = true
 serde = { version = "1.0", features = ["derive"] }
 tokio = { version = "1.36.0", features = ["sync"] }
+js-sys = { version = "0.3", optional = true }

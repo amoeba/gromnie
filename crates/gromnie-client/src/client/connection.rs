@@ -24,6 +24,7 @@ impl ServerInfo {
     }
 
     /// Get the login server address for sending standard messages
+    #[cfg(not(target_arch = "wasm32"))]
     pub async fn login_addr(&self) -> Result<SocketAddr, std::io::Error> {
         let addr = format!("{}:{}", self.host, self.login_port);
         tokio::net::lookup_host(addr)
@@ -37,7 +38,17 @@ impl ServerInfo {
             })
     }
 
+    /// Get the login server address for sending standard messages
+    #[cfg(target_arch = "wasm32")]
+    pub async fn login_addr(&self) -> Result<SocketAddr, std::io::Error> {
+        Err(std::io::Error::new(
+            std::io::ErrorKind::Unsupported,
+            "DNS resolution not available in WASM; use WISP transport instead",
+        ))
+    }
+
     /// Get the world server address for sending ConnectResponse
+    #[cfg(not(target_arch = "wasm32"))]
     pub async fn world_addr(&self) -> Result<SocketAddr, std::io::Error> {
         let addr = format!("{}:{}", self.host, self.world_port);
         tokio::net::lookup_host(addr)
@@ -49,5 +60,14 @@ impl ServerInfo {
                     "Could not resolve IPv4 address",
                 )
             })
+    }
+
+    /// Get the world server address for sending ConnectResponse
+    #[cfg(target_arch = "wasm32")]
+    pub async fn world_addr(&self) -> Result<SocketAddr, std::io::Error> {
+        Err(std::io::Error::new(
+            std::io::ErrorKind::Unsupported,
+            "DNS resolution not available in WASM; use WISP transport instead",
+        ))
     }
 }
