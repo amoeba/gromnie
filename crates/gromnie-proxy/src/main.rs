@@ -4,8 +4,9 @@ use anyhow::Result;
 use clap::Parser;
 use futures::{SinkExt, StreamExt};
 use tokio::net::UdpSocket;
-use tokio_tungstenite::accept_async;
-use tracing::{error, info};
+use tokio_tungstenite::accept_hdr_async;
+use tracing::{error, info, warn};
+use tungstenite::http::Uri;
 
 use wisp_mux::{
     ServerMux, WispV2Handshake,
@@ -47,17 +48,35 @@ async fn main() -> Result<()> {
 
     loop {
         let (stream, addr) = listener.accept().await?;
+        let wisp_path = args.wisp_path.clone();
         info!(%addr, "new connection");
         tokio::spawn(async move {
-            if let Err(e) = handle_connection(stream, addr).await {
+            if let Err(e) = handle_connection(stream, addr, &wisp_path).await {
                 error!(%addr, "connection error: {e:#}");
             }
         });
     }
 }
 
-async fn handle_connection(stream: tokio::net::TcpStream, addr: SocketAddr) -> Result<()> {
-    let ws_stream = accept_async(stream).await?;
+async fn handle_connection(
+    stream: tokio::net::TcpStream,
+    addr: SocketAddr,
+    wisp_path: &str,
+) -> Result<()> {
+    let ws_stream = accept_hdr_async(stream, |request| {
+        let path = request.uri().path();
+        if path != wisp_path {
+            warn!(%addr, %path, expected = %wisp_path, "rejecting connection: path mismatch");
+            return Err(tungstenite::Error::Http(
+                tungstenite::http::Response::builder()
+                    .status(404)
+                    .body(Some(format!("Not found: {}", path).into()))
+                    .unwrap(),
+            ));
+        }
+        Ok(None)
+    })
+    .await?;
     info!(%addr, "websocket established");
 
     let transport = TokioTungsteniteTransport(ws_stream);
