@@ -28,6 +28,8 @@ use wisp_mux::{
     },
 };
 
+pub(crate) mod util;
+
 pub mod transport;
 
 type BrowserWispTransportRead = Pin<Box<dyn TransportRead>>;
@@ -353,13 +355,11 @@ impl GromnieWispClient {
     }
 }
 
-fn js_error(err: impl std::fmt::Display) -> JsValue {
-    JsValue::from_str(&err.to_string())
-}
-
 fn downgrade_rejection_error_message() -> &'static str {
     "WISP downgrade rejected: server negotiated WISP v1; compatibility mode is required to allow downgrade"
 }
+
+use util::js_error;
 
 pub mod client;
 

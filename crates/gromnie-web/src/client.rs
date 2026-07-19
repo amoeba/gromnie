@@ -9,6 +9,7 @@ use gromnie_client::client::SimpleClientAction;
 
 use crate::GromnieWispClient;
 use crate::transport::{NetLogCallback, WispUdpTransport, format_net_entry};
+use crate::util::js_error;
 
 type AsyncCallback = Rc<RefCell<Option<js_sys::Function>>>;
 
@@ -18,10 +19,6 @@ pub struct WasmClient {
     action_tx: Option<tokio::sync::mpsc::UnboundedSender<SimpleClientAction>>,
     on_event: AsyncCallback,
     on_net_log: NetLogCallback,
-}
-
-fn js_error(err: impl std::fmt::Display) -> JsValue {
-    JsValue::from_str(&err.to_string())
 }
 
 fn event_to_js(event: &ClientEvent) -> JsValue {
