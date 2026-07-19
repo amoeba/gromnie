@@ -166,9 +166,18 @@ impl ClientTransport for WispUdpTransport {
                 pin_mut!(fut_a, fut_b);
 
                 let r: Option<Result<_, _>> = select! {
-                    r = fut_a => r,
-                    r = fut_b => r,
+                    r = fut_a => {
+                        if r.is_none() { stream_a = None; }
+                        r
+                    }
+                    r = fut_b => {
+                        if r.is_none() { stream_b = None; }
+                        r
+                    }
                 };
+                if stream_a.is_none() && stream_b.is_none() {
+                    break None;
+                }
                 if r.is_some() {
                     break r;
                 }
