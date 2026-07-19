@@ -1,5 +1,7 @@
 use std::sync::Arc;
 use std::sync::atomic::Ordering;
+use std::time::Duration;
+use std::time::Instant;
 use tokio::sync::mpsc::UnboundedSender;
 use tracing::{debug, error, info};
 
@@ -8,10 +10,92 @@ use crate::event_bus::{EventEnvelope, EventType, SystemEvent};
 use gromnie_events::{SimpleClientAction, SimpleGameEvent};
 use serenity::http::Http;
 use serenity::model::id::ChannelId;
-use std::time::Instant;
 
 // Alias for backward compatibility in this file
 use SimpleGameEvent as GameEvent;
+
+/// Format a Duration as (hours, minutes, seconds)
+fn format_uptime(duration: Duration) -> (u64, u64, u64) {
+    let secs = duration.as_secs();
+    (secs / 3600, (secs % 3600) / 60, secs % 60)
+}
+
+/// Log game events shared between LoggingConsumer and DiscordConsumer.
+/// Returns true if the event was handled.
+fn log_common_game_event(event: &GameEvent) -> bool {
+    match event {
+        GameEvent::CharacterListReceived {
+            account,
+            characters,
+            num_slots,
+        } => {
+            let names = characters
+                .iter()
+                .map(|c| format!("{} ({})", c.name, c.character_id.0))
+                .collect::<Vec<_>>()
+                .join(", ");
+            info!(target: "events", "CharacterList -- Account: {}, Slots: {}, Number of Chars: {}, Chars: {}", account, num_slots, characters.len(), names);
+            true
+        }
+        GameEvent::LoginFailed { reason } => {
+            error!(target: "events", "LoginFailed -- Reason: {}", reason);
+            true
+        }
+        GameEvent::ConnectingSetProgress { progress } => {
+            debug!(target: "events", "Connecting progress: {:.1}%", progress * 100.0);
+            true
+        }
+        GameEvent::UpdatingSetProgress { progress } => {
+            debug!(target: "events", "Updating progress: {:.1}%", progress * 100.0);
+            true
+        }
+        GameEvent::CharacterError {
+            error_code,
+            error_message,
+        } => {
+            error!(target: "events", "Character error (code {}): {}", error_code, error_message);
+            true
+        }
+        _ => false,
+    }
+}
+
+/// Log system events shared between LoggingConsumer and DiscordConsumer.
+/// Returns true if the event was handled.
+fn log_common_system_event(event: &SystemEvent) -> bool {
+    match event {
+        SystemEvent::AuthenticationSucceeded { .. } => {
+            info!(target: "events", "Authentication succeeded - connected to server");
+            true
+        }
+        SystemEvent::AuthenticationFailed { reason, .. } => {
+            error!(target: "events", "Authentication failed: {}", reason);
+            true
+        }
+        SystemEvent::Disconnected {
+            will_reconnect,
+            reconnect_attempt,
+            delay_secs,
+            ..
+        } => {
+            info!(
+                target: "events",
+                "Disconnected (will_reconnect={}, attempt={}, delay={}s)",
+                will_reconnect, reconnect_attempt, delay_secs
+            );
+            true
+        }
+        SystemEvent::Reconnecting {
+            attempt,
+            delay_secs,
+            ..
+        } => {
+            info!(target: "events", "Reconnecting (attempt={}, delay={}s)", attempt, delay_secs);
+            true
+        }
+        _ => false,
+    }
+}
 
 // Re-export EventConsumer from gromnie-events
 pub use gromnie_events::EventConsumer;
@@ -48,156 +132,115 @@ impl crate::client_runner_builder::ConsumerFactory for LoggingConsumerFactory {
 impl EventConsumer for LoggingConsumer {
     fn handle_event(&mut self, envelope: EventEnvelope) {
         match envelope.event {
-            EventType::Game(game_event) => match game_event {
-                GameEvent::CharacterListReceived {
-                    account,
-                    characters,
-                    num_slots,
-                } => {
-                    let names = characters
-                        .iter()
-                        .map(|c| format!("{} ({})", c.name, c.character_id.0))
-                        .collect::<Vec<_>>()
-                        .join(", ");
-                    info!(target: "events", "CharacterList -- Account: {}, Slots: {}, Number of Chars: {}, Chars: {}", account, num_slots, characters.len(), names);
+            EventType::Game(game_event) => {
+                if log_common_game_event(&game_event) {
+                    return;
                 }
-                GameEvent::LoginSucceeded {
-                    character_id,
-                    character_name,
-                } => {
-                    info!(target: "events", "LoginSucceeded -- Character: {} (ID: {})", character_name, character_id);
+                match game_event {
+                    GameEvent::LoginSucceeded {
+                        character_id,
+                        character_name,
+                    } => {
+                        info!(target: "events", "LoginSucceeded -- Character: {} (ID: {})", character_name, character_id);
+                    }
+                    GameEvent::ChatMessageReceived {
+                        message,
+                        message_type,
+                    } => {
+                        info!(target: "events", "CHAT [{}]: {}", message_type, message);
+                    }
+                    GameEvent::CreatePlayer { character_id } => {
+                        info!(target: "events", "CREATE PLAYER: Character ID {}", character_id);
+                    }
+                    GameEvent::ItemCreateObject {
+                        object_id,
+                        name,
+                        item_type,
+                        container_id,
+                        burden,
+                        value,
+                        items_capacity: _,
+                        container_capacity: _,
+                    } => {
+                        info!(target: "events", "ITEM CREATE: {} (ID: {}, Type: {}, Container: {:?}, Burden: {}, Value: {})",
+                            name, object_id, item_type, container_id, burden, value);
+                    }
+                    GameEvent::ItemOnViewContents {
+                        container_id,
+                        items,
+                    } => {
+                        info!(target: "events", "ITEM VIEW CONTENTS: Container {} has {} items", container_id, items.len());
+                    }
+                    GameEvent::PlayerContainersReceived {
+                        player_id,
+                        containers,
+                    } => {
+                        info!(target: "events", "PLAYER CONTAINERS: Player {} has {} containers", player_id, containers.len());
+                    }
+                    GameEvent::ItemDeleteObject { object_id } => {
+                        info!(target: "events", "ITEM DELETE: Object ID {}", object_id);
+                    }
+                    GameEvent::ItemMovedObject {
+                        object_id,
+                        new_container_id,
+                    } => {
+                        info!(target: "events", "ITEM MOVED: Object {} moved to container {}", object_id, new_container_id);
+                    }
+                    GameEvent::QualitiesPrivateUpdateInt {
+                        object_id,
+                        property_name,
+                        value,
+                    } => {
+                        info!(target: "events", "QUALITY UPDATE: Object {} property {} = {}", object_id, property_name, value);
+                    }
+                    GameEvent::ItemSetState {
+                        object_id,
+                        property_name,
+                        value,
+                    } => {
+                        info!(target: "events", "ITEM SET STATE: Object {} property {} = {}", object_id, property_name, value);
+                    }
+                    _ => {}
                 }
-                GameEvent::LoginFailed { reason } => {
-                    error!(target: "events", "LoginFailed -- Reason: {}", reason);
-                }
-                GameEvent::ChatMessageReceived {
-                    message,
-                    message_type,
-                } => {
-                    info!(target: "events", "CHAT [{}]: {}", message_type, message);
-                }
-                GameEvent::ConnectingSetProgress { progress } => {
-                    debug!(target: "events", "Connecting progress: {:.1}%", progress * 100.0);
-                }
-                GameEvent::UpdatingSetProgress { progress } => {
-                    debug!(target: "events", "Updating progress: {:.1}%", progress * 100.0);
-                }
-                GameEvent::CharacterError {
-                    error_code,
-                    error_message,
-                } => {
-                    error!(target: "events", "Character error (code {}): {}", error_code, error_message);
-                }
-                GameEvent::CreatePlayer { character_id } => {
-                    info!(target: "events", "CREATE PLAYER: Character ID {}", character_id);
-                }
-                GameEvent::ItemCreateObject {
-                    object_id,
-                    name,
-                    item_type,
-                    container_id,
-                    burden,
-                    value,
-                    items_capacity: _,
-                    container_capacity: _,
-                } => {
-                    info!(target: "events", "ITEM CREATE: {} (ID: {}, Type: {}, Container: {:?}, Burden: {}, Value: {})",
-                        name, object_id, item_type, container_id, burden, value);
-                }
-                GameEvent::ItemOnViewContents {
-                    container_id,
-                    items,
-                } => {
-                    info!(target: "events", "ITEM VIEW CONTENTS: Container {} has {} items", container_id, items.len());
-                }
-                GameEvent::PlayerContainersReceived {
-                    player_id,
-                    containers,
-                } => {
-                    info!(target: "events", "PLAYER CONTAINERS: Player {} has {} containers", player_id, containers.len());
-                }
-                GameEvent::ItemDeleteObject { object_id } => {
-                    info!(target: "events", "ITEM DELETE: Object ID {}", object_id);
-                }
-                GameEvent::ItemMovedObject {
-                    object_id,
-                    new_container_id,
-                } => {
-                    info!(target: "events", "ITEM MOVED: Object {} moved to container {}", object_id, new_container_id);
-                }
-                GameEvent::QualitiesPrivateUpdateInt {
-                    object_id,
-                    property_name,
-                    value,
-                } => {
-                    info!(target: "events", "QUALITY UPDATE: Object {} property {} = {}", object_id, property_name, value);
-                }
-                GameEvent::ItemSetState {
-                    object_id,
-                    property_name,
-                    value,
-                } => {
-                    info!(target: "events", "ITEM SET STATE: Object {} property {} = {}", object_id, property_name, value);
-                }
-            },
+            }
             EventType::State(state_event) => {
-                // Log state changes (new granular states)
                 info!(target: "events", "STATE CHANGE: {:?}", state_event);
             }
-            EventType::System(system_event) => match system_event {
-                SystemEvent::AuthenticationSucceeded { .. } => {
-                    info!(target: "events", "Authentication succeeded - connected to server");
+            EventType::System(system_event) => {
+                if log_common_system_event(&system_event) {
+                    return;
                 }
-                SystemEvent::AuthenticationFailed { reason, .. } => {
-                    error!(target: "events", "Authentication failed: {}", reason);
+                match system_event {
+                    SystemEvent::LoginSucceeded {
+                        character_id,
+                        character_name,
+                    } => {
+                        info!(target: "events", "LoginSucceeded -- Character: {} (ID: {})", character_name, character_id);
+                    }
+                    SystemEvent::ConnectingStarted { .. } => {
+                        info!(target: "events", "Connecting started");
+                    }
+                    SystemEvent::ConnectingDone { .. } => {
+                        info!(target: "events", "Connecting done");
+                    }
+                    SystemEvent::UpdatingStarted { .. } => {
+                        info!(target: "events", "Updating started");
+                    }
+                    SystemEvent::UpdatingDone { .. } => {
+                        info!(target: "events", "Updating done");
+                    }
+                    SystemEvent::ReloadScripts { .. } => {
+                        info!(target: "events", "Reloading scripts");
+                    }
+                    SystemEvent::LogScriptMessage { script_id, message } => {
+                        info!(target: "events", "Script [{}]: {}", script_id, message);
+                    }
+                    SystemEvent::Shutdown => {
+                        info!(target: "events", "System shutdown");
+                    }
+                    _ => {}
                 }
-                SystemEvent::ConnectingStarted { .. } => {
-                    info!(target: "events", "Connecting started");
-                }
-                SystemEvent::ConnectingDone { .. } => {
-                    info!(target: "events", "Connecting done");
-                }
-                SystemEvent::UpdatingStarted { .. } => {
-                    info!(target: "events", "Updating started");
-                }
-                SystemEvent::UpdatingDone { .. } => {
-                    info!(target: "events", "Updating done");
-                }
-                SystemEvent::LoginSucceeded {
-                    character_id,
-                    character_name,
-                } => {
-                    info!(target: "events", "LoginSucceeded -- Character: {} (ID: {})", character_name, character_id);
-                }
-                SystemEvent::Disconnected {
-                    will_reconnect,
-                    reconnect_attempt,
-                    delay_secs,
-                    ..
-                } => {
-                    info!(
-                        target: "events",
-                        "Disconnected (will_reconnect={}, attempt={}, delay={}s)",
-                        will_reconnect, reconnect_attempt, delay_secs
-                    );
-                }
-                SystemEvent::Reconnecting {
-                    attempt,
-                    delay_secs,
-                    ..
-                } => {
-                    info!(target: "events", "Reconnecting (attempt={}, delay={}s)", attempt, delay_secs);
-                }
-                SystemEvent::ReloadScripts { .. } => {
-                    info!(target: "events", "Reloading scripts");
-                }
-                SystemEvent::LogScriptMessage { script_id, message } => {
-                    info!(target: "events", "Script [{}]: {}", script_id, message);
-                }
-                SystemEvent::Shutdown => {
-                    info!(target: "events", "System shutdown");
-                }
-            },
+            }
         }
     }
 }
@@ -269,6 +312,20 @@ pub struct UptimeData {
     pub ingame_start: Option<Instant>,
 }
 
+impl UptimeData {
+    pub fn format_bot_uptime(&self) -> String {
+        let (h, m, s) = format_uptime(self.bot_start.elapsed());
+        format!("{:02}:{:02}:{:02}", h, m, s)
+    }
+
+    pub fn format_ingame_uptime(&self) -> Option<String> {
+        self.ingame_start.map(|start| {
+            let (h, m, s) = format_uptime(start.elapsed());
+            format!("{:02}:{:02}:{:02}", h, m, s)
+        })
+    }
+}
+
 /// Event consumer that forwards chat messages to Discord
 pub struct DiscordConsumer {
     _action_tx: UnboundedSender<SimpleClientAction>,
@@ -309,6 +366,24 @@ impl DiscordConsumer {
             ingame_start_time: None,
             uptime_data: Some(uptime_data),
         }
+    }
+
+    fn handle_login_succeeded(&mut self, character_id: u32, character_name: &str) {
+        let now = Instant::now();
+        self.ingame_start_time = Some(now);
+
+        if let Some(ref uptime_data) = self.uptime_data {
+            let uptime_data_clone = uptime_data.clone();
+            tokio::spawn(async move {
+                let mut data = uptime_data_clone.write().await;
+                data.ingame_start = Some(now);
+            });
+        }
+
+        let (h, m, s) = format_uptime(self.bot_start_time.elapsed());
+
+        info!(target: "events", "LoginSucceeded -- Character: {} (ID: {})", character_name, character_id);
+        info!(target: "events", "Bot uptime: {:02}:{:02}:{:02} | Now tracking in-game time", h, m, s);
     }
 
     /// Create a factory for this consumer
@@ -369,37 +444,27 @@ impl EventConsumer for DiscordConsumer {
     fn handle_event(&mut self, envelope: EventEnvelope) {
         match envelope.event {
             EventType::Game(game_event) => {
+                if log_common_game_event(&game_event) {
+                    return;
+                }
                 match game_event {
-                    GameEvent::CharacterListReceived {
-                        account,
-                        characters,
-                        num_slots,
+                    GameEvent::LoginSucceeded {
+                        character_id,
+                        character_name,
                     } => {
-                        let names = characters
-                            .iter()
-                            .map(|c| format!("{} ({})", c.name, c.character_id.0))
-                            .collect::<Vec<_>>()
-                            .join(", ");
-                        info!(target: "events", "CharacterList -- Account: {}, Slots: {}, Number of Chars: {}, Chars: {}", account, num_slots, characters.len(), names);
+                        self.handle_login_succeeded(character_id, &character_name);
                     }
                     GameEvent::ChatMessageReceived {
                         message,
                         message_type,
                     } => {
-                        // Log with uptime info if available
                         if let Some(ingame_start) = self.ingame_start_time {
-                            let ingame_uptime = ingame_start.elapsed();
-                            let ingame_secs = ingame_uptime.as_secs();
-                            let ingame_hours = ingame_secs / 3600;
-                            let ingame_mins = (ingame_secs % 3600) / 60;
-                            let ingame_secs_remainder = ingame_secs % 60;
-
-                            info!(target: "events", "CHAT [{}]: {} | In-game: {:02}:{:02}:{:02}", message_type, message, ingame_hours, ingame_mins, ingame_secs_remainder);
+                            let (h, m, s) = format_uptime(ingame_start.elapsed());
+                            info!(target: "events", "CHAT [{}]: {} | In-game: {:02}:{:02}:{:02}", message_type, message, h, m, s);
                         } else {
                             info!(target: "events", "CHAT [{}]: {}", message_type, message);
                         }
 
-                        // Forward to Discord
                         let discord_message = format!("[{}] {}", message_type, message);
                         let http = self.http.clone();
                         let channel_id = self.channel_id;
@@ -409,48 +474,6 @@ impl EventConsumer for DiscordConsumer {
                                 error!("Failed to send Discord message: {}", e);
                             }
                         });
-                    }
-                    GameEvent::LoginSucceeded {
-                        character_id,
-                        character_name,
-                    } => {
-                        // Record in-game start time
-                        let now = Instant::now();
-                        self.ingame_start_time = Some(now);
-
-                        // Update shared uptime data if available
-                        if let Some(ref uptime_data) = self.uptime_data {
-                            let uptime_data_clone = uptime_data.clone();
-                            tokio::spawn(async move {
-                                let mut data = uptime_data_clone.write().await;
-                                data.ingame_start = Some(now);
-                            });
-                        }
-
-                        // Calculate total uptime
-                        let total_uptime = self.bot_start_time.elapsed();
-                        let total_secs = total_uptime.as_secs();
-                        let total_hours = total_secs / 3600;
-                        let total_mins = (total_secs % 3600) / 60;
-                        let total_secs_remainder = total_secs % 60;
-
-                        info!(target: "events", "LoginSucceeded -- Character: {} (ID: {})", character_name, character_id);
-                        info!(target: "events", "Bot uptime: {:02}:{:02}:{:02} | Now tracking in-game time", total_hours, total_mins, total_secs_remainder);
-                    }
-                    GameEvent::LoginFailed { reason } => {
-                        error!(target: "events", "LoginFailed -- Reason: {}", reason);
-                    }
-                    GameEvent::ConnectingSetProgress { progress } => {
-                        debug!(target: "events", "Connecting progress: {:.1}%", progress * 100.0);
-                    }
-                    GameEvent::UpdatingSetProgress { progress } => {
-                        debug!(target: "events", "Updating progress: {:.1}%", progress * 100.0);
-                    }
-                    GameEvent::CharacterError {
-                        error_code,
-                        error_message,
-                    } => {
-                        error!(target: "events", "Character error (code {}): {}", error_code, error_message);
                     }
                     GameEvent::CreatePlayer { character_id } => {
                         debug!(target: "events", "CREATE PLAYER: Character ID {}", character_id);
@@ -464,69 +487,24 @@ impl EventConsumer for DiscordConsumer {
                     | GameEvent::ItemSetState { .. } => {
                         // Ignore inventory events in Discord consumer
                     }
+                    _ => {}
                 }
             }
             EventType::State(state_event) => {
-                // Log state changes (new granular states)
                 info!(target: "events", "STATE CHANGE: {:?}", state_event);
             }
             EventType::System(system_event) => {
+                if log_common_system_event(&system_event) {
+                    return;
+                }
                 match system_event {
-                    SystemEvent::AuthenticationSucceeded { .. } => {
-                        info!(target: "events", "Authentication succeeded - connected to server");
-                    }
-                    SystemEvent::AuthenticationFailed { reason, .. } => {
-                        error!(target: "events", "Authentication failed: {}", reason);
-                    }
                     SystemEvent::LoginSucceeded {
                         character_id,
                         character_name,
                     } => {
-                        // Record in-game start time
-                        let now = Instant::now();
-                        self.ingame_start_time = Some(now);
-
-                        // Update shared uptime data if available
-                        if let Some(ref uptime_data) = self.uptime_data {
-                            let uptime_data_clone = uptime_data.clone();
-                            tokio::spawn(async move {
-                                let mut data = uptime_data_clone.write().await;
-                                data.ingame_start = Some(now);
-                            });
-                        }
-
-                        // Calculate total uptime
-                        let total_uptime = self.bot_start_time.elapsed();
-                        let total_secs = total_uptime.as_secs();
-                        let total_hours = total_secs / 3600;
-                        let total_mins = (total_secs % 3600) / 60;
-                        let total_secs_remainder = total_secs % 60;
-
-                        info!(target: "events", "LoginSucceeded -- Character: {} (ID: {})", character_name, character_id);
-                        info!(target: "events", "Bot uptime: {:02}:{:02}:{:02} | Now tracking in-game time", total_hours, total_mins, total_secs_remainder);
+                        self.handle_login_succeeded(character_id, &character_name);
                     }
-                    SystemEvent::Disconnected {
-                        will_reconnect,
-                        reconnect_attempt,
-                        delay_secs,
-                        ..
-                    } => {
-                        info!(
-                            target: "events",
-                            "Disconnected (will_reconnect={}, attempt={}, delay={}s)",
-                            will_reconnect, reconnect_attempt, delay_secs
-                        );
-                    }
-                    SystemEvent::Reconnecting {
-                        attempt,
-                        delay_secs,
-                        ..
-                    } => {
-                        info!(target: "events", "Reconnecting (attempt={}, delay={}s)", attempt, delay_secs);
-                    }
-                    _ => {
-                        // Handle other system events if needed
-                    }
+                    _ => {}
                 }
             }
         }

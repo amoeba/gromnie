@@ -112,32 +112,16 @@ impl Handler {
     async fn handle_uptime_command(&self, ctx: &Context, command: &CommandInteraction) {
         let uptime_data = self.uptime_data.read().await;
 
-        let bot_uptime = uptime_data.bot_start.elapsed();
-        let bot_secs = bot_uptime.as_secs();
-        let bot_hours = bot_secs / 3600;
-        let bot_mins = (bot_secs % 3600) / 60;
-        let bot_secs_remainder = bot_secs % 60;
-
-        let response_text = if let Some(ingame_start) = uptime_data.ingame_start {
-            let ingame_uptime = ingame_start.elapsed();
-            let ingame_secs = ingame_uptime.as_secs();
-            let ingame_hours = ingame_secs / 3600;
-            let ingame_mins = (ingame_secs % 3600) / 60;
-            let ingame_secs_remainder = ingame_secs % 60;
-
+        let response_text = if let Some(ref ingame_fmt) = uptime_data.format_ingame_uptime() {
             format!(
-                "**Bot Uptime:** {:02}:{:02}:{:02}\n**In-Game Time:** {:02}:{:02}:{:02}",
-                bot_hours,
-                bot_mins,
-                bot_secs_remainder,
-                ingame_hours,
-                ingame_mins,
-                ingame_secs_remainder
+                "**Bot Uptime:** {}\n**In-Game Time:** {}",
+                uptime_data.format_bot_uptime(),
+                ingame_fmt
             )
         } else {
             format!(
-                "**Bot Uptime:** {:02}:{:02}:{:02}\n**In-Game Time:** Not logged in yet",
-                bot_hours, bot_mins, bot_secs_remainder
+                "**Bot Uptime:** {}\n**In-Game Time:** Not logged in yet",
+                uptime_data.format_bot_uptime()
             )
         };
 
@@ -260,32 +244,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         loop {
             interval.tick().await;
             let data = uptime_data_periodic.read().await;
-            let total_uptime = data.bot_start.elapsed();
-            let total_secs = total_uptime.as_secs();
-            let total_hours = total_secs / 3600;
-            let total_mins = (total_secs % 3600) / 60;
-            let total_secs_remainder = total_secs % 60;
-
-            if let Some(ingame_start) = data.ingame_start {
-                let ingame_uptime = ingame_start.elapsed();
-                let ingame_secs = ingame_uptime.as_secs();
-                let ingame_hours = ingame_secs / 3600;
-                let ingame_mins = (ingame_secs % 3600) / 60;
-                let ingame_secs_remainder = ingame_secs % 60;
-                info!(
-                    "Uptime - Bot: {:02}:{:02}:{:02} | In-game: {:02}:{:02}:{:02}",
-                    total_hours,
-                    total_mins,
-                    total_secs_remainder,
-                    ingame_hours,
-                    ingame_mins,
-                    ingame_secs_remainder
-                );
+            let bot_uptime = data.format_bot_uptime();
+            if let Some(ref ingame_fmt) = data.format_ingame_uptime() {
+                info!("Uptime - Bot: {} | In-game: {}", bot_uptime, ingame_fmt);
             } else {
-                info!(
-                    "Bot uptime: {:02}:{:02}:{:02} (not in-game yet)",
-                    total_hours, total_mins, total_secs_remainder
-                );
+                info!("Bot uptime: {} (not in-game yet)", bot_uptime);
             }
         }
     });
