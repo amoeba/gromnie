@@ -44,7 +44,7 @@ ratatui = { workspace = true, optional = true }
 serde = { version = "1.0", features = ["derive"] }
 serenity = { workspace = true, optional = true }
 strum_macros = "0.26.1"
-tokio = { version = "1.36.0", features = ["sync", "rt", "macros", "io-util"] }
+tokio = { workspace = true, features = ["sync", "rt", "macros", "io-util"] }
 toml = "0.8"
 tracing.workspace = true
 tracing-appender = { workspace = true, optional = true }

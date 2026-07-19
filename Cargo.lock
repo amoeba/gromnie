@@ -1215,6 +1215,7 @@ dependencies = [
  "wasm-bindgen-futures",
  "wasmtime",
  "wasmtime-wasi",
+ "web-sys",
  "wit-bindgen 0.57.1",
 ]
 

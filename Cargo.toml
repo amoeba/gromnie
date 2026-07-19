@@ -36,6 +36,9 @@ license = "MIT"
 asheron-rs = { git = "https://github.com/amoeba/asheron-rs" }
 anyhow = "1.0"
 chrono = "0.4"
+dirs = "5"
+thiserror = "2.0"
+tokio = { version = "1.36", features = ["full"] }
 clap = { version = "4.5.0", features = ["derive"] }
 crossterm = "0.28"
 directories = "5.0"

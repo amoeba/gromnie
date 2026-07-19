@@ -18,8 +18,8 @@ gromnie-client = { path = "../gromnie-client" }
 gromnie-events = { path = "../gromnie-events" }
 gromnie-scripting-host = { path = "../gromnie-scripting-host", optional = true }
 serenity.workspace = true
-thiserror = "2.0"
-tokio = { version = "1.36.0", features = ["full"] }
+thiserror.workspace = true
+tokio.workspace = true
 tracing.workspace = true
 tracing-appender.workspace = true
 tracing-subscriber.workspace = true
