@@ -2,7 +2,7 @@ use anyhow::Result;
 use clap::{Parser, Subcommand};
 use std::env;
 use std::fs;
-
+use std::path::PathBuf;
 use std::process::Command;
 
 #[derive(Parser)]
@@ -18,6 +18,11 @@ enum Commands {
         #[command(subcommand)]
         command: ScriptCommands,
     },
+    /// Build gromnie-web wasm artifacts
+    Web {
+        #[command(subcommand)]
+        command: WebCommands,
+    },
 }
 
 #[derive(Subcommand)]
@@ -28,6 +33,12 @@ enum ScriptCommands {
     Install,
 }
 
+#[derive(Subcommand)]
+enum WebCommands {
+    /// Build and package gromnie-web for browser usage
+    Build,
+}
+
 fn main() -> Result<()> {
     let cli = Cli::parse();
 
@@ -36,6 +47,130 @@ fn main() -> Result<()> {
             ScriptCommands::Build => build_scripts()?,
             ScriptCommands::Install => install_scripts()?,
         },
+        Commands::Web { command } => match command {
+            WebCommands::Build => build_web()?,
+        },
+    }
+
+    Ok(())
+}
+
+fn project_root() -> Result<PathBuf> {
+    match env::var("CARGO_MANIFEST_DIR") {
+        Ok(manifest_dir) => Ok(std::path::PathBuf::from(manifest_dir)
+            .parent()
+            .ok_or_else(|| anyhow::anyhow!("Could not determine project root"))?
+            .parent()
+            .ok_or_else(|| anyhow::anyhow!("Could not determine project root"))?
+            .to_path_buf()),
+        Err(_) => Ok(env::current_dir()?),
+    }
+}
+
+fn ensure_rust_target(target: &str) -> Result<()> {
+    let output = Command::new("rustup")
+        .args(["target", "list", "--installed"])
+        .output()?;
+    let installed_targets = String::from_utf8(output.stdout)?;
+
+    if installed_targets.lines().any(|line| line.trim() == target) {
+        println!("✓ Rust target installed: {target}");
+        return Ok(());
+    }
+
+    println!("Installing Rust target: {target}");
+    let status = Command::new("rustup")
+        .args(["target", "add", target])
+        .status()?;
+
+    if status.success() {
+        println!("✓ Installed Rust target: {target}");
+        Ok(())
+    } else {
+        Err(anyhow::anyhow!("Failed to install Rust target: {target}"))
+    }
+}
+
+fn ensure_wasm_bindgen() -> Result<()> {
+    match Command::new("wasm-bindgen").arg("--version").status() {
+        Ok(status) if status.success() => {
+            println!("✓ wasm-bindgen CLI detected");
+            Ok(())
+        }
+        Ok(status) => Err(anyhow::anyhow!(
+            "wasm-bindgen CLI exists but failed to run (status: {status}). Try reinstalling with: cargo install wasm-bindgen-cli"
+        )),
+        Err(_) => Err(anyhow::anyhow!(
+            "wasm-bindgen CLI is not installed. Install with: cargo install wasm-bindgen-cli"
+        )),
+    }
+}
+
+fn build_web() -> Result<()> {
+    println!("Building gromnie-web wasm package...\n");
+
+    ensure_rust_target("wasm32-unknown-unknown")?;
+    ensure_wasm_bindgen()?;
+
+    let project_root = project_root()?;
+    let web_crate_dir = project_root.join("crates/gromnie-web");
+    let out_dir = web_crate_dir.join("pkg");
+    let wasm_input = project_root.join("target/wasm32-unknown-unknown/release/gromnie_web.wasm");
+    let out_name = "gromnie_web";
+
+    println!("Running cargo build for gromnie-web...");
+    let build_status = Command::new("cargo")
+        .args([
+            "build",
+            "-p",
+            "gromnie-web",
+            "--target",
+            "wasm32-unknown-unknown",
+            "--release",
+        ])
+        .current_dir(&project_root)
+        .status()?;
+    if !build_status.success() {
+        return Err(anyhow::anyhow!("cargo build failed for gromnie-web"));
+    }
+
+    if !wasm_input.exists() {
+        return Err(anyhow::anyhow!(
+            "Expected wasm input not found: {}",
+            wasm_input.display()
+        ));
+    }
+
+    fs::create_dir_all(&out_dir)?;
+
+    println!("Running wasm-bindgen...");
+    let bindgen_status = Command::new("wasm-bindgen")
+        .arg(&wasm_input)
+        .args([
+            "--target",
+            "web",
+            "--out-dir",
+            out_dir
+                .to_str()
+                .ok_or_else(|| anyhow::anyhow!("Output path contains invalid UTF-8"))?,
+            "--out-name",
+            out_name,
+        ])
+        .status()?;
+    if !bindgen_status.success() {
+        return Err(anyhow::anyhow!("wasm-bindgen failed"));
+    }
+
+    let js_path = out_dir.join(format!("{out_name}.js"));
+    let wasm_path = out_dir.join(format!("{out_name}_bg.wasm"));
+    let dts_path = out_dir.join(format!("{out_name}.d.ts"));
+
+    println!("\nBuild complete.");
+    println!("Artifacts:");
+    println!("  {}", js_path.display());
+    println!("  {}", wasm_path.display());
+    if dts_path.exists() {
+        println!("  {}", dts_path.display());
     }
 
     Ok(())
@@ -70,21 +205,7 @@ fn build_scripts() -> Result<()> {
     }
 
     // Get the project root using CARGO_MANIFEST_DIR
-    let project_root = match env::var("CARGO_MANIFEST_DIR") {
-        Ok(manifest_dir) => {
-            // CARGO_MANIFEST_DIR points to crates/xtask, so get parent twice
-            std::path::PathBuf::from(manifest_dir)
-                .parent()
-                .ok_or_else(|| anyhow::anyhow!("Could not determine project root"))?
-                .parent()
-                .ok_or_else(|| anyhow::anyhow!("Could not determine project root"))?
-                .to_path_buf()
-        }
-        Err(_) => {
-            // Fallback: assume current dir is project root
-            env::current_dir()?
-        }
-    };
+    let project_root = project_root()?;
 
     // Scripts are in ./scripts directory
     let scripts_dir = project_root.join("scripts");
@@ -193,21 +314,7 @@ fn install_scripts() -> Result<()> {
     println!("Installing scripts...\n");
 
     // Get the project root using CARGO_MANIFEST_DIR
-    let project_root = match env::var("CARGO_MANIFEST_DIR") {
-        Ok(manifest_dir) => {
-            // CARGO_MANIFEST_DIR points to crates/xtask, so get parent twice
-            std::path::PathBuf::from(manifest_dir)
-                .parent()
-                .ok_or_else(|| anyhow::anyhow!("Could not determine project root"))?
-                .parent()
-                .ok_or_else(|| anyhow::anyhow!("Could not determine project root"))?
-                .to_path_buf()
-        }
-        Err(_) => {
-            // Fallback: assume current dir is project root
-            env::current_dir()?
-        }
-    };
+    let project_root = project_root()?;
 
     let src_dir = project_root.join("scripts/target/wasm32-wasip2/release");
     let dest_dir = dirs::config_dir()

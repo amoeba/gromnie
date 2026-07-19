@@ -499,7 +499,8 @@ mod transition_flow_tests {
         // Simulate timeout
         if let Some(connecting) = scene.as_connecting_mut() {
             // Artificially age the start time to trigger timeout
-            connecting.started_at = std::time::Instant::now() - std::time::Duration::from_secs(25);
+            connecting.started_at =
+                gromnie_client::instant::Instant::now() - std::time::Duration::from_secs(25);
         }
 
         // Verify timeout is detected

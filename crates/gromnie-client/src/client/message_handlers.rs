@@ -272,8 +272,8 @@ impl MessageHandler<asheron_rs::messages::s2c::LoginLoginCharacterSet> for Clien
             num_slots: char_list.num_allowed_characters,
         };
         let raw_tx = self.raw_event_tx.clone();
-        tokio::spawn(async move {
-            tokio::time::sleep(tokio::time::Duration::from_millis(UI_DELAY_MS)).await;
+        crate::instant::spawn_detached(async move {
+            crate::instant::sleep(std::time::Duration::from_millis(UI_DELAY_MS)).await;
             info!(target: "net", "Sending CharacterListReceived event after delay");
             if raw_tx.send(ClientEvent::Game(game_event)).await.is_err() {
                 error!(target: "net", "Failed to send CharacterListReceived event");
@@ -348,8 +348,8 @@ impl MessageHandler<asheron_rs::messages::s2c::CharacterCharGenVerificationRespo
             num_slots: 0,
         };
         let raw_tx = self.raw_event_tx.clone();
-        tokio::spawn(async move {
-            tokio::time::sleep(tokio::time::Duration::from_millis(UI_DELAY_MS)).await;
+        crate::instant::spawn_detached(async move {
+            crate::instant::sleep(std::time::Duration::from_millis(UI_DELAY_MS)).await;
             info!(target: "net", "Sending CharacterListReceived event after character creation");
             if raw_tx.send(ClientEvent::Game(game_event)).await.is_err() {
                 error!(target: "net", "Failed to send CharacterListReceived event");

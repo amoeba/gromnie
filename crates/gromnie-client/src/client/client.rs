@@ -31,7 +31,6 @@ use asheron_rs::packets::s2c_packet::S2CPacket;
 use asheron_rs::readers::ACDataType;
 use asheron_rs::types::{BlobFragments, ConnectRequestHeader};
 use asheron_rs::writers::{ACWritable, write_string, write_u32};
-use tokio::net::UdpSocket;
 use tracing::{debug, error, info, warn};
 
 use crate::client::constants::*;
@@ -49,6 +48,9 @@ use crate::client::protocol_conversions::{
 use crate::client::{ClientEvent, ClientSystemEvent, GameEvent};
 use crate::crypto::crypto_system::CryptoSystem;
 use crate::crypto::magic_number::get_magic_number;
+#[cfg(not(target_arch = "wasm32"))]
+use crate::transport::NativeUdpTransport;
+use crate::transport::{ClientTransport, TransportChannel};
 use asheron_rs::gameevents::{
     CommunicationHearDirectSpeech, CommunicationTransientString, MagicRemoveEnchantment,
     MagicUpdateEnchantment, TradeAcceptTrade as TradeAcceptTradeEvent, TradeAddToTrade,
@@ -70,7 +72,7 @@ use crate::client::scene::{ConnectingProgress, PatchingProgress};
 pub struct Client {
     pub id: u32,
     pub server: ServerInfo,
-    pub socket: UdpSocket,
+    transport: Box<dyn ClientTransport>,
     account: Account,
 
     // ========== Session-Based Architecture ==========
@@ -81,11 +83,11 @@ pub struct Client {
     pub recv_count: u32,
     last_ack_sent: u32,      // Track the last sequence we ACKed to the server
     unacked_send_count: u32, // Track how many sends we've done without receiving a packet
-    last_receive_time: Option<std::time::Instant>, // Track when we last received any packet from server
-    fragment_sequence: u32,                        // Counter for outgoing fragment sequences
-    next_game_action_sequence: u32,                // Sequence counter for GameAction messages
-    pending_fragments: HashMap<u32, Fragment>,     // Track incomplete fragment sequences
-    message_queue: VecDeque<RawMessage>,           // Queue of parsed messages to process
+    last_receive_time: Option<crate::instant::Instant>, // Track when we last received any packet from server
+    fragment_sequence: u32,                             // Counter for outgoing fragment sequences
+    next_game_action_sequence: u32,                     // Sequence counter for GameAction messages
+    pending_fragments: HashMap<u32, Fragment>,          // Track incomplete fragment sequences
+    message_queue: VecDeque<RawMessage>,                // Queue of parsed messages to process
     pub(crate) outgoing_message_queue: VecDeque<OutgoingMessage>, // Queue of messages to send with optional delays
     pub(crate) raw_event_tx: mpsc::Sender<ClientEvent>,           // Raw event sender to runner
     action_rx: mpsc::UnboundedReceiver<gromnie_events::SimpleClientAction>, // Receive actions from handlers
@@ -96,7 +98,7 @@ pub struct Client {
     // Reconnection state
     reconnect_config: crate::config::ReconnectConfig,
     pub(crate) reconnect_attempt_count: u32, // Track reconnection attempts across state transitions
-    pub(crate) reconnect_at: Option<std::time::Instant>, // When to attempt reconnection (None if not waiting)
+    pub(crate) reconnect_at: Option<crate::instant::Instant>, // When to attempt reconnection (None if not waiting)
     /// Optional character name to auto-login with after receiving character list
     pub(crate) character: Option<String>,
     /// Pending auto-login action to be processed after character list is received
@@ -114,6 +116,7 @@ pub struct PendingTradeState {
 }
 
 impl Client {
+    #[cfg(not(target_arch = "wasm32"))]
     pub async fn new(
         id: u32,
         address: String,
@@ -138,6 +141,7 @@ impl Client {
         .await
     }
 
+    #[cfg(not(target_arch = "wasm32"))]
     pub async fn new_with_reconnect(
         id: u32,
         address: String,
@@ -150,8 +154,36 @@ impl Client {
         Client,
         mpsc::UnboundedSender<gromnie_events::SimpleClientAction>,
     ) {
-        let sok = UdpSocket::bind("0.0.0.0:0").await.unwrap();
+        let transport = NativeUdpTransport::bind_ephemeral()
+            .await
+            .expect("failed to bind client transport");
+        Self::new_with_transport(
+            id,
+            address,
+            name,
+            password,
+            character,
+            raw_event_tx,
+            reconnect_enabled,
+            Box::new(transport),
+        )
+        .await
+    }
 
+    #[allow(clippy::too_many_arguments)]
+    pub async fn new_with_transport(
+        id: u32,
+        address: String,
+        name: String,
+        password: String,
+        character: Option<String>,
+        raw_event_tx: mpsc::Sender<ClientEvent>,
+        reconnect_enabled: bool,
+        transport: Box<dyn ClientTransport>,
+    ) -> (
+        Client,
+        mpsc::UnboundedSender<gromnie_events::SimpleClientAction>,
+    ) {
         // Parse address to extract host and port
         let parts: Vec<&str> = address.split(':').collect();
         let host = parts[0].to_string();
@@ -177,7 +209,7 @@ impl Client {
             id,
             server: ServerInfo::new(host, login_port),
             account: Account { name, password },
-            socket: sok,
+            transport,
 
             // Initialize session-based architecture
             session: ClientSession::new(SessionState::AuthLoginRequest),
@@ -291,20 +323,33 @@ impl Client {
         // Serialize with checksum (pass session for encryption key if fragmented)
         let buffer = packet.serialize(self.session.connection.as_ref())?;
 
-        // Determine destination address
-        let dest_addr = if packet.flags.contains(PacketHeaderFlags::CONNECT_RESPONSE) {
-            // ConnectResponse goes to world port (9001)
-            self.server.world_addr().await?
+        // Determine destination channel
+        let dest_channel = if packet.flags.contains(PacketHeaderFlags::CONNECT_RESPONSE) {
+            TransportChannel::World
         } else {
-            // Everything else goes to login port (9000)
-            self.server.login_addr().await?
+            TransportChannel::Login
         };
 
-        debug!(target: "net", "Sending packet: seq={}, id={}, flags={:?}, dest={}",
-            packet.sequence, packet.recipient_id, packet.flags, dest_addr);
+        debug!(
+            target: "net",
+            "Sending packet: seq={}, id={}, flags={:?}, channel={:?}",
+            packet.sequence,
+            packet.recipient_id,
+            packet.flags,
+            dest_channel
+        );
 
-        self.socket.send_to(&buffer, dest_addr).await?;
+        self.transport
+            .send(&self.server, dest_channel, buffer)
+            .await?;
         Ok(())
+    }
+
+    pub async fn recv_packet(
+        &mut self,
+        buf: &mut [u8],
+    ) -> Result<(usize, SocketAddr), std::io::Error> {
+        self.transport.recv(buf).await
     }
 
     /// Check if there are messages waiting to be processed
@@ -593,10 +638,19 @@ impl Client {
         };
 
         // Get current time as Unix timestamp (seconds since epoch)
-        let current_time = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_secs();
+        let current_time = {
+            #[cfg(not(target_arch = "wasm32"))]
+            {
+                std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .unwrap()
+                    .as_secs()
+            }
+            #[cfg(target_arch = "wasm32")]
+            {
+                (js_sys::Date::now() / 1000.0) as u64
+            }
+        };
 
         // CRITICAL: Only set recipient_id and iteration if client_id > 0 (matches actestclient line 292-297)
         // When client_id is 0, these should be 0 (default values)
@@ -705,7 +759,7 @@ impl Client {
     pub fn should_reconnect(&mut self) -> bool {
         if let Some(reconnect_at) = self.reconnect_at {
             // Check if we've reached the reconnect time
-            return std::time::Instant::now() >= reconnect_at;
+            return crate::instant::Instant::now() >= reconnect_at;
         }
         false
     }
@@ -772,7 +826,7 @@ impl Client {
 
         // Update timing to account for backoff delay
         if let Some(connecting) = self.scene.as_connecting_mut() {
-            connecting.last_retry_at = std::time::Instant::now() + delay; // Don't retry until after the backoff delay
+            connecting.last_retry_at = crate::instant::Instant::now() + delay; // Don't retry until after the backoff delay
         }
 
         true
@@ -794,7 +848,7 @@ impl Client {
         );
 
         // Set reconnect_at for later checking
-        self.reconnect_at = Some(std::time::Instant::now() + delay);
+        self.reconnect_at = Some(crate::instant::Instant::now() + delay);
 
         // Clear session state
         self.session.connection = None;
@@ -1084,10 +1138,11 @@ impl Client {
         debug!(target: "net", "Sending fragmented message: seq={}, frag_seq={}, size={}, checksum=0x{:08X}",
             packet_sequence, frag_sequence, buffer.len(), total_checksum);
 
-        // After connection, all packets with Id > 0 go to the login server port (9000)
-        let login_addr = self.server.login_addr().await?;
-        debug!(target: "net", "Sending fragmented message to login server at {}", login_addr);
-        self.socket.send_to(&buffer, login_addr).await?;
+        // After connection, all packets with Id > 0 go to the login channel
+        debug!(target: "net", "Sending fragmented message to login channel");
+        self.transport
+            .send(&self.server, TransportChannel::Login, buffer)
+            .await?;
         Ok(())
     }
 
@@ -1629,7 +1684,7 @@ impl Client {
 
     pub async fn process_packet(&mut self, buffer: &[u8], size: usize, peer: &SocketAddr) {
         // Track last receive time for disconnect detection
-        self.last_receive_time = Some(std::time::Instant::now());
+        self.last_receive_time = Some(crate::instant::Instant::now());
 
         // Pull out TransitHeader first and inspect
         let mut cursor = std::io::Cursor::new(buffer);
@@ -1703,7 +1758,7 @@ impl Client {
             }
 
             // Delay before sending ConnectResponse (to make UI progress visible)
-            tokio::time::sleep(tokio::time::Duration::from_millis(UI_DELAY_MS)).await;
+            crate::instant::sleep(std::time::Duration::from_millis(UI_DELAY_MS)).await;
 
             // Send ConnectResponse
             let _ = self.do_connect_response().await;
@@ -1814,10 +1869,19 @@ impl Client {
             length: computed_length as u32,
             login_type: AuthFlags::AdminAccountOverride as u32,
             unknown: 0,
-            timestamp: std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap()
-                .as_secs() as i32,
+            timestamp: {
+                #[cfg(not(target_arch = "wasm32"))]
+                {
+                    std::time::SystemTime::now()
+                        .duration_since(std::time::UNIX_EPOCH)
+                        .unwrap()
+                        .as_secs() as i32
+                }
+                #[cfg(target_arch = "wasm32")]
+                {
+                    (js_sys::Date::now() / 1000.0) as i32
+                }
+            },
             account,
             password,
         };
@@ -1870,9 +1934,10 @@ impl Client {
         // Increment send_count for LoginRequest (matches actestclient)
         self.send_count += 1;
 
-        // Send to login server port (9000)
-        let login_addr = self.server.login_addr().await?;
-        self.socket.send_to(&buffer, login_addr).await?;
+        // Send to login channel
+        self.transport
+            .send(&self.server, TransportChannel::Login, buffer)
+            .await?;
 
         // Update progress to LoginRequestSent (33%)
         if let Some(connecting) = self.scene.as_connecting_mut()

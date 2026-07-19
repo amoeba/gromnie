@@ -1,4 +1,4 @@
-use std::time::Instant;
+use crate::instant::Instant;
 
 use asheron_rs::messages::c2s::{CharacterSendCharGenResult, LoginSendEnterWorld};
 

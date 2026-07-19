@@ -27,3 +27,6 @@ name = "discord-bot"
 
 [[bin]]
 name = "load-tester"
+
+[[bin]]
+name = "gromnie-proxy"

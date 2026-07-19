@@ -1,0 +1,18 @@
+# WASM Client Readiness Summary
+
+## What exists
+- **`gromnie-web` crate** — functional WISP-over-WebSocket transport with `connect()`, `open_udp_stream()`, and `open_tcp_stream()` via `#[wasm_bindgen]`
+- **`ClientTransport` trait** — clean abstraction (`transport.rs`) that a WISP transport can slot into
+- **`TransportFactory` pattern** — already supports plugging in custom transports at runtime
+
+## What's missing to send the first packet
+1. **`WispUdpTransport` implementing `ClientTransport`** — ~50-100 lines, wraps the WISP mux stream
+2. **Feature-gate `tokio::net`** — DNS lookup in `connection.rs:29,43` needs WASM alternative
+3. **Replace `std::time::Instant`** — ~15 call sites across 5 files (panics in WASM)
+4. **Feature-gate incompatible deps** — `crossterm`, `ratatui`, `serenity`, `directories`, `wasmtime`, etc. in `gromnie-client/Cargo.toml`
+5. **WASM async runtime** — replace `tokio::spawn`/`tokio::select!` with `wasm_bindgen_futures::spawn_local`/`futures::select!`
+
+## Timeline estimate
+- **First UDP packet via WISP**: ~1-2 days of focused work
+- **Full connection handshake in WASM**: ~3-5 days
+- **Production-quality WASM client**: ~1-2 weeks
