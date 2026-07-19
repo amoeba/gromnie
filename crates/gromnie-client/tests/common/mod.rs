@@ -1,10 +1,7 @@
 use asheron_rs::enums::PacketHeaderFlags;
-/// Shared helpers for regression testing
-///
-/// This module provides utilities for building test packets and validating their structure.
 use asheron_rs::packets::c2s_packet::C2SPacket;
 use byteorder::{ByteOrder, LittleEndian};
-use gromnie::client::C2SPacketExt;
+use gromnie_client::client::C2SPacketExt;
 
 // ============================================================================
 // Field Extraction Helpers
@@ -71,7 +68,7 @@ pub fn extract_ack_sequence(buffer: &[u8], flags: u32) -> Option<u32> {
 pub fn extract_payload(buffer: &[u8]) -> &[u8] {
     assert!(buffer.len() >= 20, "Buffer must have at least header");
     let size = extract_size(buffer) as usize;
-    let payload_offset = 20; // Just after header, optional headers are part of size
+    let payload_offset = 20;
     assert!(
         buffer.len() >= payload_offset + size,
         "Buffer too small for payload"
@@ -118,6 +115,20 @@ pub fn verify_structure_with_payload(
 
     let size = extract_size(buffer) as usize;
     assert_eq!(size, expected_payload_size, "Payload size mismatch");
+}
+
+/// Verify packet structure with optional expected payload size
+pub fn verify_packet_structure(
+    buffer: &[u8],
+    expected_flags: u32,
+    expected_payload_size: Option<usize>,
+) {
+    verify_basic_structure(buffer, expected_flags);
+
+    if let Some(expected_size) = expected_payload_size {
+        let size = extract_size(buffer) as usize;
+        assert_eq!(size, expected_size, "Payload size mismatch");
+    }
 }
 
 // ============================================================================
@@ -180,57 +191,20 @@ pub fn build_packet_with_ack(sequence: u32, ack_seq: u32) -> C2SPacket {
 }
 
 // ============================================================================
-// Hex Formatting Helpers (for test output)
-// ============================================================================
-
-/// Format a buffer as hex string for test output/debugging
-pub fn format_hex(buffer: &[u8]) -> String {
-    buffer
-        .iter()
-        .map(|b| format!("{:02X}", b))
-        .collect::<Vec<_>>()
-        .join(" ")
-}
-
-/// Format a buffer as hex string with line breaks for readability
-pub fn format_hex_pretty(buffer: &[u8], bytes_per_line: usize) -> String {
-    buffer
-        .chunks(bytes_per_line)
-        .enumerate()
-        .map(|(i, chunk)| {
-            let hex = chunk
-                .iter()
-                .map(|b| format!("{:02X}", b))
-                .collect::<Vec<_>>()
-                .join(" ");
-            format!("{:04X}: {}", i * bytes_per_line, hex)
-        })
-        .collect::<Vec<_>>()
-        .join("\n")
-}
-
-// ============================================================================
 // Comparison Helpers
 // ============================================================================
 
 /// Compare packet headers, ignoring sequence and checksum fields
 /// Useful for regression testing when sequence is dynamic
 pub fn compare_headers_ignore_sequence_checksum(buffer1: &[u8], buffer2: &[u8]) -> bool {
-    // Bytes 0-4: sequence (skip)
-    // Bytes 4-8: flags (compare)
-    // Bytes 8-12: checksum (skip)
-    // Bytes 12-20: rest of header (compare)
-
     if buffer1.len() < 20 || buffer2.len() < 20 {
         return false;
     }
 
-    // Compare flags
     if buffer1[4..8] != buffer2[4..8] {
         return false;
     }
 
-    // Compare rest of header (recipient_id, time_since_last_packet, size, iteration)
     if buffer1[12..20] != buffer2[12..20] {
         return false;
     }

@@ -1,78 +1,20 @@
 use asheron_rs::enums::PacketHeaderFlags;
 use asheron_rs::packets::c2s_packet::C2SPacket;
-use byteorder::{ByteOrder, LittleEndian};
-/// Regression tests for packet checksum calculation
-///
-/// These tests verify that packet serialization produces correct checksums.
-/// Checksums are computed from actual packet data, so they're stable regression indicators.
-///
-/// Golden values in these tests should be verified against:
-/// - Known good packets from pcaps
-/// - Server responses that accept the packets
-/// - Cross-validation with actestclient behavior
-use gromnie::client::C2SPacketExt;
+use gromnie_client::client::C2SPacketExt;
 
-// ============================================================================
-// Test Helpers
-// ============================================================================
+mod common;
 
-/// Extract checksum from a serialized packet buffer
-fn extract_checksum(buffer: &[u8]) -> u32 {
-    assert!(buffer.len() >= 12, "Buffer too small for checksum field");
-    LittleEndian::read_u32(&buffer[8..12])
-}
-
-/// Extract flags from a serialized packet buffer
-fn extract_flags(buffer: &[u8]) -> u32 {
-    assert!(buffer.len() >= 8, "Buffer too small for flags field");
-    LittleEndian::read_u32(&buffer[4..8])
-}
-
-/// Extract size field from a serialized packet buffer (payload size, not including header)
-fn extract_size(buffer: &[u8]) -> u16 {
-    assert!(buffer.len() >= 18, "Buffer too small for size field");
-    LittleEndian::read_u16(&buffer[16..18])
-}
-
-/// Verify basic packet structure invariants
-fn verify_packet_structure(
-    buffer: &[u8],
-    expected_flags: u32,
-    expected_payload_size: Option<usize>,
-) {
-    assert!(
-        buffer.len() >= 20,
-        "Packet must have at least 20-byte header"
-    );
-    assert_eq!(buffer.len() % 4, 0, "Packet must be 4-byte aligned");
-
-    let flags = extract_flags(buffer);
-    assert_eq!(flags, expected_flags, "Flags mismatch");
-
-    let size = extract_size(buffer) as usize;
-    assert_eq!(buffer.len(), 20 + size, "Total length = header + size");
-
-    if let Some(expected_size) = expected_payload_size {
-        assert_eq!(size, expected_size, "Payload size mismatch");
-    }
-}
-
-// ============================================================================
-// Test Cases: Simple Packets (No Session Required)
-// ============================================================================
+use common::{extract_checksum, extract_size, verify_packet_structure};
 
 #[test]
 fn test_timesync_packet_checksum() {
-    // TimeSync is a simple packet: just a u64 timestamp in the payload
-    // No session, no fragments, no encryption
-
     let packet = C2SPacket {
-        sequence: 0, // TimeSync uses seq=0
+        sequence: 0,
         flags: PacketHeaderFlags::TIME_SYNC,
-        checksum: 0, // Will be calculated
+        checksum: 0,
         recipient_id: 0,
         time_since_last_packet: 0,
-        size: 8, // u64 timestamp
+        size: 8,
         iteration: 0,
         server_switch: None,
         retransmit_sequences: None,
@@ -82,7 +24,7 @@ fn test_timesync_packet_checksum() {
         world_login_request: None,
         connect_response: None,
         cicmd_command: None,
-        time: Some(1704067200), // Fixed timestamp for reproducibility
+        time: Some(1704067200),
         echo_time: None,
         flow: None,
         fragments: None,
@@ -93,7 +35,7 @@ fn test_timesync_packet_checksum() {
     verify_packet_structure(
         &buffer,
         PacketHeaderFlags::TIME_SYNC.bits(),
-        Some(8), // u64 timestamp
+        Some(8),
     );
 
     let checksum = extract_checksum(&buffer);
@@ -103,7 +45,6 @@ fn test_timesync_packet_checksum() {
         "Checksum should be calculated, not placeholder"
     );
 
-    // Verify this packet serializes deterministically (same input = same output)
     let buffer2 = packet
         .serialize(None)
         .expect("Failed to serialize second time");
@@ -112,7 +53,6 @@ fn test_timesync_packet_checksum() {
 
 #[test]
 fn test_timesync_checksum_reproducible() {
-    // Verify that TimeSync packets with the same timestamp produce the same checksum
     let make_packet = |time| C2SPacket {
         sequence: 0,
         flags: PacketHeaderFlags::TIME_SYNC,
@@ -149,8 +89,6 @@ fn test_timesync_checksum_reproducible() {
 
 #[test]
 fn test_timesync_checksum_changes_with_different_timestamp() {
-    // Verify that different timestamps produce different checksums
-
     let make_packet = |time| C2SPacket {
         sequence: 0,
         flags: PacketHeaderFlags::TIME_SYNC,
@@ -185,14 +123,8 @@ fn test_timesync_checksum_changes_with_different_timestamp() {
     );
 }
 
-// ============================================================================
-// Test Cases: Packets with Optional Headers
-// ============================================================================
-
 #[test]
 fn test_packet_with_ack_sequence_checksum() {
-    // Test that ACK sequences are included in checksum calculation
-
     let make_packet = |ack_seq: Option<u32>| {
         let mut packet = C2SPacket {
             sequence: 1,
@@ -229,13 +161,11 @@ fn test_packet_with_ack_sequence_checksum() {
     let checksum_without = extract_checksum(&buffer_without_ack);
     let checksum_with = extract_checksum(&buffer_with_ack);
 
-    // Checksums should differ because the optional header changes the packet
     assert_ne!(
         checksum_without, checksum_with,
         "Adding ACK sequence should change checksum"
     );
 
-    // Packet with ACK should be larger
     assert!(
         buffer_with_ack.len() > buffer_without_ack.len(),
         "Packet with ACK should be larger (4 extra bytes)"
@@ -244,9 +174,6 @@ fn test_packet_with_ack_sequence_checksum() {
 
 #[test]
 fn test_packet_with_multiple_optional_headers_checksum() {
-    // Test that multiple optional headers are checksummed correctly
-    // Optional header order matters: ack, world_login, connect_response, time, echo, flow
-
     let packet = C2SPacket {
         sequence: 1,
         flags: PacketHeaderFlags::empty(),
@@ -269,7 +196,6 @@ fn test_packet_with_multiple_optional_headers_checksum() {
         fragments: None,
     };
 
-    // Update flags to match the fields we set
     let mut packet = packet;
     packet.flags |= PacketHeaderFlags::ACK_SEQUENCE;
     packet.flags |= PacketHeaderFlags::WORLD_LOGIN_REQUEST;
@@ -277,8 +203,6 @@ fn test_packet_with_multiple_optional_headers_checksum() {
 
     let buffer = packet.serialize(None).expect("Failed to serialize");
 
-    // Total optional header size should be:
-    // ack_sequence: 4, world_login_request: 8, time: 8 = 20 bytes
     let expected_optional_size = 4 + 8 + 8;
     let size = extract_size(&buffer) as usize;
     assert_eq!(
@@ -291,22 +215,15 @@ fn test_packet_with_multiple_optional_headers_checksum() {
     assert_ne!(checksum, 0xbadd70dd, "Checksum should not be placeholder");
 }
 
-// ============================================================================
-// Test Cases: Size Field Regression
-// ============================================================================
-
 #[test]
 fn test_size_field_auto_calculation() {
-    // Verify that the size field is automatically calculated from actual buffer length
-    // (not from manually set size field)
-
     let packet = C2SPacket {
         sequence: 0,
         flags: PacketHeaderFlags::TIME_SYNC,
         checksum: 0,
         recipient_id: 0,
         time_since_last_packet: 0,
-        size: 9999, // Intentionally wrong!
+        size: 9999,
         iteration: 0,
         server_switch: None,
         retransmit_sequences: None,
@@ -324,7 +241,6 @@ fn test_size_field_auto_calculation() {
 
     let buffer = packet.serialize(None).expect("Failed to serialize");
 
-    // The serialize method should have corrected the size field
     let actual_size = extract_size(&buffer);
     assert_eq!(
         actual_size, 8,
@@ -337,14 +253,8 @@ fn test_size_field_auto_calculation() {
     );
 }
 
-// ============================================================================
-// Test Cases: Checksum Placeholder Detection
-// ============================================================================
-
 #[test]
 fn test_checksum_never_placeholder() {
-    // Regression test: ensure checksum is never left as the placeholder value
-
     let packet = C2SPacket {
         sequence: 0,
         flags: PacketHeaderFlags::TIME_SYNC,
@@ -375,15 +285,8 @@ fn test_checksum_never_placeholder() {
     );
 }
 
-// ============================================================================
-// Test Cases: Deterministic Serialization
-// ============================================================================
-
 #[test]
 fn test_serialization_determinism() {
-    // Verify that serializing the same packet twice produces identical output
-    // This is critical for regression testing: same input = same bytes = same checksum
-
     let packet = C2SPacket {
         sequence: 42,
         flags: PacketHeaderFlags::TIME_SYNC | PacketHeaderFlags::ACK_SEQUENCE,
@@ -419,5 +322,3 @@ fn test_serialization_determinism() {
         "Second and third serialization should be identical"
     );
 }
-
-// Note: Tests requiring session/encryption keys are in regression_session_tests.rs
