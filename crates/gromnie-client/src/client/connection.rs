@@ -23,10 +23,9 @@ impl ServerInfo {
         peer_ip == self.host || peer_ip == "127.0.0.1" || peer_ip == "::1"
     }
 
-    /// Get the login server address for sending standard messages
     #[cfg(not(target_arch = "wasm32"))]
-    pub async fn login_addr(&self) -> Result<SocketAddr, std::io::Error> {
-        let addr = format!("{}:{}", self.host, self.login_port);
+    async fn resolve_addr(&self, port: u16) -> Result<SocketAddr, std::io::Error> {
+        let addr = format!("{}:{}", self.host, port);
         tokio::net::lookup_host(addr)
             .await?
             .find(|a| a.is_ipv4())
@@ -38,36 +37,21 @@ impl ServerInfo {
             })
     }
 
+    #[cfg(target_arch = "wasm32")]
+    async fn resolve_addr(&self, _port: u16) -> Result<SocketAddr, std::io::Error> {
+        Err(std::io::Error::new(
+            std::io::ErrorKind::Unsupported,
+            "DNS resolution not available in WASM; use WISP transport instead",
+        ))
+    }
+
     /// Get the login server address for sending standard messages
-    #[cfg(target_arch = "wasm32")]
     pub async fn login_addr(&self) -> Result<SocketAddr, std::io::Error> {
-        Err(std::io::Error::new(
-            std::io::ErrorKind::Unsupported,
-            "DNS resolution not available in WASM; use WISP transport instead",
-        ))
+        self.resolve_addr(self.login_port).await
     }
 
     /// Get the world server address for sending ConnectResponse
-    #[cfg(not(target_arch = "wasm32"))]
     pub async fn world_addr(&self) -> Result<SocketAddr, std::io::Error> {
-        let addr = format!("{}:{}", self.host, self.world_port);
-        tokio::net::lookup_host(addr)
-            .await?
-            .find(|a| a.is_ipv4())
-            .ok_or_else(|| {
-                std::io::Error::new(
-                    std::io::ErrorKind::NotFound,
-                    "Could not resolve IPv4 address",
-                )
-            })
-    }
-
-    /// Get the world server address for sending ConnectResponse
-    #[cfg(target_arch = "wasm32")]
-    pub async fn world_addr(&self) -> Result<SocketAddr, std::io::Error> {
-        Err(std::io::Error::new(
-            std::io::ErrorKind::Unsupported,
-            "DNS resolution not available in WASM; use WISP transport instead",
-        ))
+        self.resolve_addr(self.world_port).await
     }
 }
