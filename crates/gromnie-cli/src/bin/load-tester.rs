@@ -2,13 +2,10 @@ use clap::Parser;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tracing::error;
-use tracing_subscriber::EnvFilter;
-use tracing_subscriber::layer::SubscriberExt;
-use tracing_subscriber::util::SubscriberInitExt;
 
 use gromnie_runner::{
     AutoLoginConsumer, ClientConfig, ClientNaming, CompositeConsumer, FnConsumerBuilder,
-    MultiClientStats, RunConfig, RunResult, StatsConsumer,
+    MultiClientStats, RunConfig, RunResult, StatsConsumer, logging,
 };
 
 #[derive(Parser)]
@@ -74,27 +71,7 @@ async fn main() {
         return;
     }
 
-    // Set up file appender for load_tester.log
-    let file_appender = tracing_appender::rolling::never(".", "load_tester.log");
-    let (non_blocking_file, _guard) = tracing_appender::non_blocking(file_appender);
-
-    // Create the env filter
-    let env_filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info"));
-
-    // Set up layered subscriber that writes to both stdout and file
-    tracing_subscriber::registry()
-        .with(env_filter)
-        .with(
-            tracing_subscriber::fmt::layer()
-                .with_writer(std::io::stdout)
-                .with_ansi(true),
-        )
-        .with(
-            tracing_subscriber::fmt::layer()
-                .with_writer(non_blocking_file)
-                .with_ansi(false),
-        )
-        .init();
+    let _log_guard = logging::init_logging("load-tester").expect("failed to initialize logging");
 
     let run_args = if let Some(Command::Run(args)) = args.command {
         args
