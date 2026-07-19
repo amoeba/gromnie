@@ -8,6 +8,9 @@ use std::ops::{Add, Sub};
 use std::pin::Pin;
 use std::time::Duration;
 
+#[cfg(target_arch = "wasm32")]
+use web_sys;
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Instant {
     #[cfg(not(target_arch = "wasm32"))]
@@ -106,6 +109,9 @@ pub fn sleep(_duration: Duration) -> Pin<Box<dyn Future<Output = ()> + Send>> {
         // On WASM, we can't use gloo_timers here because TimeoutFuture is not Send
         // and this future needs to be Send for tokio::spawn compatibility.
         // WASM callers should use spawn_local with gloo_timers directly instead.
+        web_sys::console::warn_1(
+            &format!("[gromnie] sleep({:?}) is a no-op on WASM; use gloo_timers with spawn_local for real delays", _duration).into(),
+        );
         Box::pin(async {})
     }
 }

@@ -23,7 +23,7 @@ native = [
   "dep:wasmtime-wasi",
   "dep:wit-bindgen",
 ]
-wasm = ["dep:js-sys", "dep:wasm-bindgen-futures", "gromnie-events/wasm"]
+wasm = ["dep:js-sys", "dep:web-sys", "dep:wasm-bindgen-futures", "gromnie-events/wasm"]
 
 [dependencies]
 asheron-rs.workspace = true
@@ -32,6 +32,7 @@ bitflags = "2.6"
 byteorder = "1.5.0"
 js-sys = { version = "0.3", optional = true }
 wasm-bindgen-futures = { version = "0.4", optional = true }
+web-sys = { version = "0.3", optional = true, features = ["console"] }
 chrono.workspace = true
 clap.workspace = true
 crossterm = { workspace = true, optional = true }
