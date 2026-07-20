@@ -19,6 +19,10 @@ let wasm = null;
 let client = null;
 let characters = [];
 
+// Auto-derive ws_url from page origin
+const wsProto = location.protocol === "https:" ? "wss:" : "ws:";
+wsUrlEl.value = `${wsProto}//${location.host}/wisp/`;
+
 function appendLog(pre, message) {
   const line = `[${new Date().toISOString()}] ${message}`;
   pre.textContent += `${line}\n`;
