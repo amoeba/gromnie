@@ -105,7 +105,7 @@ fn split_axum_ws(mut ws: WebSocket) -> (AxumTransportRead, AxumTransportWrite) {
                 data = write_rx.recv() => {
                     match data {
                         Some(bytes) => {
-                            if ws.send(Message::Binary(bytes.into())).await.is_err() {
+                            if ws.send(Message::Binary(bytes)).await.is_err() {
                                 break;
                             }
                         }
@@ -118,7 +118,10 @@ fn split_axum_ws(mut ws: WebSocket) -> (AxumTransportRead, AxumTransportWrite) {
 
     (
         AxumTransportRead { rx: read_rx },
-        AxumTransportWrite { tx: write_tx, _ws_task: ws_task },
+        AxumTransportWrite {
+            tx: write_tx,
+            _ws_task: ws_task,
+        },
     )
 }
 
@@ -138,9 +141,11 @@ async fn main() -> Result<()> {
     let app = Router::new()
         .route(
             &args.wisp_path,
-            get(|ws: axum::extract::ws::WebSocketUpgrade, _state: State<AppState>| async move {
-                ws.on_upgrade(handle_ws)
-            }),
+            get(
+                |ws: axum::extract::ws::WebSocketUpgrade, _state: State<AppState>| async move {
+                    ws.on_upgrade(handle_ws)
+                },
+            ),
         )
         .fallback_service(ServeDir::new(&args.static_dir).append_index_html_on_directories(true))
         .with_state(state);
@@ -160,7 +165,8 @@ async fn handle_ws(socket: WebSocket) {
         UdpProtocolExtensionBuilder,
     )]);
 
-    let client = match ServerMux::new(transport_read, transport_write, 65536, Some(handshake)).await {
+    let client = match ServerMux::new(transport_read, transport_write, 65536, Some(handshake)).await
+    {
         Ok(c) => c,
         Err(e) => {
             error!("wisp handshake failed: {e}");
