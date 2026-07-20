@@ -116,30 +116,4 @@ jobs:
           build-args: |
             BUILDKIT_INLINE_CACHE=1
 
-  deploy:
-    name: Deploy to Dokku
-    runs-on: ubuntu-latest
-    needs: build-image
-    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-    steps:
-      - name: Generate image tag
-        id: image-tag
-        run: |
-          SHORT_SHA=$(echo "${{ github.sha }}" | cut -c1-7)
-          echo "tag=${SHORT_SHA}" >> $GITHUB_OUTPUT
-
-      - name: Setup SSH for Dokku
-        run: |
-          mkdir -p ~/.ssh
-          echo "${{ secrets.DOKKU_SSH_PRIVATE_KEY }}" > ~/.ssh/deploy_key
-          chmod 600 ~/.ssh/deploy_key
-          ssh-keyscan -H ${{ secrets.DOKKU_HOST }} >> ~/.ssh/known_hosts
-
-      - name: Deploy to Dokku
-        run: |
-          APP_NAME="gromnie"
-          IMAGE="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.image-tag.outputs.tag }}"
-          echo "Deploying $IMAGE to $APP_NAME"
-
-          ssh -i ~/.ssh/deploy_key dokku@${{ secrets.DOKKU_HOST }} \
-            git:from-image $APP_NAME "$IMAGE"
+  # Dokku pulls from GHCR directly via git:from-image
