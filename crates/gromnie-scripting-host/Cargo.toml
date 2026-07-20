@@ -18,7 +18,7 @@ gromnie-client = { path = "../gromnie-client" }
 gromnie-events = { path = "../gromnie-events" }
 anyhow.workspace = true
 directories.workspace = true
-tokio = { workspace = true, features = ["test-util"] }
+tokio = { workspace = true, features = ["full", "test-util"] }
 toml.workspace = true
 tracing.workspace = true
 wasmtime.workspace = true

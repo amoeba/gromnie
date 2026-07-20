@@ -28,7 +28,7 @@ gromnie-runner = { path = "../gromnie-runner" }
 gromnie-scripting-host = { path = "../gromnie-scripting-host", optional = true }
 ratatui.workspace = true
 serenity.workspace = true
-tokio.workspace = true
+tokio = { workspace = true, features = ["full"] }
 tracing.workspace = true
 tracing-appender.workspace = true
 tracing-subscriber.workspace = true

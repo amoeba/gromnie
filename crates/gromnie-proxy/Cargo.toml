@@ -17,7 +17,7 @@ axum = { version = "0.8", features = ["ws"] }
 bytes = "1"
 clap = { workspace = true }
 futures = "0.3"
-tokio.workspace = true
+tokio = { workspace = true, features = ["full"] }
 tokio-tungstenite = "0.27"
 tower-http = { version = "0.6", features = ["fs"] }
 tracing = { workspace = true }

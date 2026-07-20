@@ -55,6 +55,7 @@ impl WasmClient {
         &mut self,
         ws_url: String,
         server_host: String,
+        server_port: u16,
         account_name: String,
         password: String,
     ) -> Result<(), JsValue> {
@@ -66,9 +67,9 @@ impl WasmClient {
 
         web_sys::console::log_1(&"[wasm] step 2: opening UDP stream".into());
 
-        // 2. Open UDP stream to game server (login port 9000)
+        // 2. Open UDP stream to game server
         let stream_id = wisp_client
-            .open_udp_stream(server_host.clone(), 9000)
+            .open_udp_stream(server_host.clone(), server_port)
             .await?;
 
         web_sys::console::log_1(&format!("[wasm] step 3: taking stream id={}", stream_id).into());
@@ -93,7 +94,7 @@ impl WasmClient {
         web_sys::console::log_1(&"[wasm] step 6: creating gromnie client".into());
 
         // 6. Create the gromnie client with our WISP transport
-        let address = format!("{}:9000", server_host);
+        let address = format!("{}:{}", server_host, server_port);
         let (mut client, action_tx) = gromnie_client::client::Client::new_with_transport(
             1,
             address,

@@ -6,8 +6,8 @@ const logEls = {
   system: document.getElementById("log-system"),
 };
 const netLogEl = document.getElementById("net-log");
-const wsUrlEl = document.getElementById("ws-url");
 const hostEl = document.getElementById("host");
+const portEl = document.getElementById("port");
 const accountEl = document.getElementById("account");
 const passwordEl = document.getElementById("password");
 const charListEl = document.getElementById("char-list");
@@ -18,10 +18,6 @@ const selectCharBtn = document.getElementById("select-char");
 let wasm = null;
 let client = null;
 let characters = [];
-
-// Auto-derive ws_url from page origin
-const wsProto = location.protocol === "https:" ? "wss:" : "ws:";
-wsUrlEl.value = `${wsProto}//${location.host}/wisp/`;
 
 function appendLog(pre, message) {
   const line = `[${new Date().toISOString()}] ${message}`;
@@ -122,7 +118,10 @@ async function doLogin() {
     }
 
     loginBtn.disabled = true;
-    log(`connecting to ${wsUrlEl.value.trim()}...`);
+
+    const wsProto = location.protocol === "https:" ? "wss:" : "ws:";
+    const wsUrl = `${wsProto}//${location.host}/wisp/`;
+    log(`connecting to ${wsUrl}...`);
 
     client = new wasm.WasmClient();
 
@@ -131,8 +130,9 @@ async function doLogin() {
     client.set_on_net_log(handleNetLog);
 
     await client.connect(
-      wsUrlEl.value.trim(),
+      wsUrl,
       hostEl.value.trim(),
+      parseInt(portEl.value.trim(), 10),
       accountEl.value.trim(),
       passwordEl.value.trim()
     );
