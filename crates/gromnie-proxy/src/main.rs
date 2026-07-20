@@ -1,15 +1,15 @@
+use std::future::Future;
 use std::net::SocketAddr;
 use std::path::PathBuf;
 use std::pin::Pin;
 use std::task::{Context, Poll};
-use std::future::Future;
 
 use anyhow::Result;
 use axum::Router;
 use axum::body::Body;
-use axum::http;
 use axum::extract::State;
 use axum::extract::ws::{Message, WebSocket};
+use axum::http;
 use axum::routing::get;
 use base64::Engine;
 use bytes::Bytes;
@@ -123,8 +123,11 @@ struct BasicAuthMiddleware<S> {
 
 impl<S> Service<http::Request<Body>> for BasicAuthMiddleware<S>
 where
-    S: Service<http::Request<Body>, Response = http::Response<Body>, Error = std::convert::Infallible>
-        + Clone
+    S: Service<
+            http::Request<Body>,
+            Response = http::Response<Body>,
+            Error = std::convert::Infallible,
+        > + Clone
         + Send
         + 'static,
     S::Future: Send,
@@ -318,19 +321,18 @@ async fn main() -> Result<()> {
     // Auth configuration via environment variables
     let auth_config = match std::env::var("AUTH_ENABLE") {
         Ok(val) if val == "true" || val == "1" => {
-            let user = std::env::var("AUTH_USER")
-                .expect("AUTH_USER must be set when AUTH_ENABLE=true");
+            let user =
+                std::env::var("AUTH_USER").expect("AUTH_USER must be set when AUTH_ENABLE=true");
             let pass = std::env::var("AUTH_PASSWORD")
                 .expect("AUTH_PASSWORD must be set when AUTH_ENABLE=true");
-            let secret = std::env::var("AUTH_SECRET")
-                .unwrap_or_else(|_| {
-                    use std::collections::hash_map::DefaultHasher;
-                    use std::hash::{Hash, Hasher};
-                    let mut h = DefaultHasher::new();
-                    user.hash(&mut h);
-                    pass.hash(&mut h);
-                    format!("{:016x}", h.finish())
-                });
+            let secret = std::env::var("AUTH_SECRET").unwrap_or_else(|_| {
+                use std::collections::hash_map::DefaultHasher;
+                use std::hash::{Hash, Hasher};
+                let mut h = DefaultHasher::new();
+                user.hash(&mut h);
+                pass.hash(&mut h);
+                format!("{:016x}", h.finish())
+            });
             info!(user = %user, "basic auth enabled");
             Some(AuthConfig {
                 username: user,
