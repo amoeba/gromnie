@@ -13,10 +13,13 @@ path = "src/main.rs"
 
 [dependencies]
 anyhow.workspace = true
+axum = { version = "0.8", features = ["ws"] }
+bytes = "1"
 clap = { workspace = true }
 futures = "0.3"
 tokio.workspace = true
 tokio-tungstenite = "0.27"
+tower-http = { version = "0.6", features = ["fs"] }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
 wisp-mux = { workspace = true, features = ["tokio-tungstenite"] }

@@ -1,0 +1,8 @@
+services:
+  gromnie-proxy:
+    build:
+      context: .
+      dockerfile: crates/gromnie-proxy/Dockerfile
+    ports:
+      - "8080:8080"
+    restart: unless-stopped

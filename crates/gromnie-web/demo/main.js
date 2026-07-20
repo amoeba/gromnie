@@ -54,7 +54,7 @@ document.querySelectorAll(".tab").forEach((tab) => {
 
 async function loadWasm() {
   try {
-    wasm = await import("../pkg/gromnie_web.js");
+    wasm = await import("./pkg/gromnie_web.js");
     await wasm.default();
     log("wasm loaded from ../pkg/gromnie_web.js");
     loginBtn.disabled = false;
