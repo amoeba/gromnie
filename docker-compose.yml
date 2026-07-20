@@ -6,3 +6,9 @@ services:
     ports:
       - "8080:8080"
     restart: unless-stopped
+    # Uncomment to enable HTTP basic auth
+    # environment:
+    #   AUTH_ENABLE: "true"
+    #   AUTH_USER: "user"
+    #   AUTH_PASSWORD: "changeme"
+    #   AUTH_SECRET: "random-secret-key-for-cookie-signing"
