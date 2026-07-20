@@ -190,7 +190,11 @@ async fn handle_ws(socket: WebSocket) {
                 let port = connect_pkt.port;
                 let stream_type = connect_pkt.stream_type;
                 info!(%host, port, ?stream_type, "client opened stream");
-                tokio::spawn(handle_stream(connect_pkt, stream));
+                tokio::spawn(async move {
+                    if let Err(e) = handle_stream(connect_pkt, stream).await {
+                        error!(host = %host, port, "stream failed: {e:#}");
+                    }
+                });
             }
             None => {
                 info!("wisp connection closed");

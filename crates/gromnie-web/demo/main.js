@@ -69,6 +69,13 @@ async function loadWasm() {
 function handleEvent(eventDesc) {
   logEvent(eventDesc);
 
+  // Re-enable login button on disconnect or error
+  if (eventDesc.includes("Disconnected") || eventDesc.includes("AuthenticationFailed")) {
+    loginBtn.disabled = false;
+    client = null;
+    characters = [];
+  }
+
   // Parse character list events
   if (eventDesc.includes("CharacterListReceived")) {
     const charMatch = eventDesc.match(/characters:\s*\[(.*?)\]/s);

@@ -32,11 +32,7 @@ fn test_timesync_packet_checksum() {
 
     let buffer = packet.serialize(None).expect("Failed to serialize");
 
-    verify_packet_structure(
-        &buffer,
-        PacketHeaderFlags::TIME_SYNC.bits(),
-        Some(8),
-    );
+    verify_packet_structure(&buffer, PacketHeaderFlags::TIME_SYNC.bits(), Some(8));
 
     let checksum = extract_checksum(&buffer);
     assert_ne!(checksum, 0, "Checksum should not be zero");
