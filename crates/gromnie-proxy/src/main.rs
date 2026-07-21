@@ -430,6 +430,7 @@ async fn handle_stream(
 ) -> Result<()> {
     let host = &connect_pkt.host;
     let port = connect_pkt.port;
+    info!(%host, port, "handle_stream: starting forwarding");
 
     let game_addr = tokio::net::lookup_host(format!("{host}:{port}"))
         .await?
@@ -437,7 +438,7 @@ async fn handle_stream(
         .ok_or_else(|| anyhow::anyhow!("no addresses found for {host}:{port}"))?;
     let game_socket = tokio::net::UdpSocket::bind("0.0.0.0:0").await?;
     game_socket.connect(&game_addr).await?;
-    info!(%game_addr, "udp forwarding started");
+    info!(%game_addr, local = %game_socket.local_addr().unwrap(), "udp forwarding started");
 
     let game_socket = std::sync::Arc::new(game_socket);
     let game_socket_read = game_socket.clone();
@@ -450,9 +451,13 @@ async fn handle_stream(
 
     // WISP -> UDP
     let forward = async {
+        let mut pkt_count: u64 = 0;
         loop {
             match StreamExt::next(&mut stream_rx).await {
                 Some(Ok(payload)) => {
+                    pkt_count += 1;
+                    let hex_preview: String = payload.iter().take(20).map(|b| format!("{:02x}", b)).collect::<Vec<_>>().join(" ");
+                    info!(%game_addr, len = payload.len(), pkt_count, "WISP -> UDP: forwarding {} bytes | {}", payload.len(), hex_preview);
                     if let Err(e) = game_socket_write.send(&payload).await {
                         error!(%game_addr, "udp send error: {e}");
                         break;
@@ -462,7 +467,10 @@ async fn handle_stream(
                     error!(%game_addr, "wisp recv error: {e}");
                     break;
                 }
-                None => break,
+                None => {
+                    info!(%game_addr, "WISP -> UDP: stream ended (no more data from client)");
+                    break;
+                }
             }
         }
         let _ = close_tx.send(());
@@ -475,7 +483,9 @@ async fn handle_stream(
             tokio::select! {
                 result = game_socket_read.recv_from(&mut buf) => {
                     match result {
-                        Ok((len, _)) => {
+                        Ok((len, src)) => {
+                            let hex_preview: String = buf[..len].iter().take(20).map(|b| format!("{:02x}", b)).collect::<Vec<_>>().join(" ");
+                            info!(%game_addr, len, %src, "UDP -> WISP: received {} bytes from game server | {}", len, hex_preview);
                             let data = Bytes::copy_from_slice(&buf[..len]);
                             if let Err(e) = stream_tx.send(data).await {
                                 error!(%game_addr, "wisp send error: {e}");
@@ -489,6 +499,7 @@ async fn handle_stream(
                     }
                 }
                 _ = &mut close_rx => {
+                    info!(%game_addr, "UDP -> WISP: shutting down (forward direction ended)");
                     break;
                 }
             }
