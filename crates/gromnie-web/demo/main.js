@@ -376,5 +376,23 @@ async function loadWasm() {
   }
 }
 
+async function checkProxy() {
+  const wsProto = location.protocol === "https:" ? "wss:" : "ws:";
+  const wsUrl = `${wsProto}//${location.host}/wisp/`;
+  try {
+    const ws = new WebSocket(wsUrl);
+    const ok = await new Promise((resolve) => {
+      ws.onopen = () => { ws.close(); resolve(true); };
+      ws.onerror = () => resolve(false);
+      setTimeout(() => { try { ws.close(); } catch {} resolve(false); }, 3000);
+    });
+    setStatus(proxyStatusEl, ok ? "reachable" : "unreachable", ok);
+    log(`proxy ${wsUrl}: ${ok ? "reachable" : "unreachable"}`);
+  } catch {
+    setStatus(proxyStatusEl, "unreachable", false);
+  }
+}
+
 loadForm();
 loadWasm();
+checkProxy();
