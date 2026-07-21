@@ -456,7 +456,12 @@ async fn handle_stream(
             match StreamExt::next(&mut stream_rx).await {
                 Some(Ok(payload)) => {
                     pkt_count += 1;
-                    let hex_preview: String = payload.iter().take(20).map(|b| format!("{:02x}", b)).collect::<Vec<_>>().join(" ");
+                    let hex_preview: String = payload
+                        .iter()
+                        .take(20)
+                        .map(|b| format!("{:02x}", b))
+                        .collect::<Vec<_>>()
+                        .join(" ");
                     info!(%game_addr, len = payload.len(), pkt_count, "WISP -> UDP: forwarding {} bytes | {}", payload.len(), hex_preview);
                     if let Err(e) = game_socket_write.send(&payload).await {
                         error!(%game_addr, "udp send error: {e}");
