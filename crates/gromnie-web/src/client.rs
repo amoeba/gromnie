@@ -115,60 +115,22 @@ impl WasmClient {
 
         web_sys::console::log_1(&"[wasm] step 8: spawning recv loop".into());
 
-        // 8. Spawn the recv loop with keepalive and timeout detection
+        // 8. Spawn the recv loop with keepalive
         let net_log_ref = self.on_net_log.clone();
-        const RECV_TIMEOUT_MS: u64 = 15_000;
         const KEEPALIVE_INTERVAL_MS: u64 = 5000;
-        const POLL_INTERVAL_MS: u64 = 50;
         spawn_local(async move {
             let mut buf = vec![0u8; 65536];
             let mut last_keepalive_ms = js_sys::Date::now() as u64;
-            let mut last_recv_ms = js_sys::Date::now() as u64;
 
             loop {
-                // Poll recv with manual timeout (tokio::time not available in WASM)
-                // Scoped so recv_fut's borrow on client/buf is released before we use them
-                let recv_result: Option<Result<(usize, _), _>> = {
-                    let recv_fut = client.recv_packet(&mut buf);
-                    futures::pin_mut!(recv_fut);
-
-                    let now_ms = js_sys::Date::now() as u64;
-                    if now_ms - last_recv_ms >= RECV_TIMEOUT_MS {
-                        None
-                    } else {
-                        let timeout_ms =
-                            (RECV_TIMEOUT_MS - (now_ms - last_recv_ms)).min(POLL_INTERVAL_MS);
-                        let delay_promise = js_sys::Promise::new(&mut |resolve, _reject| {
-                            let closure = wasm_bindgen::closure::Closure::once(move || {
-                                resolve.call0(&JsValue::NULL).ok();
-                            });
-                            web_sys::window()
-                                .unwrap()
-                                .set_timeout_with_callback_and_timeout_and_arguments_0(
-                                    closure.as_ref().unchecked_ref(),
-                                    timeout_ms as i32,
-                                )
-                                .ok();
-                            closure.forget();
-                        });
-                        let timer = wasm_bindgen_futures::JsFuture::from(delay_promise);
-                        match futures::future::select(recv_fut.as_mut(), timer).await {
-                            futures::future::Either::Left((result, _)) => Some(result),
-                            futures::future::Either::Right(_) => None,
-                        }
-                    }
-                }; // recv_fut dropped here, &mut client/buf released
-
-                match recv_result {
-                    Some(Ok((len, addr))) => {
-                        last_recv_ms = js_sys::Date::now() as u64;
-
+                match client.recv_packet(&mut buf).await {
+                    Ok((len, addr)) => {
                         if let Some(cb) = net_log_ref.borrow().as_ref() {
                             let msg = format_net_entry("RX", "?", &buf[..len]);
                             cb.call1(&JsValue::NULL, &msg.into()).ok();
                         }
 
-                        let now_ms = last_recv_ms;
+                        let now_ms = js_sys::Date::now() as u64;
                         if now_ms - last_keepalive_ms >= KEEPALIVE_INTERVAL_MS {
                             if let Err(e) = client.send_keepalive().await {
                                 web_sys::console::error_1(&format!("keepalive error: {e}").into());
@@ -184,22 +146,8 @@ impl WasmClient {
                             web_sys::console::error_1(&format!("send_pending error: {e}").into());
                         }
                     }
-                    Some(Err(e)) => {
+                    Err(e) => {
                         web_sys::console::error_1(&format!("recv error: {e}").into());
-                        let _ = error_tx_clone
-                            .send(ClientEvent::System(
-                                gromnie_client::client::ClientSystemEvent::Disconnected {
-                                    will_reconnect: false,
-                                    reconnect_attempt: 0,
-                                    delay_secs: 0,
-                                },
-                            ))
-                            .await;
-                        break;
-                    }
-                    None => {
-                        let msg = format!("no response from server after {RECV_TIMEOUT_MS}ms");
-                        web_sys::console::error_1(&msg.into());
                         let _ = error_tx_clone
                             .send(ClientEvent::System(
                                 gromnie_client::client::ClientSystemEvent::Disconnected {
@@ -260,6 +208,23 @@ impl WasmClient {
             message: message.to_string(),
         })
         .map_err(|e| js_error(format!("send failed: {e}")))?;
+
+        Ok(())
+    }
+
+    pub async fn disconnect(&self) -> Result<(), JsValue> {
+        let tx = self
+            .action_tx
+            .as_ref()
+            .ok_or_else(|| js_error("not connected"))?;
+
+        tx.send(SimpleClientAction::Disconnect)
+            .map_err(|e| js_error(format!("send failed: {e}")))?;
+
+        // Close the WebSocket so the recv loop terminates and emits Disconnected
+        if let Some(wisp) = &self.wisp_client {
+            wisp.close().await;
+        }
 
         Ok(())
     }

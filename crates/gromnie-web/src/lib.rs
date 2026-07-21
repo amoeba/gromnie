@@ -369,6 +369,15 @@ impl GromnieWispClient {
         let mut state = self.state.lock().await;
         state.streams.remove(&id)
     }
+
+    /// Close the mux and all streams, terminating the WebSocket connection.
+    pub async fn close(&self) {
+        let mut state = self.state.lock().await;
+        state.streams.clear();
+        if let Some(mux) = state.mux.take() {
+            let _ = mux.close().await;
+        }
+    }
 }
 
 #[cfg(test)]
