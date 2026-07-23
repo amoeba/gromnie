@@ -41,6 +41,8 @@ FROM nginx:1.27-alpine
 
 # Default WISP proxy host (overridden via WISP_HOST env var at runtime).
 ENV WISP_HOST=gromnie-proxy:8080
+ARG GIT_SHA=dev
+ENV GIT_SHA=${GIT_SHA}
 
 # Copy demo files and generated pkg/ directory. The index.html still contains
 # the __WISP_HOST__ placeholder, which the entrypoint replaces at startup.
@@ -53,6 +55,8 @@ COPY --from=builder /app/crates/gromnie-web/pkg/           /usr/share/nginx/html
 COPY <<'ENTRYPINT' /usr/local/bin/entrypoint.sh
 #!/bin/sh
 sed -i "s/__WISP_HOST__/${WISP_HOST}/g" /usr/share/nginx/html/index.html
+sed -i "s/__GIT_SHA__/${GIT_SHA}/g" /usr/share/nginx/html/index.html
+sed -i "s/__GIT_SHA__/${GIT_SHA}/g" /usr/share/nginx/html/main.js
 exec /docker-entrypoint.sh nginx -g 'daemon off;'
 ENTRYPINT
 RUN chmod +x /usr/local/bin/entrypoint.sh

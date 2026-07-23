@@ -41,6 +41,7 @@
     <div class="status-bar">
       <div class="status-item" id="wasm-status"><span class="label">WASM</span> loading...</div>
       <div class="status-item" id="proxy-status"><span class="label">Proxy</span> --</div>
+      <div class="status-item" id="version-status"><span class="label">Build</span> __GIT_SHA__</div>
     </div>
 
     <div class="main-area" id="main-area">
@@ -114,6 +115,6 @@
       </div>
     </div>
 
-    <script type="module" src="./main.js"></script>
+    <script type="module" src="./main.js?v=__GIT_SHA__"></script>
   </body>
 </html>

@@ -298,6 +298,10 @@ async fn main() -> Result<()> {
         )
         .init();
 
+    if let Some(sha) = option_env!("GIT_SHA") {
+        info!(git_sha = sha, "starting");
+    }
+
     let args = Args::parse();
 
     // Auth configuration via environment variables

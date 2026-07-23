@@ -34,6 +34,9 @@ COPY --from=cacher /app/target target
 COPY --from=cacher /app/Cargo.lock Cargo.lock
 COPY . .
 
+ARG GIT_SHA=dev
+ENV GIT_SHA=${GIT_SHA}
+
 RUN --mount=type=cache,target=$CARGO_HOME/registry,sharing=locked \
     --mount=type=cache,target=$CARGO_HOME/git,sharing=locked \
     cargo build --release -p gromnie-proxy

@@ -365,7 +365,7 @@ chatInputEl.addEventListener("keydown", (e) => {
 
 async function loadWasm() {
   try {
-    const mod = await import("./pkg/index.mjs");
+    const mod = await import("./pkg/index.mjs?v=__GIT_SHA__");
     GromnieClient = mod.GromnieClient;
     log("wasm loaded from ./pkg/index.mjs");
     setStatus(wasmStatusEl, "ready", true);

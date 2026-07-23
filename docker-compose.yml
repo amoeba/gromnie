@@ -3,6 +3,8 @@ services:
     build:
       context: .
       dockerfile: crates/gromnie-proxy/Dockerfile
+      args:
+        - GIT_SHA
     ports:
       - "8081:8081"
     env_file:
@@ -15,6 +17,8 @@ services:
     build:
       context: .
       dockerfile: crates/gromnie-web/Dockerfile
+      args:
+        - GIT_SHA
     ports:
       - "8080:8080"
     environment:
