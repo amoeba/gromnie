@@ -4,11 +4,20 @@ services:
       context: .
       dockerfile: crates/gromnie-proxy/Dockerfile
     ports:
+      - "8081:8081"
+    env_file:
+      - crates/gromnie-web/.env
+    environment:
+      - GROMNIE_LISTEN=0.0.0.0:8081
+      - AUTH_ENABLE=false
+
+  gromnie-web:
+    build:
+      context: .
+      dockerfile: crates/gromnie-web/Dockerfile
+    ports:
       - "8080:8080"
-    restart: unless-stopped
-    # Uncomment to enable HTTP basic auth
-    # environment:
-    #   AUTH_ENABLE: "true"
-    #   AUTH_USER: "user"
-    #   AUTH_PASSWORD: "changeme"
-    #   AUTH_SECRET: "random-secret-key-for-cookie-signing"
+    environment:
+      - WISP_HOST=localhost:8081
+    depends_on:
+      - gromnie-proxy

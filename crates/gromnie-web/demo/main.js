@@ -253,7 +253,7 @@ async function doLogin() {
     selectedCharId = null;
 
     const wsProto = location.protocol === "https:" ? "wss:" : "ws:";
-    const wsUrl = `${wsProto}//${WISP_HOST}/wisp/`;
+    const wsUrl = `${wsProto}//${WISP_HOST}/`;
     log(`connecting to ${wsUrl}...`);
 
     client = new GromnieClient(wsUrl);
@@ -381,7 +381,7 @@ async function loadWasm() {
 
 async function checkProxy() {
   const wsProto = location.protocol === "https:" ? "wss:" : "ws:";
-  const wsUrl = `${wsProto}//${WISP_HOST}/wisp/`;
+  const wsUrl = `${wsProto}//${WISP_HOST}/`;
   try {
     const ws = new WebSocket(wsUrl);
     const ok = await new Promise((resolve) => {

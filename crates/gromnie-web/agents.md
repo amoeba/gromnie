@@ -3,6 +3,19 @@
 This document describes how to build, run, and test `gromnie-web` locally using
 `chrome-devtools-mcp` to drive a headless/headful Chrome browser.
 
+## Architecture
+
+- **gromnie-proxy** — Pure WISP proxy (WebSocket → UDP). Listens on `/` by default.
+- **gromnie-web** — nginx serving the WASM demo static files.
+
+In **Docker Compose**, the two run as separate containers:
+- `gromnie-web` on host port **8080** (static files)
+- `gromnie-proxy` on host port **8081** (WISP WebSocket)
+- The browser loads the page from nginx, then connects to the proxy directly.
+
+For **local dev** (no Docker), the proxy can optionally serve static files with
+`--static-dir` so everything runs on a single port.
+
 ## Prerequisites
 
 - Rust toolchain with the `wasm32-unknown-unknown` target
@@ -50,10 +63,27 @@ The `.env` file contains two groups of credentials:
 | `GROMNIE_GAME_ACCOUNT` | Account name for the game server          |
 | `GROMNIE_GAME_PASSWORD` | Password for the game server              |
 
-## 3. Build and start the proxy
+## 3. Docker Compose (recommended)
 
-The proxy serves both the demo static files and the WISP WebSocket endpoint
-at `/wisp/`. Build it once, then start it with env vars sourced from `.env`:
+The simplest way to run everything locally:
+
+```bash
+# Build and start both containers
+docker compose up --build -d
+```
+
+This starts:
+- **gromnie-web** (nginx) on `http://localhost:8080/`
+- **gromnie-proxy** on `ws://localhost:8081/` (no auth — see note below)
+
+> **Note:** Docker Compose disables proxy auth (`AUTH_ENABLE=false`) because
+> the browser loads the page from nginx (different origin), so no session cookie
+> is set for the proxy. For authenticated proxy access, run the proxy natively
+> with `--static-dir` (see section 4).
+
+## 4. Local dev (no Docker)
+
+Build and run the proxy with static file serving on a single port:
 
 ```bash
 # Build (once)
@@ -63,7 +93,7 @@ cargo build -p gromnie-proxy
 bash -c 'set -a && source crates/gromnie-web/.env && set +a && \
   ./target/debug/gromnie-proxy \
     --listen 127.0.0.1:8080 \
-    --wisp-path /wisp/ \
+    --wisp-path / \
     --static-dir crates/gromnie-web'
 ```
 
@@ -71,29 +101,36 @@ The proxy logs should show:
 
 ```
 INFO gromnie_proxy: basic auth enabled user=<AUTH_USER>
-INFO gromnie_proxy: listening listen=127.0.0.1:8080 wisp_path=/wisp/ static_dir=crates/gromnie-web
+INFO gromnie_proxy: listening listen=127.0.0.1:8080 wisp_path=/
 ```
 
-## 4. Test with chrome-devtools-mcp
+## 5. Test with chrome-devtools-mcp
 
-Open Chrome and navigate to the demo. Because basic auth is enabled, embed the
-proxy credentials in the URL:
+### Docker Compose
+
+Navigate to the demo (no auth needed):
 
 ```
-http://<AUTH_USER>:<AUTH_PASSWORD>@127.0.0.1:8080/demo/
+chrome-mcp__navigate_page url="http://localhost:8080/"
+```
+
+### Local dev (with auth)
+
+Embed proxy credentials in the URL:
+
+```
+chrome-mcp__navigate_page url="http://<AUTH_USER>:<AUTH_PASSWORD>@127.0.0.1:8080/"
 ```
 
 ### Step-by-step MCP tool calls
 
-> Replace `<AUTH_USER>` and `<AUTH_PASSWORD>` with the values from `.env`.
-
-#### 4a. Navigate to the demo
+#### 5a. Navigate to the demo
 
 ```
-chrome-mcp__navigate_page url="http://<AUTH_USER>:<AUTH_PASSWORD>@127.0.0.1:8080/demo/"
+chrome-mcp__navigate_page url="http://localhost:8080/"
 ```
 
-#### 4b. Verify the page loaded
+#### 5b. Verify the page loaded
 
 Take a snapshot and check the status bar:
 
@@ -103,11 +140,11 @@ chrome-mcp__take_snapshot
 
 Expected:
 - **WASM** status: `ready`
-- **Proxy** status: `reachable`
-- Log shows: `wasm loaded from ../pkg/gromnie_web.js`
-- Log shows: `proxy ws://127.0.0.1:8080/wisp/: reachable`
+- **Proxy** status: `reachable` (Docker) or `reachable` (local dev with auth)
+- Log shows: `wasm loaded from ./pkg/index.mjs`
+- Log shows: `proxy ws://...: reachable`
 
-#### 4c. Fill in the login form
+#### 5c. Fill in the login form
 
 Use the game-server credentials from `.env` (`GROMNIE_GAME_HOST`,
 `GROMNIE_GAME_PORT`, `GROMNIE_GAME_ACCOUNT`, `GROMNIE_GAME_PASSWORD`).
@@ -123,7 +160,7 @@ chrome-mcp__fill_form elements=[
 ]
 ```
 
-#### 4d. Click Login
+#### 5d. Click Login
 
 ```
 chrome-mcp__click uid="<login-button-uid>"
@@ -132,7 +169,7 @@ chrome-mcp__click uid="<login-button-uid>"
 Expected log output:
 
 ```
-connecting to ws://127.0.0.1:8080/wisp/...
+connecting to ws://...
 connected and login sent, waiting for server response...
 event: game:CharacterListReceived { account: "<GROMNIE_GAME_ACCOUNT>", characters: [...], num_slots: 11 }
 found N character(s)
@@ -141,7 +178,7 @@ found N character(s)
 The character-select view should appear with a list of characters and an
 **Enter World** button.
 
-#### 4e. Enter the world (optional)
+#### 5e. Enter the world (optional)
 
 Click the first character in the list, then click **Enter World**:
 
@@ -162,7 +199,7 @@ event: game:CreatePlayer { character_id: <id> }
 
 The world view should appear with a chat input and message area.
 
-#### 4f. Check for errors
+#### 5f. Check for errors
 
 ```
 chrome-mcp__list_console_messages types=["error", "warn"]
@@ -171,7 +208,7 @@ chrome-mcp__list_console_messages types=["error", "warn"]
 A `404` for `favicon.ico` is expected and harmless. A warning about
 `sleep(1s) is a no-op on WASM` is also expected.
 
-## 5. Headless harness (alternative)
+## 6. Headless harness (alternative)
 
 For CI or automated runs without chrome-devtools-mcp, use the built-in
 headless harness:
@@ -185,7 +222,17 @@ This serves the project root, launches headless Chrome, and asserts that the
 WASM module loads. Add `--scenario=connect-flow` to test the connect + open
 TCP/UDP flow.
 
-## 6. Quick reference
+## 7. Quick reference
+
+### Docker Compose
+
+```bash
+docker compose up --build -d
+# Web: http://localhost:8080/
+# Proxy: ws://localhost:8081/
+```
+
+### Local dev
 
 ```bash
 # 1. Build WASM
@@ -194,12 +241,12 @@ cargo xtask web build
 # 2. Build proxy
 cargo build -p gromnie-proxy
 
-# 3. Start proxy (sources .env)
+# 3. Start proxy with static files (sources .env)
 bash -c 'set -a && source crates/gromnie-web/.env && set +a && \
-  ./target/debug/gromnie-proxy --listen 127.0.0.1:8080 --wisp-path /wisp/ --static-dir crates/gromnie-web'
+  ./target/debug/gromnie-proxy --listen 127.0.0.1:8080 --wisp-path / --static-dir crates/gromnie-web'
 
 # 4. In Chrome (via chrome-devtools-mcp):
-#    - Navigate to http://<AUTH_USER>:<AUTH_PASSWORD>@127.0.0.1:8080/demo/
+#    - Navigate to http://<AUTH_USER>:<AUTH_PASSWORD>@127.0.0.1:8080/
 #    - Fill form with GROMNIE_GAME_* credentials
 #    - Click Login → observe character list
 #    - Click Enter World → observe game events

@@ -50,10 +50,6 @@ RUN apt-get update && \
 
 COPY --from=builder /app/target/release/gromnie-proxy /app/gromnie-proxy
 
-COPY crates/gromnie-web/demo/index.html /app/static/index.html
-COPY crates/gromnie-web/demo/main.js /app/static/main.js
-COPY crates/gromnie-web/pkg/ /app/static/pkg/
-
 EXPOSE 8080
 
-CMD ["./gromnie-proxy", "--static-dir", "/app/static"]
+CMD ["./gromnie-proxy"]

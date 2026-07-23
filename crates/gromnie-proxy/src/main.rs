@@ -200,14 +200,14 @@ where
     about = "WISP proxy server for AC game servers"
 )]
 struct Args {
-    #[arg(long, default_value = "0.0.0.0:8080")]
+    #[arg(long, default_value = "0.0.0.0:8080", env = "GROMNIE_LISTEN")]
     listen: SocketAddr,
 
-    #[arg(long, default_value = "/wisp/")]
+    #[arg(long, default_value = "/")]
     wisp_path: String,
 
-    #[arg(long, default_value = "/app/static")]
-    static_dir: PathBuf,
+    #[arg(long)]
+    static_dir: Option<PathBuf>,
 }
 
 /// Thin wrapper around axum's [`WebSocket`] that implements `TransportRead`
@@ -327,12 +327,15 @@ async fn main() -> Result<()> {
         }
     };
 
-    let app = Router::new()
-        .route(
-            &args.wisp_path,
-            get(|ws: axum::extract::ws::WebSocketUpgrade| async move { ws.on_upgrade(handle_ws) }),
-        )
-        .fallback_service(ServeDir::new(&args.static_dir).append_index_html_on_directories(true));
+    let app = Router::new().route(
+        &args.wisp_path,
+        get(|ws: axum::extract::ws::WebSocketUpgrade| async move { ws.on_upgrade(handle_ws) }),
+    );
+    let app = if let Some(ref dir) = args.static_dir {
+        app.fallback_service(ServeDir::new(dir).append_index_html_on_directories(true))
+    } else {
+        app
+    };
 
     let app = if let Some(config) = auth_config {
         app.layer(BasicAuthLayer::new(config))
@@ -341,7 +344,7 @@ async fn main() -> Result<()> {
     };
 
     let listener = tokio::net::TcpListener::bind(&args.listen).await?;
-    info!(listen = %args.listen, wisp_path = %args.wisp_path, static_dir = %args.static_dir.display(), "listening");
+    info!(listen = %args.listen, wisp_path = %args.wisp_path, "listening");
 
     axum::serve(listener, app).await?;
 
