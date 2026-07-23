@@ -95,7 +95,7 @@ impl WispUdpTransport {
         let stream = mux
             .new_stream(StreamType::Udp, server.host.clone(), port)
             .await
-            .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?;
+            .map_err(std::io::Error::other)?;
 
         self.streams.insert(channel, stream);
         Ok(())
@@ -118,7 +118,7 @@ impl ClientTransport for WispUdpTransport {
             stream
                 .send(Payload::from(bytes))
                 .await
-                .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))
+                .map_err(std::io::Error::other)
         })
     }
 
@@ -183,10 +183,7 @@ impl ClientTransport for WispUdpTransport {
                     let addr: SocketAddr = "0.0.0.0:0".parse().unwrap();
                     Ok((len, addr))
                 }
-                Some(Err(e)) => Err(std::io::Error::new(
-                    std::io::ErrorKind::Other,
-                    format!("{}", e),
-                )),
+                Some(Err(e)) => Err(std::io::Error::other(format!("{}", e))),
                 None => Err(std::io::Error::new(
                     std::io::ErrorKind::ConnectionReset,
                     "All streams closed",

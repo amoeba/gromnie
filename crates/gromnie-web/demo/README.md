@@ -1,6 +1,6 @@
 # gromnie-web demo
 
-Tiny static browser demo for `GromnieWispClient`.
+Tiny static browser demo for `WasmClient`.
 
 ## 1) Generate wasm-bindgen output
 

@@ -14,7 +14,7 @@ use futures_util::FutureExt;
 use js_sys::{Array, ArrayBuffer, Uint8Array};
 use send_wrapper::SendWrapper;
 use thiserror::Error;
-use wasm_bindgen::{JsCast, JsValue, closure::Closure, prelude::wasm_bindgen};
+use wasm_bindgen::{JsCast, JsValue, closure::Closure};
 use wasm_bindgen_futures::spawn_local;
 use web_sys::{BinaryType, MessageEvent, WebSocket};
 use wisp_mux::{
@@ -39,19 +39,6 @@ pub(crate) struct ClientState {
     pub(crate) mux: Option<ClientMux<BrowserWispTransportWrite>>,
     pub(crate) streams: HashMap<u32, MuxStream<BrowserWispTransportWrite>>,
     pub(crate) last_mux_error: Option<String>,
-}
-
-#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
-enum WispVersionPolicy {
-    #[default]
-    RequireV2,
-    AllowV1Downgrade,
-}
-
-impl WispVersionPolicy {
-    fn rejects_downgrade(self, downgraded: bool) -> bool {
-        matches!(self, Self::RequireV2) && downgraded
-    }
 }
 
 #[derive(Error, Debug)]
@@ -205,8 +192,7 @@ fn register_callbacks(
     let onmessage_tx = read_tx.clone();
     let onmessage = Closure::wrap(Box::new(move |evt: MessageEvent| {
         if let Ok(arr) = evt.data().dyn_into::<ArrayBuffer>() {
-            let _ =
-                onmessage_tx.send(WebSocketMessage::Message(Uint8Array::new(&arr).to_vec()));
+            let _ = onmessage_tx.send(WebSocketMessage::Message(Uint8Array::new(&arr).to_vec()));
         }
     }) as Box<dyn Fn(MessageEvent)>);
 
@@ -314,32 +300,39 @@ impl BrowserWebSocketTransport {
     }
 }
 
-#[wasm_bindgen]
-pub struct GromnieWispClient {
+/// Internal WISP-over-WebSocket transport layer.
+///
+/// This struct is used internally by [`WasmClient`] to establish a WISP
+/// multiplexed connection over a browser `WebSocket`. It is not exported
+/// to JavaScript — use `WasmClient` for the public API.
+pub(crate) struct GromnieWispClient {
     ws_url: String,
     protocols: Vec<String>,
-    wisp_version_policy: WispVersionPolicy,
+    allow_v1_downgrade: bool,
     pub(crate) state: Arc<Mutex<ClientState>>,
 }
 
-#[wasm_bindgen]
 impl GromnieWispClient {
-    #[wasm_bindgen(constructor)]
     pub fn new(ws_url: String) -> Self {
         Self {
             ws_url,
             protocols: Vec::new(),
-            wisp_version_policy: WispVersionPolicy::default(),
+            allow_v1_downgrade: false,
             state: Arc::new(Mutex::new(ClientState::default())),
         }
     }
 
+    #[allow(dead_code)]
     pub fn set_allow_v1_downgrade(&mut self, allow: bool) {
-        self.wisp_version_policy = if allow {
-            WispVersionPolicy::AllowV1Downgrade
-        } else {
-            WispVersionPolicy::RequireV2
-        };
+        self.allow_v1_downgrade = allow;
+    }
+
+    /// Returns `true` if a WISP v1 downgrade should be rejected.
+    ///
+    /// Downgrade is rejected when `allow_v1_downgrade` is `false` (the default)
+    /// and the server actually negotiated WISP v1.
+    fn should_reject_downgrade(&self, downgraded: bool) -> bool {
+        !self.allow_v1_downgrade && downgraded
     }
 
     pub async fn connect(&self) -> Result<(), JsValue> {
@@ -360,10 +353,7 @@ impl GromnieWispClient {
             .await
             .map_err(js_error)?;
         let (mux, mux_task) = client.with_no_required_extensions();
-        if self
-            .wisp_version_policy
-            .rejects_downgrade(mux.was_downgraded())
-        {
+        if self.should_reject_downgrade(mux.was_downgraded()) {
             let _ = mux.close().await;
             let _ = mux_task.await;
             return Err(JsValue::from_str(downgrade_rejection_error_message()));
@@ -386,6 +376,7 @@ impl GromnieWispClient {
         Ok(())
     }
 
+    #[allow(dead_code)]
     pub async fn open_tcp_stream(&self, host: String, port: u16) -> Result<u32, JsValue> {
         self.open_stream(StreamType::Tcp, host, port).await
     }
@@ -437,21 +428,25 @@ impl GromnieWispClient {
 
 #[cfg(test)]
 mod tests {
-    use super::WispVersionPolicy;
+    use super::GromnieWispClient;
 
     #[test]
-    fn require_v2_policy_rejects_downgrade() {
-        assert!(WispVersionPolicy::RequireV2.rejects_downgrade(true));
+    fn default_policy_rejects_downgrade() {
+        let client = GromnieWispClient::new("ws://localhost".to_string());
+        assert!(client.should_reject_downgrade(true));
     }
 
     #[test]
-    fn require_v2_policy_accepts_v2_connection() {
-        assert!(!WispVersionPolicy::RequireV2.rejects_downgrade(false));
+    fn default_policy_accepts_v2_connection() {
+        let client = GromnieWispClient::new("ws://localhost".to_string());
+        assert!(!client.should_reject_downgrade(false));
     }
 
     #[test]
-    fn compatibility_policy_allows_downgrade() {
-        assert!(!WispVersionPolicy::AllowV1Downgrade.rejects_downgrade(true));
+    fn compatibility_mode_allows_downgrade() {
+        let mut client = GromnieWispClient::new("ws://localhost".to_string());
+        client.set_allow_v1_downgrade(true);
+        assert!(!client.should_reject_downgrade(true));
     }
 
     #[test]

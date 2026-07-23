@@ -107,6 +107,12 @@ fn spawn_event_forwarder(
     });
 }
 
+impl Default for WasmClient {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 #[wasm_bindgen]
 impl WasmClient {
     #[wasm_bindgen(constructor)]
@@ -187,7 +193,7 @@ impl WasmClient {
         web_sys::console::log_1(&"[wasm] step 7: calling do_login".into());
 
         // 7. Send the first LoginRequest packet
-        client.do_login().await.map_err(|e| js_error(e))?;
+        client.do_login().await.map_err(js_error)?;
 
         web_sys::console::log_1(&"[wasm] step 8: spawning recv loop".into());
 

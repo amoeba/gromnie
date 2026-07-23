@@ -28,7 +28,7 @@ Both crates implement their own WebSocket-to-WISP transport adapters from scratc
 | 2.5 | `WispUdpTransport` stores `SendWrapper` for all fields | Low | web | — | ⏳ Pending |
 | 2.6 | `ClientState` stores `mux` and `streams` separately | Low | web | — | ⏳ Pending |
 | 2.7 | `GromnieWispClient` exposes `state` as `pub(crate)` | Low | web | — | ⏳ Pending |
-| 2.8 | `WispVersionPolicy` enum could be a bool | Very Low | web | Trivial | ⏳ Pending |
+| 2.8 | `WispVersionPolicy` enum could be a bool | Very Low | web | Trivial | ✅ Done |
 | 2.9 | `WebSocketTransportError` wraps errors as `String` | Low | web | Low | ⏳ Pending |
 | 2.10 | `util.rs` is a single 6-line function | Very Low | web | — | ⏳ Pending |
 | 3.1 | Both crates reimplement WebSocket-to-WISP transport adapters | High | cross-cutting | High | ✅ Done |
@@ -324,6 +324,8 @@ This is a two-variant enum with a single boolean method. It could be replaced wi
 
 **Recommendation:** Replace with `allow_v1_downgrade: bool` on `GromnieWispClient`.
 
+**Resolution:** Replaced the `WispVersionPolicy` enum (two variants, `Default` derive, `rejects_downgrade` method) with a simple `allow_v1_downgrade: bool` field on `GromnieWispClient`. The `should_reject_downgrade` method encapsulates the logic (`!self.allow_v1_downgrade && downgraded`). The three `WispVersionPolicy` tests were updated to test `should_reject_downgrade` directly.
+
 ### 2.9. `WebSocketTransportError` wraps errors as `String`
 
 **Severity: Low — error handling**
@@ -425,7 +427,7 @@ However, the `WasmClient::connect` method manually orchestrates the client lifec
 | **Low** | Duplicated hex formatting | both | Trivial | ✅ Done |
 | **Low** | Duplicated WISP handshake construction | both | Trivial | ✅ Done |
 | **Low** | `WasmClient::connect` is a 130-line method doing 9 things | web | Medium | ✅ Done |
-| **Low** | `WispVersionPolicy` enum could be a bool | web | Trivial | ⏳ Pending |
+| **Very Low** | `WispVersionPolicy` enum could be a bool | web | Trivial | ✅ Done |
 | **Low** | `tokio-tungstenite` in proxy `[dependencies]` instead of `[dev-dependencies]` | proxy | Trivial | ✅ Done (fixed by 1.1) |
 | **Low** | `WebSocketTransportError` loses original error types | web | Low | ⏳ Pending |
 
