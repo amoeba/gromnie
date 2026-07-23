@@ -19,7 +19,7 @@ Both crates implement their own WebSocket-to-WISP transport adapters from scratc
 | 1.5 | Manual cookie parsing instead of using `cookie` crate | Low | proxy | Low | ✅ Done |
 | 1.6 | Empty `AppState` struct | Low | proxy | Trivial | ✅ Done |
 | 1.7 | Duplicated hex formatting | Low | both | Trivial | ✅ Done |
-| 1.8 | `handle_stream` uses `futures::StreamExt::split` with manual channel management | Low | proxy | Medium | ⏳ Pending |
+| 1.8 | `handle_stream` uses `futures::StreamExt::split` with manual channel management | Low | proxy | Medium | ✅ Done |
 | 1.9 | `tokio-tungstenite` in proxy `[dependencies]` instead of `[dev-dependencies]` | Low | proxy | Trivial | ✅ Done (fixed by 1.1) |
 | 2.1 | `BrowserWebSocketTransport` reimplements wisp-mux's transport helpers | High | web | Medium | ✅ Done |
 | 2.2 | `WispUdpTransport::recv` dual-stream select loop is overly complex | Medium | web | Medium | ✅ Done |
@@ -185,6 +185,8 @@ The `handle_stream` function (lines 427–521) is ~95 lines and manages a comple
 
 This is correct but quite verbose. The pattern of "forward A→B, forward B→A, shut down when either direction ends" is common enough that it could be extracted into a helper or simplified.
 
+**Resolution:** Simplified `handle_stream` by: (1) removing the unnecessary `futures::pin_mut!(close_rx)` — `oneshot::Receiver` is `Unpin` so pinning is a no-op, (2) adding `biased` to the `tokio::select!` in the backward direction to prioritize the shutdown signal (`close_rx`) over the game socket recv, ensuring prompt shutdown when the forward direction ends, (3) adding clarifying comments to document the control flow of both directions. The `hex_preview` helper from item 1.7 is already used in both directions.
+
 ### 1.9. `tokio-tungstenite` dependency is unused
 
 **Severity: Low — dead dependency**
@@ -256,6 +258,8 @@ The `connect` method in `client.rs` (lines 54–183) is ~130 lines with 9 number
 The recv loop (step 8, lines 121–164) is particularly dense — it handles packet reception, keepalive timing, packet processing, and error handling all in one closure.
 
 **Recommendation:** Extract the recv loop into a separate method/function. The keepalive logic could also be extracted.
+
+**Resolution:** Simplified `handle_stream` by: (1) removing the unnecessary `futures::pin_mut!(close_rx)` — `oneshot::Receiver` is `Unpin` so pinning is a no-op, (2) adding `biased` to the `tokio::select!` in the backward direction to prioritize the shutdown signal (`close_rx`) over the game socket recv, ensuring prompt shutdown when the forward direction ends, (3) adding clarifying comments to document the control flow of both directions. The `hex_preview` helper from item 1.7 is already used in both directions.
 
 **Resolution:** Extracted the recv loop (step 8) into a standalone `spawn_recv_loop()` function and the event forwarder (step 9) into a standalone `spawn_event_forwarder()` function. The `connect` method now calls these functions with the necessary parameters, reducing its body from ~130 lines to ~85 lines. The recv loop retains its keepalive logic inline (checking `KEEPALIVE_INTERVAL_MS` after each packet) since it's tightly coupled with the packet processing cycle — extracting it would require passing mutable client state and keepalive timing state, adding complexity without clarity. The event forwarder is now a simple 10-line function that receives events from the channel and forwards them to the JS callback.
 

@@ -426,10 +426,11 @@ async fn handle_stream<W: wisp_mux::ws::TransportWrite>(
 
     let (mut stream_tx, mut stream_rx) = futures::StreamExt::split(stream);
 
-    let (close_tx, close_rx) = tokio::sync::oneshot::channel::<()>();
-    futures::pin_mut!(close_rx);
+    let (close_tx, mut close_rx) = tokio::sync::oneshot::channel::<()>();
 
-    // WISP -> UDP
+    // WISP -> UDP: forward packets from the WISP stream to the game server.
+    // When this direction ends (error, stream closed, or send failure),
+    // signal the backward direction to shut down via close_tx.
     let forward = async {
         let mut pkt_count: u64 = 0;
         loop {
@@ -456,11 +457,18 @@ async fn handle_stream<W: wisp_mux::ws::TransportWrite>(
         let _ = close_tx.send(());
     };
 
-    // UDP -> WISP
+    // UDP -> WISP: forward packets from the game server to the WISP stream.
+    // Uses biased select to prioritize the shutdown signal (close_rx) so
+    // the backward direction exits promptly when the forward direction ends.
     let backward = async {
         let mut buf = vec![0u8; 65536];
         loop {
             tokio::select! {
+                biased;
+                _ = &mut close_rx => {
+                    info!(%game_addr, "UDP -> WISP: shutting down (forward direction ended)");
+                    break;
+                }
                 result = game_socket_read.recv_from(&mut buf) => {
                     match result {
                         Ok((len, src)) => {
@@ -477,10 +485,6 @@ async fn handle_stream<W: wisp_mux::ws::TransportWrite>(
                             break;
                         }
                     }
-                }
-                _ = &mut close_rx => {
-                    info!(%game_addr, "UDP -> WISP: shutting down (forward direction ended)");
-                    break;
                 }
             }
         }
