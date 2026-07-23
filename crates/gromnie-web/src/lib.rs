@@ -3,7 +3,7 @@ use std::{
     pin::Pin,
     sync::{
         Arc,
-        atomic::{AtomicBool, Ordering},
+        atomic::{AtomicU8, Ordering},
     },
 };
 
@@ -18,8 +18,7 @@ use wasm_bindgen::{JsCast, JsValue, closure::Closure, prelude::wasm_bindgen};
 use wasm_bindgen_futures::spawn_local;
 use web_sys::{BinaryType, MessageEvent, WebSocket};
 use wisp_mux::{
-    ClientMux, WispError, WispV2Handshake,
-    extensions::{AnyProtocolExtensionBuilder, udp::UdpProtocolExtensionBuilder},
+    ClientMux, WispError,
     packet::StreamType,
     stream::MuxStream,
     ws::{
@@ -76,10 +75,63 @@ enum WebSocketMessage {
     Message(Vec<u8>),
 }
 
+/// WebSocket connection state, tracked in a single shared enum instead of
+/// separate `Event`/`AtomicBool` instances.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum WsState {
+    Connecting,
+    Open,
+    Closed,
+    Error,
+}
+
+impl WsState {
+    fn as_u8(self) -> u8 {
+        self as u8
+    }
+
+    fn from_u8(v: u8) -> Self {
+        match v {
+            0 => WsState::Connecting,
+            1 => WsState::Open,
+            2 => WsState::Closed,
+            3 => WsState::Error,
+            _ => WsState::Connecting,
+        }
+    }
+}
+
+/// Shared WebSocket state: a single `Event` plus an atomic state enum.
+///
+/// This replaces the previous four separate synchronization primitives
+/// (`open_event`, `error_event`, `close_event`, `closed: AtomicBool`)
+/// with a single `Event` that fires on any state transition.
+struct SharedWsState {
+    state: AtomicU8,
+    event: Event,
+}
+
+impl SharedWsState {
+    fn new() -> Self {
+        Self {
+            state: AtomicU8::new(WsState::Connecting.as_u8()),
+            event: Event::new(),
+        }
+    }
+
+    fn set_state(&self, state: WsState) {
+        self.state.store(state.as_u8(), Ordering::Release);
+        self.event.notify(usize::MAX);
+    }
+
+    fn get_state(&self) -> WsState {
+        WsState::from_u8(self.state.load(Ordering::Acquire))
+    }
+}
+
 struct WebSocketReader {
     read_rx: Receiver<WebSocketMessage>,
-    closed: Arc<AtomicBool>,
-    close_event: Arc<Event>,
+    shared: Arc<SharedWsState>,
 }
 
 impl WebSocketReader {
@@ -87,13 +139,14 @@ impl WebSocketReader {
         Box::pin(async_iterator_transport_read(self, |this| {
             Box::pin(async move {
                 use WebSocketMessage as M;
-                if this.closed.load(Ordering::Acquire) {
-                    return Err(WispError::WsImplSocketClosed);
+                match this.shared.get_state() {
+                    WsState::Closed | WsState::Error => return Err(WispError::WsImplSocketClosed),
+                    _ => {}
                 }
 
                 let res = futures_util::select! {
                     data = this.read_rx.recv_async() => data.ok(),
-                    () = this.close_event.listen().fuse() => None
+                    () = this.shared.event.listen().fuse() => None
                 };
 
                 match res {
@@ -108,10 +161,7 @@ impl WebSocketReader {
 
 struct BrowserWebSocketTransport {
     inner: Arc<SendWrapper<WebSocket>>,
-    open_event: Arc<Event>,
-    error_event: Arc<Event>,
-    close_event: Arc<Event>,
-    closed: Arc<AtomicBool>,
+    shared: Arc<SharedWsState>,
 
     #[allow(dead_code)]
     onopen: SendWrapper<Closure<dyn Fn()>>,
@@ -132,47 +182,66 @@ impl Drop for BrowserWebSocketTransport {
     }
 }
 
+/// Callbacks registered on the browser `WebSocket`.
+struct WsCallbacks {
+    onopen: Closure<dyn Fn()>,
+    onclose: Closure<dyn Fn()>,
+    onerror: Closure<dyn Fn(JsValue)>,
+    onmessage: Closure<dyn Fn(MessageEvent)>,
+}
+
+/// Register all four WebSocket event callbacks and wire them to the shared
+/// state and message channel.
+fn register_callbacks(
+    ws: &WebSocket,
+    shared: &Arc<SharedWsState>,
+    read_tx: flume::Sender<WebSocketMessage>,
+) -> WsCallbacks {
+    let onopen_shared = shared.clone();
+    let onopen = Closure::wrap(Box::new(move || {
+        onopen_shared.set_state(WsState::Open);
+    }) as Box<dyn Fn()>);
+
+    let onmessage_tx = read_tx.clone();
+    let onmessage = Closure::wrap(Box::new(move |evt: MessageEvent| {
+        if let Ok(arr) = evt.data().dyn_into::<ArrayBuffer>() {
+            let _ =
+                onmessage_tx.send(WebSocketMessage::Message(Uint8Array::new(&arr).to_vec()));
+        }
+    }) as Box<dyn Fn(MessageEvent)>);
+
+    let onclose_shared = shared.clone();
+    let onclose = Closure::wrap(Box::new(move || {
+        onclose_shared.set_state(WsState::Closed);
+    }) as Box<dyn Fn()>);
+
+    let onerror_tx = read_tx;
+    let onerror_shared = shared.clone();
+    let onerror = Closure::wrap(Box::new(move |e| {
+        let _ = onerror_tx.send(WebSocketMessage::Error(WebSocketTransportError::Unknown(
+            format!("{e:?}"),
+        )));
+        onerror_shared.set_state(WsState::Error);
+    }) as Box<dyn Fn(JsValue)>);
+
+    ws.set_binary_type(BinaryType::Arraybuffer);
+    ws.set_onmessage(Some(onmessage.as_ref().unchecked_ref()));
+    ws.set_onopen(Some(onopen.as_ref().unchecked_ref()));
+    ws.set_onclose(Some(onclose.as_ref().unchecked_ref()));
+    ws.set_onerror(Some(onerror.as_ref().unchecked_ref()));
+
+    WsCallbacks {
+        onopen,
+        onclose,
+        onerror,
+        onmessage,
+    }
+}
+
 impl BrowserWebSocketTransport {
     fn connect(url: &str, protocols: &[String]) -> Result<(Self, WebSocketReader), JsValue> {
         let (read_tx, read_rx) = flume::unbounded();
-        let closed = Arc::new(AtomicBool::new(false));
-
-        let open_event = Arc::new(Event::new());
-        let close_event = Arc::new(Event::new());
-        let error_event = Arc::new(Event::new());
-
-        let onopen_event = open_event.clone();
-        let onopen = Closure::wrap(
-            Box::new(move || while onopen_event.notify(usize::MAX) == 0 {}) as Box<dyn Fn()>,
-        );
-
-        let onmessage_tx = read_tx.clone();
-        let onmessage = Closure::wrap(Box::new(move |evt: MessageEvent| {
-            if let Ok(arr) = evt.data().dyn_into::<ArrayBuffer>() {
-                let _ =
-                    onmessage_tx.send(WebSocketMessage::Message(Uint8Array::new(&arr).to_vec()));
-            }
-        }) as Box<dyn Fn(MessageEvent)>);
-
-        let onclose_closed = closed.clone();
-        let onclose_event = close_event.clone();
-        let onclose = Closure::wrap(Box::new(move || {
-            onclose_closed.store(true, Ordering::Release);
-            onclose_event.notify(usize::MAX);
-        }) as Box<dyn Fn()>);
-
-        let onerror_tx = read_tx.clone();
-        let onerror_closed = closed.clone();
-        let onerror_close = close_event.clone();
-        let onerror_event = error_event.clone();
-        let onerror = Closure::wrap(Box::new(move |e| {
-            let _ = onerror_tx.send(WebSocketMessage::Error(WebSocketTransportError::Unknown(
-                format!("{e:?}"),
-            )));
-            onerror_closed.store(true, Ordering::Release);
-            onerror_close.notify(usize::MAX);
-            onerror_event.notify(usize::MAX);
-        }) as Box<dyn Fn(JsValue)>);
+        let shared = Arc::new(SharedWsState::new());
 
         let ws = if protocols.is_empty() {
             WebSocket::new(url)
@@ -189,46 +258,35 @@ impl BrowserWebSocketTransport {
             )
         }?;
 
-        ws.set_binary_type(BinaryType::Arraybuffer);
-        ws.set_onmessage(Some(onmessage.as_ref().unchecked_ref()));
-        ws.set_onopen(Some(onopen.as_ref().unchecked_ref()));
-        ws.set_onclose(Some(onclose.as_ref().unchecked_ref()));
-        ws.set_onerror(Some(onerror.as_ref().unchecked_ref()));
+        let callbacks = register_callbacks(&ws, &shared, read_tx);
 
         Ok((
             Self {
                 inner: Arc::new(SendWrapper::new(ws)),
-                open_event,
-                error_event,
-                close_event: close_event.clone(),
-                closed: closed.clone(),
-                onopen: SendWrapper::new(onopen),
-                onclose: SendWrapper::new(onclose),
-                onerror: SendWrapper::new(onerror),
-                onmessage: SendWrapper::new(onmessage),
+                shared: shared.clone(),
+                onopen: SendWrapper::new(callbacks.onopen),
+                onclose: SendWrapper::new(callbacks.onclose),
+                onerror: SendWrapper::new(callbacks.onerror),
+                onmessage: SendWrapper::new(callbacks.onmessage),
             },
-            WebSocketReader {
-                read_rx,
-                closed,
-                close_event,
-            },
+            WebSocketReader { read_rx, shared },
         ))
     }
 
     async fn wait_for_open(&self) -> bool {
-        if self.closed.load(Ordering::Acquire) {
-            return false;
-        }
-        futures_util::select! {
-            () = self.open_event.listen().fuse() => true,
-            () = self.error_event.listen().fuse() => false,
+        loop {
+            match self.shared.get_state() {
+                WsState::Open => return true,
+                WsState::Error | WsState::Closed => return false,
+                WsState::Connecting => {}
+            }
+            self.shared.event.listen().await;
         }
     }
 
     fn into_write(self) -> BrowserWispTransportWrite {
         let ws = self.inner.clone();
-        let closed = self.closed.clone();
-        let close_event = self.close_event.clone();
+        let shared = self.shared.clone();
         Box::pin(async_iterator_transport_write(
             self,
             |this, item| {
@@ -239,15 +297,14 @@ impl BrowserWebSocketTransport {
                     Ok(this)
                 })
             },
-            (ws, closed, close_event),
-            |(ws, closed, close_event)| {
+            (ws, shared),
+            |(ws, shared)| {
                 Box::pin(async move {
                     ws.set_onopen(None);
                     ws.set_onclose(None);
                     ws.set_onerror(None);
                     ws.set_onmessage(None);
-                    closed.store(true, Ordering::Release);
-                    close_event.notify(usize::MAX);
+                    shared.set_state(WsState::Closed);
                     ws.close().map_err(|err| {
                         WispError::from(WebSocketTransportError::CloseFailed(format!("{err:?}")))
                     })
@@ -297,9 +354,7 @@ impl GromnieWispClient {
             return Err(JsValue::from_str("websocket failed to open"));
         }
 
-        let handshake = WispV2Handshake::new(vec![AnyProtocolExtensionBuilder::new(
-            UdpProtocolExtensionBuilder,
-        )]);
+        let handshake = gromnie_wisp::default_wisp_handshake();
 
         let client = ClientMux::new(reader.into_read(), transport.into_write(), Some(handshake))
             .await

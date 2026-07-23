@@ -1306,6 +1306,7 @@ dependencies = [
  "clap",
  "cookie",
  "futures",
+ "gromnie-wisp",
  "hmac",
  "sha2",
  "time",
@@ -1396,6 +1397,7 @@ dependencies = [
  "futures",
  "futures-util",
  "gromnie-client",
+ "gromnie-wisp",
  "js-sys",
  "send_wrapper",
  "thiserror 2.0.18",
@@ -1403,6 +1405,13 @@ dependencies = [
  "wasm-bindgen",
  "wasm-bindgen-futures",
  "web-sys",
+ "wisp-mux",
+]
+
+[[package]]
+name = "gromnie-wisp"
+version = "0.1.0"
+dependencies = [
  "wisp-mux",
 ]
 

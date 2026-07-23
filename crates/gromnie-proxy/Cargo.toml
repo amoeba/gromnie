@@ -28,6 +28,7 @@ tower-http = { version = "0.6", features = ["fs"] }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
 wisp-mux = { workspace = true, features = ["tokio-tungstenite"] }
+gromnie-wisp = { path = "../gromnie-wisp" }
 
 [dev-dependencies]
 tokio-tungstenite = "0.27"

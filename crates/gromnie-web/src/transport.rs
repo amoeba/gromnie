@@ -140,51 +140,47 @@ impl ClientTransport for WispUdpTransport {
                 ));
             }
 
-            let login = self.streams.remove(&TransportChannel::Login);
-            let world = self.streams.remove(&TransportChannel::World);
+            let mut login = self.streams.remove(&TransportChannel::Login);
+            let mut world = self.streams.remove(&TransportChannel::World);
 
-            let mut stream_a = login;
-            let mut stream_b = world;
+            let result = match (&mut login, &mut world) {
+                (Some(l), Some(w)) => {
+                    // Both streams available: race them with select!
+                    let l_fut = StreamExt::next(l).fuse();
+                    let w_fut = StreamExt::next(w).fuse();
+                    pin_mut!(l_fut, w_fut);
 
-            let result = loop {
-                let fut_a = async {
-                    match &mut stream_a {
-                        Some(s) => StreamExt::next(s).await,
-                        None => std::future::pending().await,
-                    }
-                };
-                let fut_b = async {
-                    match &mut stream_b {
-                        Some(s) => StreamExt::next(s).await,
-                        None => std::future::pending().await,
-                    }
-                };
-                let fut_a = fut_a.fuse();
-                let fut_b = fut_b.fuse();
-                pin_mut!(fut_a, fut_b);
+                    let r = select! {
+                        r = l_fut => {
+                            if r.is_none() { login = None; }
+                            r
+                        }
+                        r = w_fut => {
+                            if r.is_none() { world = None; }
+                            r
+                        }
+                    };
 
-                let r: Option<Result<_, _>> = select! {
-                    r = fut_a => {
-                        if r.is_none() { stream_a = None; }
+                    if r.is_some() {
                         r
+                    } else {
+                        // One stream closed; fall back to the other.
+                        match (&mut login, &mut world) {
+                            (Some(l), None) => StreamExt::next(l).await,
+                            (None, Some(w)) => StreamExt::next(w).await,
+                            _ => None,
+                        }
                     }
-                    r = fut_b => {
-                        if r.is_none() { stream_b = None; }
-                        r
-                    }
-                };
-                if stream_a.is_none() && stream_b.is_none() {
-                    break None;
                 }
-                if r.is_some() {
-                    break r;
-                }
+                (Some(l), None) => StreamExt::next(l).await,
+                (None, Some(w)) => StreamExt::next(w).await,
+                (None, None) => None,
             };
 
-            if let Some(s) = stream_a {
+            if let Some(s) = login {
                 self.streams.insert(TransportChannel::Login, s);
             }
-            if let Some(s) = stream_b {
+            if let Some(s) = world {
                 self.streams.insert(TransportChannel::World, s);
             }
 

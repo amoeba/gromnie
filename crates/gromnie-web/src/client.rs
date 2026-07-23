@@ -31,6 +31,82 @@ fn event_to_js(event: &ClientEvent) -> JsValue {
     JsValue::from_str(&desc)
 }
 
+/// Spawn the recv loop on the local executor.
+///
+/// Receives packets from the WISP transport, logs them, sends periodic
+/// keepalives, and processes incoming messages. On error, emits a
+/// `Disconnected` system event and terminates.
+fn spawn_recv_loop(
+    mut client: gromnie_client::client::Client,
+    net_log: NetLogCallback,
+    error_tx: tokio::sync::mpsc::Sender<ClientEvent>,
+) {
+    const KEEPALIVE_INTERVAL_MS: u64 = 5000;
+    spawn_local(async move {
+        let mut buf = vec![0u8; 65536];
+        let mut last_keepalive_ms = js_sys::Date::now() as u64;
+
+        loop {
+            match client.recv_packet(&mut buf).await {
+                Ok((len, addr)) => {
+                    if let Some(cb) = net_log.borrow().as_ref() {
+                        let msg = format_net_entry("RX", "?", &buf[..len]);
+                        cb.call1(&JsValue::NULL, &msg.into()).ok();
+                    }
+
+                    let now_ms = js_sys::Date::now() as u64;
+                    if now_ms - last_keepalive_ms >= KEEPALIVE_INTERVAL_MS {
+                        if let Err(e) = client.send_keepalive().await {
+                            web_sys::console::error_1(&format!("keepalive error: {e}").into());
+                        }
+                        last_keepalive_ms = now_ms;
+                    }
+
+                    client.process_packet(&buf[..len], len, &addr).await;
+                    client.process_messages();
+                    client.process_actions();
+                    client.process_game_actions();
+                    if let Err(e) = client.send_pending_messages().await {
+                        web_sys::console::error_1(&format!("send_pending error: {e}").into());
+                    }
+                }
+                Err(e) => {
+                    web_sys::console::error_1(&format!("recv error: {e}").into());
+                    let _ = error_tx
+                        .send(ClientEvent::System(
+                            gromnie_client::client::ClientSystemEvent::Disconnected {
+                                will_reconnect: false,
+                                reconnect_attempt: 0,
+                                delay_secs: 0,
+                            },
+                        ))
+                        .await;
+                    break;
+                }
+            }
+        }
+    });
+}
+
+/// Spawn the event forwarder on the local executor.
+///
+/// Receives `ClientEvent`s from the channel and forwards them to the
+/// JS callback registered via `set_on_event`.
+fn spawn_event_forwarder(
+    event_rx: tokio::sync::mpsc::Receiver<ClientEvent>,
+    on_event: AsyncCallback,
+) {
+    spawn_local(async move {
+        let mut rx = event_rx;
+        while let Some(event) = rx.recv().await {
+            web_sys::console::log_1(&format!("[event] {:?}", event).into());
+            if let Some(cb) = on_event.borrow().as_ref() {
+                cb.call1(&JsValue::NULL, &event_to_js(&event)).ok();
+            }
+        }
+    });
+}
+
 #[wasm_bindgen]
 impl WasmClient {
     #[wasm_bindgen(constructor)]
@@ -116,64 +192,10 @@ impl WasmClient {
         web_sys::console::log_1(&"[wasm] step 8: spawning recv loop".into());
 
         // 8. Spawn the recv loop with keepalive
-        let net_log_ref = self.on_net_log.clone();
-        const KEEPALIVE_INTERVAL_MS: u64 = 5000;
-        spawn_local(async move {
-            let mut buf = vec![0u8; 65536];
-            let mut last_keepalive_ms = js_sys::Date::now() as u64;
-
-            loop {
-                match client.recv_packet(&mut buf).await {
-                    Ok((len, addr)) => {
-                        if let Some(cb) = net_log_ref.borrow().as_ref() {
-                            let msg = format_net_entry("RX", "?", &buf[..len]);
-                            cb.call1(&JsValue::NULL, &msg.into()).ok();
-                        }
-
-                        let now_ms = js_sys::Date::now() as u64;
-                        if now_ms - last_keepalive_ms >= KEEPALIVE_INTERVAL_MS {
-                            if let Err(e) = client.send_keepalive().await {
-                                web_sys::console::error_1(&format!("keepalive error: {e}").into());
-                            }
-                            last_keepalive_ms = now_ms;
-                        }
-
-                        client.process_packet(&buf[..len], len, &addr).await;
-                        client.process_messages();
-                        client.process_actions();
-                        client.process_game_actions();
-                        if let Err(e) = client.send_pending_messages().await {
-                            web_sys::console::error_1(&format!("send_pending error: {e}").into());
-                        }
-                    }
-                    Err(e) => {
-                        web_sys::console::error_1(&format!("recv error: {e}").into());
-                        let _ = error_tx_clone
-                            .send(ClientEvent::System(
-                                gromnie_client::client::ClientSystemEvent::Disconnected {
-                                    will_reconnect: false,
-                                    reconnect_attempt: 0,
-                                    delay_secs: 0,
-                                },
-                            ))
-                            .await;
-                        break;
-                    }
-                }
-            }
-        });
+        spawn_recv_loop(client, self.on_net_log.clone(), error_tx_clone);
 
         // 9. Spawn event forwarder
-        let on_event_ref = self.on_event.clone();
-        spawn_local(async move {
-            let mut rx = event_rx;
-            while let Some(event) = rx.recv().await {
-                web_sys::console::log_1(&format!("[event] {:?}", event).into());
-                if let Some(cb) = on_event_ref.borrow().as_ref() {
-                    cb.call1(&JsValue::NULL, &event_to_js(&event)).ok();
-                }
-            }
-        });
+        spawn_event_forwarder(event_rx, self.on_event.clone());
 
         // Store state
         self.wisp_client = Some(wisp_client);

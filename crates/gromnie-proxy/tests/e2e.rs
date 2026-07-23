@@ -6,8 +6,8 @@ use tokio::net::TcpListener;
 use tokio_tungstenite::connect_async;
 
 use wisp_mux::{
-    ClientMux, WispV2Handshake,
-    extensions::{AnyProtocolExtensionBuilder, udp::UdpProtocolExtension},
+    ClientMux,
+    extensions::udp::UdpProtocolExtension,
     packet::StreamType,
     ws::{TokioTungsteniteTransport, TransportExt},
 };
@@ -24,9 +24,7 @@ async fn spawn_proxy() -> SocketAddr {
                 let transport = TokioTungsteniteTransport(ws);
                 let (rx, tx) = transport.split_fast();
 
-                let handshake = WispV2Handshake::new(vec![AnyProtocolExtensionBuilder::new(
-                    wisp_mux::extensions::udp::UdpProtocolExtensionBuilder,
-                )]);
+                let handshake = gromnie_wisp::default_wisp_handshake();
 
                 let client = wisp_mux::ServerMux::new(rx, tx, 65536, Some(handshake))
                     .await
@@ -91,11 +89,7 @@ async fn wisp_handshake_and_udp_stream() -> Result<()> {
     let transport = TokioTungsteniteTransport(ws_stream);
     let (rx, tx) = transport.split_fast();
 
-    let extensions = vec![AnyProtocolExtensionBuilder::new(
-        wisp_mux::extensions::udp::UdpProtocolExtensionBuilder,
-    )];
-
-    let (mux, mux_future) = ClientMux::new(rx, tx, Some(WispV2Handshake::new(extensions)))
+    let (mux, mux_future) = ClientMux::new(rx, tx, Some(gromnie_wisp::default_wisp_handshake()))
         .await?
         .with_required_extensions(&[UdpProtocolExtension::ID])
         .await?;

@@ -10,6 +10,7 @@ members = [
   "crates/gromnie-scripting-host",
   "crates/gromnie-tui",
   "crates/gromnie-web",
+  "crates/gromnie-wisp",
   "crates/xtask",
   "tests/scripting",
 ]

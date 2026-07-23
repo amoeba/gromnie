@@ -24,8 +24,7 @@ use tower_http::services::ServeDir;
 use tracing::{error, info};
 
 use wisp_mux::{
-    ServerMux, WispV2Handshake, WispError,
-    extensions::{AnyProtocolExtensionBuilder, udp::UdpProtocolExtensionBuilder},
+    ServerMux, WispError,
     ws::TransportExt,
 };
 
@@ -152,8 +151,9 @@ where
             {
                 for part in cookie_str.split(';') {
                     let part = part.trim();
-                    if let Some(val) = part.strip_prefix("gromnie_session=")
-                        && verify_session(val, &config.secret_key).is_some()
+                    if let Ok(c) = cookie::Cookie::parse(part)
+                        && c.name() == "gromnie_session"
+                        && verify_session(c.value(), &config.secret_key).is_some()
                     {
                         return inner.call(req).await;
                     }
@@ -315,12 +315,11 @@ async fn main() -> Result<()> {
             let pass = std::env::var("AUTH_PASSWORD")
                 .expect("AUTH_PASSWORD must be set when AUTH_ENABLE=true");
             let secret = std::env::var("AUTH_SECRET").unwrap_or_else(|_| {
-                use std::collections::hash_map::DefaultHasher;
-                use std::hash::{Hash, Hasher};
-                let mut h = DefaultHasher::new();
-                user.hash(&mut h);
-                pass.hash(&mut h);
-                format!("{:016x}", h.finish())
+                use sha2::{Digest, Sha256};
+                let mut h = Sha256::new();
+                h.update(user.as_bytes());
+                h.update(pass.as_bytes());
+                h.finalize().iter().map(|b| format!("{:02x}", b)).collect()
             });
             info!(user = %user, "basic auth enabled");
             Some(AuthConfig {
@@ -371,9 +370,7 @@ async fn handle_ws(socket: WebSocket) {
     let transport = AxumWsTransport::new(socket);
     let (transport_read, transport_write) = transport.split_fast();
 
-    let handshake = WispV2Handshake::new(vec![AnyProtocolExtensionBuilder::new(
-        UdpProtocolExtensionBuilder,
-    )]);
+    let handshake = gromnie_wisp::default_wisp_handshake();
 
     let client = match ServerMux::new(transport_read, transport_write, 65536, Some(handshake)).await
     {

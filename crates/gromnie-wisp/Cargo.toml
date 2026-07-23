@@ -1,0 +1,15 @@
+[package]
+name = "gromnie-wisp"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+description = "Shared WISP protocol helpers for gromnie"
+repository.workspace = true
+license.workspace = true
+
+[lib]
+name = "gromnie_wisp"
+path = "src/lib.rs"
+
+[dependencies]
+wisp-mux = { workspace = true }
