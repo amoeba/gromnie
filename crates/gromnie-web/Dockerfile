@@ -84,6 +84,11 @@ server {
     location / {
         try_files $uri $uri/ =404;
     }
+    location /auth {
+        proxy_pass http://${PROXY_UPSTREAM};
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+    }
     location /wisp {
         proxy_pass http://${PROXY_UPSTREAM};
         proxy_http_version 1.1;

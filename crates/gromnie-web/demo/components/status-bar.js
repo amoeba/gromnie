@@ -58,6 +58,10 @@ TEMPLATE.innerHTML = `
       background: var(--codex-red, #c44a3a);
       box-shadow: 0 0 6px rgba(196, 74, 58, 0.4);
     }
+    .dot--warn {
+      background: var(--codex-orange, #c48a3a);
+      box-shadow: 0 0 6px rgba(196, 138, 58, 0.4);
+    }
     .sep {
       color: var(--codex-border, #3d2e1a);
       user-select: none;
@@ -93,14 +97,15 @@ class GromnieStatusBar extends HTMLElement {
     this._proxyEl = this.shadowRoot.getElementById("proxy-status");
   }
 
-  setStatus(type, text, ok) {
+  setStatus(type, text, state) {
     const el = type === "wasm" ? this._wasmEl : this._proxyEl;
     const dot = el.querySelector(".dot");
     const value = el.querySelector(".status-value");
 
     dot.className = "dot";
-    if (ok === true) dot.classList.add("dot--ok");
-    else if (ok === false) dot.classList.add("dot--err");
+    if (state === true || state === "ok") dot.classList.add("dot--ok");
+    else if (state === "warn") dot.classList.add("dot--warn");
+    else if (state === false || state === "err") dot.classList.add("dot--err");
 
     value.textContent = text;
   }

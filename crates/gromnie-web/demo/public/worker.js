@@ -112,24 +112,14 @@ async function checkProxy() {
     wispUrl = `ws://${self.location.host}/wisp`;
   }
   try {
-    const ws = new WebSocket(wispUrl);
-    const ok = await new Promise((resolve) => {
-      ws.onopen = () => {
-        ws.close();
-        resolve(true);
-      };
-      ws.onerror = () => resolve(false);
-      setTimeout(() => {
-        try {
-          ws.close();
-        } catch {}
-        resolve(false);
-      }, 3000);
-    });
-    broadcast({
-      type: "proxy_status",
-      status: ok ? "reachable" : "unreachable",
-    });
+    const resp = await fetch(`//${self.location.host}/auth`);
+    if (resp.ok) {
+      broadcast({ type: "proxy_status", status: "reachable" });
+    } else if (resp.status === 401) {
+      broadcast({ type: "proxy_status", status: "auth required" });
+    } else {
+      broadcast({ type: "proxy_status", status: "unreachable" });
+    }
   } catch {
     broadcast({ type: "proxy_status", status: "unreachable" });
   }

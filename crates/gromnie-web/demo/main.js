@@ -180,14 +180,17 @@ port.onmessage = (e) => {
       }
       break;
 
-    case "proxy_status":
-      statusBar.setStatus(
-        "proxy",
-        msg.status,
-        msg.status === "reachable",
-      );
+    case "proxy_status": {
+      const state =
+        msg.status === "reachable"
+          ? "ok"
+          : msg.status === "auth required"
+            ? "warn"
+            : "err";
+      statusBar.setStatus("proxy", msg.status, state);
       logViewer.log(`proxy: ${msg.status}`);
       break;
+    }
 
     case "state":
       restoreState(msg);

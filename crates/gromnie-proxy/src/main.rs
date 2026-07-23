@@ -331,10 +331,12 @@ async fn main() -> Result<()> {
         }
     };
 
-    let app = Router::new().route(
-        &args.wisp_path,
-        get(|ws: axum::extract::ws::WebSocketUpgrade| async move { ws.on_upgrade(handle_ws) }),
-    );
+    let app = Router::new()
+        .route("/auth", get(|| async { (http::StatusCode::OK, "ok") }))
+        .route(
+            &args.wisp_path,
+            get(|ws: axum::extract::ws::WebSocketUpgrade| async move { ws.on_upgrade(handle_ws) }),
+        );
     let app = if let Some(ref dir) = args.static_dir {
         app.fallback_service(ServeDir::new(dir).append_index_html_on_directories(true))
     } else {
