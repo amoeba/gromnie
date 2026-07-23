@@ -7,7 +7,6 @@ use std::task::{Context, Poll};
 use anyhow::Result;
 use axum::Router;
 use axum::body::Body;
-use axum::extract::State;
 use axum::extract::ws::{Message, WebSocket};
 use axum::http;
 use axum::routing::get;
@@ -214,9 +213,6 @@ struct Args {
     static_dir: PathBuf,
 }
 
-#[derive(Clone)]
-struct AppState {}
-
 /// Thin wrapper around axum's [`WebSocket`] that implements `TransportRead`
 /// and `TransportWrite` (i.e. `Stream<Item = Result<Bytes, WispError>>` and
 /// `Sink<Bytes, Error = WispError>`).
@@ -334,19 +330,16 @@ async fn main() -> Result<()> {
         }
     };
 
-    let state = AppState {};
-
     let app = Router::new()
         .route(
             &args.wisp_path,
             get(
-                |ws: axum::extract::ws::WebSocketUpgrade, _state: State<AppState>| async move {
+                |ws: axum::extract::ws::WebSocketUpgrade| async move {
                     ws.on_upgrade(handle_ws)
                 },
             ),
         )
-        .fallback_service(ServeDir::new(&args.static_dir).append_index_html_on_directories(true))
-        .with_state(state);
+        .fallback_service(ServeDir::new(&args.static_dir).append_index_html_on_directories(true));
 
     let app = if let Some(config) = auth_config {
         app.layer(BasicAuthLayer::new(config))

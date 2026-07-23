@@ -17,7 +17,7 @@ Both crates implement their own WebSocket-to-WISP transport adapters from scratc
 | 1.3 | `poll_ready` violates Sink contract | Medium | proxy | Low | ✅ Done (fixed by 1.1) |
 | 1.4 | `DefaultHasher` for session secret derivation | Low | proxy | Low | ✅ Done |
 | 1.5 | Manual cookie parsing instead of using `cookie` crate | Low | proxy | Low | ✅ Done |
-| 1.6 | Empty `AppState` struct | Low | proxy | Trivial | ⏳ Pending |
+| 1.6 | Empty `AppState` struct | Low | proxy | Trivial | ✅ Done |
 | 1.7 | Duplicated hex formatting | Low | both | Trivial | ⏳ Pending |
 | 1.8 | `handle_stream` uses `futures::StreamExt::split` with manual channel management | Low | proxy | Medium | ⏳ Pending |
 | 1.9 | `tokio-tungstenite` in proxy `[dependencies]` instead of `[dev-dependencies]` | Low | proxy | Trivial | ✅ Done (fixed by 1.1) |
@@ -150,6 +150,8 @@ get(|ws: WebSocketUpgrade, _state: State<AppState>| async move { ... })
 Since the state is never read, it could be removed entirely, simplifying the router setup.
 
 **Recommendation:** Remove `AppState` and the `State` extractor from the route handler.
+
+**Resolution:** Removed the empty `AppState` struct, the `State` import, the `State<AppState>` parameter from the route handler, and the `.with_state(state)` call. The route handler now takes only `WebSocketUpgrade` as a parameter.
 
 ### 1.7. Debug hex formatting is duplicated
 
@@ -409,7 +411,7 @@ However, the `WasmClient::connect` method manually orchestrates the client lifec
 | **Medium** | `poll_ready` violates Sink contract | proxy | Low | ✅ Done (fixed by 1.1) |
 | **Low** | `DefaultHasher` for session secret derivation | proxy | Low | ✅ Done |
 | **Low** | Manual cookie parsing instead of using `cookie` crate | proxy | Low | ✅ Done |
-| **Low** | Empty `AppState` struct | proxy | Trivial | ⏳ Pending |
+| **Low** | Empty `AppState` struct | proxy | Trivial | ✅ Done |
 | **Low** | Duplicated hex formatting | both | Trivial | ⏳ Pending |
 | **Low** | Duplicated WISP handshake construction | both | Trivial | ✅ Done |
 | **Low** | `WasmClient::connect` is a 130-line method doing 9 things | web | Medium | ✅ Done |
