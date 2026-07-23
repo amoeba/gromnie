@@ -1,0 +1,332 @@
+/* ═══════════════════════════════════════════════════════════════
+   THE CODEX OF MONITORIA
+   A theme for gromnie-web, in the manner of ancient Sosaria
+   ═══════════════════════════════════════════════════════════════ */
+
+@import url('https://fonts.googleapis.com/css2?family=MedievalSharp&family=IM+Fell+English+SC&display=swap');
+
+:root {
+  /* ── Parchment & Ink ── */
+  --codex-bg:          #0c0a08;
+  --codex-panel:       #14110d;
+  --codex-panel-light: #1c1712;
+  --codex-border:      #3d2e1a;
+  --codex-border-glow: #5a3d1a;
+
+  /* ── Text ── */
+  --codex-text:        #c8b07a;
+  --codex-text-dim:    #7a6840;
+  --codex-text-bright: #e8d4a0;
+  --codex-heading:     #d4a843;
+
+  /* ── Accent Colors ── */
+  --codex-gold:        #d4a843;
+  --codex-gold-dim:    #8a6e2a;
+  --codex-green:       #4a9a4a;
+  --codex-green-dim:   #2a5a2a;
+  --codex-red:         #c44a3a;
+  --codex-red-dim:     #6a2a22;
+  --codex-cyan:        #4aa8a8;
+  --codex-blue:        #4a6ac4;
+  --codex-magenta:     #a44aa8;
+  --codex-orange:      #c48a3a;
+
+  /* ── Chat Colors (AC message types) ── */
+  --chat-default:      #c8b07a;
+  --chat-say:          #4aa8a8;
+  --chat-tell:         #4a9a4a;
+  --chat-shout:        #c48a3a;
+  --chat-system:       #c44a3a;
+  --chat-emote:        #a44aa8;
+  --chat-guild:        #4a6ac4;
+
+  /* ── Spacing ── */
+  --sp-1: 0.25rem;
+  --sp-2: 0.5rem;
+  --sp-3: 0.75rem;
+  --sp-4: 1rem;
+  --sp-5: 1.25rem;
+  --sp-6: 1.5rem;
+
+  /* ── Typography ── */
+  --font-display: 'MedievalSharp', 'IM Fell English SC', serif;
+  --font-body:    ui-monospace, SFMono-Regular, 'Cascadia Code', 'Fira Code', Menlo, monospace;
+  --font-size:    13px;
+
+  /* ── Decorative ── */
+  --border-radius: 2px;
+  --glow-gold:     0 0 8px rgba(212, 168, 67, 0.15);
+  --glow-red:      0 0 8px rgba(196, 74, 58, 0.2);
+  --glow-green:    0 0 8px rgba(74, 154, 74, 0.2);
+}
+
+/* ── Reset & Base ── */
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html {
+  font-size: var(--font-size);
+}
+
+body {
+  font-family: var(--font-body);
+  background: var(--codex-bg);
+  color: var(--codex-text);
+  line-height: 1.5;
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+
+/* Subtle CRT scanline overlay */
+body::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 9999;
+  background: repeating-linear-gradient(
+    0deg,
+    transparent,
+    transparent 2px,
+    rgba(0, 0, 0, 0.03) 2px,
+    rgba(0, 0, 0, 0.03) 4px
+  );
+}
+
+/* ── Scrollbar ── */
+::-webkit-scrollbar {
+  width: 8px;
+}
+::-webkit-scrollbar-track {
+  background: var(--codex-panel);
+}
+::-webkit-scrollbar-thumb {
+  background: var(--codex-border);
+  border: 1px solid var(--codex-panel);
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--codex-border-glow);
+}
+
+/* ── Selection ── */
+::selection {
+  background: var(--codex-gold-dim);
+  color: var(--codex-text-bright);
+}
+
+/* ── Layout ── */
+#app-shell {
+  max-width: 56rem;
+  margin: 0 auto;
+  padding: var(--sp-4);
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}
+
+#main-area {
+  border: 1px solid var(--codex-border);
+  border-radius: var(--border-radius);
+  padding: var(--sp-4);
+  min-height: 16rem;
+  margin-bottom: var(--sp-4);
+  background: var(--codex-panel);
+  position: relative;
+}
+
+/* Corner ornaments for main area */
+#main-area::before,
+#main-area::after {
+  content: '╔';
+  position: absolute;
+  top: -0.15rem;
+  color: var(--codex-gold-dim);
+  font-size: 1.2rem;
+  line-height: 1;
+}
+#main-area::before { left: 0.3rem; }
+#main-area::after {
+  content: '╗';
+  right: 0.3rem;
+}
+
+#main-area > div {
+  display: none;
+}
+#main-area > div.active {
+  display: block;
+}
+
+/* ── Shared Panel Decorations ── */
+.codex-panel {
+  position: relative;
+}
+
+.codex-title {
+  font-family: var(--font-display);
+  color: var(--codex-heading);
+  font-size: 1.15rem;
+  margin-bottom: var(--sp-3);
+  padding-bottom: var(--sp-2);
+  border-bottom: 1px solid var(--codex-border);
+  letter-spacing: 0.03em;
+}
+
+.codex-subtitle {
+  font-family: var(--font-display);
+  color: var(--codex-text-dim);
+  font-size: 0.8rem;
+  font-style: italic;
+  margin-top: calc(-1 * var(--sp-1));
+  margin-bottom: var(--sp-3);
+}
+
+/* ── Form Elements ── */
+.codex-input {
+  background: var(--codex-panel);
+  border: 1px solid var(--codex-border);
+  color: var(--codex-text-bright);
+  font-family: var(--font-body);
+  font-size: 0.85rem;
+  padding: var(--sp-1) var(--sp-2);
+  border-radius: var(--border-radius);
+  width: 100%;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.codex-input:focus {
+  outline: none;
+  border-color: var(--codex-gold-dim);
+  box-shadow: var(--glow-gold);
+}
+
+.codex-input::placeholder {
+  color: var(--codex-text-dim);
+  font-style: italic;
+}
+
+/* ── Buttons ── */
+.codex-btn {
+  font-family: var(--font-body);
+  font-size: 0.85rem;
+  padding: var(--sp-1) var(--sp-3);
+  border: 1px solid var(--codex-border);
+  border-radius: var(--border-radius);
+  cursor: pointer;
+  transition: all 0.15s;
+  background: var(--codex-panel);
+  color: var(--codex-text);
+  letter-spacing: 0.02em;
+}
+
+.codex-btn:hover:not(:disabled) {
+  border-color: var(--codex-gold-dim);
+  color: var(--codex-text-bright);
+  box-shadow: var(--glow-gold);
+}
+
+.codex-btn:active:not(:disabled) {
+  background: var(--codex-panel-light);
+}
+
+.codex-btn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.codex-btn--primary {
+  border-color: var(--codex-gold-dim);
+  color: var(--codex-gold);
+}
+
+.codex-btn--primary:hover:not(:disabled) {
+  border-color: var(--codex-gold);
+  color: var(--codex-heading);
+  box-shadow: 0 0 12px rgba(212, 168, 67, 0.2);
+}
+
+.codex-btn--danger {
+  border-color: var(--codex-red-dim);
+  color: var(--codex-red);
+}
+
+.codex-btn--danger:hover:not(:disabled) {
+  border-color: var(--codex-red);
+  box-shadow: var(--glow-red);
+}
+
+/* ── Decorative Dividers ── */
+.codex-divider {
+  text-align: center;
+  color: var(--codex-border);
+  margin: var(--sp-3) 0;
+  overflow: hidden;
+  white-space: nowrap;
+  user-select: none;
+  font-size: 0.75rem;
+}
+
+/* ── ASCII Ornament Classes ── */
+.ornament {
+  color: var(--codex-border);
+  user-select: none;
+  font-size: 0.75rem;
+  line-height: 1.2;
+}
+
+.ornament-gold {
+  color: var(--codex-gold-dim);
+}
+
+/* ── Status Indicator ── */
+.codex-status {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-1);
+}
+
+.codex-status__dot {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--codex-text-dim);
+}
+
+.codex-status__dot--ok {
+  background: var(--codex-green);
+  box-shadow: 0 0 6px rgba(74, 154, 74, 0.4);
+}
+
+.codex-status__dot--err {
+  background: var(--codex-red);
+  box-shadow: 0 0 6px rgba(196, 74, 58, 0.4);
+}
+
+/* ── Animations ── */
+@keyframes pulse-gold {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.6; }
+}
+
+@keyframes flicker {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.97; }
+  75% { opacity: 1; }
+  92% { opacity: 0.98; }
+}
+
+.codex-flicker {
+  animation: flicker 4s infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

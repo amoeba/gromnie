@@ -1,50 +1,88 @@
-// <gromnie-log-viewer> — Tabbed log panels (All/Game/Protocol/State/System/Network).
+// <gromnie-log-viewer> — "The Scrying Pool" — Tabbed log panels with Ultima framing.
 
 const TEMPLATE = document.createElement("template");
 TEMPLATE.innerHTML = `
   <style>
     :host {
       display: block;
-      border: 1px solid #ddd;
-      padding: 0.5rem;
-      border-radius: 4px;
+      border: 1px solid var(--codex-border, #3d2e1a);
+      border-radius: 2px;
+      background: var(--codex-panel, #14110d);
+    }
+    .scry-header {
+      text-align: center;
+      padding: var(--sp-2, 0.5rem) var(--sp-2, 0.5rem) 0;
+      font-size: 0.7rem;
+      color: var(--codex-text-dim, #7a6840);
+      user-select: none;
     }
     .tabs {
       display: flex;
       gap: 0;
-      margin-bottom: 0;
+      padding: 0 var(--sp-2, 0.5rem);
+      border-bottom: 1px solid var(--codex-border, #3d2e1a);
+      overflow-x: auto;
     }
     .tab {
-      padding: 0.25rem 0.6rem;
-      border: 1px solid #ccc;
-      border-bottom: none;
+      padding: 0.3rem 0.7rem;
       cursor: pointer;
-      font-size: 0.75rem;
-      background: #f5f5f5;
-      border-radius: 3px 3px 0 0;
+      font-size: 0.7rem;
+      color: var(--codex-text-dim, #7a6840);
+      border-bottom: 2px solid transparent;
+      transition: color 0.15s, border-color 0.15s;
+      white-space: nowrap;
+      user-select: none;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+    }
+    .tab:hover {
+      color: var(--codex-text, #c8b07a);
     }
     .tab.active {
-      background: #fff;
-      border-bottom: 1px solid #fff;
-      margin-bottom: -1px;
+      color: var(--codex-gold, #d4a843);
+      border-bottom-color: var(--codex-gold, #d4a843);
     }
     .tab-content {
-      border: 1px solid #ccc;
-      padding: 0.3rem;
-      height: calc(100vh - 14rem);
+      padding: var(--sp-2, 0.5rem);
+      height: calc(100vh - 22rem);
       overflow-y: auto;
       white-space: pre-wrap;
-      font-size: 0.7rem;
+      font-size: 0.68rem;
+      line-height: 1.5;
       display: none;
+      color: var(--codex-text, #c8b07a);
     }
     .tab-content.active {
       display: block;
     }
     #net-log {
-      background: #111;
-      color: #0f0;
+      background: rgba(0, 0, 0, 0.3);
+    }
+    .log-line {
+      margin-bottom: 1px;
+    }
+    .log-line .timestamp {
+      color: var(--codex-text-dim, #7a6840);
+      font-size: 0.6rem;
+    }
+    .net-tx {
+      color: var(--codex-red, #c44a3a);
+    }
+    .net-rx {
+      color: var(--codex-green, #4a9a4a);
+    }
+    .scry-footer {
+      text-align: center;
+      padding: var(--sp-1, 0.25rem);
+      font-size: 0.65rem;
+      color: var(--codex-border, #3d2e1a);
+      user-select: none;
+      border-top: 1px solid var(--codex-border, #3d2e1a);
     }
   </style>
+  <div class="scry-header">
+    ── The Scrying Pool ──
+  </div>
   <div class="tabs">
     <div class="tab active" data-tab="all">All</div>
     <div class="tab" data-tab="game">Game</div>
@@ -59,6 +97,7 @@ TEMPLATE.innerHTML = `
   <pre id="log-state" class="tab-content"></pre>
   <pre id="log-system" class="tab-content"></pre>
   <pre id="net-log" class="tab-content"></pre>
+  <div class="scry-footer">════════════════════════════════════════</div>
 `;
 
 class GromnieLogViewer extends HTMLElement {
@@ -112,9 +151,8 @@ class GromnieLogViewer extends HTMLElement {
   }
 
   logNet(entry) {
-    const color = entry.startsWith("[TX]") ? "#f88" : "#8f8";
     const line = document.createElement("div");
-    line.style.color = color;
+    line.className = entry.startsWith("[TX]") ? "net-tx" : "net-rx";
     line.textContent = entry;
     this._netLogEl.appendChild(line);
     while (this._netLogEl.children.length > 200) {
@@ -124,8 +162,24 @@ class GromnieLogViewer extends HTMLElement {
   }
 
   _appendLog(pre, message) {
-    const line = `[${new Date().toISOString()}] ${message}`;
-    pre.textContent += `${line}\n`;
+    const now = new Date();
+    const ts = now.toISOString().slice(11, 23);
+    const line = document.createElement("div");
+    line.className = "log-line";
+
+    const tsSpan = document.createElement("span");
+    tsSpan.className = "timestamp";
+    tsSpan.textContent = `[${ts}] `;
+
+    const text = document.createTextNode(message);
+
+    line.appendChild(tsSpan);
+    line.appendChild(text);
+    pre.appendChild(line);
+
+    while (pre.children.length > 500) {
+      pre.removeChild(pre.firstChild);
+    }
     pre.scrollTop = pre.scrollHeight;
   }
 }

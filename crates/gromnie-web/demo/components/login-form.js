@@ -1,4 +1,4 @@
-// <gromnie-login-form> — Account view with host/port/account/password fields.
+// <gromnie-login-form> — "The Scroll of Entry" — Account view with medieval framing.
 
 const STORAGE_KEY = "gromnie-form";
 
@@ -8,53 +8,95 @@ TEMPLATE.innerHTML = `
     :host {
       display: block;
     }
-    h2 {
-      margin-top: 0;
+    .scroll-header {
+      text-align: center;
+      margin-bottom: var(--sp-4, 1rem);
     }
-    .row {
+    .scroll-header h2 {
+      font-family: var(--font-display, serif);
+      color: var(--codex-heading, #d4a843);
+      font-size: 1.2rem;
+      margin: 0;
+      letter-spacing: 0.05em;
+    }
+    .scroll-header .subtitle {
+      font-size: 0.7rem;
+      color: var(--codex-text-dim, #7a6840);
+      font-style: italic;
+    }
+    .scroll-header .rule {
+      color: var(--codex-border, #3d2e1a);
+      font-size: 0.75rem;
+      user-select: none;
+      margin-top: var(--sp-2, 0.5rem);
+    }
+    .form-grid {
       display: grid;
-      grid-template-columns: 4.5rem 1fr;
-      gap: 0.25rem;
-      margin-bottom: 0.25rem;
+      grid-template-columns: 6rem 1fr;
+      gap: var(--sp-2, 0.5rem);
       align-items: center;
+      max-width: 32rem;
+      margin: 0 auto;
     }
-    input {
-      width: 100%;
-      padding: 0.2rem 0.3rem;
-      font-size: 0.85rem;
-      font-family: inherit;
+    .form-label {
+      color: var(--codex-text-dim, #7a6840);
+      font-size: 0.8rem;
+      text-align: right;
+      padding-right: var(--sp-2, 0.5rem);
+    }
+    .form-label::before {
+      content: '» ';
+      color: var(--codex-border, #3d2e1a);
+    }
+    .input-wrapper {
+      position: relative;
+    }
+    .input-wrapper::after {
+      content: attr(data-char);
+      position: absolute;
+      right: 0.5rem;
+      top: 50%;
+      transform: translateY(-50%);
+      color: var(--codex-border, #3d2e1a);
+      font-size: 0.8rem;
+      pointer-events: none;
+      opacity: 0;
     }
     .actions {
       display: flex;
-      gap: 0.4rem;
-      margin-top: 0.4rem;
-    }
-    button {
-      padding: 0.25rem 0.5rem;
-      font-size: 0.85rem;
-      font-family: inherit;
+      gap: var(--sp-2, 0.5rem);
+      justify-content: center;
+      margin-top: var(--sp-4, 1rem);
     }
   </style>
-  <h2>Account Info</h2>
-  <div class="row">
-    <label for="host">host</label>
-    <input id="host" />
+
+  <div class="scroll-header">
+    <h2>⚜ The Scroll of Entry ⚜</h2>
+    <div class="subtitle">Inscribe thy credentials to breach the gateway</div>
+    <div class="rule">─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─</div>
   </div>
-  <div class="row">
-    <label for="port">port</label>
-    <input id="port" value="9000" />
+
+  <div class="form-grid">
+    <label class="form-label" for="host">Host</label>
+    <input class="codex-input" id="host" placeholder="play.coldeve.ac" />
+
+    <label class="form-label" for="port">Port</label>
+    <input class="codex-input" id="port" value="9000" placeholder="9000" />
+
+    <label class="form-label" for="account">Account</label>
+    <input class="codex-input" id="account" placeholder="thy name" />
+
+    <label class="form-label" for="password">Password</label>
+    <input class="codex-input" id="password" type="password" placeholder="thy secret word" />
   </div>
-  <div class="row">
-    <label for="account">account</label>
-    <input id="account" />
-  </div>
-  <div class="row">
-    <label for="password">password</label>
-    <input id="password" type="password" />
-  </div>
+
   <div class="actions">
-    <button id="login" disabled>Login</button>
-    <button id="reset-form" type="button">Reset</button>
+    <button class="codex-btn codex-btn--primary" id="login" disabled>
+      ⚔ Enter the Gateway
+    </button>
+    <button class="codex-btn" id="reset-form" type="button">
+      ↺ Clear
+    </button>
   </div>
 `;
 

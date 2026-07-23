@@ -1,4 +1,4 @@
-// <gromnie-error-overlay> — Modal error dialog.
+// <gromnie-error-overlay> — "The Dark Omen" — Modal error dialog with Ultima framing.
 
 const TEMPLATE = document.createElement("template");
 TEMPLATE.innerHTML = `
@@ -7,39 +7,68 @@ TEMPLATE.innerHTML = `
       display: none;
       position: fixed;
       inset: 0;
-      background: rgba(0,0,0,0.5);
+      background: rgba(12, 10, 8, 0.85);
       z-index: 100;
       align-items: center;
       justify-content: center;
+      backdrop-filter: blur(2px);
     }
     :host(.active) {
       display: flex;
     }
-    #error-box {
-      background: #fff;
-      border: 2px solid #c44;
-      border-radius: 6px;
-      padding: 1.2rem;
-      max-width: 20rem;
+    #omen-box {
+      background: var(--codex-panel, #14110d);
+      border: 1px solid var(--codex-red, #c44a3a);
+      border-radius: 2px;
+      padding: 0;
+      max-width: 24rem;
       text-align: center;
+      box-shadow: 0 0 30px rgba(196, 74, 58, 0.15);
     }
-    #error-box h3 {
-      margin: 0 0 0.5rem;
-      color: #c44;
+    .omen-header {
+      background: rgba(196, 74, 58, 0.1);
+      padding: var(--sp-2, 0.5rem) var(--sp-4, 1rem);
+      border-bottom: 1px solid var(--codex-red, #c44a3a);
     }
-    #error-box p {
-      margin: 0 0 0.8rem;
+    .omen-header h3 {
+      margin: 0;
+      font-family: var(--font-display, serif);
+      color: var(--codex-red, #c44a3a);
+      font-size: 1.1rem;
+      letter-spacing: 0.05em;
     }
-    button {
-      padding: 0.25rem 0.5rem;
+    .omen-body {
+      padding: var(--sp-4, 1rem);
+    }
+    .omen-icon {
+      font-size: 2rem;
+      margin-bottom: var(--sp-2, 0.5rem);
+      color: var(--codex-red, #c44a3a);
+      user-select: none;
+    }
+    #error-message {
+      margin: 0 0 var(--sp-4, 1rem);
+      color: var(--codex-text, #c8b07a);
       font-size: 0.85rem;
-      font-family: inherit;
+      line-height: 1.5;
+    }
+    .omen-footer {
+      padding: 0 var(--sp-4, 1rem) var(--sp-4, 1rem);
     }
   </style>
-  <div id="error-box">
-    <h3>Login Failed</h3>
-    <p id="error-message"></p>
-    <button id="error-ok">OK</button>
+  <div id="omen-box">
+    <div class="omen-header">
+      <h3>☠ The Dark Omen ☠</h3>
+    </div>
+    <div class="omen-body">
+      <div class="omen-icon">⚠</div>
+      <p id="error-message"></p>
+    </div>
+    <div class="omen-footer">
+      <button class="codex-btn codex-btn--danger" id="error-ok">
+        Acknowledge
+      </button>
+    </div>
   </div>
 `;
 
