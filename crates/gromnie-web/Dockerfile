@@ -45,7 +45,7 @@ ENV GIT_SHA=${GIT_SHA}
 # Copy demo files and generated pkg/ directory.
 COPY --from=builder /app/crates/gromnie-web/demo/index.html /usr/share/nginx/html/index.html
 COPY --from=builder /app/crates/gromnie-web/demo/main.js    /usr/share/nginx/html/main.js
-COPY --from=builder /app/crates/gromnie-web/demo/ui.js      /usr/share/nginx/html/ui.js
+COPY --from=builder /app/crates/gromnie-web/demo/components/ /usr/share/nginx/html/components/
 COPY --from=builder /app/crates/gromnie-web/demo/public/worker.js  /usr/share/nginx/html/worker.js
 COPY --from=builder /app/crates/gromnie-web/pkg/            /usr/share/nginx/html/pkg/
 

@@ -32,22 +32,46 @@ For **local dev**, Vite serves the files and proxies `/wisp` to gromnie-proxy.
 The codebase is split so that UI edits trigger Vite HMR (hot module replacement)
 instead of full page reloads, preserving the SharedWorker connection:
 
-- **`demo/main.js`** — Stable entry point. Creates the SharedWorker and wires
-  up the message handler. **Never edit this file during UI development.**
-- **`demo/ui.js`** — All UI logic (DOM refs, event handlers, rendering).
-  Safe to edit freely — Vite HMRs this module without killing the worker.
+- **`demo/main.js`** — Stable entry point. Creates the SharedWorker and routes
+  messages to web components. Editing this file causes a page reload.
+- **`demo/components/index.js`** — HMR entry point. Imports all component
+  classes, registers them with `customElements.define()` (try-caught for safe
+  re-execution during HMR), and self-accepts via `import.meta.hot.accept()`.
+  When a component file changes, Vite sends the HMR update through this file.
+- **`demo/components/`** — Web components. Each exports a class (no
+  `define()` call, no `customElements.get()` guard — registration is handled
+  by `index.js`):
+  - `status-bar.js` — WASM/Proxy/Build status indicators
+  - `login-form.js` — Account view with host/port/account/password fields
+  - `character-select.js` — Character list and enter world button
+  - `world-view.js` — Chat messages, chat input, exit world button
+  - `log-viewer.js` — Tabbed log panels (All/Game/Protocol/State/System/Network)
+  - `error-overlay.js` — Modal error dialog
 - **`demo/public/worker.js`** — SharedWorker script. Served from `public/`
   so Vite passes it through untouched (not transformed as a module).
 
-When you edit `ui.js`, Vite sends an HMR update that swaps the module
-without reloading the page. The SharedWorker stays alive and the game
-connection persists. The `main.js` entry point accepts the update via
-`import.meta.hot.accept()` and rebinds the message handler to the new
-module's `handleMessage` function.
+**Why this works:** `customElements.define()` is a side effect — when Vite
+HMR-swaps a component module, re-executing `define()` throws an error and
+triggers a page reload. By centralizing registration in `index.js` with
+try-caught `define()` calls and `import.meta.hot.accept()`, component edits
+trigger `hmr update /components/index.js` instead of a page reload. The
+SharedWorker stays alive and the game connection persists.
 
-**Important:** If you edit `main.js` or `worker.js`, Vite does a full
-page reload, which kills the SharedWorker (standard browser behavior).
-Avoid editing those files during active development sessions.
+Components communicate with `main.js` via custom events (fired with
+`bubbles: true, composed: true` to cross Shadow DOM boundaries):
+- `gromnie:connect` — Login form sends `{host, port, account, password}`
+- `gromnie:select-character` — Character select sends `{characterId, characterName}`
+- `gromnie:send-chat` — World view sends `{message}`
+- `gromnie:exit-world` — World view exits to character select
+- `gromnie:dismiss-error` — Error overlay dismissed
+
+`main.js` calls component methods directly (e.g. `worldView.appendChat()`,
+`charSelect.setCharacters()`, `statusBar.setStatus()`) — components do not
+listen for worker messages; `main.js` is the sole mediator.
+
+**Important:** Editing `main.js` or `worker.js` causes a full page reload,
+which kills the SharedWorker. Only edit component files under `components/`
+during active development sessions.
 
 ## Prerequisites
 

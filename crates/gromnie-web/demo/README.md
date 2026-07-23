@@ -4,12 +4,18 @@ Tiny static browser demo for `GromnieClient`.
 
 ## Architecture
 
-The UI is split into two files for HMR support:
+The UI is built with web components for HMR support:
 
-- **`main.js`** — Stable entry point. Creates the SharedWorker and wires up
-  the message handler. **Never edit during UI development.**
-- **`ui.js`** — All UI logic (DOM refs, event handlers, rendering).
-  Safe to edit freely — Vite HMRs this module without killing the worker.
+- **`main.js`** — Stable entry point. Creates the SharedWorker and routes
+  messages to components. **Never edit during UI development.**
+- **`components/`** — Web components that encapsulate UI logic:
+  - `status-bar.js` — WASM/Proxy/Build status
+  - `login-form.js` — Account view
+  - `character-select.js` — Character list
+  - `world-view.js` — Chat interface
+  - `log-viewer.js` — Tabbed log panels
+  - `error-overlay.js` — Error modal
+  - `index.js` — Barrel file
 
 The SharedWorker (`public/worker.js`) holds the `GromnieClient` instance and
 WISP connection, persisting across page reloads so the game connection survives
