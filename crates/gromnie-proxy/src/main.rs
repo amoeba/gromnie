@@ -24,8 +24,9 @@ use tower_http::services::ServeDir;
 use tracing::{error, info};
 
 use wisp_mux::{
-    ServerMux, WispV2Handshake,
+    ServerMux, WispV2Handshake, WispError,
     extensions::{AnyProtocolExtensionBuilder, udp::UdpProtocolExtensionBuilder},
+    ws::TransportExt,
 };
 
 // ---------------------------------------------------------------------------
@@ -216,91 +217,79 @@ struct Args {
 #[derive(Clone)]
 struct AppState {}
 
-struct AxumTransportRead {
-    rx: tokio::sync::mpsc::Receiver<Result<Bytes, wisp_mux::WispError>>,
+/// Thin wrapper around axum's [`WebSocket`] that implements `TransportRead`
+/// and `TransportWrite` (i.e. `Stream<Item = Result<Bytes, WispError>>` and
+/// `Sink<Bytes, Error = WispError>`).
+///
+/// This replaces the previous ~80 lines of custom `AxumTransportRead` /
+/// `AxumTransportWrite` / `split_axum_ws` boilerplate (mpsc channels + a
+/// background `tokio::select!` task) with a direct delegation to axum's
+/// built-in `Stream` and `Sink` implementations for `WebSocket`.
+///
+/// Benefits over the old approach:
+/// - No background task to leak (the old `poll_close` was a no-op that left
+///   the task dangling).
+/// - `poll_ready` / `poll_close` properly delegate to the underlying socket,
+///   so backpressure and graceful shutdown work correctly.
+struct AxumWsTransport {
+    ws: WebSocket,
 }
 
-struct AxumTransportWrite {
-    tx: tokio::sync::mpsc::Sender<Bytes>,
-    _ws_task: tokio::task::JoinHandle<()>,
+impl AxumWsTransport {
+    fn new(ws: WebSocket) -> Self {
+        Self { ws }
+    }
 }
 
-impl Stream for AxumTransportRead {
-    type Item = Result<Bytes, wisp_mux::WispError>;
+impl Stream for AxumWsTransport {
+    type Item = Result<Bytes, WispError>;
 
-    fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
-        match self.rx.poll_recv(cx) {
-            Poll::Ready(Some(result)) => Poll::Ready(Some(result)),
-            Poll::Ready(None) => Poll::Ready(None),
-            Poll::Pending => Poll::Pending,
+    fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
+        let mut ws = Pin::new(&mut self.get_mut().ws);
+        loop {
+            match ws.as_mut().poll_next(cx) {
+                Poll::Ready(Some(Ok(Message::Binary(data)))) => {
+                    return Poll::Ready(Some(Ok(data)));
+                }
+                Poll::Ready(Some(Ok(Message::Close(_)))) => return Poll::Ready(None),
+                // Skip non-binary, non-close frames (Text, Ping, Pong).
+                Poll::Ready(Some(Ok(_))) => continue,
+                Poll::Ready(Some(Err(e))) => {
+                    return Poll::Ready(Some(Err(WispError::WsImplError(Box::new(e)))));
+                }
+                Poll::Ready(None) => return Poll::Ready(None),
+                Poll::Pending => return Poll::Pending,
+            }
         }
     }
 }
 
-impl Sink<Bytes> for AxumTransportWrite {
-    type Error = wisp_mux::WispError;
+impl Sink<Bytes> for AxumWsTransport {
+    type Error = WispError;
 
-    fn poll_ready(self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
-        Poll::Ready(Ok(()))
+    fn poll_ready(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
+        Pin::new(&mut self.get_mut().ws)
+            .poll_ready(cx)
+            .map_err(|e| WispError::WsImplError(Box::new(e)))
     }
 
     fn start_send(self: Pin<&mut Self>, item: Bytes) -> Result<(), Self::Error> {
-        self.tx
-            .try_send(item)
-            .map_err(|_| wisp_mux::WispError::WsImplSocketClosed)
+        Pin::new(&mut self.get_mut().ws)
+            .start_send(Message::Binary(item))
+            .map_err(|e| WispError::WsImplError(Box::new(e)))
     }
 
-    fn poll_flush(self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
-        Poll::Ready(Ok(()))
+    fn poll_flush(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
+        Pin::new(&mut self.get_mut().ws)
+            .poll_flush(cx)
+            .map_err(|e| WispError::WsImplError(Box::new(e)))
     }
 
-    fn poll_close(self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
-        Poll::Ready(Ok(()))
+    fn poll_close(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
+        Pin::new(&mut self.get_mut().ws)
+            .poll_close(cx)
+            .map_err(|e| WispError::WsImplError(Box::new(e)))
     }
-}
-
-fn split_axum_ws(mut ws: WebSocket) -> (AxumTransportRead, AxumTransportWrite) {
-    let (read_tx, read_rx) = tokio::sync::mpsc::channel(64);
-    let (write_tx, mut write_rx) = tokio::sync::mpsc::channel::<Bytes>(64);
-
-    let ws_task = tokio::spawn(async move {
-        loop {
-            tokio::select! {
-                msg = ws.next() => {
-                    match msg {
-                        Some(Ok(Message::Binary(data))) => {
-                            let payload = Bytes::from(data.to_vec());
-                            if read_tx.send(Ok(payload)).await.is_err() {
-                                break;
-                            }
-                        }
-                        Some(Ok(Message::Close(_))) => break,
-                        Some(Ok(_)) => {}
-                        Some(Err(_)) => break,
-                        None => break,
-                    }
-                }
-                data = write_rx.recv() => {
-                    match data {
-                        Some(bytes) => {
-                            if ws.send(Message::Binary(bytes)).await.is_err() {
-                                break;
-                            }
-                        }
-                        None => break,
-                    }
-                }
-            }
-        }
-    });
-
-    (
-        AxumTransportRead { rx: read_rx },
-        AxumTransportWrite {
-            tx: write_tx,
-            _ws_task: ws_task,
-        },
-    )
 }
 
 // ---------------------------------------------------------------------------
@@ -379,7 +368,8 @@ async fn main() -> Result<()> {
 // ---------------------------------------------------------------------------
 
 async fn handle_ws(socket: WebSocket) {
-    let (transport_read, transport_write) = split_axum_ws(socket);
+    let transport = AxumWsTransport::new(socket);
+    let (transport_read, transport_write) = transport.split_fast();
 
     let handshake = WispV2Handshake::new(vec![AnyProtocolExtensionBuilder::new(
         UdpProtocolExtensionBuilder,
@@ -424,9 +414,9 @@ async fn handle_ws(socket: WebSocket) {
     }
 }
 
-async fn handle_stream(
+async fn handle_stream<W: wisp_mux::ws::TransportWrite>(
     connect_pkt: wisp_mux::packet::ConnectPacket,
-    stream: wisp_mux::stream::MuxStream<AxumTransportWrite>,
+    stream: wisp_mux::stream::MuxStream<W>,
 ) -> Result<()> {
     let host = &connect_pkt.host;
     let port = connect_pkt.port;
