@@ -1,0 +1,51 @@
+# ── Build WASM artifacts ──────────────────────────────────────────────
+# Uses the same Rust base as the proxy Dockerfile for consistency.
+FROM rust:1.91.1 AS base
+
+RUN cargo install cargo-chef
+ENV CARGO_HOME=/usr/local/cargo
+RUN apt-get update && \
+    apt-get install -y ca-certificates && \
+    rm -rf /var/lib/apt/lists/*
+
+# Install wasm32 target and wasm-bindgen-cli in the base stage so they
+# are available in all subsequent stages.
+RUN rustup target add wasm32-unknown-unknown && \
+    cargo install wasm-bindgen-cli --version 0.2.120 --root /usr/local
+
+FROM base AS chef
+WORKDIR /app
+COPY . .
+RUN cargo chef prepare --recipe-path recipe.json
+
+FROM base AS cacher
+WORKDIR /app
+COPY --from=chef /app/recipe.json recipe.json
+RUN --mount=type=cache,target=$CARGO_HOME/registry,sharing=locked \
+    --mount=type=cache,target=$CARGO_HOME/git,sharing=locked \
+    cargo chef cook --release -p gromnie-web --target wasm32-unknown-unknown --recipe-path recipe.json
+
+FROM base AS builder
+WORKDIR /app
+COPY --from=cacher /app/target target
+COPY --from=cacher /app/Cargo.lock Cargo.lock
+COPY . .
+
+# Build the WASM package and generate JS glue + wrapper files
+RUN --mount=type=cache,target=$CARGO_HOME/registry,sharing=locked \
+    --mount=type=cache,target=$CARGO_HOME/git,sharing=locked \
+    PATH="/usr/local/bin:$PATH" cargo xtask web build
+
+# ── Runtime: static file server ───────────────────────────────────────
+FROM nginx:1.27-alpine
+
+# Copy demo files and generated pkg/ directory
+COPY --from=builder /app/crates/gromnie-web/demo/index.html /usr/share/nginx/html/index.html
+COPY --from=builder /app/crates/gromnie-web/demo/main.js  /usr/share/nginx/html/main.js
+COPY --from=builder /app/crates/gromnie-web/pkg/           /usr/share/nginx/html/pkg/
+
+# nginx listens on 8080 to match Dokku's port mapping
+RUN sed -i 's/listen 80;/listen 8080;/' /etc/nginx/conf.d/default.conf && \
+    sed -i 's/listen \[::\]:80;/listen [::]:8080;/' /etc/nginx/conf.d/default.conf
+
+EXPOSE 8080
