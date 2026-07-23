@@ -23,7 +23,7 @@ Both crates implement their own WebSocket-to-WISP transport adapters from scratc
 | 1.9 | `tokio-tungstenite` in proxy `[dependencies]` instead of `[dev-dependencies]` | Low | proxy | Trivial | ✅ Done (fixed by 1.1) |
 | 2.1 | `BrowserWebSocketTransport` reimplements wisp-mux's transport helpers | High | web | Medium | ✅ Done |
 | 2.2 | `WispUdpTransport::recv` dual-stream select loop is overly complex | Medium | web | Medium | ✅ Done |
-| 2.3 | `format_net_entry` duplicates hex formatting logic | Low | web | Trivial | ⏳ Pending |
+| 2.3 | `format_net_entry` duplicates hex formatting logic | Low | web | Trivial | ✅ Done |
 | 2.4 | `WasmClient::connect` is a 130-line method doing 9 things | Low | web | Medium | ✅ Done |
 | 2.5 | `WispUdpTransport` stores `SendWrapper` for all fields | Low | web | — | ⏳ Pending |
 | 2.6 | `ClientState` stores `mux` and `streams` separately | Low | web | — | ⏳ Pending |
@@ -238,6 +238,8 @@ This could potentially be simplified using `futures::stream::select` or `futures
 **Severity: Low — duplication**
 
 The `format_net_entry` function in `transport.rs` (lines 22–51) formats bytes as hex with sequence/flags parsing. This is similar to the hex preview formatting in `gromnie-proxy` (see §1.7), but with additional protocol-specific fields (seq, flags). While the proxy's version is simpler (just hex), both could benefit from a shared hex formatting utility.
+
+**Resolution:** Resolved by the `hex_preview()` extraction in item 1.7/3.3. The `format_net_entry` function now calls `gromnie_wisp::hex_preview()` for hex formatting in both branches, eliminating the duplicated `iter().take(max).map(|b| format!("{:02x}", b)).collect::<Vec<_>>().join(" ")` pattern.
 
 ### 2.4. `WasmClient::connect` has 9 sequential steps with debug logging
 
