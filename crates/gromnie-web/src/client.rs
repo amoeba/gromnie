@@ -8,7 +8,7 @@ use gromnie_client::client::ClientEvent;
 use gromnie_client::client::SimpleClientAction;
 
 use crate::GromnieWispClient;
-use crate::transport::{NetLogCallback, WispUdpTransport, format_net_entry};
+use crate::transport::{NetLogCallback, format_net_entry};
 use crate::util::js_error;
 
 type AsyncCallback = Rc<RefCell<Option<js_sys::Function>>>;
@@ -156,17 +156,11 @@ impl WasmClient {
 
         web_sys::console::log_1(&format!("[wasm] step 3: taking stream id={}", stream_id).into());
 
-        // 3. Take the stream out of the WISP client
-        let stream = wisp_client
-            .take_stream(stream_id)
-            .await
-            .ok_or_else(|| JsValue::from_str("stream not found after opening"))?;
-
-        web_sys::console::log_1(&"[wasm] step 4: creating transport".into());
-
-        // 4. Create WISP UDP transport from the stream
+        // 3-4. Take the stream and create WISP UDP transport
         let net_log = self.on_net_log.clone();
-        let transport = WispUdpTransport::new(wisp_client.state.clone(), stream, net_log);
+        let transport = wisp_client
+            .create_udp_transport(stream_id, net_log)
+            .await?;
 
         web_sys::console::log_1(&"[wasm] step 5: creating event channel".into());
 

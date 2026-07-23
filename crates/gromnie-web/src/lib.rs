@@ -414,6 +414,25 @@ impl GromnieWispClient {
         state.streams.remove(&id)
     }
 
+    /// Create a `WispUdpTransport` from a stream ID, encapsulating the
+    /// stream-take and state-clone steps so callers don't need to access
+    /// `self.state` directly.
+    pub async fn create_udp_transport(
+        &self,
+        stream_id: u32,
+        net_log: crate::transport::NetLogCallback,
+    ) -> Result<crate::transport::WispUdpTransport, JsValue> {
+        let stream = self
+            .take_stream(stream_id)
+            .await
+            .ok_or_else(|| JsValue::from_str("stream not found after opening"))?;
+        Ok(crate::transport::WispUdpTransport::new(
+            self.state.clone(),
+            stream,
+            net_log,
+        ))
+    }
+
     /// Close the mux and all streams, terminating the WebSocket connection.
     pub async fn close(&self) {
         let mut state = self.state.lock().await;

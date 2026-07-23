@@ -27,7 +27,7 @@ Both crates implement their own WebSocket-to-WISP transport adapters from scratc
 | 2.4 | `WasmClient::connect` is a 130-line method doing 9 things | Low | web | Medium | ✅ Done |
 | 2.5 | `WispUdpTransport` stores `SendWrapper` for all fields | Low | web | — | ⏳ Pending |
 | 2.6 | `ClientState` stores `mux` and `streams` separately | Low | web | — | ⏳ Pending |
-| 2.7 | `GromnieWispClient` exposes `state` as `pub(crate)` | Low | web | — | ⏳ Pending |
+| 2.7 | `GromnieWispClient` exposes `state` as `pub(crate)` | Low | web | — | ✅ Done |
 | 2.8 | `WispVersionPolicy` enum could be a bool | Very Low | web | Trivial | ✅ Done |
 | 2.9 | `WebSocketTransportError` wraps errors as `String` | Low | web | Low | ✅ Done |
 | 2.10 | `util.rs` is a single 6-line function | Very Low | web | — | ⏳ Pending |
@@ -302,6 +302,8 @@ pub(crate) state: Arc<Mutex<ClientState>>,
 ```
 
 `WasmClient::connect` accesses `wisp_client.state.clone()` directly (line 87). This creates tight coupling between `GromnieWispClient` and `WasmClient`. A cleaner API would have `GromnieWispClient` provide a method to construct a `WispUdpTransport` from a stream ID, rather than exposing internal state.
+
+**Resolution:** Added `create_udp_transport(stream_id, net_log)` method to `GromnieWispClient` that encapsulates the `take_stream` + `WispUdpTransport::new` steps. `WasmClient::connect` now calls this method instead of accessing `wisp_client.state` directly, removing the tight coupling. The `WispUdpTransport` import was removed from `client.rs` since it's no longer needed there.
 
 ### 2.8. `WispVersionPolicy` is a simple enum with a single method
 
