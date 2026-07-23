@@ -1,2 +1,4 @@
 /target
 gromnie-proxy.log
+.env
+*.local
