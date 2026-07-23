@@ -16,18 +16,19 @@ This produces browser artifacts in `crates/gromnie-web/pkg/` via `cargo build` +
 
 ## Usage (JS/TS)
 
-The public API is the `WasmClient` class, which handles the full connection
+The public API is the `GromnieClient` class, which handles the full connection
 flow: WISP handshake, UDP stream tunneling, AC protocol login, and event
 delivery.
 
+The WASM module is auto-initialized when you import from `index.mjs`, so there's
+no need to call `init()` separately.
+
 ```ts
-import init, { WasmClient } from "gromnie-web";
+import { GromnieClient } from "gromnie-web";
 
-await init();
+const client = new GromnieClient("wss://example.com/wisp/");
 
-const client = new WasmClient();
-
-// Receive game events as structured objects
+// Receive game events
 client.set_on_event((event) => {
   console.log("event:", event);
 });
@@ -39,11 +40,10 @@ client.set_on_net_log((entry) => {
 
 // Connect through the WISP proxy to the game server
 await client.connect(
-  "wss://example.com/wisp/",   // WISP WebSocket URL
-  "play.coldeve.ac",            // game server host
-  9000,                         // game server port
-  "account",                    // account name
-  "password"                    // account password
+  "play.coldeve.ac",   // game server host
+  9000,                // game server port
+  "account",           // account name
+  "password"           // account password
 );
 
 // After the character list arrives, select a character to enter the world
@@ -80,4 +80,4 @@ event has a `type` field that discriminates the variant:
 ### Internal transport
 
 The WISP-over-WebSocket transport layer (`GromnieWispClient`) is an internal
-implementation detail of `WasmClient`. It is not exported to JavaScript.
+implementation detail of `GromnieClient`. It is not exported to JavaScript.

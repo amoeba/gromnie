@@ -43,6 +43,37 @@ jobs:
       - name: Run cargo clippy
         run: cargo clippy --all-targets --all-features -- -D warnings
 
+  prek:
+    name: Prek hooks
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+
+      - name: Install toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - name: Cache dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry/index
+            ~/.cargo/registry/cache
+            ~/.cargo/git/db
+            target/
+          key: ${{ runner.os }}-prek-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-prek-
+
+      - name: Install prek
+        run: |
+          curl --proto '=https' --tlsv1.2 -LsSf https://github.com/j178/prek/releases/latest/download/prek-installer.sh | sh
+
+      - name: Run prek hooks
+        run: prek run --all-files
+
   test:
     name: Test (${{ matrix.os }})
     runs-on: ${{ matrix.os }}

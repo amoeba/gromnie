@@ -1,3 +1,4 @@
+#[allow(dead_code)]
 mod common;
 
 use asheron_rs::enums::PacketHeaderFlags;

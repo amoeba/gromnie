@@ -161,16 +161,80 @@ fn build_web() -> Result<()> {
         return Err(anyhow::anyhow!("wasm-bindgen failed"));
     }
 
+    // Generate auto-initializing wrapper module and update package.json
+    generate_wrapper_files(&out_dir, out_name)?;
+
     let js_path = out_dir.join(format!("{out_name}.js"));
     let wasm_path = out_dir.join(format!("{out_name}_bg.wasm"));
     let dts_path = out_dir.join(format!("{out_name}.d.ts"));
+    let index_path = out_dir.join("index.mjs");
+    let index_dts_path = out_dir.join("index.d.ts");
 
     println!("\nBuild complete.");
     println!("Artifacts:");
+    println!("  {}", index_path.display());
     println!("  {}", js_path.display());
     println!("  {}", wasm_path.display());
     if dts_path.exists() {
         println!("  {}", dts_path.display());
+    }
+    if index_dts_path.exists() {
+        println!("  {}", index_dts_path.display());
+    }
+
+    Ok(())
+}
+
+/// Write the auto-initializing wrapper module (`index.mjs`), its type
+/// declarations (`index.d.ts`), and update `package.json` to point at them.
+fn generate_wrapper_files(out_dir: &std::path::Path, out_name: &str) -> Result<()> {
+    // index.mjs — auto-initializes the WASM module on import
+    let index_mjs = format!(
+        "// Auto-initializing wrapper for gromnie-web.\n\
+         //\n\
+         // Importing from this module automatically initializes the WASM module,\n\
+         // so consumers don't need to call `init()` separately:\n\
+         //\n\
+         //   import {{ GromnieClient }} from \"gromnie-web\";\n\
+         //   const client = new GromnieClient(\"wss://example.com/wisp/\");\n\
+         //   await client.connect(\"play.example.com\", 9000, \"account\", \"password\");\n\
+         //\n\n\
+         import init, {{ GromnieClient }} from \"./{out_name}.js\";\n\
+         \n\
+         await init();\n\
+         \n\
+         export {{ GromnieClient }};\n"
+    );
+    fs::write(out_dir.join("index.mjs"), index_mjs)?;
+
+    // index.d.ts — re-export types from the wasm-bindgen generated declarations
+    let index_dts = format!(
+        "// Type declarations for the auto-initializing gromnie-web wrapper.\n\
+         //\n\
+         // Re-exports GromnieClient from the wasm-bindgen generated declarations.\n\n\
+         export {{ GromnieClient }} from \"./{out_name}.d.ts\";\n"
+    );
+    fs::write(out_dir.join("index.d.ts"), index_dts)?;
+
+    // Update package.json to point at the wrapper
+    let pkg_path = out_dir.join("package.json");
+    if pkg_path.exists() {
+        let mut pkg = fs::read_to_string(&pkg_path)?;
+
+        // Add index.mjs and index.d.ts to the files array
+        pkg = pkg.replace(
+            "\"files\": [\n    \"gromnie_web_bg.wasm\"",
+            "\"files\": [\n    \"index.mjs\",\n    \"index.d.ts\",\n    \"gromnie_web_bg.wasm\"",
+        );
+
+        // Update main and types to point at the wrapper
+        pkg = pkg.replace("\"main\": \"gromnie_web.js\"", "\"main\": \"index.mjs\"");
+        pkg = pkg.replace(
+            "\"types\": \"gromnie_web.d.ts\"",
+            "\"types\": \"index.d.ts\"",
+        );
+
+        fs::write(&pkg_path, pkg)?;
     }
 
     Ok(())

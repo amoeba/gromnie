@@ -14,7 +14,9 @@ use crate::util::js_error;
 type AsyncCallback = Rc<RefCell<Option<js_sys::Function>>>;
 
 #[wasm_bindgen]
-pub struct WasmClient {
+pub struct GromnieClient {
+    wisp_url: String,
+    account: String,
     wisp_client: Option<GromnieWispClient>,
     action_tx: Option<tokio::sync::mpsc::UnboundedSender<SimpleClientAction>>,
     on_event: AsyncCallback,
@@ -107,17 +109,13 @@ fn spawn_event_forwarder(
     });
 }
 
-impl Default for WasmClient {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
 #[wasm_bindgen]
-impl WasmClient {
+impl GromnieClient {
     #[wasm_bindgen(constructor)]
-    pub fn new() -> Self {
+    pub fn new(wisp_url: String) -> Self {
         Self {
+            wisp_url,
+            account: String::new(),
             wisp_client: None,
             action_tx: None,
             on_event: Rc::new(RefCell::new(None)),
@@ -135,16 +133,17 @@ impl WasmClient {
 
     pub async fn connect(
         &mut self,
-        ws_url: String,
         server_host: String,
         server_port: u16,
         account_name: String,
         password: String,
     ) -> Result<(), JsValue> {
+        self.account = account_name.clone();
+
         web_sys::console::log_1(&"[wasm] step 1: creating WISP client".into());
 
         // 1. Create and connect WISP client
-        let wisp_client = GromnieWispClient::new(ws_url);
+        let wisp_client = GromnieWispClient::new(self.wisp_url.clone());
         wisp_client.connect().await?;
 
         web_sys::console::log_1(&"[wasm] step 2: opening UDP stream".into());
@@ -202,7 +201,7 @@ impl WasmClient {
         Ok(())
     }
 
-    pub fn select_character(&self, character_id: u32, account: &str) -> Result<(), JsValue> {
+    pub fn select_character(&self, character_id: u32) -> Result<(), JsValue> {
         let tx = self
             .action_tx
             .as_ref()
@@ -211,7 +210,7 @@ impl WasmClient {
         tx.send(SimpleClientAction::LoginCharacter {
             character_id,
             character_name: String::new(),
-            account: account.to_string(),
+            account: self.account.clone(),
         })
         .map_err(|e| js_error(format!("send failed: {e}")))?;
 

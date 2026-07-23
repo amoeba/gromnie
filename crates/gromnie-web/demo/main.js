@@ -35,7 +35,7 @@ const errorOkBtn = document.getElementById("error-ok");
 
 const STORAGE_KEY = "gromnie-form";
 
-let wasm = null;
+let GromnieClient = null;
 let client = null;
 let characters = [];
 let selectedCharId = null;
@@ -236,7 +236,7 @@ function parseCharacterList(eventDesc) {
 
 async function doLogin() {
   try {
-    if (!wasm) {
+    if (!GromnieClient) {
       throw new Error("wasm module not loaded");
     }
     if (client) {
@@ -252,7 +252,7 @@ async function doLogin() {
     const wsUrl = `${wsProto}//${location.host}/wisp/`;
     log(`connecting to ${wsUrl}...`);
 
-    client = new wasm.WasmClient();
+    client = new GromnieClient(wsUrl);
     client.set_on_event(handleEvent);
     client.set_on_net_log(handleNetLog);
 
@@ -266,7 +266,6 @@ async function doLogin() {
     }, 10000);
 
     await client.connect(
-      wsUrl,
       hostEl.value.trim(),
       parseInt(portEl.value.trim(), 10),
       accountEl.value.trim(),
@@ -292,7 +291,7 @@ async function doEnterWorld() {
     log(`entering world with character: ${char.name} (ID: ${char.id})...`);
     enterWorldBtn.disabled = true;
     exitWorldBtn.disabled = false;
-    client.select_character(selectedCharId, accountEl.value.trim());
+    client.select_character(selectedCharId);
     log("character selected, entering world...");
     inWorld = true;
     chatMessagesEl.innerHTML = "";
@@ -362,9 +361,9 @@ chatInputEl.addEventListener("keydown", (e) => {
 
 async function loadWasm() {
   try {
-    wasm = await import("./pkg/gromnie_web.js");
-    await wasm.default();
-    log("wasm loaded from ../pkg/gromnie_web.js");
+    const mod = await import("./pkg/index.mjs");
+    GromnieClient = mod.GromnieClient;
+    log("wasm loaded from ./pkg/index.mjs");
     setStatus(wasmStatusEl, "ready", true);
     loginBtn.disabled = false;
   } catch (err) {

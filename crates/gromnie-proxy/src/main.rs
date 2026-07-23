@@ -22,10 +22,7 @@ use tower::Service;
 use tower_http::services::ServeDir;
 use tracing::{error, info};
 
-use wisp_mux::{
-    ServerMux, WispError,
-    ws::TransportExt,
-};
+use wisp_mux::{ServerMux, WispError, ws::TransportExt};
 
 // ---------------------------------------------------------------------------
 // Session cookie helpers
@@ -333,11 +330,7 @@ async fn main() -> Result<()> {
     let app = Router::new()
         .route(
             &args.wisp_path,
-            get(
-                |ws: axum::extract::ws::WebSocketUpgrade| async move {
-                    ws.on_upgrade(handle_ws)
-                },
-            ),
+            get(|ws: axum::extract::ws::WebSocketUpgrade| async move { ws.on_upgrade(handle_ws) }),
         )
         .fallback_service(ServeDir::new(&args.static_dir).append_index_html_on_directories(true));
 

@@ -55,12 +55,12 @@ impl gromnie::Script for TimeoutTestScript {
         Box::pin(async move {
             let start_time = gromnie::get_event_time_millis();
             gromnie::log(&format!("TimeoutTestScript: Starting event handler (will sleep {}ms)", sleep_duration_ms));
-            
+
             // Simulate a long-running operation by spinning (WASI might not have sleep)
             // This is intentionally blocking to test timeout functionality
             let start = gromnie::get_event_time_millis();
             let target = start + sleep_duration_ms;
-            
+
             // Busy-wait loop to simulate blocking I/O
             loop {
                 let current = gromnie::get_event_time_millis();
@@ -70,10 +70,10 @@ impl gromnie::Script for TimeoutTestScript {
                 // Add a small yield to prevent completely blocking the runtime
                 // In a real scenario this would be a blocking I/O operation
             }
-            
+
             let end_time = gromnie::get_event_time_millis();
             let actual_duration = end_time - start_time;
-            
+
             gromnie::log(&format!("TimeoutTestScript: Event handler completed after {}ms", actual_duration));
         })
     }
@@ -86,11 +86,11 @@ impl gromnie::Script for TimeoutTestScript {
         Box::pin(async move {
             let start_time = gromnie::get_event_time_millis();
             gromnie::log(&format!("TimeoutTestScript: Starting tick (will sleep {}ms)", sleep_duration_ms));
-            
+
             // Simulate a long-running operation
             let start = gromnie::get_event_time_millis();
             let target = start + sleep_duration_ms;
-            
+
             // Busy-wait loop to simulate blocking I/O
             loop {
                 let current = gromnie::get_event_time_millis();
@@ -98,10 +98,10 @@ impl gromnie::Script for TimeoutTestScript {
                     break;
                 }
             }
-            
+
             let end_time = gromnie::get_event_time_millis();
             let actual_duration = end_time - start_time;
-            
+
             gromnie::log(&format!("TimeoutTestScript: Tick completed after {}ms", actual_duration));
         })
     }

@@ -162,7 +162,7 @@ async function main() {
     if (scenario === "loader") {
       pass =
         expectMode === "loaded"
-          ? logText.includes("wasm loaded from ../pkg/gromnie_web.js")
+          ? logText.includes("wasm loaded from ./pkg/index.mjs")
           : logText.includes("missing wasm-bindgen pkg output");
     } else if (scenario === "connect-flow") {
       const tcpOpenError =
@@ -172,7 +172,7 @@ async function main() {
         logText.includes("open_udp_stream error: connect first") ||
         logText.includes("open_udp_stream error: not connected");
       pass =
-        logText.includes("wasm loaded from ../pkg/gromnie_web.js") &&
+        logText.includes("wasm loaded from ./pkg/index.mjs") &&
         logText.includes("connect error:") &&
         tcpOpenError &&
         udpOpenError;

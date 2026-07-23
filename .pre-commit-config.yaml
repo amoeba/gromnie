@@ -1,0 +1,44 @@
+# prek configuration — https://github.com/j178/prek
+#
+# Ensures commits pass `cargo fmt` and `cargo clippy`, matching the checks
+# in .github/workflows/ci.yml.
+#
+# Install:  prek install
+# Run all:  prek run --all-files
+# Update:   prek update
+#
+# This file is compatible with both prek and pre-commit.
+
+fail_fast: false
+default_install_hook_types: [pre-commit]
+
+repos:
+  # ── Rust formatting & linting (mirrors .github/workflows/ci.yml) ──────────
+  - repo: local
+    hooks:
+      - id: cargo-fmt
+        name: cargo fmt
+        entry: cargo fmt --all -- --check
+        language: system
+        types: [rust]
+        pass_filenames: false
+
+      - id: cargo-clippy
+        name: cargo clippy
+        entry: cargo clippy --all-targets --all-features -- -D warnings
+        language: system
+        types: [rust]
+        pass_filenames: false
+
+  # ── Built-in hygiene hooks (zero-setup, no dependencies) ──────────────────
+  - repo: builtin
+    hooks:
+      - id: check-yaml
+      - id: check-toml
+      - id: check-merge-conflict
+      - id: check-added-large-files
+        args: ["--maxkb=1024"] # 1 MiB
+      - id: end-of-file-fixer
+      - id: trailing-whitespace
+      - id: mixed-line-ending
+        args: [--fix=lf]

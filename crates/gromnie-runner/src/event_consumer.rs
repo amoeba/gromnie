@@ -497,14 +497,12 @@ impl EventConsumer for DiscordConsumer {
                 if log_common_system_event(&system_event) {
                     return;
                 }
-                match system_event {
-                    SystemEvent::LoginSucceeded {
-                        character_id,
-                        character_name,
-                    } => {
-                        self.handle_login_succeeded(character_id, &character_name);
-                    }
-                    _ => {}
+                if let SystemEvent::LoginSucceeded {
+                    character_id,
+                    character_name,
+                } = system_event
+                {
+                    self.handle_login_succeeded(character_id, &character_name);
                 }
             }
         }

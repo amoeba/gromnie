@@ -1,6 +1,6 @@
 # gromnie-web demo
 
-Tiny static browser demo for `WasmClient`.
+Tiny static browser demo for `GromnieClient`.
 
 ## 1) Generate wasm-bindgen output
 
@@ -24,7 +24,7 @@ Then open:
 
 - <http://127.0.0.1:8081/demo/>
 
-The demo imports `../pkg/gromnie_web.js`, so it must be served from the `crates/gromnie-web` directory root.
+The demo imports `../pkg/index.mjs`, so it must be served from the `crates/gromnie-web` directory root.
 
 ## Harness: capture browser output in agent/CI logs
 

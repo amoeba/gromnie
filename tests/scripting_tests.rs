@@ -11,23 +11,23 @@ use std::path::Path;
 async fn test_script_lifecycle() {
     // Create action channel
     let (action_tx, mut action_rx) = mpsc::unbounded_channel();
-    
+
     // Create script runner
     let mut runner = ScriptRunner::new(action_tx);
-    
+
     // Load test scripts
     let test_scripts_dir = Path::new("tests/scripting");
     runner.load_scripts(test_scripts_dir, &HashMap::new());
-    
+
     // Verify at least one script was loaded
     assert!(runner.script_count() > 0, "No scripts were loaded");
-    
+
     // Check that we can get script IDs
     let script_ids = runner.script_ids();
     assert!(!script_ids.is_empty(), "No script IDs returned");
-    
+
     println!("Loaded scripts: {:?}", script_ids);
-    
+
     // Verify that scripts can be unloaded
     runner.unload_scripts();
     assert_eq!(runner.script_count(), 0, "Scripts were not properly unloaded");
@@ -37,16 +37,16 @@ async fn test_script_lifecycle() {
 async fn test_event_handling() {
     let (action_tx, _action_rx) = mpsc::unbounded_channel();
     let mut runner = ScriptRunner::new(action_tx);
-    
+
     // Load test scripts
     let test_scripts_dir = Path::new("tests/scripting");
     runner.load_scripts(test_scripts_dir, &HashMap::new());
-    
+
     if runner.script_count() == 0 {
         println!("Warning: No scripts loaded for event test");
         return;
     }
-    
+
     // Create test events
     let test_events = vec![
         GameEvent::ChatMessageReceived {
@@ -54,12 +54,12 @@ async fn test_event_handling() {
             message_type: 1,
         },
     ];
-    
+
     // Process events
     for event in test_events {
         runner.handle_event(gromnie_client::client::events::ClientEvent::Game(event));
     }
-    
+
     // Give scripts time to process (in real scenario, we'd check actions)
     tokio::time::sleep(Duration::from_millis(100)).await;
 }
@@ -68,19 +68,19 @@ async fn test_event_handling() {
 async fn test_timer_functionality() {
     let (action_tx, _action_rx) = mpsc::unbounded_channel();
     let mut runner = ScriptRunner::new(action_tx);
-    
+
     // Load test scripts
     let test_scripts_dir = Path::new("tests/scripting");
     runner.load_scripts(test_scripts_dir, &HashMap::new());
-    
+
     if runner.script_count() == 0 {
         println!("Warning: No scripts loaded for timer test");
         return;
     }
-    
+
     // Simulate time passing by handling events with different timestamps
     let start_time = Instant::now();
-    
+
     // Handle a few events to trigger ticks
     for i in 0..5 {
         let event = GameEvent::ChatMessageReceived {
@@ -89,7 +89,7 @@ async fn test_timer_functionality() {
         };
 
         runner.handle_event(gromnie_client::client::events::ClientEvent::Game(event));
-        
+
         // Small delay to allow timers to progress
         tokio::time::sleep(Duration::from_millis(50)).await;
     }
@@ -118,16 +118,16 @@ async fn test_script_reload() {
 async fn test_host_function_calls() {
     let (action_tx, mut action_rx) = mpsc::unbounded_channel();
     let mut runner = ScriptRunner::new(action_tx);
-    
+
     // Load test scripts
     let test_scripts_dir = Path::new("tests/scripting");
     runner.load_scripts(test_scripts_dir, &HashMap::new());
-    
+
     if runner.script_count() == 0 {
         println!("Warning: No scripts loaded for host function test");
         return;
     }
-    
+
     // Trigger script execution by sending events
     let event = GameEvent::ChatMessageReceived {
         message: "Test trigger".to_string(),
@@ -135,16 +135,16 @@ async fn test_host_function_calls() {
     };
 
     runner.handle_event(gromnie_client::client::events::ClientEvent::Game(event));
-    
+
     // Check if scripts generated any actions
     let mut action_count = 0;
     while let Ok(action) = action_rx.try_recv() {
         action_count += 1;
         println!("Received action: {:?}", action);
-        
+
         // We can't easily verify specific actions without more complex setup,
         // but we can verify that actions are being generated
     }
-    
+
     println!("Scripts generated {} actions", action_count);
 }

@@ -2,6 +2,7 @@ use asheron_rs::enums::PacketHeaderFlags;
 use asheron_rs::packets::c2s_packet::C2SPacket;
 use gromnie_client::client::C2SPacketExt;
 
+#[allow(dead_code)]
 mod common;
 
 use common::{extract_checksum, extract_size, verify_packet_structure};
