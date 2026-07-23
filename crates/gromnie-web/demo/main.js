@@ -35,6 +35,10 @@ const errorOkBtn = document.getElementById("error-ok");
 
 const STORAGE_KEY = "gromnie-form";
 
+// WISP proxy host — configurable via <meta name="wisp-host">.
+// Falls back to location.host when the meta tag is absent (e.g. local dev).
+const WISP_HOST = document.querySelector('meta[name="wisp-host"]')?.content || location.host;
+
 let GromnieClient = null;
 let client = null;
 let characters = [];
@@ -249,7 +253,7 @@ async function doLogin() {
     selectedCharId = null;
 
     const wsProto = location.protocol === "https:" ? "wss:" : "ws:";
-    const wsUrl = `${wsProto}//${location.host}/wisp/`;
+    const wsUrl = `${wsProto}//${WISP_HOST}/wisp/`;
     log(`connecting to ${wsUrl}...`);
 
     client = new GromnieClient(wsUrl);
@@ -377,7 +381,7 @@ async function loadWasm() {
 
 async function checkProxy() {
   const wsProto = location.protocol === "https:" ? "wss:" : "ws:";
-  const wsUrl = `${wsProto}//${location.host}/wisp/`;
+  const wsUrl = `${wsProto}//${WISP_HOST}/wisp/`;
   try {
     const ws = new WebSocket(wsUrl);
     const ok = await new Promise((resolve) => {
