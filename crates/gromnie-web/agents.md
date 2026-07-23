@@ -5,24 +5,58 @@ This document describes how to build, run, and test `gromnie-web` locally using
 
 ## Architecture
 
-- **gromnie-proxy** — Pure WISP proxy (WebSocket → UDP). Listens on `/` by default.
-- **gromnie-web** — nginx serving the WASM demo static files.
+- **gromnie-proxy** — Pure WISP proxy (WebSocket → UDP). Listens on `/wisp` by default.
+- **gromnie-web** — Vite dev server (or nginx in Docker) serving the WASM demo.
+- **SharedWorker** — Holds `GromnieClient` and the WISP connection. Persists across
+  page reloads so the game connection survives HMR and full reloads.
 
-In **Docker Compose**, the two run as separate containers:
-- `gromnie-web` on host port **8080** (static files)
-- `gromnie-proxy` on host port **8081** (WISP WebSocket)
-- The browser loads the page from nginx, then connects to the proxy directly.
+```
+┌─────────────────┐       postMessage       ┌──────────────────┐
+│   Main Page      │ ◄──────────────────► │   SharedWorker    │
+│  (UI only)       │                        │  (GromnieClient)  │
+│  HTML/CSS/JS     │                        │  WISP connection  │
+└─────────────────┘                        └──────────────────┘
+        │                                          │
+        │  HTTP (Vite or nginx)                    │  WebSocket
+        ▼                                          ▼
+   Dev server ──proxy /wisp──► gromnie-proxy ──UDP──► AC server
+```
 
-For **local dev** (no Docker), the proxy can optionally serve static files with
-`--static-dir` so everything runs on a single port.
+In **Docker Compose**, nginx proxies `/wisp` to the gromnie-proxy container so
+the browser uses a single origin for everything.
+
+For **local dev**, Vite serves the files and proxies `/wisp` to gromnie-proxy.
+
+### HMR-safe file structure
+
+The codebase is split so that UI edits trigger Vite HMR (hot module replacement)
+instead of full page reloads, preserving the SharedWorker connection:
+
+- **`demo/main.js`** — Stable entry point. Creates the SharedWorker and wires
+  up the message handler. **Never edit this file during UI development.**
+- **`demo/ui.js`** — All UI logic (DOM refs, event handlers, rendering).
+  Safe to edit freely — Vite HMRs this module without killing the worker.
+- **`demo/public/worker.js`** — SharedWorker script. Served from `public/`
+  so Vite passes it through untouched (not transformed as a module).
+
+When you edit `ui.js`, Vite sends an HMR update that swaps the module
+without reloading the page. The SharedWorker stays alive and the game
+connection persists. The `main.js` entry point accepts the update via
+`import.meta.hot.accept()` and rebinds the message handler to the new
+module's `handleMessage` function.
+
+**Important:** If you edit `main.js` or `worker.js`, Vite does a full
+page reload, which kills the SharedWorker (standard browser behavior).
+Avoid editing those files during active development sessions.
 
 ## Prerequisites
 
 - Rust toolchain with the `wasm32-unknown-unknown` target
 - `wasm-bindgen-cli` (`cargo install wasm-bindgen-cli`)
-- Node.js (optional, for the headless harness in `demo/harness/`)
+- Node.js (for Vite dev server)
 - Google Chrome or Chromium
 - The `gromnie-proxy` binary (built from `crates/gromnie-proxy`)
+- tmux (for managing dev processes with agents)
 
 ## 1. Build the WASM artifacts
 
@@ -38,8 +72,7 @@ This produces:
 - `crates/gromnie-web/pkg/gromnie_web_bg.wasm`
 - `crates/gromnie-web/pkg/gromnie_web.d.ts`
 
-The demo (`demo/main.js`) imports `../pkg/gromnie_web.js`, so the pkg output
-must exist before the demo can load in a browser.
+The demo imports these via `demo/pkg` (a symlink to `../pkg`).
 
 ## 2. Set up credentials
 
@@ -63,74 +96,93 @@ The `.env` file contains two groups of credentials:
 | `GROMNIE_GAME_ACCOUNT` | Account name for the game server          |
 | `GROMNIE_GAME_PASSWORD` | Password for the game server              |
 
-## 3. Docker Compose (recommended)
-
-The simplest way to run everything locally:
+## 3. Install npm dependencies
 
 ```bash
-# Build and start both containers
+cd crates/gromnie-web && npm install
+```
+
+## 4. Local dev with tmux (recommended)
+
+The easiest way to run the dev environment is with tmux. Create a session with
+named windows for each process:
+
+```bash
+# From repo root — create a tmux session with proxy + vite
+tmux new-session -d -s gromnie-dev -n proxy \
+  "bash -c 'set -a && source crates/gromnie-web/.env && set +a && \
+    cargo run -p gromnie-proxy -- \
+      --listen 127.0.0.1:8081 \
+      --wisp-path /wisp; \
+    read -p \"Press Enter to exit…\"'"
+
+tmux new-window -t gromnie-dev -n vite \
+  "cd crates/gromnie-web && npm run dev; read -p 'Press Enter to exit…'"
+
+tmux attach -t gromnie-dev
+```
+
+This gives you two windows: `proxy` (gromnie-proxy) and `vite` (dev server).
+
+### Managing tmux from an agent
+
+Use `tmux send-keys` and `tmux capture-pane` to interact with the processes:
+
+```bash
+# Check proxy logs
+tmux capture-pane -t gromnie-dev:proxy -p
+
+# Check vite logs
+tmux capture-pane -t gromnie-dev:vite -p
+
+# Send a command to the proxy pane
+tmux send-keys -t gromnie-proxy "some command" Enter
+```
+
+When done:
+
+```bash
+tmux kill-session -t gromnie-dev
+```
+
+## 5. Docker Compose
+
+The simplest way to run everything without local tooling:
+
+```bash
 docker compose up --build -d
 ```
 
 This starts:
 - **gromnie-web** (nginx) on `http://localhost:8080/`
-- **gromnie-proxy** on `ws://localhost:8081/` (no auth — see note below)
+- **gromnie-proxy** on port `8081`
 
-> **Note:** Docker Compose disables proxy auth (`AUTH_ENABLE=false`) because
-> the browser loads the page from nginx (different origin), so no session cookie
-> is set for the proxy. For authenticated proxy access, run the proxy natively
-> with `--static-dir` (see section 4).
+nginx proxies `/wisp` WebSocket connections to the gromnie-proxy container,
+so the browser uses a single origin (`localhost:8080`) for everything.
 
-## 4. Local dev (no Docker)
+## 6. Test with chrome-devtools-mcp
 
-Build and run the proxy with static file serving on a single port:
-
-```bash
-# Build (once)
-cargo build -p gromnie-proxy
-
-# Start the proxy (sources .env for AUTH_* and game credentials)
-bash -c 'set -a && source crates/gromnie-web/.env && set +a && \
-  ./target/debug/gromnie-proxy \
-    --listen 127.0.0.1:8080 \
-    --wisp-path / \
-    --static-dir crates/gromnie-web'
-```
-
-The proxy logs should show:
+### Local dev (Vite)
 
 ```
-INFO gromnie_proxy: basic auth enabled user=<AUTH_USER>
-INFO gromnie_proxy: listening listen=127.0.0.1:8080 wisp_path=/
+chrome-mcp__navigate_page url="http://localhost:5173/demo/"
 ```
-
-## 5. Test with chrome-devtools-mcp
 
 ### Docker Compose
 
-Navigate to the demo (no auth needed):
-
 ```
 chrome-mcp__navigate_page url="http://localhost:8080/"
-```
-
-### Local dev (with auth)
-
-Embed proxy credentials in the URL:
-
-```
-chrome-mcp__navigate_page url="http://<AUTH_USER>:<AUTH_PASSWORD>@127.0.0.1:8080/"
 ```
 
 ### Step-by-step MCP tool calls
 
-#### 5a. Navigate to the demo
+#### 6a. Navigate to the demo
 
 ```
-chrome-mcp__navigate_page url="http://localhost:8080/"
+chrome-mcp__navigate_page url="http://localhost:5173/demo/"
 ```
 
-#### 5b. Verify the page loaded
+#### 6b. Verify the page loaded
 
 Take a snapshot and check the status bar:
 
@@ -140,11 +192,12 @@ chrome-mcp__take_snapshot
 
 Expected:
 - **WASM** status: `ready`
-- **Proxy** status: `reachable` (Docker) or `reachable` (local dev with auth)
+- **Proxy** status: `reachable`
 - Log shows: `wasm loaded from ./pkg/index.mjs`
-- Log shows: `proxy ws://...: reachable`
+- Log shows: `proxy: reachable`
+- Log shows: `worker: not connected` (initial state)
 
-#### 5c. Fill in the login form
+#### 6c. Fill in the login form
 
 Use the game-server credentials from `.env` (`GROMNIE_GAME_HOST`,
 `GROMNIE_GAME_PORT`, `GROMNIE_GAME_ACCOUNT`, `GROMNIE_GAME_PASSWORD`).
@@ -160,7 +213,7 @@ chrome-mcp__fill_form elements=[
 ]
 ```
 
-#### 5d. Click Login
+#### 6d. Click Login
 
 ```
 chrome-mcp__click uid="<login-button-uid>"
@@ -169,7 +222,7 @@ chrome-mcp__click uid="<login-button-uid>"
 Expected log output:
 
 ```
-connecting to ws://...
+connecting to play.coldeve.ac:9000...
 connected and login sent, waiting for server response...
 event: game:CharacterListReceived { account: "<GROMNIE_GAME_ACCOUNT>", characters: [...], num_slots: 11 }
 found N character(s)
@@ -178,7 +231,7 @@ found N character(s)
 The character-select view should appear with a list of characters and an
 **Enter World** button.
 
-#### 5e. Enter the world (optional)
+#### 6e. Enter the world (optional)
 
 Click the first character in the list, then click **Enter World**:
 
@@ -199,7 +252,22 @@ event: game:CreatePlayer { character_id: <id> }
 
 The world view should appear with a chat input and message area.
 
-#### 5f. Check for errors
+#### 6f. Test reload preservation
+
+Reload the page and verify the SharedWorker reconnects:
+
+```
+chrome-mcp__navigate_page type="reload"
+chrome-mcp__take_snapshot
+```
+
+Expected:
+- Log shows: `worker: reconnected to existing session`
+- If in world: world view is restored with character name
+- If at character select: character list is restored
+- **No need to re-enter credentials or re-login**
+
+#### 6g. Check for errors
 
 ```
 chrome-mcp__list_console_messages types=["error", "warn"]
@@ -208,7 +276,7 @@ chrome-mcp__list_console_messages types=["error", "warn"]
 A `404` for `favicon.ico` is expected and harmless. A warning about
 `sleep(1s) is a no-op on WASM` is also expected.
 
-## 6. Headless harness (alternative)
+## 7. Headless harness (alternative)
 
 For CI or automated runs without chrome-devtools-mcp, use the built-in
 headless harness:
@@ -222,32 +290,44 @@ This serves the project root, launches headless Chrome, and asserts that the
 WASM module loads. Add `--scenario=connect-flow` to test the connect + open
 TCP/UDP flow.
 
-## 7. Quick reference
+## 8. Quick reference
+
+### Local dev (tmux)
+
+```bash
+# Start the dev environment
+tmux new-session -d -s gromnie-dev -n proxy \
+  "bash -c 'set -a && source crates/gromnie-web/.env && set +a && \
+    cargo run -p gromnie-proxy -- --listen 127.0.0.1:8081 --wisp-path /wisp; \
+    read'"
+
+tmux new-window -t gromnie-dev -n vite \
+  "cd crates/gromnie-web && npm run dev; read"
+
+tmux attach -t gromnie-dev
+
+# In Chrome: http://localhost:5173/demo/
+```
 
 ### Docker Compose
 
 ```bash
 docker compose up --build -d
 # Web: http://localhost:8080/
-# Proxy: ws://localhost:8081/
+# Proxy: port 8081 (internal, proxied through nginx)
 ```
 
-### Local dev
+### Local dev (manual, without tmux)
 
 ```bash
-# 1. Build WASM
+# Terminal 1: build + run proxy
 cargo xtask web build
-
-# 2. Build proxy
 cargo build -p gromnie-proxy
-
-# 3. Start proxy with static files (sources .env)
 bash -c 'set -a && source crates/gromnie-web/.env && set +a && \
-  ./target/debug/gromnie-proxy --listen 127.0.0.1:8080 --wisp-path / --static-dir crates/gromnie-web'
+  ./target/debug/gromnie-proxy --listen 127.0.0.1:8081 --wisp-path /wisp'
 
-# 4. In Chrome (via chrome-devtools-mcp):
-#    - Navigate to http://<AUTH_USER>:<AUTH_PASSWORD>@127.0.0.1:8080/
-#    - Fill form with GROMNIE_GAME_* credentials
-#    - Click Login → observe character list
-#    - Click Enter World → observe game events
+# Terminal 2: Vite dev server
+cd crates/gromnie-web && npm run dev
+
+# Open: http://localhost:5173/demo/
 ```

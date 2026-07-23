@@ -39,30 +39,28 @@ RUN --mount=type=cache,target=$CARGO_HOME/registry,sharing=locked \
 # ── Runtime: static file server ───────────────────────────────────────
 FROM nginx:1.27-alpine
 
-# Default WISP proxy host (overridden via WISP_HOST env var at runtime).
-ENV WISP_HOST=gromnie-proxy:8080
 ARG GIT_SHA=dev
 ENV GIT_SHA=${GIT_SHA}
 
-# Copy demo files and generated pkg/ directory. The index.html still contains
-# the __WISP_HOST__ placeholder, which the entrypoint replaces at startup.
+# Copy demo files and generated pkg/ directory.
 COPY --from=builder /app/crates/gromnie-web/demo/index.html /usr/share/nginx/html/index.html
-COPY --from=builder /app/crates/gromnie-web/demo/main.js  /usr/share/nginx/html/main.js
-COPY --from=builder /app/crates/gromnie-web/pkg/           /usr/share/nginx/html/pkg/
+COPY --from=builder /app/crates/gromnie-web/demo/main.js    /usr/share/nginx/html/main.js
+COPY --from=builder /app/crates/gromnie-web/demo/ui.js      /usr/share/nginx/html/ui.js
+COPY --from=builder /app/crates/gromnie-web/demo/public/worker.js  /usr/share/nginx/html/worker.js
+COPY --from=builder /app/crates/gromnie-web/pkg/            /usr/share/nginx/html/pkg/
 
-# Entrypoint wrapper: substitute __WISP_HOST__ with the env var, then
+# Entrypoint wrapper: substitute __GIT_SHA__ in static files, then
 # hand off to the standard nginx entrypoint.
-COPY <<'ENTRYPINT' /usr/local/bin/entrypoint.sh
+COPY <<'ENTRYPOINT' /usr/local/bin/entrypoint.sh
 #!/bin/sh
-sed -i "s/__WISP_HOST__/${WISP_HOST}/g" /usr/share/nginx/html/index.html
 sed -i "s/__GIT_SHA__/${GIT_SHA}/g" /usr/share/nginx/html/index.html
 sed -i "s/__GIT_SHA__/${GIT_SHA}/g" /usr/share/nginx/html/main.js
 exec /docker-entrypoint.sh nginx -g 'daemon off;'
-ENTRYPINT
+ENTRYPOINT
 RUN chmod +x /usr/local/bin/entrypoint.sh
 ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
 
-# Replace default config with one that listens on 8080 (matches Dokku port mapping).
+# Replace default config: listen on 8080, proxy /wisp to gromnie-proxy.
 # Remove the IPv6 entrypoint script that would revert our port change.
 RUN rm -f /docker-entrypoint.d/10-listen-on-ipv6-by-default.sh && \
     rm -f /etc/nginx/conf.d/default.conf && \
@@ -79,6 +77,14 @@ server {
     }
     location / {
         try_files $uri $uri/ =404;
+    }
+    location /wisp {
+        proxy_pass http://gromnie-proxy:8081;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header Host $host;
+        proxy_read_timeout 86400;
     }
 }
 EOF
