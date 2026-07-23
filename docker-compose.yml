@@ -11,7 +11,7 @@ services:
       - crates/gromnie-web/.env
     environment:
       - GROMNIE_LISTEN=0.0.0.0:8081
-      - AUTH_ENABLE=false
+      - AUTH_ENABLE=true
 
   gromnie-web:
     build:
@@ -21,5 +21,8 @@ services:
         - GIT_SHA
     ports:
       - "8080:8080"
+    environment:
+      - PROXY_SCHEME=http
+      - PROXY_UPSTREAM=gromnie-proxy:8081
     depends_on:
       - gromnie-proxy

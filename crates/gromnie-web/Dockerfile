@@ -58,7 +58,7 @@ COPY --from=builder /app/crates/gromnie-web/pkg/            /usr/share/nginx/htm
 # then hand off to the standard nginx entrypoint.
 COPY <<'ENTRYPOINT' /usr/local/bin/entrypoint.sh
 #!/bin/sh
-envsubst '${PROXY_UPSTREAM}' < /etc/nginx/conf.d/default.conf.template > /etc/nginx/conf.d/default.conf
+envsubst '${PROXY_SCHEME} ${PROXY_UPSTREAM}' < /etc/nginx/conf.d/default.conf.template > /etc/nginx/conf.d/default.conf
 sed -i "s/__GIT_SHA__/${GIT_SHA}/g" /usr/share/nginx/html/index.html
 sed -i "s/__GIT_SHA__/${GIT_SHA}/g" /usr/share/nginx/html/main.js
 sed -i "s/__GIT_SHA__/${GIT_SHA}/g" /usr/share/nginx/html/components/status-bar.js
@@ -86,13 +86,17 @@ server {
         try_files $uri $uri/ =404;
     }
     location /auth {
-        proxy_pass https://${PROXY_UPSTREAM};
+        resolver 127.0.0.11 valid=10s ipv6=off;
+        set $upstream_url ${PROXY_SCHEME}://${PROXY_UPSTREAM};
+        proxy_pass $upstream_url;
         proxy_http_version 1.1;
         proxy_set_header Host $host;
         proxy_ssl_server_name on;
     }
     location /wisp {
-        proxy_pass https://${PROXY_UPSTREAM};
+        resolver 127.0.0.11 valid=10s ipv6=off;
+        set $upstream_url ${PROXY_SCHEME}://${PROXY_UPSTREAM};
+        proxy_pass $upstream_url;
         proxy_http_version 1.1;
         proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection "upgrade";
