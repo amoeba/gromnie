@@ -44,8 +44,20 @@ COPY --from=builder /app/crates/gromnie-web/demo/index.html /usr/share/nginx/htm
 COPY --from=builder /app/crates/gromnie-web/demo/main.js  /usr/share/nginx/html/main.js
 COPY --from=builder /app/crates/gromnie-web/pkg/           /usr/share/nginx/html/pkg/
 
-# nginx listens on 8080 to match Dokku's port mapping
-RUN sed -i 's/listen 80;/listen 8080;/' /etc/nginx/conf.d/default.conf && \
-    sed -i 's/listen \[::\]:80;/listen [::]:8080;/' /etc/nginx/conf.d/default.conf
+# Replace default config with one that listens on 8080 (matches Dokku port mapping).
+# Remove the IPv6 entrypoint script that would revert our port change.
+RUN rm -f /docker-entrypoint.d/10-listen-on-ipv6-by-default.sh && \
+    rm -f /etc/nginx/conf.d/default.conf && \
+    cat > /etc/nginx/conf.d/default.conf <<'EOF'
+server {
+    listen 8080;
+    server_name _;
+    root /usr/share/nginx/html;
+    index index.html;
+    location / {
+        try_files $uri $uri/ =404;
+    }
+}
+EOF
 
 EXPOSE 8080
