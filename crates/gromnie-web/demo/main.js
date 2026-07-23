@@ -206,6 +206,7 @@ port.onmessage = (e) => {
       inWorld = true;
       worldView.clearChat();
       worldView.setCharName(msg.charName);
+      worldView.setExitEnabled(true);
       showView(worldViewContainer);
       worldView.focusInput();
       break;
@@ -216,6 +217,7 @@ port.onmessage = (e) => {
     case "disconnected":
       loginForm.setLoginEnabled(true);
       charSelect.setEnterEnabled(false);
+      worldView.setExitEnabled(false);
       characters = [];
       selectedCharId = null;
       inWorld = false;

@@ -60,7 +60,7 @@ TEMPLATE.innerHTML = `
     <button id="chat-send">Send</button>
   </div>
   <div class="actions">
-    <button id="exit-world">Exit World</button>
+    <button id="exit-world" disabled>Exit World</button>
   </div>
 `;
 
@@ -95,6 +95,10 @@ class GromnieWorldView extends HTMLElement {
 
   setCharName(name) {
     this._charNameEl.textContent = name;
+  }
+
+  setExitEnabled(enabled) {
+    this._exitBtn.disabled = !enabled;
   }
 
   clearChat() {
