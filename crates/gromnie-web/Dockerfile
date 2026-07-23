@@ -61,6 +61,7 @@ COPY <<'ENTRYPOINT' /usr/local/bin/entrypoint.sh
 envsubst '${PROXY_UPSTREAM}' < /etc/nginx/conf.d/default.conf.template > /etc/nginx/conf.d/default.conf
 sed -i "s/__GIT_SHA__/${GIT_SHA}/g" /usr/share/nginx/html/index.html
 sed -i "s/__GIT_SHA__/${GIT_SHA}/g" /usr/share/nginx/html/main.js
+sed -i "s/__GIT_SHA__/${GIT_SHA}/g" /usr/share/nginx/html/components/status-bar.js
 exec /docker-entrypoint.sh nginx -g 'daemon off;'
 ENTRYPOINT
 RUN chmod +x /usr/local/bin/entrypoint.sh
@@ -85,16 +86,18 @@ server {
         try_files $uri $uri/ =404;
     }
     location /auth {
-        proxy_pass http://${PROXY_UPSTREAM};
+        proxy_pass https://${PROXY_UPSTREAM};
         proxy_http_version 1.1;
         proxy_set_header Host $host;
+        proxy_ssl_server_name on;
     }
     location /wisp {
-        proxy_pass http://${PROXY_UPSTREAM};
+        proxy_pass https://${PROXY_UPSTREAM};
         proxy_http_version 1.1;
         proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection "upgrade";
         proxy_set_header Host $host;
+        proxy_ssl_server_name on;
         proxy_read_timeout 86400;
     }
 }
