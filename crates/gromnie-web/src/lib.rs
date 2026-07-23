@@ -43,12 +43,12 @@ pub(crate) struct ClientState {
 
 #[derive(Error, Debug)]
 enum WebSocketTransportError {
-    #[error("websocket error: {0}")]
-    Unknown(String),
-    #[error("websocket send failed: {0}")]
-    SendFailed(String),
-    #[error("websocket close failed: {0}")]
-    CloseFailed(String),
+    #[error("websocket error: {0:?}")]
+    Unknown(JsValue),
+    #[error("websocket send failed: {0:?}")]
+    SendFailed(JsValue),
+    #[error("websocket close failed: {0:?}")]
+    CloseFailed(JsValue),
 }
 
 impl From<WebSocketTransportError> for WispError {
@@ -204,9 +204,7 @@ fn register_callbacks(
     let onerror_tx = read_tx;
     let onerror_shared = shared.clone();
     let onerror = Closure::wrap(Box::new(move |e| {
-        let _ = onerror_tx.send(WebSocketMessage::Error(WebSocketTransportError::Unknown(
-            format!("{e:?}"),
-        )));
+        let _ = onerror_tx.send(WebSocketMessage::Error(WebSocketTransportError::Unknown(e)));
         onerror_shared.set_state(WsState::Error);
     }) as Box<dyn Fn(JsValue)>);
 
@@ -278,7 +276,7 @@ impl BrowserWebSocketTransport {
             |this, item| {
                 Box::pin(async move {
                     this.inner.send_with_u8_array(&item).map_err(|err| {
-                        WispError::from(WebSocketTransportError::SendFailed(format!("{err:?}")))
+                        WispError::from(WebSocketTransportError::SendFailed(err))
                     })?;
                     Ok(this)
                 })
@@ -292,7 +290,7 @@ impl BrowserWebSocketTransport {
                     ws.set_onmessage(None);
                     shared.set_state(WsState::Closed);
                     ws.close().map_err(|err| {
-                        WispError::from(WebSocketTransportError::CloseFailed(format!("{err:?}")))
+                        WispError::from(WebSocketTransportError::CloseFailed(err))
                     })
                 })
             },

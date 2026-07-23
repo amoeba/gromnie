@@ -29,7 +29,7 @@ Both crates implement their own WebSocket-to-WISP transport adapters from scratc
 | 2.6 | `ClientState` stores `mux` and `streams` separately | Low | web | — | ⏳ Pending |
 | 2.7 | `GromnieWispClient` exposes `state` as `pub(crate)` | Low | web | — | ⏳ Pending |
 | 2.8 | `WispVersionPolicy` enum could be a bool | Very Low | web | Trivial | ✅ Done |
-| 2.9 | `WebSocketTransportError` wraps errors as `String` | Low | web | Low | ⏳ Pending |
+| 2.9 | `WebSocketTransportError` wraps errors as `String` | Low | web | Low | ✅ Done |
 | 2.10 | `util.rs` is a single 6-line function | Very Low | web | — | ⏳ Pending |
 | 3.1 | Both crates reimplement WebSocket-to-WISP transport adapters | High | cross-cutting | High | ✅ Done |
 | 3.2 | Both crates use the same WISP handshake configuration | Low | cross-cutting | Trivial | ✅ Done |
@@ -339,6 +339,8 @@ enum WebSocketTransportError {
 ```
 
 All variants just wrap a `String`. This loses the original error type. Using `Box<dyn std::error::Error>` or a proper error enum would be more idiomatic, though in a wasm context `String` is often sufficient for JS interop.
+
+**Resolution:** Replaced `String` with `JsValue` in all three variants (`Unknown`, `SendFailed`, `CloseFailed`). This preserves the original JavaScript error value instead of converting it to a string via `format!("{e:?}")`. The `#[error]` attributes use `{0:?}` since `JsValue` implements `Debug` but not `Display`. Call sites updated to pass `JsValue` directly instead of formatting it to a string first.
 
 ### 2.10. `util.rs` is a single 6-line function
 
