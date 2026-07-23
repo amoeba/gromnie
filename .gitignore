@@ -2,3 +2,4 @@
 gromnie-proxy.log
 .env
 *.local
+crates/gromnie-web/pkg
