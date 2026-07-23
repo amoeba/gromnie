@@ -158,9 +158,7 @@ impl WasmClient {
 
         // 3-4. Take the stream and create WISP UDP transport
         let net_log = self.on_net_log.clone();
-        let transport = wisp_client
-            .create_udp_transport(stream_id, net_log)
-            .await?;
+        let transport = wisp_client.create_udp_transport(stream_id, net_log).await?;
 
         web_sys::console::log_1(&"[wasm] step 5: creating event channel".into());
 

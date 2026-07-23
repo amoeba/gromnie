@@ -275,9 +275,9 @@ impl BrowserWebSocketTransport {
             self,
             |this, item| {
                 Box::pin(async move {
-                    this.inner.send_with_u8_array(&item).map_err(|err| {
-                        WispError::from(WebSocketTransportError::SendFailed(err))
-                    })?;
+                    this.inner
+                        .send_with_u8_array(&item)
+                        .map_err(|err| WispError::from(WebSocketTransportError::SendFailed(err)))?;
                     Ok(this)
                 })
             },
@@ -289,9 +289,8 @@ impl BrowserWebSocketTransport {
                     ws.set_onerror(None);
                     ws.set_onmessage(None);
                     shared.set_state(WsState::Closed);
-                    ws.close().map_err(|err| {
-                        WispError::from(WebSocketTransportError::CloseFailed(err))
-                    })
+                    ws.close()
+                        .map_err(|err| WispError::from(WebSocketTransportError::CloseFailed(err)))
                 })
             },
         ))
