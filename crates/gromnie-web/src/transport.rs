@@ -23,12 +23,7 @@ pub(crate) fn format_net_entry(dir: &str, channel: &str, bytes: &[u8]) -> String
     if bytes.len() >= 8 {
         let seq = u32::from_le_bytes([bytes[0], bytes[1], bytes[2], bytes[3]]);
         let flags = u32::from_le_bytes([bytes[4], bytes[5], bytes[6], bytes[7]]);
-        let hex: String = bytes
-            .iter()
-            .take(32)
-            .map(|b| format!("{:02x}", b))
-            .collect::<Vec<_>>()
-            .join(" ");
+        let hex = gromnie_wisp::hex_preview(bytes, 32);
         let ellipsis = if bytes.len() > 32 { " ..." } else { "" };
         format!(
             "[{}] {} seq={} flags=0x{:08X} len={} | {}{}",
@@ -41,11 +36,7 @@ pub(crate) fn format_net_entry(dir: &str, channel: &str, bytes: &[u8]) -> String
             ellipsis
         )
     } else {
-        let hex: String = bytes
-            .iter()
-            .map(|b| format!("{:02x}", b))
-            .collect::<Vec<_>>()
-            .join(" ");
+        let hex = gromnie_wisp::hex_preview(bytes, usize::MAX);
         format!("[{}] {} len={} | {}", dir, channel, bytes.len(), hex)
     }
 }

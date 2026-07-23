@@ -18,7 +18,7 @@ Both crates implement their own WebSocket-to-WISP transport adapters from scratc
 | 1.4 | `DefaultHasher` for session secret derivation | Low | proxy | Low | ✅ Done |
 | 1.5 | Manual cookie parsing instead of using `cookie` crate | Low | proxy | Low | ✅ Done |
 | 1.6 | Empty `AppState` struct | Low | proxy | Trivial | ✅ Done |
-| 1.7 | Duplicated hex formatting | Low | both | Trivial | ⏳ Pending |
+| 1.7 | Duplicated hex formatting | Low | both | Trivial | ✅ Done |
 | 1.8 | `handle_stream` uses `futures::StreamExt::split` with manual channel management | Low | proxy | Medium | ⏳ Pending |
 | 1.9 | `tokio-tungstenite` in proxy `[dependencies]` instead of `[dev-dependencies]` | Low | proxy | Trivial | ✅ Done (fixed by 1.1) |
 | 2.1 | `BrowserWebSocketTransport` reimplements wisp-mux's transport helpers | High | web | Medium | ✅ Done |
@@ -33,7 +33,7 @@ Both crates implement their own WebSocket-to-WISP transport adapters from scratc
 | 2.10 | `util.rs` is a single 6-line function | Very Low | web | — | ⏳ Pending |
 | 3.1 | Both crates reimplement WebSocket-to-WISP transport adapters | High | cross-cutting | High | ✅ Done |
 | 3.2 | Both crates use the same WISP handshake configuration | Low | cross-cutting | Trivial | ✅ Done |
-| 3.3 | Both crates have debug hex formatting | Low | cross-cutting | Trivial | ⏳ Pending |
+| 3.3 | Both crates have debug hex formatting | Low | cross-cutting | Trivial | ✅ Done |
 | 3.4 | `gromnie-web` depends on `gromnie-client` with `wasm` feature | Informational | web | — | ⏳ Pending |
 
 ---
@@ -171,6 +171,8 @@ let hex_preview: String = payload
 This exact pattern appears twice. It should be a helper function.
 
 **Recommendation:** Extract a `fn hex_preview(bytes: &[u8], max: usize) -> String` helper.
+
+**Resolution:** Added `hex_preview()` to the `gromnie-wisp` shared crate. Both the proxy (`handle_stream`, two call sites) and the web crate (`format_net_entry`, two branches) now use this shared helper instead of duplicating the `iter().take(max).map(|b| format!("{:02x}", b)).collect::<Vec<_>>().join(" ")` pattern.
 
 ### 1.8. `handle_stream` uses `futures::StreamExt::split` with manual channel management
 
@@ -390,6 +392,8 @@ Both crates format hex previews for logging:
 
 A shared `hex_preview` utility would eliminate this.
 
+**Resolution:** Added `hex_preview()` to the `gromnie-wisp` shared crate and used it in both the proxy (`handle_stream`, two call sites) and the web crate (`format_net_entry`, two branches). This eliminates the duplicated `iter().take(max).map(|b| format!("{:02x}", b)).collect::<Vec<_>>().join(" ")` pattern across both crates.
+
 ### 3.4. `gromnie-web` depends on `gromnie-client` with `wasm` feature
 
 **Severity: Informational**
@@ -412,7 +416,7 @@ However, the `WasmClient::connect` method manually orchestrates the client lifec
 | **Low** | `DefaultHasher` for session secret derivation | proxy | Low | ✅ Done |
 | **Low** | Manual cookie parsing instead of using `cookie` crate | proxy | Low | ✅ Done |
 | **Low** | Empty `AppState` struct | proxy | Trivial | ✅ Done |
-| **Low** | Duplicated hex formatting | both | Trivial | ⏳ Pending |
+| **Low** | Duplicated hex formatting | both | Trivial | ✅ Done |
 | **Low** | Duplicated WISP handshake construction | both | Trivial | ✅ Done |
 | **Low** | `WasmClient::connect` is a 130-line method doing 9 things | web | Medium | ✅ Done |
 | **Low** | `WispVersionPolicy` enum could be a bool | web | Trivial | ⏳ Pending |

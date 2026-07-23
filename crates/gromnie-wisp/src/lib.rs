@@ -20,3 +20,16 @@ pub fn default_wisp_handshake() -> WispV2Handshake {
         UdpProtocolExtensionBuilder,
     )])
 }
+
+/// Format a byte slice as a space-separated hex string, truncated to `max` bytes.
+///
+/// This is used by both `gromnie-proxy` and `gromnie-web` for debug logging
+/// of WISP/UDP packets, eliminating duplicated hex formatting logic.
+pub fn hex_preview(bytes: &[u8], max: usize) -> String {
+    bytes
+        .iter()
+        .take(max)
+        .map(|b| format!("{:02x}", b))
+        .collect::<Vec<_>>()
+        .join(" ")
+}

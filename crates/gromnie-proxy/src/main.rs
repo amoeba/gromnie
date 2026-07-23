@@ -436,12 +436,7 @@ async fn handle_stream<W: wisp_mux::ws::TransportWrite>(
             match StreamExt::next(&mut stream_rx).await {
                 Some(Ok(payload)) => {
                     pkt_count += 1;
-                    let hex_preview: String = payload
-                        .iter()
-                        .take(20)
-                        .map(|b| format!("{:02x}", b))
-                        .collect::<Vec<_>>()
-                        .join(" ");
+                    let hex_preview = gromnie_wisp::hex_preview(&payload, 20);
                     info!(%game_addr, len = payload.len(), pkt_count, "WISP -> UDP: forwarding {} bytes | {}", payload.len(), hex_preview);
                     if let Err(e) = game_socket_write.send(&payload).await {
                         error!(%game_addr, "udp send error: {e}");
@@ -469,7 +464,7 @@ async fn handle_stream<W: wisp_mux::ws::TransportWrite>(
                 result = game_socket_read.recv_from(&mut buf) => {
                     match result {
                         Ok((len, src)) => {
-                            let hex_preview: String = buf[..len].iter().take(20).map(|b| format!("{:02x}", b)).collect::<Vec<_>>().join(" ");
+                            let hex_preview = gromnie_wisp::hex_preview(&buf[..len], 20);
                             info!(%game_addr, len, %src, "UDP -> WISP: received {} bytes from game server | {}", len, hex_preview);
                             let data = Bytes::copy_from_slice(&buf[..len]);
                             if let Err(e) = stream_tx.send(data).await {
