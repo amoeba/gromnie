@@ -25,16 +25,16 @@ Both crates implement their own WebSocket-to-WISP transport adapters from scratc
 | 2.2 | `WispUdpTransport::recv` dual-stream select loop is overly complex | Medium | web | Medium | ✅ Done |
 | 2.3 | `format_net_entry` duplicates hex formatting logic | Low | web | Trivial | ✅ Done |
 | 2.4 | `WasmClient::connect` is a 130-line method doing 9 things | Low | web | Medium | ✅ Done |
-| 2.5 | `WispUdpTransport` stores `SendWrapper` for all fields | Low | web | — | ⏳ Pending |
-| 2.6 | `ClientState` stores `mux` and `streams` separately | Low | web | — | ⏳ Pending |
+| 2.5 | `WispUdpTransport` stores `SendWrapper` for all fields | Low | web | — | ✅ Done |
+| 2.6 | `ClientState` stores `mux` and `streams` separately | Low | web | — | ✅ Done |
 | 2.7 | `GromnieWispClient` exposes `state` as `pub(crate)` | Low | web | — | ✅ Done |
 | 2.8 | `WispVersionPolicy` enum could be a bool | Very Low | web | Trivial | ✅ Done |
 | 2.9 | `WebSocketTransportError` wraps errors as `String` | Low | web | Low | ✅ Done |
-| 2.10 | `util.rs` is a single 6-line function | Very Low | web | — | ⏳ Pending |
+| 2.10 | `util.rs` is a single 6-line function | Very Low | web | — | ✅ Done |
 | 3.1 | Both crates reimplement WebSocket-to-WISP transport adapters | High | cross-cutting | High | ✅ Done |
 | 3.2 | Both crates use the same WISP handshake configuration | Low | cross-cutting | Trivial | ✅ Done |
 | 3.3 | Both crates have debug hex formatting | Low | cross-cutting | Trivial | ✅ Done |
-| 3.4 | `gromnie-web` depends on `gromnie-client` with `wasm` feature | Informational | web | — | ⏳ Pending |
+| 3.4 | `gromnie-web` depends on `gromnie-client` with `wasm` feature | Informational | web | — | ✅ Done |
 
 ---
 
@@ -279,6 +279,8 @@ pub struct WispUdpTransport {
 
 The `ClientTransport` trait requires `Send + Sync`, but the transport holds non-`Send` types (due to `web_sys::WebSocket`). Using `SendWrapper` is the correct approach, but it means the transport can never be used from multiple threads. This is inherent to the WASM/browser environment, so it's not a bug, but worth noting.
 
+**Resolution:** No code change needed. `SendWrapper` is the correct and only viable approach for storing non-`Send` types (like `web_sys::WebSocket` and `js_sys::Function`) behind a `Send + Sync` trait (`ClientTransport`). In a WASM environment, all code runs on a single thread, so the `Send` requirement is satisfied by `SendWrapper`'s unsafe impl. This is a fundamental constraint of the browser environment, not a design flaw.
+
 ### 2.6. `ClientState` stores `mux` and `streams` separately, leading to potential inconsistency
 
 **Severity: Low — design**
@@ -292,6 +294,8 @@ pub(crate) struct ClientState {
 ```
 
 The `mux` is stored in `ClientState` (in `lib.rs`), and `WispUdpTransport` also stores a `streams` HashMap. When `take_stream` is called, the stream is removed from `ClientState.streams` but `WispUdpTransport` has its own copy. This works because `WispUdpTransport` is constructed with the stream before it's removed from `ClientState`, but it's a bit fragile — the two stores are not kept in sync.
+
+**Resolution:** No code change needed. The two stores serve different purposes: `ClientState.streams` (keyed by `u32` stream ID) manages the stream lifecycle in `GromnieWispClient`, while `WispUdpTransport.streams` (keyed by `TransportChannel` Login/World) is used for send/recv routing. The "transfer" pattern (take from `ClientState`, pass to `WispUdpTransport`) is intentional — `take_stream` removes the stream from `ClientState` and ownership transfers to `WispUdpTransport`. The `create_udp_transport` method (item 2.7) now encapsulates this transfer, making the ownership semantics clearer.
 
 ### 2.7. `GromnieWispClient` exposes `state` as `pub(crate)`
 
@@ -356,6 +360,8 @@ pub(crate) fn js_error(err: impl std::fmt::Display) -> JsValue {
 
 This is used in both `lib.rs` and `client.rs`. It's fine as a utility, but it's so small it could be inlined or kept as-is. Not a real issue.
 
+**Resolution:** No code change needed. The `js_error` utility is appropriately extracted as a shared helper — it's used in multiple modules and provides a clear, consistent conversion from `Display` errors to `JsValue`. Inlining would duplicate the logic.
+
 ---
 
 ## 3. Cross-cutting Issues
@@ -413,6 +419,8 @@ A shared `hex_preview` utility would eliminate this.
 The web crate correctly depends on `gromnie-client` with `default-features = false, features = ["wasm"]`, which means it uses the wasm-compatible `Client` constructor (`new_with_transport`) and the `js_sys::Date`-based time in `send_timesync`. This is good — the web crate properly reuses the core client logic rather than reimplementing the AC protocol.
 
 However, the `WasmClient::connect` method manually orchestrates the client lifecycle (create client, call `do_login`, spawn recv loop, spawn event forwarder) rather than using any higher-level helper from `gromnie-client`. If `gromnie-client` had a `run()` or `run_with_transport()` method that encapsulated this loop, the web crate would be significantly simpler.
+
+**Resolution:** No code change needed. The manual orchestration is necessary because the WASM environment requires `spawn_local` (not `tokio::spawn`) and the recv loop uses `js_sys::Date` for keepalive timing. The `gromnie-client` crate's `Client` is designed to be driven by an external runner, and the `WasmClient::connect` method serves as that runner for the browser environment. The recv loop and event forwarder have been extracted into standalone functions (item 2.4), making the orchestration clearer.
 
 ---
 
