@@ -107,23 +107,9 @@ async function doDisconnect() {
   inWorld = false;
 }
 
-async function checkProxy() {
-  if (!wispUrl) {
-    wispUrl = `ws://${self.location.host}/wisp`;
-  }
-  try {
-    const resp = await fetch(`//${self.location.host}/auth`);
-    if (resp.ok) {
-      broadcast({ type: "proxy_status", status: "reachable" });
-    } else if (resp.status === 401) {
-      broadcast({ type: "proxy_status", status: "auth required" });
-    } else {
-      broadcast({ type: "proxy_status", status: "unreachable" });
-    }
-  } catch {
-    broadcast({ type: "proxy_status", status: "unreachable" });
-  }
-}
+// Proxy health check is now done in main.js (page context) to avoid
+// Cloudflare caching issues with SharedWorker fetch.
+async function checkProxy() {}
 
 async function initWasm() {
   try {

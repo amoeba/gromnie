@@ -180,17 +180,8 @@ port.onmessage = (e) => {
       }
       break;
 
-    case "proxy_status": {
-      const state =
-        msg.status === "reachable"
-          ? "ok"
-          : msg.status === "auth required"
-            ? "warn"
-            : "err";
-      statusBar.setStatus("proxy", msg.status, state);
-      logViewer.log(`proxy: ${msg.status}`);
-      break;
-    }
+    // proxy_status is handled by checkProxy() in page context (not worker)
+    // to avoid Cloudflare caching issues with SharedWorker fetch.
 
     case "state":
       restoreState(msg);
@@ -246,5 +237,27 @@ port.onmessage = (e) => {
   }
 };
 
-// Init: request state from worker
+// Proxy health check (runs in page context, not SharedWorker, to avoid
+// Cloudflare caching issues with SharedWorker fetch).
+async function checkProxy() {
+  try {
+    const resp = await fetch("/auth", { cache: "no-store", credentials: "include" });
+    if (resp.ok) {
+      statusBar.setStatus("proxy", "reachable", "ok");
+      logViewer.log("proxy: reachable");
+    } else if (resp.status === 401) {
+      statusBar.setStatus("proxy", "auth required", "warn");
+      logViewer.log("proxy: auth required");
+    } else {
+      statusBar.setStatus("proxy", "unreachable", "err");
+      logViewer.log("proxy: unreachable");
+    }
+  } catch {
+    statusBar.setStatus("proxy", "unreachable", "err");
+    logViewer.log("proxy: unreachable");
+  }
+}
+
+// Init: request state from worker, then check proxy
 port.postMessage({ type: "get_state" });
+checkProxy();
