@@ -81,3 +81,29 @@ event has a `type` field that discriminates the variant:
 
 The WISP-over-WebSocket transport layer (`GromnieWispClient`) is an internal
 implementation detail of `GromnieClient`. It is not exported to JavaScript.
+
+## Network architecture
+
+```
+Browser (WASM) ──wss──▶ Cloudflare ──▶ nginx (gromnie) ──ws──▶ gromnie-proxy ──UDP──▶ AC server
+                         TLS term.      static files            WISP protocol
+                         CDN            WebSocket proxy
+```
+
+**Why nginx proxies WebSocket connections:**
+
+- gromnie-proxy runs on an internal Docker network, not exposed to the internet
+- Single-origin policy: browser serves from `gromnie.treestats.net`, proxy is a
+  separate container — cross-origin direct connection not viable
+- TLS is terminated by Cloudflare; nginx listens on plain HTTP
+- nginx serves static files (HTML/JS/WASM) and proxies `/wisp` to the proxy
+
+The WebSocket upgrade is end-to-end between browser and gromnie-proxy. nginx is
+transparent after the initial HTTP handshake — it passes bytes through. The
+`proxy_pass` uses a literal hostname (resolved at nginx startup from
+`/etc/hosts` via Docker's `--add-host`), avoiding runtime DNS resolution
+failures on the default bridge network.
+
+**Docker networking:** Both containers run on Dokku. The web container uses
+`--add-host=gromnie-proxy:<ip>` to resolve the proxy by hostname. The proxy's
+IP is set at deploy time and is stable across container restarts.
