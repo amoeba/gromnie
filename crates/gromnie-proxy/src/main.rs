@@ -28,7 +28,7 @@ struct Args {
     #[arg(long, default_value = "0.0.0.0:8080", env = "GROMNIE_LISTEN")]
     listen: SocketAddr,
 
-    #[arg(long, default_value = "/")]
+    #[arg(long, default_value = "/wisp")]
     wisp_path: String,
 
     #[arg(long)]
