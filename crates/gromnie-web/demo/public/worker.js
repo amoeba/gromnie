@@ -76,7 +76,8 @@ async function doConnect(host, port, account, password) {
   if (client) throw new Error("already connected");
 
   if (!wispUrl) {
-    wispUrl = `ws://${self.location.host}/wisp`;
+    const protocol = self.location.protocol === "https:" ? "wss:" : "ws:";
+    wispUrl = `${protocol}//${self.location.host}/wisp`;
   }
 
   client = new GromnieClient(wispUrl);
