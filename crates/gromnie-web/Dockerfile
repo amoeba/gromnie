@@ -44,7 +44,7 @@ ENV GIT_SHA=${GIT_SHA}
 
 # Proxy upstream — defaults to Docker Compose service name, override for
 # Dokku / external deployments (e.g. gromnie-proxy.treestats.net).
-ENV PROXY_UPSTREAM=gromnie-proxy:8081
+ENV PROXY_UPSTREAM=gromnie-proxy:8080
 
 # Copy demo files and generated pkg/ directory.
 COPY --from=builder /app/crates/gromnie-web/demo/index.html /usr/share/nginx/html/index.html
@@ -86,14 +86,11 @@ server {
         try_files $uri $uri/ =404;
     }
     location /wisp {
-        resolver 127.0.0.11 valid=10s ipv6=off;
-        set $upstream_url ${PROXY_SCHEME}://${PROXY_UPSTREAM};
-        proxy_pass $upstream_url;
+        proxy_pass ${PROXY_SCHEME}://${PROXY_UPSTREAM};
         proxy_http_version 1.1;
         proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection "upgrade";
         proxy_set_header Host $host;
-        proxy_ssl_server_name on;
         proxy_read_timeout 86400;
     }
 }
