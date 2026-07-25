@@ -7,11 +7,8 @@ services:
         - GIT_SHA
     ports:
       - "8081:8081"
-    env_file:
-      - crates/gromnie-web/.env
     environment:
       - GROMNIE_LISTEN=0.0.0.0:8081
-      - AUTH_ENABLE=true
 
   gromnie-web:
     build:

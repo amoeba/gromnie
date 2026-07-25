@@ -85,14 +85,6 @@ server {
     location / {
         try_files $uri $uri/ =404;
     }
-    location /auth {
-        resolver 127.0.0.11 valid=10s ipv6=off;
-        set $upstream_url ${PROXY_SCHEME}://${PROXY_UPSTREAM};
-        proxy_pass $upstream_url;
-        proxy_http_version 1.1;
-        proxy_set_header Host $host;
-        proxy_ssl_server_name on;
-    }
     location /wisp {
         resolver 127.0.0.11 valid=10s ipv6=off;
         set $upstream_url ${PROXY_SCHEME}://${PROXY_UPSTREAM};

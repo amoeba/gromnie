@@ -241,13 +241,10 @@ port.onmessage = (e) => {
 // Cloudflare caching issues with SharedWorker fetch).
 async function checkProxy() {
   try {
-    const resp = await fetch("/auth", { cache: "no-store", credentials: "include" });
+    const resp = await fetch("/", { method: "HEAD", cache: "no-store" });
     if (resp.ok) {
       statusBar.setStatus("proxy", "reachable", "ok");
       logViewer.log("proxy: reachable");
-    } else if (resp.status === 401) {
-      statusBar.setStatus("proxy", "auth required", "warn");
-      logViewer.log("proxy: auth required");
     } else {
       statusBar.setStatus("proxy", "unreachable", "err");
       logViewer.log("proxy: unreachable");
