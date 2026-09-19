@@ -1,37 +1,23 @@
 # gromnie
 
-**gromnie is a headless [Asheron's Call](https://en.wikipedia.org/wiki/Asheron%27s_Call) game
-client written in Rust.**
+gromnie is a headless, cross-platform [Asheron's Call](https://en.wikipedia.org/wiki/Asheron%27s_Call) game
+client written in Rust. gromnie depends heavily on [asheron-rs](https://github.com/amoeba/asheron-rs), my AC protocol and .dat library (also in Rust).
 
-It implements the AC network protocol in Rust — the authentication and login handshake,
-character selection, world entry, and dispatch of the server-to-client message and game-event
-streams — without driving the retail graphical client. A reusable client library sits at the
-core, with a terminal UI, a WASM scripting runtime, a Discord bot, a load tester, and a
-browser/WebSocket transport built on top.
+## Background
+
+gromnie started as an attempt to port parad0x's [actestclient](https://github.com/paradoxlost/actestclient) to Rust back in early 2024. At that point, I was only able to get login working. Then, around the time GPT 3.5 came out, I was able to continue making headway on features.
+
+gromnie wouldn't have been possible without existing sources like actestclient, trevis' various libraries, and the ACE source.
 
 ## Features
 
-1. **Headless protocol client** — `gromnie-client` implements the login/auth handshake,
-   character selection, world entry, and server-to-client message dispatch using
-   [`asheron-rs`](https://github.com/amoeba/asheron-rs) message types.
-2. **Pluggable event consumers** — `gromnie-events` and `gromnie-runner` deliver game, protocol,
-   state, and system events to consumers such as the TUI, logging, stats, auto-login, Discord,
-   and scripts.
-3. **WASM scripting** — scripts compile to WASM components and run in Wasmtime; they receive
-   typed events, read client-state snapshots, and send actions (`SendChatSay`, `SendChatTell`,
-   `LoginCharacter`, `DoMovementCommand`, `StopMovementCommand`, `Disconnect`, …) back to the
-   client. Supports hot reload and per-script execution timeouts.
-4. **Terminal UI** — the `tui` binary is an interactive `ratatui` client.
-5. **Headless CLI** — the `cli` binary runs the client without a UI.
-6. **Discord bot** — the `discord-bot` binary forwards messages between a Discord channel and
-   in-game chat.
-7. **Load testing** — the `load-tester` binary spawns many concurrent clients against a server
-   and reports aggregate stats.
-8. **Browser client** — `gromnie-web` compiles the client to WASM via `wasm-bindgen` and
-   tunnels UDP over WebSockets.
-9. **WISP proxy** — `gromnie-proxy` provides the WISP-over-WebSocket → UDP bridge used by the
-   browser client.
-10. **Cross-platform** — CI runs the test suite on Linux, macOS, and Windows.
+1. Headless client library for use in other projects
+2. Wasm-based scripting system with hot reload (`gromnie-scripting`)
+3. Basic CLI client (`gromnie-cli`)
+3. Basic TUI client (`gromnie-tui`)
+4. Discord bot (`discord-bot`)
+5. Load tester (`load-tester`) for spawning potentially infinite clients at once.
+6. Browser client with UDP proxy.
 
 ## Project layout
 
@@ -78,7 +64,7 @@ For the browser path, UDP is tunneled over a WebSocket:
 Browser (WASM) ──wss──▶ reverse proxy ──▶ gromnie-proxy ──UDP──▶ AC server
 ```
 
-## Getting a dev environment up
+## Development
 
 ### Prerequisites
 
@@ -258,19 +244,6 @@ Auto-fix formatting and lints:
 cargo fmt
 cargo clippy --all-targets --all-features --fix --allow-dirty
 ```
-
-### Guidelines
-
-- Match the existing style; `cargo fmt` and clippy must be clean.
-- Keep changes focused; prefer small, reviewable PRs.
-- Update documentation when behavior or public APIs change. Relevant docs:
-  - [`docs/scripting.md`](docs/scripting.md) — scripting API
-  - [`docs/acnetworkprotocol.md`](docs/acnetworkprotocol.md) — protocol notes
-  - [`ASYNC.md`](ASYNC.md) — async WASM scripting design
-  - [`agents.md`](agents.md) — instructions for AI agents
-- AI agents working in this repo should read [`agents.md`](agents.md) and the crate-specific
-  [`crates/gromnie-web/agents.md`](crates/gromnie-web/agents.md).
-
 ## Acknowledgements
 
 - Protocol types and wire format are provided by
