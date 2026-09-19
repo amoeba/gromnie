@@ -3,25 +3,35 @@
 **gromnie is a headless [Asheron's Call](https://en.wikipedia.org/wiki/Asheron%27s_Call) game
 client written in Rust.**
 
-It speaks the AC network protocol directly (rather than driving the retail client), so it can
-log in, select a character, enter the world, and observe or react to the full server event
-stream without a graphical client. On top of that core it ships a terminal UI, a scriptable
-event system powered by WASM, a Discord bot, a load tester, and a WISP proxy that lets the
-client run in a browser.
+It implements the AC network protocol in Rust — the authentication and login handshake,
+character selection, world entry, and dispatch of the server-to-client message and game-event
+streams — without driving the retail graphical client. A reusable client library sits at the
+core, with a terminal UI, a WASM scripting runtime, a Discord bot, a load tester, and a
+browser/WebSocket transport built on top.
 
-## Highlights
+## Features
 
-- **Headless protocol client** — implements login, world entry, and the server-to-client
-  message stream using [`asheron-rs`](https://github.com/amoeba/asheron-rs) protocol types.
-- **Terminal UI** — a full interactive client (`tui`) built with `ratatui`.
-- **Scripting** — sandboxed WASM components (Wasmtime) can respond to strongly-typed game
-  events, query client state, and send actions back to the client. Hot reload included.
-- **Multi-client / load testing** — run many clients concurrently against a server and collect
-  stats.
-- **Discord integration** — bridge in-game chat and a Discord channel.
-- **Browser client** — `gromnie-web` compiles the client to WASM and tunnels UDP over
-  WebSockets via the WISP proxy, so it can run in a browser.
-- **Cross-platform** — developed on macOS/Linux/Windows; CI tests all three.
+1. **Headless protocol client** — `gromnie-client` implements the login/auth handshake,
+   character selection, world entry, and server-to-client message dispatch using
+   [`asheron-rs`](https://github.com/amoeba/asheron-rs) message types.
+2. **Pluggable event consumers** — `gromnie-events` and `gromnie-runner` deliver game, protocol,
+   state, and system events to consumers such as the TUI, logging, stats, auto-login, Discord,
+   and scripts.
+3. **WASM scripting** — scripts compile to WASM components and run in Wasmtime; they receive
+   typed events, read client-state snapshots, and send actions (`SendChatSay`, `SendChatTell`,
+   `LoginCharacter`, `DoMovementCommand`, `StopMovementCommand`, `Disconnect`, …) back to the
+   client. Supports hot reload and per-script execution timeouts.
+4. **Terminal UI** — the `tui` binary is an interactive `ratatui` client.
+5. **Headless CLI** — the `cli` binary runs the client without a UI.
+6. **Discord bot** — the `discord-bot` binary forwards messages between a Discord channel and
+   in-game chat.
+7. **Load testing** — the `load-tester` binary spawns many concurrent clients against a server
+   and reports aggregate stats.
+8. **Browser client** — `gromnie-web` compiles the client to WASM via `wasm-bindgen` and
+   tunnels UDP over WebSockets.
+9. **WISP proxy** — `gromnie-proxy` provides the WISP-over-WebSocket → UDP bridge used by the
+   browser client.
+10. **Cross-platform** — CI runs the test suite on Linux, macOS, and Windows.
 
 ## Project layout
 
