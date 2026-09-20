@@ -107,3 +107,59 @@ jobs:
 
       - name: Run integration tests
         run: cargo test --workspace --test '*' --all-features
+
+  ios:
+    name: iOS app
+    runs-on: macos-latest
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain with iOS targets
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-ios,aarch64-apple-ios-sim,x86_64-apple-ios
+
+      - name: Cache dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry/index
+            ~/.cargo/registry/cache
+            ~/.cargo/git/db
+            target/
+          key: ${{ runner.os }}-cargo-ios-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-ios-
+
+      - name: Install cbindgen
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cbindgen
+
+      - name: Install xcodegen
+        run: brew install xcodegen
+
+      - name: Build the Rust core and XCFramework
+        run: cargo xtask ios build-core
+
+      - name: Generate the Xcode project
+        working-directory: ios/Gromnie
+        run: xcodegen generate
+
+      - name: Build the app for the simulator
+        working-directory: ios/Gromnie
+        run: |
+          xcodebuild -project Gromnie.xcodeproj -scheme Gromnie \
+            -destination 'generic/platform=iOS Simulator' \
+            CODE_SIGNING_ALLOWED=NO build
+
+      - name: Run the app unit tests
+        working-directory: ios/Gromnie
+        run: |
+          DEVICE=$(xcrun simctl list devices available -j \
+            | jq -r '[.devices[][] | select(.name | startswith("iPhone"))][0].udid')
+          echo "Using simulator $DEVICE"
+          xcodebuild -project Gromnie.xcodeproj -scheme Gromnie \
+            -destination "platform=iOS Simulator,id=$DEVICE" \
+            CODE_SIGNING_ALLOWED=NO test
