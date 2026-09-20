@@ -71,6 +71,9 @@ public final class GromnieCoreClient: @unchecked Sendable {
         // Keep every mutation of `session`, `continuation`, and `isPolling`
         // confined to the serial queue.
         let stream: AsyncStream<BridgeEvent> = try queue.sync {
+            self.isPolling = false
+            self.continuation?.finish()
+            self.continuation = nil
             destroyLocked()
             guard let session = gromnie_session_create() else {
                 throw GromnieCoreError.internalError

@@ -10,7 +10,13 @@ struct RootView: View {
         case .characters:
             CharacterListView()
         case .enteringWorld:
-            ProgressView("Entering world…")
+            VStack(spacing: 16) {
+                ProgressView("Entering world…")
+                Button("Disconnect") {
+                    session.disconnect()
+                }
+                .accessibilityIdentifier("disconnectButton")
+            }
         case .chat:
             ChatView()
         }

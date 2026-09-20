@@ -18,6 +18,9 @@ const EVENT_CAPACITY: usize = 4_096;
 /// bridge event queue; a burst larger than this between two actor iterations
 /// (50 ms) can still drop raw events, which is acceptable for a chat-only v1.
 const RAW_EVENT_CAPACITY: usize = 4_096;
+/// The client does not retransmit `CharacterEnterWorldRequest`, so give up if
+/// the character login is not acknowledged within this window.
+const ENTER_WORLD_TIMEOUT: Duration = Duration::from_secs(20);
 
 #[derive(Debug)]
 pub enum Command {
@@ -154,6 +157,7 @@ async fn run_client(
 
     let mut character_names = HashMap::new();
     let mut last_keepalive = tokio::time::Instant::now();
+    let mut entering_world_since: Option<tokio::time::Instant> = None;
     let mut buffer = [0_u8; 65_536];
     let mut user_initiated = false;
     let terminal_reason = 'session: loop {
@@ -211,6 +215,7 @@ async fn run_client(
                     if let Err(error) = client.send_pending_messages().await {
                         emitter.error("network", error.to_string(), "characters");
                     } else {
+                        entering_world_since = Some(tokio::time::Instant::now());
                         emitter.emit(BridgeEventKind::EnteringWorld { character_id });
                     }
                 }
@@ -245,6 +250,16 @@ async fn run_client(
         }
 
         while let Ok(event) = raw_events.try_recv() {
+            if matches!(
+                event,
+                ClientEvent::Game(
+                    SimpleGameEvent::LoginSucceeded { .. }
+                        | SimpleGameEvent::CharacterError { .. }
+                        | SimpleGameEvent::LoginFailed { .. }
+                )
+            ) {
+                entering_world_since = None;
+            }
             forward_event(emitter, event, &mut character_names);
         }
 
@@ -253,6 +268,19 @@ async fn run_client(
         // the final drain below forwards it before the terminal event.
         if client.check_state_timeout() {
             break 'session "connection timed out".to_string();
+        }
+
+        // A dropped `EnterWorldRequest`/`LoginCreatePlayer` would otherwise
+        // leave the UI on "Entering world…" forever.
+        if let Some(since) = entering_world_since
+            && since.elapsed() >= ENTER_WORLD_TIMEOUT
+        {
+            emitter.error(
+                "character",
+                "The server did not respond to the character login.".to_string(),
+                "characters",
+            );
+            break 'session "entering world timed out".to_string();
         }
 
         // If the initial LoginRequest was lost, retry it like the native

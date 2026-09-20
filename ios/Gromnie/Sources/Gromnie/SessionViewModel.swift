@@ -203,7 +203,8 @@ final class SessionViewModel: ObservableObject {
         let invalid = CharacterSet(charactersIn: ":/[] ")
         guard host.rangeOfCharacter(from: invalid) == nil else { return false }
         return host.allSatisfy { character in
-            character.isLetter || character.isNumber || character == "." || character == "-"
+            (character.isASCII && (character.isLetter || character.isNumber))
+                || character == "." || character == "-"
         }
     }
 }
