@@ -6,6 +6,7 @@ use std::{
 };
 
 use gromnie_client::client::{Client, ClientEvent};
+use gromnie_client::transport::NativeUdpTransport;
 use gromnie_events::{ClientSystemEvent, SimpleClientAction, SimpleGameEvent};
 use tokio::sync::mpsc::{Receiver as CommandReceiver, Sender as CommandSender};
 
@@ -49,22 +50,39 @@ fn run(
     command_rx: CommandReceiver<Command>,
     event_tx: SyncSender<BridgeEvent>,
 ) {
+    let mut emitter = Emitter::new(event_tx);
     let runtime = match tokio::runtime::Builder::new_current_thread()
         .enable_all()
         .build()
     {
         Ok(runtime) => runtime,
         Err(error) => {
-            let mut emitter = Emitter::new(event_tx);
             emitter.error("runtime", error.to_string(), "form");
             emitter.disconnected("failed to start Rust runtime".to_string(), false);
             return;
         }
     };
 
-    runtime.block_on(run_client(
-        host, port, username, password, command_rx, event_tx,
-    ));
+    // A panic anywhere in the client loop must still produce a terminal event so
+    // Swift never waits forever on a dead actor.
+    let outcome = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        runtime.block_on(run_client(
+            host,
+            port,
+            username,
+            password,
+            command_rx,
+            &mut emitter,
+        ));
+    }));
+    if outcome.is_err() {
+        emitter.error(
+            "internal",
+            "The session actor stopped unexpectedly.".to_string(),
+            "form",
+        );
+        emitter.disconnected("internal session error".to_string(), false);
+    }
 }
 
 async fn run_client(
@@ -73,14 +91,21 @@ async fn run_client(
     username: String,
     password: String,
     mut command_rx: CommandReceiver<Command>,
-    event_tx: SyncSender<BridgeEvent>,
+    emitter: &mut Emitter,
 ) {
-    let mut emitter = Emitter::new(event_tx);
     emitter.emit(BridgeEventKind::Connecting);
 
     let (event_sender, mut raw_events) = tokio::sync::mpsc::channel(1_024);
     let address = format!("{host}:{port}");
-    let (mut client, action_tx) = Client::new(
+    let transport = match NativeUdpTransport::bind_ephemeral().await {
+        Ok(transport) => transport,
+        Err(error) => {
+            emitter.error("network", error.to_string(), "form");
+            emitter.disconnected("could not open a UDP socket".to_string(), false);
+            return;
+        }
+    };
+    let (mut client, action_tx) = Client::new_with_transport(
         1,
         address,
         username.clone(),
@@ -88,6 +113,7 @@ async fn run_client(
         None,
         event_sender,
         false,
+        Box::new(transport),
     )
     .await;
 
@@ -190,7 +216,7 @@ async fn run_client(
         }
 
         while let Ok(event) = raw_events.try_recv() {
-            forward_event(&mut emitter, event, &mut character_names);
+            forward_event(emitter, event, &mut character_names);
         }
 
         if last_keepalive.elapsed() >= Duration::from_secs(5) {
