@@ -1,0 +1,4 @@
+module GromnieCore {
+    header "gromnie_ios.h"
+    export *
+}
