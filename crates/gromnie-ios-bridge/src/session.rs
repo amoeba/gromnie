@@ -13,6 +13,11 @@ use tokio::sync::mpsc::{Receiver as CommandReceiver, Sender as CommandSender};
 use crate::event::{BridgeEvent, BridgeEventKind, Character};
 const COMMAND_CAPACITY: usize = 1_024;
 const EVENT_CAPACITY: usize = 4_096;
+/// `gromnie-client` publishes raw events with `try_send`, so this buffer is the
+/// only protection against drops before the actor forwards them. It matches the
+/// bridge event queue; a burst larger than this between two actor iterations
+/// (50 ms) can still drop raw events, which is acceptable for a chat-only v1.
+const RAW_EVENT_CAPACITY: usize = 4_096;
 
 #[derive(Debug)]
 pub enum Command {
@@ -116,7 +121,7 @@ async fn run_client(
 ) {
     emitter.emit(BridgeEventKind::Connecting);
 
-    let (event_sender, mut raw_events) = tokio::sync::mpsc::channel(1_024);
+    let (event_sender, mut raw_events) = tokio::sync::mpsc::channel(RAW_EVENT_CAPACITY);
     let address = format!("{host}:{port}");
     let transport: Box<dyn ClientTransport> = match transport {
         Some(transport) => transport,
