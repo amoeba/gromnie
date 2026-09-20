@@ -6,7 +6,7 @@ use std::{
 };
 
 use gromnie_client::client::{Client, ClientEvent};
-use gromnie_client::transport::NativeUdpTransport;
+use gromnie_client::transport::{ClientTransport, NativeUdpTransport};
 use gromnie_events::{ClientSystemEvent, SimpleClientAction, SimpleGameEvent};
 use tokio::sync::mpsc::{Receiver as CommandReceiver, Sender as CommandSender};
 
@@ -28,11 +28,29 @@ pub struct RunningSession {
 }
 
 pub fn start(host: String, port: u16, username: String, password: String) -> RunningSession {
+    start_with_transport(host, port, username, password, None)
+}
+
+/// Start a session with an explicitly supplied transport.
+///
+/// Production code passes `None` so the actor binds a native UDP socket; tests
+/// pass a fake transport to drive the actor without a network.
+pub fn start_with_transport(
+    host: String,
+    port: u16,
+    username: String,
+    password: String,
+    transport: Option<Box<dyn ClientTransport>>,
+) -> RunningSession {
     let (command_tx, command_rx) = tokio::sync::mpsc::channel(COMMAND_CAPACITY);
     let (event_tx, event_rx) = mpsc::sync_channel(EVENT_CAPACITY);
     let worker = thread::Builder::new()
         .name("gromnie-ios-session".to_string())
-        .spawn(move || run(host, port, username, password, command_rx, event_tx))
+        .spawn(move || {
+            run(
+                host, port, username, password, command_rx, event_tx, transport,
+            )
+        })
         .expect("failed to create gromnie session thread");
 
     RunningSession {
@@ -49,6 +67,7 @@ fn run(
     password: String,
     command_rx: CommandReceiver<Command>,
     event_tx: SyncSender<BridgeEvent>,
+    transport: Option<Box<dyn ClientTransport>>,
 ) {
     let mut emitter = Emitter::new(event_tx);
     let runtime = match tokio::runtime::Builder::new_current_thread()
@@ -73,6 +92,7 @@ fn run(
             password,
             command_rx,
             &mut emitter,
+            transport,
         ));
     }));
     if outcome.is_err() {
@@ -92,18 +112,22 @@ async fn run_client(
     password: String,
     mut command_rx: CommandReceiver<Command>,
     emitter: &mut Emitter,
+    transport: Option<Box<dyn ClientTransport>>,
 ) {
     emitter.emit(BridgeEventKind::Connecting);
 
     let (event_sender, mut raw_events) = tokio::sync::mpsc::channel(1_024);
     let address = format!("{host}:{port}");
-    let transport = match NativeUdpTransport::bind_ephemeral().await {
-        Ok(transport) => transport,
-        Err(error) => {
-            emitter.error("network", error.to_string(), "form");
-            emitter.disconnected("could not open a UDP socket".to_string(), false);
-            return;
-        }
+    let transport: Box<dyn ClientTransport> = match transport {
+        Some(transport) => transport,
+        None => match NativeUdpTransport::bind_ephemeral().await {
+            Ok(transport) => Box::new(transport),
+            Err(error) => {
+                emitter.error("network", error.to_string(), "form");
+                emitter.disconnected("could not open a UDP socket".to_string(), false);
+                return;
+            }
+        },
     };
     let (mut client, action_tx) = Client::new_with_transport(
         1,
@@ -113,7 +137,7 @@ async fn run_client(
         None,
         event_sender,
         false,
-        Box::new(transport),
+        transport,
     )
     .await;
 
@@ -328,5 +352,309 @@ impl Emitter {
             reason,
             user_initiated,
         });
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use gromnie_client::client::ServerInfo;
+    use gromnie_client::transport::{TransportChannel, TransportFuture};
+    use gromnie_events::ClientStateEvent;
+    use std::net::SocketAddr;
+
+    /// A transport that accepts outgoing packets but fails every receive, which
+    /// exercises the actor's fatal-error path without a network.
+    struct FailingTransport;
+
+    impl ClientTransport for FailingTransport {
+        fn send<'a>(
+            &'a mut self,
+            _server: &'a ServerInfo,
+            _channel: TransportChannel,
+            _bytes: Vec<u8>,
+        ) -> TransportFuture<'a, ()> {
+            Box::pin(async { Ok(()) })
+        }
+
+        fn recv<'a>(&'a mut self, _buf: &'a mut [u8]) -> TransportFuture<'a, (usize, SocketAddr)> {
+            Box::pin(async {
+                Err(std::io::Error::new(
+                    std::io::ErrorKind::ConnectionReset,
+                    "fake transport failure",
+                ))
+            })
+        }
+    }
+
+    /// A transport that accepts outgoing packets and never delivers one, so the
+    /// actor idles until it is told to disconnect.
+    struct PendingTransport;
+
+    impl ClientTransport for PendingTransport {
+        fn send<'a>(
+            &'a mut self,
+            _server: &'a ServerInfo,
+            _channel: TransportChannel,
+            _bytes: Vec<u8>,
+        ) -> TransportFuture<'a, ()> {
+            Box::pin(async { Ok(()) })
+        }
+
+        fn recv<'a>(&'a mut self, _buf: &'a mut [u8]) -> TransportFuture<'a, (usize, SocketAddr)> {
+            Box::pin(std::future::pending::<
+                Result<(usize, SocketAddr), std::io::Error>,
+            >())
+        }
+    }
+
+    fn emitter_pair() -> (Emitter, Receiver<BridgeEvent>) {
+        let (tx, rx) = mpsc::sync_channel(EVENT_CAPACITY);
+        (Emitter::new(tx), rx)
+    }
+
+    fn character(id: u32, name: &str) -> asheron_rs::types::CharacterIdentity {
+        asheron_rs::types::CharacterIdentity {
+            character_id: asheron_rs::types::ObjectId(id),
+            name: name.to_string(),
+            seconds_greyed_out: 0,
+        }
+    }
+
+    fn collect_until_terminal(rx: &Receiver<BridgeEvent>) -> Vec<BridgeEvent> {
+        let mut events = Vec::new();
+        while let Ok(event) = rx.recv_timeout(Duration::from_secs(5)) {
+            let terminal = matches!(event.kind, BridgeEventKind::Disconnected { .. });
+            events.push(event);
+            if terminal {
+                break;
+            }
+        }
+        events
+    }
+
+    fn terminal_count(events: &[BridgeEvent]) -> usize {
+        events
+            .iter()
+            .filter(|event| matches!(event.kind, BridgeEventKind::Disconnected { .. }))
+            .count()
+    }
+
+    #[test]
+    fn forward_event_maps_character_list_and_records_names() {
+        let (mut emitter, rx) = emitter_pair();
+        let mut names = HashMap::new();
+        forward_event(
+            &mut emitter,
+            ClientEvent::Game(SimpleGameEvent::CharacterListReceived {
+                account: "acct".to_string(),
+                characters: vec![character(1, "Alice"), character(2, "Bob")],
+                num_slots: 5,
+            }),
+            &mut names,
+        );
+
+        match rx.try_recv().expect("expected a characters event").kind {
+            BridgeEventKind::Characters {
+                account,
+                slots,
+                characters,
+            } => {
+                assert_eq!(account, "acct");
+                assert_eq!(slots, 5);
+                assert_eq!(characters.len(), 2);
+                assert_eq!(characters[0].id, 1);
+                assert_eq!(characters[0].name, "Alice");
+            }
+            other => panic!("unexpected event: {other:?}"),
+        }
+        assert_eq!(names.get(&1).map(String::as_str), Some("Alice"));
+        assert_eq!(names.get(&2).map(String::as_str), Some("Bob"));
+        assert!(rx.try_recv().is_err(), "only one event should be emitted");
+    }
+
+    #[test]
+    fn forward_event_maps_login_succeeded_to_entered_world() {
+        let (mut emitter, rx) = emitter_pair();
+        let mut names = HashMap::new();
+        forward_event(
+            &mut emitter,
+            ClientEvent::Game(SimpleGameEvent::LoginSucceeded {
+                character_id: 7,
+                character_name: "Alice".to_string(),
+            }),
+            &mut names,
+        );
+
+        match rx.try_recv().expect("expected an entered_world event").kind {
+            BridgeEventKind::EnteredWorld {
+                character_id,
+                character_name,
+            } => {
+                assert_eq!(character_id, 7);
+                assert_eq!(character_name, "Alice");
+            }
+            other => panic!("unexpected event: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn forward_event_maps_chat() {
+        let (mut emitter, rx) = emitter_pair();
+        let mut names = HashMap::new();
+        forward_event(
+            &mut emitter,
+            ClientEvent::Game(SimpleGameEvent::ChatMessageReceived {
+                message: "hello".to_string(),
+                message_type: 2,
+            }),
+            &mut names,
+        );
+
+        match rx.try_recv().expect("expected a chat event").kind {
+            BridgeEventKind::Chat {
+                message,
+                message_type,
+            } => {
+                assert_eq!(message, "hello");
+                assert_eq!(message_type, 2);
+            }
+            other => panic!("unexpected event: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn forward_event_routes_failures_to_the_right_screen() {
+        let cases = [
+            (
+                ClientEvent::Game(SimpleGameEvent::LoginFailed {
+                    reason: "nope".to_string(),
+                }),
+                "login",
+                "characters",
+            ),
+            (
+                ClientEvent::Game(SimpleGameEvent::CharacterError {
+                    error_code: 1,
+                    error_message: "bad".to_string(),
+                }),
+                "character",
+                "characters",
+            ),
+            (
+                ClientEvent::System(ClientSystemEvent::AuthenticationFailed {
+                    reason: "bad".to_string(),
+                }),
+                "authentication",
+                "form",
+            ),
+        ];
+
+        for (event, code, recover_to) in cases {
+            let (mut emitter, rx) = emitter_pair();
+            let mut names = HashMap::new();
+            forward_event(&mut emitter, event, &mut names);
+
+            match rx.try_recv().expect("expected an error event").kind {
+                BridgeEventKind::Error {
+                    code: actual_code,
+                    recover_to: actual_recover,
+                    ..
+                } => {
+                    assert_eq!(actual_code, code);
+                    assert_eq!(actual_recover, recover_to);
+                }
+                other => panic!("unexpected event: {other:?}"),
+            }
+        }
+    }
+
+    #[test]
+    fn forward_event_ignores_unmapped_events() {
+        let (mut emitter, rx) = emitter_pair();
+        let mut names = HashMap::new();
+        forward_event(
+            &mut emitter,
+            ClientEvent::State(ClientStateEvent::InWorld),
+            &mut names,
+        );
+        assert!(rx.try_recv().is_err());
+    }
+
+    #[test]
+    fn emitter_sequences_events_monotonically() {
+        let (mut emitter, rx) = emitter_pair();
+        emitter.emit(BridgeEventKind::Connecting);
+        emitter.disconnected("done".to_string(), true);
+
+        let first = rx.try_recv().unwrap();
+        let second = rx.try_recv().unwrap();
+        assert_eq!(first.sequence, 1);
+        assert_eq!(second.sequence, 2);
+        assert!(second.timestamp_ms >= first.timestamp_ms);
+    }
+
+    #[test]
+    fn actor_reports_transport_failure_then_one_terminal_event() {
+        let session = start_with_transport(
+            "127.0.0.1".to_string(),
+            9000,
+            "acct".to_string(),
+            "pw".to_string(),
+            Some(Box::new(FailingTransport)),
+        );
+
+        let events = collect_until_terminal(&session.event_rx);
+        session.worker.join().unwrap();
+
+        assert!(matches!(
+            events.first().map(|event| &event.kind),
+            Some(BridgeEventKind::Connecting)
+        ));
+        assert!(
+            events
+                .iter()
+                .any(|event| matches!(event.kind, BridgeEventKind::Error { .. })),
+            "a fatal transport error must surface as an error event"
+        );
+        assert_eq!(terminal_count(&events), 1);
+        assert!(matches!(
+            events.last().map(|event| &event.kind),
+            Some(BridgeEventKind::Disconnected {
+                user_initiated: false,
+                ..
+            })
+        ));
+    }
+
+    #[test]
+    fn actor_disconnect_command_emits_one_terminal_event() {
+        let session = start_with_transport(
+            "127.0.0.1".to_string(),
+            9000,
+            "acct".to_string(),
+            "pw".to_string(),
+            Some(Box::new(PendingTransport)),
+        );
+
+        let first = session
+            .event_rx
+            .recv_timeout(Duration::from_secs(5))
+            .expect("expected a connecting event");
+        assert!(matches!(first.kind, BridgeEventKind::Connecting));
+
+        session.command_tx.try_send(Command::Disconnect).unwrap();
+
+        let events = collect_until_terminal(&session.event_rx);
+        session.worker.join().unwrap();
+
+        assert_eq!(terminal_count(&events), 1);
+        assert!(matches!(
+            events.last().map(|event| &event.kind),
+            Some(BridgeEventKind::Disconnected {
+                user_initiated: true,
+                ..
+            })
+        ));
     }
 }

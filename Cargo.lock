@@ -1311,6 +1311,7 @@ dependencies = [
 name = "gromnie-ios-bridge"
 version = "0.1.0"
 dependencies = [
+ "asheron-rs",
  "gromnie-client",
  "gromnie-events",
  "serde",
