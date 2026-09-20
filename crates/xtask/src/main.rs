@@ -78,6 +78,19 @@ fn require_command(command: &str, install_hint: &str) -> Result<()> {
     }
 }
 
+/// Verify that a tool is installed without assuming it supports a version flag.
+///
+/// `lipo`, for example, has no `--version`/`-version` flag and exits non-zero
+/// for both, so only the ability to spawn the binary is checked.
+fn require_binary(command: &str, install_hint: &str) -> Result<()> {
+    match Command::new(command).arg("-help").output() {
+        Ok(_) => Ok(()),
+        Err(_) => Err(anyhow::anyhow!(
+            "{command} is required. Install it with: {install_hint}"
+        )),
+    }
+}
+
 fn build_ios_core() -> Result<()> {
     const IOS_TARGETS: [&str; 3] = [
         "aarch64-apple-ios",
@@ -91,7 +104,7 @@ fn build_ios_core() -> Result<()> {
         "xcodebuild",
         "install the full Xcode app and run xcode-select --switch",
     )?;
-    require_command(
+    require_binary(
         "lipo",
         "install the full Xcode app and run xcode-select --switch",
     )?;
