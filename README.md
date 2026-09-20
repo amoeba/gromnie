@@ -1,7 +1,7 @@
 # gromnie
 
 gromnie is a headless, cross-platform [Asheron's Call](https://en.wikipedia.org/wiki/Asheron%27s_Call) game
-client written in Rust. gromnie depends heavily on [asheron-rs](https://github.com/amoeba/asheron-rs), my AC protocol and .dat library (also in Rust).
+client written in Rust. gromnie depends heavily on [asheron-rs](https://github.com/amoeba/asheron-rs), my AC protocol and .dat library (also in Rust). gromnie does not require dat files.
 
 ## Background
 
