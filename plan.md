@@ -22,12 +22,14 @@ Swift is not a reimplementation of Gromnie. Rust retains all AC protocol parsing
 - [x] Verified the bridge's minimal `gromnie-client` dependency build and added `cargo xtask ios build-core` to generate the header and XCFramework.
 - [x] Installed `aarch64-apple-ios`, `aarch64-apple-ios-sim`, `x86_64-apple-ios`, and `cbindgen` 0.29.4.
 - [x] Ran the packaging command through header generation; the checked-in C header is reproducible.
-  - **Corrected by review:** not reproducible. cbindgen emits `typedef struct gromnie_session_t { Mutex<SessionState> inner; }` and `typedef struct SessionState SessionState;`, not the committed opaque header. The xtask also overwrites the header instead of diffing it. See Review findings.
+  - **Corrected by review:** not reproducible at the time. Fixed in `88138e7`: the handle is now opaque to cbindgen, the committed header is regenerated from it, and the xtask fails if it drifts. See Review findings status below.
 - [x] `cargo check` passes for all three iOS targets without linking.
-- [ ] Install full Xcode and select it with `xcode-select`, then run and validate the remaining XCFramework build steps.
-- [ ] Add the Swift/Xcode wrapper and three SwiftUI screens after an iOS artifact can be produced.
+- [x] Installed full Xcode 27.0 and validated the whole XCFramework build via `DEVELOPER_DIR`; `xcode-select --switch` is still pending a `sudo` step.
+- [x] Added the Swift `GromnieKit` wrapper target and the three SwiftUI screens (`ConnectionView`, `CharacterListView`, `ChatView`), plus the XcodeGen project. Named `GromnieKit` (not `GromnieCore`) to avoid a module-name collision with the C module; simulator and device builds both succeed.
 
 ## Review findings
+
+**Status update (after review):** fixed since this was written — `lipo`/`xcodebuild` prerequisite checks (`2bc71bf`, `30d8004`), header opacity + drift check (`88138e7`), `destroy` panic guard (`3341ceb`), actor-failure terminal events (`59f524f`), disconnect deadlock + regression test (`55d8845`), and the module map (`f577fd8`). Still open: raw event drops, fake-transport integration test, and an iOS CI job. The Swift app now exists (scaffold commit `d096bf5`).
 
 Reviewed at `HEAD = d3bc05b` (working tree clean). The Rust bridge foundation is real and builds, but the deliverable (the SwiftUI app) is not started and several checked items above are overstated. The highest-risk code (the actor/client loop) has no tests.
 
