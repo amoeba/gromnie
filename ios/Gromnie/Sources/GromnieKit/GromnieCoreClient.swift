@@ -39,7 +39,9 @@ public enum GromnieCoreError: Error, LocalizedError, Equatable {
 /// Owns the opaque Rust session. Every C call runs on one serial queue, and
 /// events are delivered through an `AsyncStream`. No Rust callback ever invokes
 /// Swift directly.
-public final class GromnieCoreClient {
+/// All mutable state (`session`, `continuation`, `isPolling`) is confined to
+/// `queue`, so the unchecked `Sendable` conformance is sound.
+public final class GromnieCoreClient: @unchecked Sendable {
     private let queue = DispatchQueue(label: "net.gromnie.core")
     private var session: OpaquePointer?
     private var continuation: AsyncStream<BridgeEvent>.Continuation?
@@ -66,7 +68,9 @@ public final class GromnieCoreClient {
         username: String,
         password: String
     ) throws -> AsyncStream<BridgeEvent> {
-        try queue.sync {
+        // Keep every mutation of `session`, `continuation`, and `isPolling`
+        // confined to the serial queue.
+        let stream: AsyncStream<BridgeEvent> = try queue.sync {
             destroyLocked()
             guard let session = gromnie_session_create() else {
                 throw GromnieCoreError.internalError
@@ -91,11 +95,12 @@ public final class GromnieCoreClient {
                 destroyLocked()
                 throw GromnieCoreError(code: result)
             }
+
+            return AsyncStream { continuation in
+                self.continuation = continuation
+            }
         }
 
-        let stream = AsyncStream<BridgeEvent> { continuation in
-            self.continuation = continuation
-        }
         startPolling()
         return stream
     }

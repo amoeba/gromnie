@@ -18,8 +18,13 @@ schemes:
       targets:
         Gromnie: all
         GromnieKit: all
+        GromnieTests: [test]
     run:
       config: Debug
+    test:
+      config: Debug
+      targets:
+        - GromnieTests
     archive:
       config: Release
 
@@ -71,6 +76,21 @@ targets:
         UILaunchScreen: {}
         UISupportedInterfaceOrientations:
           - UIInterfaceOrientationPortrait
+          - UIInterfaceOrientationPortraitUpsideDown
           - UIInterfaceOrientationLandscapeLeft
           - UIInterfaceOrientationLandscapeRight
         NSLocalNetworkUsageDescription: "Gromnie connects directly to game servers on your local network."
+
+  GromnieTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - path: Tests/GromnieTests
+    dependencies:
+      - target: Gromnie
+      - target: GromnieKit
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES
+        TEST_HOST: "$(BUILT_PRODUCTS_DIR)/Gromnie.app/Gromnie"
+        BUNDLE_LOADER: "$(TEST_HOST)"

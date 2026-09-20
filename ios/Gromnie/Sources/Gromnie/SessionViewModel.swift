@@ -4,7 +4,7 @@ import SwiftUI
 
 @MainActor
 final class SessionViewModel: ObservableObject {
-    enum Screen {
+    enum Screen: Equatable {
         case form
         case characters
         case enteringWorld
@@ -130,18 +130,17 @@ final class SessionViewModel: ObservableObject {
     }
 
     func handleScenePhase(_ phase: ScenePhase) {
-        switch phase {
-        case .background, .inactive:
-            guard screen != .form || status == .connecting else { return }
-            disconnect()
-        default:
-            break
-        }
+        // `.inactive` fires transiently (Control Center, notification shade,
+        // incoming call), so it must not tear down an active session. Only a
+        // real background transition disconnects; v1 has no background mode.
+        guard phase == .background else { return }
+        guard screen != .form || status == .connecting else { return }
+        disconnect()
     }
 
     // MARK: - Event handling
 
-    private func handle(_ event: BridgeEvent) {
+    func handle(_ event: BridgeEvent) {
         switch BridgeEventType(rawValue: event.type) {
         case .connecting:
             status = .connecting
