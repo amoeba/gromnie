@@ -115,6 +115,10 @@ fn build_ios_core() -> Result<()> {
     let project_root = project_root()?;
     let bridge_dir = project_root.join("crates/gromnie-ios-bridge");
     let header = bridge_dir.join("include/gromnie_ios.h");
+    let generated_header = project_root.join("target/gromnie-ios/gromnie_ios.h");
+    if let Some(parent) = generated_header.parent() {
+        fs::create_dir_all(parent)?;
+    }
     let cbindgen_status = Command::new("cbindgen")
         .args([
             "--config",
@@ -123,11 +127,17 @@ fn build_ios_core() -> Result<()> {
             "gromnie-ios-bridge",
             "--output",
         ])
-        .arg(&header)
+        .arg(&generated_header)
         .current_dir(&bridge_dir)
         .status()?;
     if !cbindgen_status.success() {
         return Err(anyhow::anyhow!("cbindgen failed for gromnie-ios-bridge"));
+    }
+    if fs::read(&header)? != fs::read(&generated_header)? {
+        return Err(anyhow::anyhow!(
+            "{} is out of date. Run cbindgen (see plan.md) and commit the generated header.",
+            header.display()
+        ));
     }
 
     for target in IOS_TARGETS {

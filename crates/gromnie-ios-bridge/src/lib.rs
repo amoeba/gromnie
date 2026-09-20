@@ -16,7 +16,10 @@ use std::{
 
 use session::{Command, RunningSession};
 
-#[repr(C)]
+// Deliberately not `#[repr(C)]`: the session is always used behind a pointer,
+// and cbindgen emits only a forward declaration for a type without a
+// guaranteed layout, keeping the Rust internals out of the C header.
+#[allow(non_camel_case_types)]
 pub struct gromnie_session_t {
     inner: Mutex<SessionState>,
 }
