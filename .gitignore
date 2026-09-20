@@ -1,5 +1,6 @@
 /target
 gromnie-proxy.log
+.DS_Store
 .env
 *.local
 crates/gromnie-web/pkg
