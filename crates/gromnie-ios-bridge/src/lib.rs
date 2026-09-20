@@ -219,7 +219,8 @@ pub unsafe extern "C" fn gromnie_session_destroy(session: *mut gromnie_session_t
     if session.is_null() {
         return;
     }
-    let _ = disconnect(session);
+    // Guard the ABI boundary: a panic here must not unwind into C/Swift.
+    let _ = catch_code(|| disconnect(session));
     // SAFETY: caller promises this is the one matching create call and has no further users.
     unsafe { drop(Box::from_raw(session)) };
 }
