@@ -1,0 +1,9 @@
+language = "C"
+include_guard = "GROMNIE_IOS_H"
+pragma_once = false
+documentation = false
+usize_is_size_t = true
+
+[parse]
+parse_deps = false
+

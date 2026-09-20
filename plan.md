@@ -1,600 +1,226 @@
-# Implementation Plan: Expose All acprotocol Events to Scripts
+# Implementation Plan: Minimal iOS Gromnie Client
 
-## Overview
+## Fixed scope
 
-Remove the `SimpleGameEvent` abstraction and expose all acprotocol server-to-client events directly to WASM scripts using strongly-typed WIT records. This gives scripts access to the full protocol event stream with full type safety instead of the current 4 limited event types.
+Ship an iPhone/iPad SwiftUI app whose only gameplay capability is chat. Its complete v1 flow is:
 
-## Requirements (from user)
-- ✅ Remove SimpleGameEvent abstraction as soon as we can
-- ✅ Fire events for ALL top-level S2C messages
-- ✅ Fire events for ALL nested game events (within OrderedGameEvent)
-- ✅ Expose acprotocol as strongly-typed Rust types via WIT
-- ✅ Keep SimpleClientAction for script→client actions
-- ✅ Breaking change OK (no backward compatibility needed)
-
-## Design Approach
-
-**Key Insight:** Define WIT record types that mirror acprotocol message structures, providing full type safety across the WASM boundary.
-
-### Event Flow
-```
-acprotocol S2CMessage/GameEvent (parsed)
-    ↓ (convert to wrapper type)
-Rust ProtocolEvent enum (in gromnie-events)
-    ↓ (convert to WIT types)
-WIT s2c-event / game-event variant
-    ↓ (passed to WASM with wasmtime bindings)
-Scripts receive strongly-typed Rust structs
+```text
+Connect form → character list → select character → chat transcript + composer → disconnect
 ```
 
-### Two-Level Event Structure
-The protocol has two event layers:
-1. **Top-level S2C messages** - ~94 types (LoginCreatePlayer, ItemCreateObject, etc.)
-2. **Nested game events** - ~150+ types (within OrderedGameEvent 0xF7B0)
+The app accepts a hostname (or IPv4 address), port, account name, and password. It uses the existing Rust Gromnie client to communicate directly with the AC server over UDP. It does not render the world, move the player, create characters, handle inventory, reconnect automatically, or stay connected in the background.
 
-Both will be exposed as separate variant groups in WIT:
-- `variant s2c-event` with ~94 variants
-- `variant game-event-msg` with ~150+ variants
+Swift is not a reimplementation of Gromnie. Rust retains all AC protocol parsing, packet sequencing, cryptography, UDP, login, character selection, and chat transmission. SwiftUI owns only presentation, user input, app lifecycle, and secure preferences.
 
-### Implementation Strategy: Phased Rollout
+## Progress
 
-**Phase 1: Core Event Types** (~20 most common types)
-- Define WIT records for essential messages first
-- Get the architecture working end-to-end
-- Validate the approach with real scripts
+- [x] Added the `gromnie-ios-bridge` workspace crate as a `staticlib`.
+- [x] Added the opaque C session API, Rust-owned session actor, serialized event queue, and C header/configuration scaffold.
+- [x] Connected `LoginCharacter`, `SendChatSay`, and `Disconnect` to the existing Rust client and mapped its character, login, chat, and error events.
+- [x] Added local ABI/input-validation tests and verified formatting, tests, and Clippy for the bridge.
+- [x] Added the missing Tokio `net` and `time` features required by `gromnie-client`'s existing native UDP code.
+- [x] Verified the bridge's minimal `gromnie-client` dependency build and added `cargo xtask ios build-core` to generate the header and XCFramework.
+- [x] Installed `aarch64-apple-ios`, `aarch64-apple-ios-sim`, `x86_64-apple-ios`, and `cbindgen` 0.29.4.
+- [x] Ran the packaging command through header generation; the checked-in C header is reproducible.
+- [x] `cargo check` passes for all three iOS targets without linking.
+- [ ] Install full Xcode and select it with `xcode-select`, then run and validate the remaining XCFramework build steps.
+- [ ] Add the Swift/Xcode wrapper and three SwiftUI screens after an iOS artifact can be produced.
 
-** Phase 2: Design codegen system similar to codegen system in ~/src/amoeba/asheron-rs
+## Decisions made now
 
-**Phase 3: Comprehensive Coverage** (remaining ~220 types)
-- we don't have to do this right away
-- use codegen
+| Question | v1 decision |
+| --- | --- |
+| Protocol implementation | Link the existing Rust `gromnie-client`; no Swift protocol implementation. |
+| Transport | Direct UDP, no WISP/WebSocket proxy. |
+| IP support | IPv4 only. The current `NativeUdpTransport` binds `0.0.0.0` and client address parsing is not IPv6-safe. Reject IPv6 literals and document this limitation. |
+| FFI | A small C ABI plus handwritten Swift wrapper; do not introduce UniFFI. This keeps artifact production, threading, and callback ownership explicit. |
+| Rust artifact | `staticlib` packaged into `GromnieCore.xcframework`, with a generated C header/module map. |
+| Event delivery | Swift polls a Rust-owned FIFO event queue on a dedicated serial queue. Rust never invokes arbitrary Swift callbacks. |
+| One session | Exactly one active Rust session per app process. Connect while active returns a local `already_connected` error. |
+| UI framework | SwiftUI, iOS 17 minimum, portrait and landscape supported. |
+| Credential storage | Host, port, username: `UserDefaults`. Password: Keychain only after an explicit “Save password” toggle; the default is off. |
+| Backgrounding | Send disconnect, stop the actor, and return to the form. No background network entitlement or reconnecting. |
+| Outgoing display | Do not local-echo a sent message. Show it only when received from the server's chat event. |
+| Distribution | Debug/device and TestFlight beta only in v1; App Store submission is out of scope. |
 
-## Implementation Steps
+## Existing Gromnie API used
 
-### Step 1: Define Core WIT Event Types
+The bridge uses `gromnie_client::Client` and its native UDP transport. It does not copy the browser client: browser code needs WISP because browsers lack UDP, while iOS can use native UDP.
 
-**File:** `crates/gromnie-scripting-api/src/wit/gromnie-script.wit`
+The implementation consumes only these current `gromnie-events` variants:
 
-Add strongly-typed event definitions. Start with ~20 most common types:
+| Rust event | Bridge event / UI action |
+| --- | --- |
+| `ClientSystemEvent::ConnectingStarted` | `.connecting` |
+| `SimpleGameEvent::CharacterListReceived { characters, .. }` | `.characters` and character-list screen |
+| `ClientStateEvent::EnteringWorld` | `.enteringWorld` spinner |
+| `SimpleGameEvent::LoginSucceeded { character_id, character_name }` | `.enteredWorld`; present chat |
+| `ClientStateEvent::InWorld` | internal confirmation only; it must follow `LoginSucceeded` before accepting chat input |
+| `SimpleGameEvent::ChatMessageReceived { message, message_type }` | `.chat` |
+| `SimpleGameEvent::LoginFailed` or `CharacterError` | `.error` and return to character list or form as applicable |
+| `ClientSystemEvent::AuthenticationFailed` | `.error`; return to form |
+| `ClientSystemEvent::Disconnected` | `.disconnected`; return to form |
 
-```wit
-// ===== S2C Message Types =====
+`SimpleClientAction::LoginCharacter`, `SendChatSay`, and `Disconnect` are the only Rust actions exposed by v1. The bridge supplies the account name and selected character ID to `LoginCharacter`; it never exposes arbitrary game actions.
 
-record login-create-player-msg {
-    character-id: u32,
-}
+## Rust bridge design
 
-record login-character-set-msg {
-    account: string,
-    characters: list<character-info>,
-    num-allowed-characters: u32,
-}
+### New crate and files
 
-record item-create-object-msg {
-    object-id: u32,
-    name: string,
-    // Add other common WeenieDescription fields as needed
-}
+Add workspace crate `crates/gromnie-ios-bridge`:
 
-record character-error-msg {
-    error-code: u32,
-    error-message: string,
-}
-
-record hear-speech-msg {
-    sender-name: string,
-    message: string,
-    message-type: u32,
-}
-
-// ... more S2C message records ...
-
-/// Top-level server-to-client messages
-variant s2c-event {
-    login-create-player(login-create-player-msg),
-    login-character-set(login-character-set-msg),
-    item-create-object(item-create-object-msg),
-    character-error(character-error-msg),
-    hear-speech(hear-speech-msg),
-    hear-ranged-speech(hear-speech-msg),
-    // Add more variants as needed
-}
-
-// ===== Game Event Types =====
-
-record hear-direct-speech-msg {
-    message: string,
-    sender-name: string,
-    sender-id: u32,
-    target-id: u32,
-    message-type: u32,
-}
-
-record transient-string-msg {
-    message: string,
-}
-
-// ... more game event records ...
-
-/// Nested game events (from OrderedGameEvent wrapper)
-variant game-event-msg {
-    hear-direct-speech(hear-direct-speech-msg),
-    transient-string(transient-string-msg),
-    // Add more variants as needed
-}
-
-// ===== Unified Protocol Event =====
-
-/// Wrapper for ordered game events with metadata
-record ordered-game-event {
-    object-id: u32,
-    sequence: u32,
-    event: game-event-msg,
-}
-
-/// Protocol event from server
-variant protocol-event {
-    s2c(s2c-event),
-    game-event(ordered-game-event),
-}
-
-/// Update the existing game-event variant
-variant game-event {
-    // OLD: Legacy simplified events (can be removed after migration)
-    character-list-received(account-data),
-    character-error(character-error),
-    create-object(world-object),
-    chat-message-received(chat-message),
-
-    // NEW: Full protocol access
-    protocol(protocol-event),
-}
+```text
+crates/gromnie-ios-bridge/
+  Cargo.toml                 # crate-type = ["staticlib"]
+  src/lib.rs                 # opaque C handle and exported ABI
+  src/session.rs             # session actor / Gromnie client loop
+  src/event.rs               # serializable, bridge-owned event records
+  include/gromnie_ios.h      # generated by cbindgen; committed
+  cbindgen.toml
 ```
 
-### Step 2: Add ProtocolEvent to ClientEvent enum
+It depends on `gromnie-client`, `gromnie-events`, `serde`, `serde_json`, `tokio`, and `thiserror`. No Apple-specific code is added to `gromnie-client`.
 
-**File:** `crates/gromnie-events/src/protocol_events.rs` (NEW)
+### ABI
 
-Create Rust types that will convert to WIT types:
+Use an opaque `gromnie_session_t`; it is allocated by Rust and may be used only from the Swift bridge's one serial `DispatchQueue`. A null handle is invalid. All functions return an integer result code; `0` means success, nonzero means a local API error.
 
-```rust
-use serde::{Deserialize, Serialize};
+```c
+typedef struct gromnie_session_t gromnie_session_t;
 
-/// Protocol event - mirrors WIT structure
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub enum ProtocolEvent {
-    S2C(S2CEvent),
-    GameEvent(OrderedGameEvent),
-}
-
-/// Top-level S2C message events
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub enum S2CEvent {
-    LoginCreatePlayer { character_id: u32 },
-    LoginCharacterSet {
-        account: String,
-        characters: Vec<CharacterData>,
-        num_allowed_characters: u32,
-    },
-    ItemCreateObject {
-        object_id: u32,
-        name: String,
-    },
-    CharacterError {
-        error_code: u32,
-        error_message: String,
-    },
-    HearSpeech {
-        sender_name: String,
-        message: String,
-        message_type: u32,
-    },
-    HearRangedSpeech {
-        sender_name: String,
-        message: String,
-        message_type: u32,
-    },
-    // Add more as needed
-}
-
-/// Nested game events with OrderedGameEvent metadata
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct OrderedGameEvent {
-    pub object_id: u32,
-    pub sequence: u32,
-    pub event: GameEventMsg,
-}
-
-/// Game event messages (nested within OrderedGameEvent)
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub enum GameEventMsg {
-    HearDirectSpeech {
-        message: String,
-        sender_name: String,
-        sender_id: u32,
-        target_id: u32,
-        message_type: u32,
-    },
-    TransientString {
-        message: String,
-    },
-    // Add more as needed
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct CharacterData {
-    pub id: u32,
-    pub name: String,
-    pub delete_pending: bool,
-}
+gromnie_session_t *gromnie_session_create(void);
+int32_t gromnie_session_connect(gromnie_session_t *,
+                                const char *host_utf8,
+                                uint16_t port,
+                                const char *username_utf8,
+                                const char *password_utf8);
+int32_t gromnie_session_select_character(gromnie_session_t *, uint32_t character_id);
+int32_t gromnie_session_send_chat(gromnie_session_t *, const char *message_utf8);
+int32_t gromnie_session_next_event(gromnie_session_t *, uint32_t timeout_ms,
+                                   uint8_t **json_utf8, size_t *json_len);
+void gromnie_buffer_free(uint8_t *json_utf8, size_t json_len);
+int32_t gromnie_session_disconnect(gromnie_session_t *);
+void gromnie_session_destroy(gromnie_session_t *);
+const char *gromnie_result_message(int32_t code);
 ```
 
-**File:** `crates/gromnie-events/src/client_events.rs`
+Rules:
 
-Add new variant to ClientEvent:
-```rust
-#[derive(Debug, Clone)]
-pub enum ClientEvent {
-    Game(SimpleGameEvent),       // Keep for backward compat during migration
-    Protocol(ProtocolEvent),     // NEW: Full protocol events
-    State(ClientStateEvent),
-    System(ClientSystemEvent),
-}
+- `connect` validates input then starts the actor and returns immediately. Network success/failure is reported as an event, not a blocking FFI result.
+- `next_event` blocks for at most `timeout_ms`; `0` means no queued event, otherwise Rust allocates an exact UTF-8 JSON buffer. Swift must call `gromnie_buffer_free` exactly once.
+- `disconnect` requests shutdown and waits for the actor to stop. The actor polls UDP with a 50 ms timeout, so a normal disconnect completes on the next poll. The Swift wrapper must call it only from its core queue, never the main actor. A future hard timeout requires a nonblocking worker-completion design and is not claimed by v1.
+- `destroy` is valid after any outcome, is never called on the main thread, and releases the handle only after issuing disconnect if necessary.
+- All C strings must be valid UTF-8, NUL-free, and at most 255 bytes for host/account and 512 bytes for password/chat. Invalid input returns `invalid_argument` and is never logged.
+- Bridge code catches panics at every ABI boundary and returns `internal_error`; no panic may cross C/Swift.
+
+### Actor and client loop
+
+`connect` starts one named Rust thread. That thread creates a multi-thread Tokio runtime, constructs `Client::new(..., reconnect = false)`, calls `do_login()`, and solely owns that `Client` until shutdown. The handle communicates with it through bounded command and event queues; it never accesses `Client` directly.
+
+The actor uses a 1,024-item command queue and a 4,096-item event queue. Commands are `SelectCharacter`, `SendChat`, and `Disconnect`. It must:
+
+1. Receive UDP datagrams and call `recv_packet`, `process_packet`, `process_messages`, `process_actions`, `process_game_actions`, and `send_pending_messages` in that order.
+2. On a command, enqueue the corresponding existing `SimpleClientAction`, then run `process_actions`, `process_game_actions`, and `send_pending_messages` immediately.
+3. Send `send_keepalive()` every five seconds while connected.
+4. Forward the `ClientEvent` channel in source order into bridge events.
+5. Emit exactly one terminal `.disconnected` event, close sockets/channels, and exit on disconnect, fatal socket error, or actor shutdown.
+
+Chat events are never dropped: when the event queue is full, actor progress pauses until Swift drains it. This is deliberate for a chat-only client; it preserves ordering and avoids silent message loss. UI-only progress events may be coalesced before entering the queue. The bridge JSON includes monotonic `sequence` and Unix-millisecond `timestamp` fields so Swift can detect a programming error in ordering.
+
+### JSON event schema
+
+`next_event` returns one object, never an array:
+
+```json
+{"sequence":42,"timestamp_ms":1735689600000,"type":"characters","characters":[{"id":123,"name":"A Character"}]}
 ```
 
-### Step 3: Add Conversion Functions
+Allowed `type` values and required fields are fixed:
 
-**File:** `crates/gromnie-events/src/protocol_events.rs` (continued)
+- `connecting`
+- `characters`: `characters: [{ id: u32, name: string }]`, `account: string`, `slots: u32`
+- `entering_world`: `character_id: u32`
+- `entered_world`: `character_id: u32`, `character_name: string`
+- `chat`: `message: string`, `message_type: u32`
+- `error`: `code: string`, `message: string`, `recover_to: "form" | "characters"`
+- `disconnected`: `reason: string`, `user_initiated: bool`
 
-Add conversion functions from acprotocol types:
+Rust, not Swift, selects `recover_to`: bad credentials and transport/login failures go to `form`; a character-specific failure goes to `characters`. Raw protocol event debug strings, passwords, packet bytes, and server addresses are never emitted.
 
-```rust
-impl From<&asheron_rs::messages::s2c::LoginCreatePlayer> for S2CEvent {
-    fn from(msg: &asheron_rs::messages::s2c::LoginCreatePlayer) -> Self {
-        S2CEvent::LoginCreatePlayer {
-            character_id: msg.character_id.0,
-        }
-    }
-}
+## Swift application design
 
-impl From<&asheron_rs::messages::s2c::LoginLoginCharacterSet> for S2CEvent {
-    fn from(msg: &asheron_rs::messages::s2c::LoginLoginCharacterSet) -> Self {
-        S2CEvent::LoginCharacterSet {
-            account: msg.account.clone(),
-            characters: msg.characters.list.iter()
-                .map(|c| CharacterData {
-                    id: c.character_id.0,
-                    name: c.name.clone(),
-                    delete_pending: c.delete_pending != 0,
-                })
-                .collect(),
-            num_allowed_characters: msg.num_allowed_characters,
-        }
-    }
-}
+### Project layout and linking
 
-// Add more From implementations for each S2CEvent variant...
+Create `ios/Gromnie/` containing `Gromnie.xcodeproj`, the `GromnieCore.xcframework`, and a Swift `GromnieCore` wrapper target. Xcode links the framework and imports its module map; app views import only the Swift wrapper, never the C header.
 
-// Conversion from game_event_handlers types
-impl From<&crate::client::game_event_handlers::CommunicationHearDirectSpeech> for GameEventMsg {
-    fn from(event: &crate::client::game_event_handlers::CommunicationHearDirectSpeech) -> Self {
-        GameEventMsg::HearDirectSpeech {
-            message: event.message.clone(),
-            sender_name: event.sender_name.clone(),
-            sender_id: event.sender_id,
-            target_id: event.target_id,
-            message_type: event.message_type,
-        }
-    }
-}
+The Swift wrapper owns one `OpaquePointer`, executes every C call on `DispatchQueue(label: "net.gromnie.core")`, and exposes an `AsyncStream<BridgeEvent>`. A single task repeatedly calls `next_event` with a 250 ms timeout, decodes JSON with `JSONDecoder`, frees the Rust buffer in `defer`, and yields typed events. It stops before destroy. No FFI call runs on the main actor.
 
-// Add more From implementations for each GameEventMsg variant...
+`@MainActor final class SessionViewModel: ObservableObject` is the sole app state owner. It has:
+
+```swift
+enum Screen { case form, characters, enteringWorld, chat }
+enum ConnectionStatus { case idle, connecting, error(String), disconnected(String) }
 ```
 
-### Step 4: Emit Protocol Events in Message Handlers
+It holds a selected character, character list, up to 1,000 chat lines, draft message, status, and the wrapper. At 1,000 lines it removes the oldest 100 before appending more. It starts the event task immediately after `connect`; it cancels it only after the terminal event or explicit teardown.
 
-**File:** `crates/gromnie-client/src/client/message_handlers.rs`
+Views are fixed as follows:
 
-Update each handler to emit protocol events. For example:
+- `ConnectionView`: Host, port, username, secure password field, “Save password” toggle, Connect. Disable Connect while connecting. Port uses decimal keyboard but still validates `1...65535`.
+- `CharacterListView`: plain list of character names; selecting a row issues `selectCharacter` once and switches to entering state. It has Disconnect.
+- `ChatView`: `ScrollView`/`LazyVStack` transcript, one text field, Send, Disconnect. Send is disabled unless the bridge has emitted both `entered_world` and `InWorld` confirmation. The composer clears only after the local command is accepted into Rust's command queue.
 
-```rust
-impl MessageHandler<asheron_rs::messages::s2c::LoginCreatePlayer> for Client {
-    fn handle(
-        &mut self,
-        create_player: asheron_rs::messages::s2c::LoginCreatePlayer,
-    ) -> Option<GameEvent> {
-        let character_id = create_player.character_id.0;
+The app stores host, port, username, and save-password preference in `UserDefaults`. When Save password is enabled it writes the password to a Keychain item with service `net.gromnie.ios` and account `<host>:<port>:<username>`; disabling it immediately deletes that item. It uses `kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly`. Password fields and raw server responses are excluded from `os.Logger` calls.
 
-        // Existing business logic...
-        self.transition_to_in_world(...);
+## iOS network/lifecycle configuration
 
-        // NEW: Emit protocol event
-        let protocol_event = ProtocolEvent::S2C(S2CEvent::from(&create_player));
-        let _ = self.raw_event_tx.try_send(ClientEvent::Protocol(protocol_event));
+- `Info.plist` includes `NSLocalNetworkUsageDescription`: “Gromnie connects directly to game servers on your local network.” It is required for LAN testing; public-server traffic uses the same direct UDP code path.
+- No App Transport Security exceptions are needed because v1 makes no HTTP/HTTPS/WebSocket connection.
+- When the scene becomes inactive or backgrounds, `SessionViewModel` asynchronously disconnects on the core queue and clears chat/character state. It does not request background execution.
+- Host validation accepts a DNS hostname or IPv4 address only, rejects URLs, brackets, spaces, colons, and IPv6 literals. Gromnie resolves the hostname normally; an IPv6-only result is presented as “This version requires an IPv4-reachable server.”
 
-        // KEEP: Emit legacy SimpleGameEvent (for backward compat)
-        Some(GameEvent::CreatePlayer { character_id })
-    }
-}
+## Build and packaging pipeline
+
+Prerequisites are Xcode command-line tools, Rust stable, `cbindgen`, and these Rust targets:
+
+```bash
+rustup target add aarch64-apple-ios aarch64-apple-ios-sim x86_64-apple-ios
+cargo install cbindgen
 ```
 
-Apply to all existing message handlers.
+Add `cargo xtask ios build-core`. It must:
 
-**For unhandled messages:** Add a catch-all emission in the dispatch loop:
+1. Run `cbindgen` from `crates/gromnie-ios-bridge/cbindgen.toml`, fail if the generated header differs from committed `include/gromnie_ios.h`.
+2. Build release static libraries for `aarch64-apple-ios`, `aarch64-apple-ios-sim`, and `x86_64-apple-ios`.
+3. Create a universal simulator library with `lipo` from the two simulator slices.
+4. Run `xcodebuild -create-xcframework` with the device library, universal simulator library, and the generated header directory.
+5. Write the result to `ios/Gromnie/Frameworks/GromnieCore.xcframework` and replace only that generated artifact.
 
-**File:** `crates/gromnie-client/src/client/client.rs` (line ~1140)
+CI runs the Rust bridge tests on the host, builds all three iOS targets, builds the XCFramework, and runs `xcodebuild test` on an iOS simulator. It does not attempt live-server tests in CI.
 
-```rust
-_ => {
-    // NEW: Try to emit protocol event even for unhandled messages
-    if let Some(protocol_event) = try_convert_to_protocol_event(&msg_type, &message) {
-        let _ = self.raw_event_tx.try_send(ClientEvent::Protocol(protocol_event));
-    }
+## Tests and release gate
 
-    info!(target: "net", "Unhandled S2CMessage: {:?} (0x{:04X})", msg_type, message.opcode);
-}
-```
+### Automated
 
-### Step 5: Emit Protocol Events for Game Events
+- Rust unit tests: C input validation, JSON schema, every event mapping above, command ordering, terminal-event uniqueness, full-queue backpressure, and repeated `disconnect`/`destroy`.
+- Rust integration test with a fake `ClientTransport`: login event → character selection action → login success → chat event, verifying the exact bridge event sequence.
+- Swift unit tests: decoding, screen reducer transitions, 1,000-line trimming, form validation, and Keychain save/delete behavior.
+- Swift UI tests with a fake `GromnieCoreClient`: form → list → chat, disabled states, error recovery, and accessible labels.
 
-**File:** `crates/gromnie-client/src/client/game_event_handlers.rs`
+### Manual device matrix
 
-Update game event handlers similarly:
+Test a debug build on a physical iPhone on Wi-Fi and cellular, against a non-production account:
 
-```rust
-impl GameEventHandler<CommunicationHearDirectSpeech> for Client {
-    fn handle(&mut self, event: CommunicationHearDirectSpeech) -> Option<GameEvent> {
-        // Existing business logic...
-        let chat_text = format!("{} tells you, \"{}\"", event.sender_name, event.message);
+1. Valid login and character list.
+2. Bad password.
+3. Invalid hostname, unreachable UDP port, and IPv6-only endpoint.
+4. Empty character list.
+5. Character selection, entered-world confirmation, incoming chat, outgoing chat, and ordering under a burst of messages.
+6. User disconnect, server disconnect, app backgrounding, and returning foreground.
+7. Saved-password opt-in, relaunch restore, and deletion after toggling it off.
 
-        // NEW: Emit protocol event
-        // Extract object_id and sequence from context (need to pass these in)
-        let protocol_event = ProtocolEvent::GameEvent(OrderedGameEvent {
-            object_id: self.current_game_event_object_id,  // Add this field to Client
-            sequence: self.current_game_event_sequence,     // Add this field to Client
-            event: GameEventMsg::from(&event),
-        });
-        let _ = self.raw_event_tx.try_send(ClientEvent::Protocol(protocol_event));
+Beta is ready only when all automated checks pass and every device scenario succeeds without password leakage, a crash, a retained Rust actor, or a stuck connecting screen.
 
-        // KEEP: Emit legacy SimpleGameEvent
-        Some(GameEvent::ChatMessageReceived {
-            message: chat_text,
-            message_type: event.message_type,
-        })
-    }
-}
-```
+## Explicit non-goals after v1
 
-**File:** `crates/gromnie-client/src/client/client.rs` (line ~1151)
-
-Modify `handle_game_event` to track object_id/sequence:
-
-```rust
-fn handle_game_event(&mut self, event_type: GameEventType, message: RawMessage) {
-    // Parse object_id and sequence from message header
-    let object_id = u32::from_le_bytes([message.data[0], message.data[1], message.data[2], message.data[3]]);
-    let sequence = u32::from_le_bytes([message.data[4], message.data[5], message.data[6], message.data[7]]);
-
-    // Store for handlers to use
-    self.current_game_event_object_id = object_id;
-    self.current_game_event_sequence = sequence;
-
-    // Dispatch to handler...
-    match event_type {
-        // ...existing handlers...
-    }
-}
-```
-
-### Step 6: Update Script Host Conversion
-
-**File:** `crates/gromnie-scripting-host/src/wasm/wasm_script.rs`
-
-Update `client_event_to_wasm()` to convert ProtocolEvent to WIT types:
-
-```rust
-fn client_event_to_wasm(event: &ClientEvent) -> WitScriptEvent {
-    match event {
-        ClientEvent::Game(game_event) => {
-            // OLD: Convert SimpleGameEvent (keep during migration)
-            WitScriptEvent::Game(simple_game_event_to_wasm(game_event))
-        }
-        ClientEvent::Protocol(protocol_event) => {
-            // NEW: Convert ProtocolEvent to WIT
-            WitScriptEvent::Game(WitGameEvent::Protocol(
-                protocol_event_to_wit(protocol_event)
-            ))
-        }
-        // ... other variants
-    }
-}
-
-fn protocol_event_to_wit(event: &ProtocolEvent) -> WitProtocolEvent {
-    match event {
-        ProtocolEvent::S2C(s2c_event) => {
-            WitProtocolEvent::S2C(s2c_event_to_wit(s2c_event))
-        }
-        ProtocolEvent::GameEvent(game_event) => {
-            WitProtocolEvent::GameEvent(WitOrderedGameEvent {
-                object_id: game_event.object_id,
-                sequence: game_event.sequence,
-                event: game_event_msg_to_wit(&game_event.event),
-            })
-        }
-    }
-}
-
-fn s2c_event_to_wit(event: &S2CEvent) -> WitS2CEvent {
-    match event {
-        S2CEvent::LoginCreatePlayer { character_id } => {
-            WitS2CEvent::LoginCreatePlayer(WitLoginCreatePlayerMsg {
-                character_id: *character_id,
-            })
-        }
-        S2CEvent::LoginCharacterSet { account, characters, num_allowed_characters } => {
-            WitS2CEvent::LoginCharacterSet(WitLoginCharacterSetMsg {
-                account: account.clone(),
-                characters: characters.iter().map(|c| WitCharacterInfo {
-                    id: c.id,
-                    name: c.name.clone(),
-                    delete_pending: c.delete_pending,
-                }).collect(),
-                num_allowed_characters: *num_allowed_characters,
-            })
-        }
-        // Add more conversions for each S2CEvent variant...
-    }
-}
-
-fn game_event_msg_to_wit(event: &GameEventMsg) -> WitGameEventMsg {
-    match event {
-        GameEventMsg::HearDirectSpeech { message, sender_name, sender_id, target_id, message_type } => {
-            WitGameEventMsg::HearDirectSpeech(WitHearDirectSpeechMsg {
-                message: message.clone(),
-                sender_name: sender_name.clone(),
-                sender_id: *sender_id,
-                target_id: *target_id,
-                message_type: *message_type,
-            })
-        }
-        // Add more conversions for each GameEventMsg variant...
-    }
-}
-```
-
-### Step 7: Update Test Scripts
-
-**File:** `tests/scripting/src/lib.rs`
-
-Update to handle strongly-typed protocol events:
-
-```rust
-fn on_event(&self, event: ScriptEvent) {
-    match event {
-        ScriptEvent::Game(GameEvent::Protocol(proto)) => {
-            // Match on strongly-typed protocol events
-            match proto {
-                ProtocolEvent::S2C(s2c) => match s2c {
-                    S2CEvent::ItemCreateObject(obj) => {
-                        log(&format!("Object created: {} (0x{:08X})",
-                            obj.name, obj.object_id));
-                    }
-                    S2CEvent::LoginCharacterSet(data) => {
-                        log(&format!("Characters for {}: {} chars",
-                            data.account, data.characters.len()));
-                    }
-                    _ => {} // Other S2C events
-                }
-                ProtocolEvent::GameEvent(game_event) => {
-                    match game_event.event {
-                        GameEventMsg::HearDirectSpeech(msg) => {
-                            log(&format!("{} tells you: {}",
-                                msg.sender_name, msg.message));
-                        }
-                        GameEventMsg::TransientString(msg) => {
-                            log(&format!("System: {}", msg.message));
-                        }
-                        _ => {} // Other game events
-                    }
-                }
-            }
-        }
-        // Keep old event handling during migration period
-        ScriptEvent::Game(GameEvent::CreateObject(obj)) => {
-            log(&format!("Object (legacy): {}", obj.name));
-        }
-        // ...
-    }
-}
-```
-
-### Step 8: Remove SimpleGameEvent (future cleanup)
-
-After all consumers migrate to ProtocolEvent:
-- Delete `crates/gromnie-events/src/simple_game_events.rs`
-- Remove `ClientEvent::Game` variant
-- Remove old WIT game-event variants (character-list-received, etc.)
-- Update all references
-
-## Critical Files
-
-1. **`crates/gromnie-scripting-api/src/wit/gromnie-script.wit`** - Define WIT event types
-2. **`crates/gromnie-events/src/protocol_events.rs`** (NEW) - Rust wrapper types
-3. **`crates/gromnie-events/src/client_events.rs`** - Add ProtocolEvent variant
-4. **`crates/gromnie-client/src/client/message_handlers.rs`** - Emit protocol events in handlers
-5. **`crates/gromnie-client/src/client/game_event_handlers.rs`** - Emit game event protocol events
-6. **`crates/gromnie-scripting-host/src/wasm/wasm_script.rs`** - Convert Rust → WIT types
-7. **`tests/scripting/src/lib.rs`** - Update test scripts
-
-## Phased Implementation Approach
-
-### Phase 1: Core Event Types (~20 most common)
-Start with essential events to validate the architecture:
-- LoginCreatePlayer, LoginCharacterSet
-- ItemCreateObject, CharacterError
-- HearSpeech, HearRangedSpeech
-- HearDirectSpeech, TransientString
-
-**Goal:** Get end-to-end flow working with real scripts
-
-### Phase 2: Expand Coverage (remaining ~220 types)
-Two options for comprehensive coverage:
-
-**Option B: Code generation**
-- Write codegen to generate WIT from acprotocol types
-- One-time effort, automatic coverage
-- Need to handle acprotocol dependency location
-
-**Recommendation:** Start with Option A (manual), switch to Option B if we need 50+ types
-
-## Testing Strategy
-
-1. Define core WIT types and Rust wrappers
-2. Implement conversions for core types
-3. Update message handlers to emit protocol events
-4. Update one test script to handle new events
-5. Verify events flow through to scripts correctly
-6. Test pattern matching on strongly-typed events
-7. Incrementally add more event types as needed
-8. Eventually remove SimpleGameEvent
-
-## Advantages of This Approach
-
-- **Full type safety** - Scripts get strongly-typed Rust structs via WIT bindings
-- **Compile-time checking** - Invalid event handling caught at script compile time
-- **Better IDE support** - Autocomplete and type hints in script development
-- **Explicit API** - Clear contract between host and scripts
-- **Future-proof** - Easy to add new types incrementally
-- **Performance** - No JSON serialization/parsing overhead
-
-## Risks & Mitigations
-
-**Risk:** Manually defining 240+ WIT types is tedious
-**Mitigation:** Start with ~20 core types, add incrementally. Consider codegen for bulk.
-
-**Risk:** WIT enum variants limited to reasonable count
-**Mitigation:** Group related events, use separate enums for S2C vs GameEvent
-
-**Risk:** Breaking change impacts all scripts
-**Mitigation:** Acceptable per user; keep SimpleGameEvent during migration
-
-**Risk:** acprotocol types may be complex to mirror in WIT
-**Mitigation:** Simplify fields, omit rarely-used data, document differences
-
-**Risk:** Maintaining sync between acprotocol and WIT types
-**Mitigation:** Use From traits with clear conversion errors. Consider codegen.
-
-## Implementation Timeline
-
-### Initial Implementation (Phase 1 - Core Types)
-1. **Day 1** (4-5 hours): Define core WIT types, create protocol_events.rs
-2. **Day 2** (3-4 hours): Implement conversions, update message handlers
-3. **Day 3** (2-3 hours): Update script host, test scripts, validate flow
-
-**Total Phase 1:** ~10-12 hours to get core working
-
-### Expansion (Phase 2 - Full Coverage)
-- **Manual:** 5-10 min × 220 types = 18-37 hours (can be spread over time)
-- **Codegen:** 8-12 hours one-time investment for generator
-
-**Recommendation:** Phase 1 immediately, Phase 2 incrementally as needed
+World rendering, movement, map, inventory, tells, automatic reconnect, IPv6, a proxy fallback, App Store submission, and multi-account switching require new design work and are not silently added to this implementation.

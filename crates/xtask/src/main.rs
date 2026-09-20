@@ -23,6 +23,11 @@ enum Commands {
         #[command(subcommand)]
         command: WebCommands,
     },
+    /// Build the Rust static library for an iOS application
+    Ios {
+        #[command(subcommand)]
+        command: IosCommands,
+    },
 }
 
 #[derive(Subcommand)]
@@ -39,6 +44,12 @@ enum WebCommands {
     Build,
 }
 
+#[derive(Subcommand)]
+enum IosCommands {
+    /// Generate the C header and package GromnieCore.xcframework
+    BuildCore,
+}
+
 fn main() -> Result<()> {
     let cli = Cli::parse();
 
@@ -50,8 +61,129 @@ fn main() -> Result<()> {
         Commands::Web { command } => match command {
             WebCommands::Build => build_web()?,
         },
+        Commands::Ios { command } => match command {
+            IosCommands::BuildCore => build_ios_core()?,
+        },
     }
 
+    Ok(())
+}
+
+fn require_command(command: &str, install_hint: &str) -> Result<()> {
+    match Command::new(command).arg("--version").status() {
+        Ok(status) if status.success() => Ok(()),
+        _ => Err(anyhow::anyhow!(
+            "{command} is required. Install it with: {install_hint}"
+        )),
+    }
+}
+
+fn build_ios_core() -> Result<()> {
+    const IOS_TARGETS: [&str; 3] = [
+        "aarch64-apple-ios",
+        "aarch64-apple-ios-sim",
+        "x86_64-apple-ios",
+    ];
+
+    println!("Building GromnieCore.xcframework...\n");
+    require_command("cbindgen", "cargo install cbindgen")?;
+    require_command(
+        "xcodebuild",
+        "install the full Xcode app and run xcode-select --switch",
+    )?;
+    require_command(
+        "lipo",
+        "install the full Xcode app and run xcode-select --switch",
+    )?;
+    for target in IOS_TARGETS {
+        ensure_rust_target(target)?;
+    }
+
+    let project_root = project_root()?;
+    let bridge_dir = project_root.join("crates/gromnie-ios-bridge");
+    let header = bridge_dir.join("include/gromnie_ios.h");
+    let cbindgen_status = Command::new("cbindgen")
+        .args([
+            "--config",
+            "cbindgen.toml",
+            "--crate",
+            "gromnie-ios-bridge",
+            "--output",
+        ])
+        .arg(&header)
+        .current_dir(&bridge_dir)
+        .status()?;
+    if !cbindgen_status.success() {
+        return Err(anyhow::anyhow!("cbindgen failed for gromnie-ios-bridge"));
+    }
+
+    for target in IOS_TARGETS {
+        let status = Command::new("cargo")
+            .args([
+                "build",
+                "-p",
+                "gromnie-ios-bridge",
+                "--release",
+                "--target",
+                target,
+            ])
+            .current_dir(&project_root)
+            .status()?;
+        if !status.success() {
+            return Err(anyhow::anyhow!("cargo build failed for {target}"));
+        }
+    }
+
+    let target_dir = project_root.join("target");
+    let device_library = target_dir.join("aarch64-apple-ios/release/libgromnie_ios_bridge.a");
+    let arm_sim_library = target_dir.join("aarch64-apple-ios-sim/release/libgromnie_ios_bridge.a");
+    let intel_sim_library = target_dir.join("x86_64-apple-ios/release/libgromnie_ios_bridge.a");
+    let universal_sim_library = target_dir.join("gromnie-ios/libgromnie_ios_bridge_sim.a");
+    let universal_sim_parent = universal_sim_library
+        .parent()
+        .ok_or_else(|| anyhow::anyhow!("invalid simulator output path"))?;
+    fs::create_dir_all(universal_sim_parent)?;
+
+    let lipo_status = Command::new("lipo")
+        .args(["-create"])
+        .arg(&arm_sim_library)
+        .arg(&intel_sim_library)
+        .args(["-output"])
+        .arg(&universal_sim_library)
+        .status()?;
+    if !lipo_status.success() {
+        return Err(anyhow::anyhow!(
+            "lipo failed to create the simulator library"
+        ));
+    }
+
+    let output = project_root.join("ios/Gromnie/Frameworks/GromnieCore.xcframework");
+    if output.exists() {
+        fs::remove_dir_all(&output)?;
+    }
+    let output_parent = output
+        .parent()
+        .ok_or_else(|| anyhow::anyhow!("invalid XCFramework output path"))?;
+    fs::create_dir_all(output_parent)?;
+    let xcframework_status = Command::new("xcodebuild")
+        .args(["-create-xcframework", "-library"])
+        .arg(&device_library)
+        .args(["-headers"])
+        .arg(bridge_dir.join("include"))
+        .args(["-library"])
+        .arg(&universal_sim_library)
+        .args(["-headers"])
+        .arg(bridge_dir.join("include"))
+        .args(["-output"])
+        .arg(&output)
+        .status()?;
+    if !xcframework_status.success() {
+        return Err(anyhow::anyhow!(
+            "xcodebuild failed to create GromnieCore.xcframework"
+        ));
+    }
+
+    println!("Built {}", output.display());
     Ok(())
 }
 

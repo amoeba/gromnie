@@ -4,6 +4,7 @@ members = [
   "crates/gromnie-cli",
   "crates/gromnie-client",
   "crates/gromnie-events",
+  "crates/gromnie-ios-bridge",
   "crates/gromnie-proxy",
   "crates/gromnie-runner",
   "crates/gromnie-scripting-api",
