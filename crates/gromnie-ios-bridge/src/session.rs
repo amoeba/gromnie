@@ -243,6 +243,23 @@ async fn run_client(
             forward_event(emitter, event, &mut character_names);
         }
 
+        // Give up on a stalled handshake instead of leaving the UI stuck on a
+        // spinner. `check_state_timeout` emits an AuthenticationFailed event;
+        // the final drain below forwards it before the terminal event.
+        if client.check_state_timeout() {
+            break 'session "connection timed out".to_string();
+        }
+
+        // If the initial LoginRequest was lost, retry it like the native
+        // runner does (only true while the scene is still Connecting).
+        if client.should_retry() {
+            if let Err(error) = client.do_login().await {
+                emitter.error("connect", error.to_string(), "form");
+                break 'session "could not send login retry".to_string();
+            }
+            client.update_retry_time();
+        }
+
         if last_keepalive.elapsed() >= Duration::from_secs(5) {
             if let Err(error) = client.send_keepalive().await {
                 emitter.error("network", error.to_string(), "form");
@@ -251,6 +268,12 @@ async fn run_client(
             last_keepalive = tokio::time::Instant::now();
         }
     };
+
+    // Forward anything the client emitted on the way out (for example the
+    // timeout's AuthenticationFailed) before the terminal disconnected event.
+    while let Ok(event) = raw_events.try_recv() {
+        forward_event(emitter, event, &mut character_names);
+    }
 
     emitter.disconnected(terminal_reason, user_initiated);
 }
