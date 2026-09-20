@@ -70,12 +70,19 @@ fn main() -> Result<()> {
 }
 
 fn require_command(command: &str, install_hint: &str) -> Result<()> {
-    match Command::new(command).arg("--version").status() {
-        Ok(status) if status.success() => Ok(()),
-        _ => Err(anyhow::anyhow!(
-            "{command} is required. Install it with: {install_hint}"
-        )),
+    // Tools disagree on the version flag (`cbindgen` uses `--version`, while
+    // `xcodebuild` uses `-version`), so accept either and keep the output quiet.
+    for flag in ["--version", "-version"] {
+        if matches!(
+            Command::new(command).arg(flag).output(),
+            Ok(output) if output.status.success()
+        ) {
+            return Ok(());
+        }
     }
+    Err(anyhow::anyhow!(
+        "{command} is required. Install it with: {install_hint}"
+    ))
 }
 
 /// Verify that a tool is installed without assuming it supports a version flag.
