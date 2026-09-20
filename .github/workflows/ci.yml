@@ -38,10 +38,10 @@ jobs:
         run: cargo fmt --all -- --check
 
       - name: Run cargo check
-        run: cargo check --all-targets --all-features
+        run: cargo check --workspace --all-targets --all-features
 
       - name: Run cargo clippy
-        run: cargo clippy --all-targets --all-features -- -D warnings
+        run: cargo clippy --workspace --all-targets --all-features -- -D warnings
 
   prek:
     name: Prek hooks
@@ -103,7 +103,7 @@ jobs:
             ${{ runner.os }}-cargo-test-
 
       - name: Run unit tests
-        run: cargo test --lib --all-features
+        run: cargo test --workspace --lib --all-features
 
       - name: Run integration tests
-        run: cargo test --test '*' --all-features
+        run: cargo test --workspace --test '*' --all-features
