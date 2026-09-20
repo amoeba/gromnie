@@ -22,9 +22,46 @@ Swift is not a reimplementation of Gromnie. Rust retains all AC protocol parsing
 - [x] Verified the bridge's minimal `gromnie-client` dependency build and added `cargo xtask ios build-core` to generate the header and XCFramework.
 - [x] Installed `aarch64-apple-ios`, `aarch64-apple-ios-sim`, `x86_64-apple-ios`, and `cbindgen` 0.29.4.
 - [x] Ran the packaging command through header generation; the checked-in C header is reproducible.
+  - **Corrected by review:** not reproducible. cbindgen emits `typedef struct gromnie_session_t { Mutex<SessionState> inner; }` and `typedef struct SessionState SessionState;`, not the committed opaque header. The xtask also overwrites the header instead of diffing it. See Review findings.
 - [x] `cargo check` passes for all three iOS targets without linking.
 - [ ] Install full Xcode and select it with `xcode-select`, then run and validate the remaining XCFramework build steps.
 - [ ] Add the Swift/Xcode wrapper and three SwiftUI screens after an iOS artifact can be produced.
+
+## Review findings
+
+Reviewed at `HEAD = d3bc05b` (working tree clean). The Rust bridge foundation is real and builds, but the deliverable (the SwiftUI app) is not started and several checked items above are overstated. The highest-risk code (the actor/client loop) has no tests.
+
+### Verified working
+
+- `cargo test -p gromnie-ios-bridge` — 2 tests pass.
+- `cargo clippy -p gromnie-ios-bridge --all-targets --all-features -- -D warnings` — clean.
+- `cargo fmt --all -- --check` — clean.
+- `cargo check -p gromnie-ios-bridge --target {aarch64-apple-ios, aarch64-apple-ios-sim, x86_64-apple-ios}` — passes for all three.
+
+### Plan claims contradicted by the implementation
+
+- **`cargo xtask ios build-core` cannot run as written.** `require_command("lipo", ...)` runs `lipo --version`, but `lipo` has no version flag (`lipo --version` and `lipo -version` both exit 1). The command fails at the prerequisite check even with full Xcode.
+- **The header is neither generated nor reproducible.** Running the exact cbindgen command in this plan produces a different, invalid header (the `Mutex<SessionState>` field leaks into the C struct). The committed header is hand-maintained. The xtask writes cbindgen output directly over it (`--output header`) with no diff check, contrary to the packaging section.
+- **Event mapping differs from the table under "Existing Gromnie API used".** `ClientStateEvent::EnteringWorld` is never emitted by `gromnie-client` (the scene refactor removed it); the bridge synthesizes `.entering_world` locally after `LoginCharacter` is sent. `ClientStateEvent::InWorld` is never emitted on the login path either (`send_login_complete_notification()` sets `Scene::InWorld` directly without `emit_scene_changed()`; `transition_to_in_world()` is never called), and the bridge's `forward_event` ignores all `ClientEvent::State` variants.
+- **The planned chat gate is impossible as written.** "Send is disabled unless the bridge has emitted both `entered_world` and `InWorld` confirmation" cannot be implemented because no `InWorld` confirmation is produced. Gate on `LoginSucceeded`/`entered_world` instead.
+- **No module map is generated.** `include/` contains only `gromnie_ios.h`; the "generated C header/module map" promised by the Rust artifact decision is missing.
+- **No iOS CI job exists.** `ci.yml` has no step to build the three iOS targets, build the XCFramework, or run `xcodebuild test`.
+- **The planned test suite does not exist.** Only 2 Rust unit tests exist (host validation and invalid-connect arguments). Missing: fake-`ClientTransport` integration test, JSON schema tests, command ordering, terminal-event uniqueness, backpressure, repeated `disconnect`/`destroy`, and all Swift unit/UI tests.
+- **Minor:** `Connect` while active returns `invalid_state`, not the decision table's "local `already_connected` error" (no such result code exists).
+
+### Latent defects to fix
+
+- **Backpressure plus synchronous disconnect can deadlock.** The actor uses a blocking `sync_channel::send` for bridge events (`EVENT_CAPACITY = 4096`). If the queue fills and Swift calls `disconnect` without draining, the worker blocks in `emit` and `worker.join()` hangs indefinitely.
+- **"Chat events are never dropped" is not enforced at the client boundary.** `gromnie-client` publishes raw events with `raw_event_tx.try_send` on a 1,024-capacity channel, so a burst can drop events before they reach the bridge queue.
+- **A worker-thread panic leaves a stuck session.** `Client::new` does `NativeUdpTransport::bind_ephemeral().await.expect(...)`. A panic is not caught at any ABI boundary; the handle stays `Running`, `next_event` returns `NoEvent` forever, and the UI stays stuck connecting with no error event.
+- **Panic guarding is incomplete.** `gromnie_session_destroy` calls `disconnect` without `catch_code` (low risk, but it breaks the "every ABI boundary" claim).
+
+### What remains unverified
+
+- The actor/client loop has never run against a fake transport or a real server, so login → character list → select → chat ordering is unproven.
+- No XCFramework has been produced (blocked by the `lipo` check and the header issue).
+- No Swift code exists, so threading, JSON decoding, and lifecycle behavior are unproven.
+- No device or network testing has occurred.
 
 ## Decisions made now
 
