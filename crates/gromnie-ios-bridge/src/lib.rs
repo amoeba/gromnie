@@ -270,7 +270,21 @@ fn disconnect(session: *mut gromnie_session_t) -> ResultCode {
     };
     let _ = running.command_tx.try_send(Command::Disconnect);
     drop(state);
-    if running.worker.join().is_err() {
+
+    // The actor's event queue is bounded and `send` blocks when full. If Swift
+    // stopped draining, the actor can be blocked enqueueing an event and will
+    // never observe the disconnect command. Drain events while waiting so the
+    // actor can make progress and exit. Events are discarded here because the
+    // session is being torn down.
+    let RunningSession {
+        event_rx, worker, ..
+    } = running;
+    while !worker.is_finished() {
+        while event_rx.try_recv().is_ok() {}
+        std::thread::sleep(Duration::from_millis(1));
+    }
+
+    if worker.join().is_err() {
         ResultCode::InternalError
     } else {
         ResultCode::Ok
@@ -340,5 +354,47 @@ mod tests {
         );
 
         unsafe { gromnie_session_destroy(session) };
+    }
+
+    #[test]
+    fn disconnect_drains_events_while_the_actor_is_blocked() {
+        // Simulate an actor that fills the bounded event queue and then blocks
+        // trying to enqueue one more event. `disconnect` must drain the queue so
+        // the actor can exit instead of deadlocking on `worker.join()`.
+        let (command_tx, _command_rx) = tokio::sync::mpsc::channel(1);
+        let (event_tx, event_rx) = std::sync::mpsc::sync_channel(1);
+        let worker = std::thread::spawn(move || {
+            let event = |sequence| crate::event::BridgeEvent {
+                sequence,
+                timestamp_ms: 0,
+                kind: crate::event::BridgeEventKind::Connecting,
+            };
+            event_tx.send(event(1)).unwrap();
+            event_tx.send(event(2)).unwrap(); // blocks until disconnect drains
+        });
+        // Give the worker time to reach the blocking send.
+        std::thread::sleep(Duration::from_millis(20));
+
+        let session = Box::into_raw(Box::new(gromnie_session_t {
+            inner: Mutex::new(SessionState::Running(RunningSession {
+                command_tx,
+                event_rx,
+                worker,
+            })),
+        })) as usize;
+
+        let (done_tx, done_rx) = std::sync::mpsc::channel();
+        let handle = std::thread::spawn(move || {
+            let session = session as *mut gromnie_session_t;
+            let code = unsafe { gromnie_session_disconnect(session) };
+            unsafe { drop(Box::from_raw(session)) };
+            let _ = done_tx.send(code);
+        });
+
+        match done_rx.recv_timeout(Duration::from_secs(5)) {
+            Ok(code) => assert_eq!(code, ResultCode::Ok as i32),
+            Err(_) => panic!("disconnect deadlocked while the actor was blocked"),
+        }
+        handle.join().unwrap();
     }
 }
