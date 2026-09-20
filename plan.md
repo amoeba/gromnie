@@ -14,6 +14,29 @@ Swift is not a reimplementation of Gromnie. Rust retains all AC protocol parsing
 
 ## Progress
 
+**Status as of the current `feat/ios` head (verified locally):**
+
+- The full pipeline works end to end: `cargo xtask ios build-core` →
+  `xcodegen generate` → `xcodebuild` succeeds for both the iOS Simulator and
+  a generic iOS device, and the built app installs and launches in the iOS 27
+  simulator.
+- The bridge has 15 Rust tests: every `ClientEvent` → `BridgeEventKind`
+  mapping, the JSON schema, emitter sequencing, transport-failure surfacing a
+  single terminal event, and disconnect emitting a single terminal event.
+- The app has a `GromnieTests` unit-test target with 11 tests (bridge JSON
+  decoding, host validation, reducer transitions, transcript cap) that pass
+  under `xcodebuild test`.
+- CI runs `cargo check`/`clippy`/`test` with `--workspace` (previously
+  `gromnie-ios-bridge` and `gromnie-web` were skipped via `default-members`) and
+  has an `ios` job that builds the core + XCFramework, generates the project,
+  builds the simulator app, and runs the unit tests.
+- The actor now mirrors the native runner's handshake handling: it retries a
+  lost `LoginRequest` and gives up after the client's 20s state timeout instead
+  of spinning forever.
+- Still unverified: the happy-path login → character list → select → chat flow
+  against a real or fake AC server. `gromnie-client` can still drop raw events
+  if its 1,024-slot channel fills before the actor drains it.
+
 - [x] Added the `gromnie-ios-bridge` workspace crate as a `staticlib`.
 - [x] Added the opaque C session API, Rust-owned session actor, serialized event queue, and C header/configuration scaffold.
 - [x] Connected `LoginCharacter`, `SendChatSay`, and `Disconnect` to the existing Rust client and mapped its character, login, chat, and error events.

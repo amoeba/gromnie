@@ -51,9 +51,23 @@ XcodeGen and are not committed. Re-run `xcodegen generate` after editing
 
 ## Running tests
 
-No iOS simulator runtime is installed by default on this machine. Install one
-before running `xcodebuild test`:
+The `GromnieTests` target (in `Tests/GromnieTests`) covers bridge JSON decoding
+and the `SessionViewModel` reducer. Run it against an installed simulator:
+
+```bash
+cd ios/Gromnie
+xcodebuild -project Gromnie.xcodeproj -scheme Gromnie \
+  -destination 'platform=iOS Simulator,name=iPhone 17' \
+  CODE_SIGNING_ALLOWED=NO test
+```
+
+If no iOS simulator runtime is installed, download one first:
 
 ```bash
 xcodebuild -downloadPlatform iOS
 ```
+
+## Continuous integration
+
+The `ios` GitHub Actions job builds the Rust core, generates the project, builds
+the simulator app, and runs the unit tests on macOS.
