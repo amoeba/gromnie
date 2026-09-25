@@ -6,4 +6,3 @@ usize_is_size_t = true
 
 [parse]
 parse_deps = false
-

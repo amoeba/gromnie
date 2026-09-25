@@ -42,6 +42,7 @@ pub fn start(host: String, port: u16, username: String, password: String) -> Run
 ///
 /// Production code passes `None` so the actor binds a native UDP socket; tests
 /// pass a fake transport to drive the actor without a network.
+#[cfg(test)]
 pub fn start_with_transport(
     host: String,
     port: u16,
@@ -89,6 +90,7 @@ fn start_with_settings(
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn run(
     host: String,
     port: u16,
@@ -136,6 +138,7 @@ fn run(
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 async fn run_client(
     host: String,
     port: u16,
