@@ -120,8 +120,8 @@ dependencies = [
 
 [[package]]
 name = "asheron-rs"
-version = "0.1.1"
-source = "git+https://github.com/amoeba/asheron-rs#d6085f81f985b6530c3e4fd862befbf9c9986502"
+version = "0.1.2"
+source = "git+https://github.com/amoeba/asheron-rs?tag=v0.1.2#f39fed9dc3e2ae163157c3a0871819ce13ac1975"
 dependencies = [
  "anyhow",
  "bitflags",

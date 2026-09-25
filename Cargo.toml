@@ -35,7 +35,7 @@ repository = "https://github.com/amoeba/gromnie.git"
 license = "MIT"
 
 [workspace.dependencies]
-asheron-rs = { git = "https://github.com/amoeba/asheron-rs" }
+asheron-rs = { git = "https://github.com/amoeba/asheron-rs", tag = "v0.1.2" }
 anyhow = "1.0"
 chrono = "0.4"
 dirs = "5"
