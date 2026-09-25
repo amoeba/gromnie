@@ -321,6 +321,7 @@ mod scene_tests {
         let patch_failed = ClientError::PatchingFailed("failed".to_string());
         let login_timeout = ClientError::LoginTimeout;
         let patch_timeout = ClientError::PatchingTimeout;
+        let auth_failed = ClientError::Authentication("bad password".to_string());
 
         // Verify they are different variants
         match conn_failed {
@@ -341,6 +342,11 @@ mod scene_tests {
         match patch_timeout {
             ClientError::PatchingTimeout => {}
             _ => panic!("Expected PatchingTimeout variant"),
+        }
+
+        match auth_failed {
+            ClientError::Authentication(message) => assert_eq!(message, "bad password"),
+            _ => panic!("Expected Authentication variant"),
         }
     }
 

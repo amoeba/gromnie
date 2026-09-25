@@ -2,8 +2,11 @@ use anyhow::Result;
 use clap::{Parser, Subcommand};
 use std::env;
 use std::fs;
-use std::path::PathBuf;
-use std::process::Command;
+use std::path::{Path, PathBuf};
+use std::process::{Command, Stdio};
+
+/// Directory holding the iOS XcodeGen project, relative to the repo root.
+const IOS_APP_DIR: &str = "ios/Gromnie";
 
 #[derive(Parser)]
 struct Cli {
@@ -23,6 +26,11 @@ enum Commands {
         #[command(subcommand)]
         command: WebCommands,
     },
+    /// Build the Rust static library for an iOS application
+    Ios {
+        #[command(subcommand)]
+        command: IosCommands,
+    },
 }
 
 #[derive(Subcommand)]
@@ -39,6 +47,16 @@ enum WebCommands {
     Build,
 }
 
+#[derive(Subcommand)]
+enum IosCommands {
+    /// Generate the C header and package GromnieCore.xcframework
+    BuildCore,
+    /// Generate the Xcode project and build the app for the iOS Simulator
+    BuildApp,
+    /// Generate the Xcode project and run the unit tests on an iOS Simulator
+    Test,
+}
+
 fn main() -> Result<()> {
     let cli = Cli::parse();
 
@@ -50,9 +68,317 @@ fn main() -> Result<()> {
         Commands::Web { command } => match command {
             WebCommands::Build => build_web()?,
         },
+        Commands::Ios { command } => match command {
+            IosCommands::BuildCore => build_ios_core()?,
+            IosCommands::BuildApp => build_ios_app()?,
+            IosCommands::Test => test_ios_app()?,
+        },
     }
 
     Ok(())
+}
+
+fn require_command(command: &str, install_hint: &str) -> Result<()> {
+    // Tools disagree on the version flag (`cbindgen` uses `--version`, while
+    // `xcodebuild` uses `-version`), so accept either and keep the output quiet.
+    for flag in ["--version", "-version"] {
+        if matches!(
+            Command::new(command).arg(flag).output(),
+            Ok(output) if output.status.success()
+        ) {
+            return Ok(());
+        }
+    }
+    Err(anyhow::anyhow!(
+        "{command} is required. Install it with: {install_hint}"
+    ))
+}
+
+/// Verify that a tool is installed without assuming it supports a version flag.
+///
+/// `lipo`, for example, has no `--version`/`-version` flag and exits non-zero
+/// for both, so only the ability to spawn the binary is checked.
+fn require_binary(command: &str, install_hint: &str) -> Result<()> {
+    match Command::new(command).arg("-help").output() {
+        Ok(_) => Ok(()),
+        Err(_) => Err(anyhow::anyhow!(
+            "{command} is required. Install it with: {install_hint}"
+        )),
+    }
+}
+
+fn build_ios_core() -> Result<()> {
+    const IOS_TARGETS: [&str; 3] = [
+        "aarch64-apple-ios",
+        "aarch64-apple-ios-sim",
+        "x86_64-apple-ios",
+    ];
+
+    println!("Building GromnieCore.xcframework...\n");
+    require_command("cbindgen", "cargo install cbindgen")?;
+    require_command(
+        "xcodebuild",
+        "install the full Xcode app and run xcode-select --switch",
+    )?;
+    require_binary(
+        "lipo",
+        "install the full Xcode app and run xcode-select --switch",
+    )?;
+    for target in IOS_TARGETS {
+        ensure_rust_target(target)?;
+    }
+
+    let project_root = project_root()?;
+    let bridge_dir = project_root.join("crates/gromnie-ios-bridge");
+    let header = bridge_dir.join("include/gromnie_ios.h");
+    let generated_header = project_root.join("target/gromnie-ios/gromnie_ios.h");
+    if let Some(parent) = generated_header.parent() {
+        fs::create_dir_all(parent)?;
+    }
+    let cbindgen_status = Command::new("cbindgen")
+        .args([
+            "--config",
+            "cbindgen.toml",
+            "--crate",
+            "gromnie-ios-bridge",
+            "--output",
+        ])
+        .arg(&generated_header)
+        .current_dir(&bridge_dir)
+        .status()?;
+    if !cbindgen_status.success() {
+        return Err(anyhow::anyhow!("cbindgen failed for gromnie-ios-bridge"));
+    }
+    if fs::read(&header)? != fs::read(&generated_header)? {
+        return Err(anyhow::anyhow!(
+            "{} is out of date. Run cbindgen (see plan.md) and commit the generated header.",
+            header.display()
+        ));
+    }
+
+    for target in IOS_TARGETS {
+        let status = Command::new(cargo_bin()?)
+            .args([
+                "build",
+                "-p",
+                "gromnie-ios-bridge",
+                "--release",
+                "--target",
+                target,
+            ])
+            .current_dir(&project_root)
+            .status()?;
+        if !status.success() {
+            return Err(anyhow::anyhow!("cargo build failed for {target}"));
+        }
+    }
+
+    let target_dir = project_root.join("target");
+    let device_library = target_dir.join("aarch64-apple-ios/release/libgromnie_ios_bridge.a");
+    let arm_sim_library = target_dir.join("aarch64-apple-ios-sim/release/libgromnie_ios_bridge.a");
+    let intel_sim_library = target_dir.join("x86_64-apple-ios/release/libgromnie_ios_bridge.a");
+    let universal_sim_library = target_dir.join("gromnie-ios/libgromnie_ios_bridge_sim.a");
+    let universal_sim_parent = universal_sim_library
+        .parent()
+        .ok_or_else(|| anyhow::anyhow!("invalid simulator output path"))?;
+    fs::create_dir_all(universal_sim_parent)?;
+
+    let lipo_status = Command::new("lipo")
+        .args(["-create"])
+        .arg(&arm_sim_library)
+        .arg(&intel_sim_library)
+        .args(["-output"])
+        .arg(&universal_sim_library)
+        .status()?;
+    if !lipo_status.success() {
+        return Err(anyhow::anyhow!(
+            "lipo failed to create the simulator library"
+        ));
+    }
+
+    let output = project_root.join("ios/Gromnie/Frameworks/GromnieCore.xcframework");
+    if output.exists() {
+        fs::remove_dir_all(&output)?;
+    }
+    let output_parent = output
+        .parent()
+        .ok_or_else(|| anyhow::anyhow!("invalid XCFramework output path"))?;
+    fs::create_dir_all(output_parent)?;
+    let xcframework_status = Command::new("xcodebuild")
+        .args(["-create-xcframework", "-library"])
+        .arg(&device_library)
+        .args(["-headers"])
+        .arg(bridge_dir.join("include"))
+        .args(["-library"])
+        .arg(&universal_sim_library)
+        .args(["-headers"])
+        .arg(bridge_dir.join("include"))
+        .args(["-output"])
+        .arg(&output)
+        .status()?;
+    if !xcframework_status.success() {
+        return Err(anyhow::anyhow!(
+            "xcodebuild failed to create GromnieCore.xcframework"
+        ));
+    }
+
+    println!("Built {}", output.display());
+    Ok(())
+}
+
+/// Resolve the cargo that owns the active rustup toolchain. This keeps the
+/// nested cross-target builds (for example the iOS staticlib) on the same
+/// toolchain that has the platform targets installed, even when a different
+/// `cargo` shadows it on `PATH` (for example Homebrew's). Falls back to
+/// `cargo` from `PATH`.
+fn cargo_bin() -> Result<PathBuf> {
+    if let Ok(output) = Command::new("rustup").args(["which", "cargo"]).output()
+        && output.status.success()
+    {
+        let path = String::from_utf8(output.stdout)?;
+        let path = path.trim();
+        if !path.is_empty() {
+            return Ok(PathBuf::from(path));
+        }
+    }
+    Ok(PathBuf::from("cargo"))
+}
+
+fn build_ios_app() -> Result<()> {
+    println!("Building the Gromnie iOS app for the simulator...\n");
+    generate_xcode_project()?;
+    ensure_xcframework()?;
+    let app_dir = project_root()?.join(IOS_APP_DIR);
+    run_xcodebuild(&app_dir, "generic/platform=iOS Simulator", "build")
+}
+
+fn test_ios_app() -> Result<()> {
+    println!("Running the Gromnie iOS unit tests...\n");
+    generate_xcode_project()?;
+    ensure_xcframework()?;
+    let app_dir = project_root()?.join(IOS_APP_DIR);
+    let destination = format!("platform=iOS Simulator,id={}", first_iphone_simulator()?);
+    run_xcodebuild(&app_dir, &destination, "test")
+}
+
+/// Regenerate `ios/Gromnie/Gromnie.xcodeproj` from `project.yml`; the project
+/// file is XcodeGen output and is not committed.
+fn generate_xcode_project() -> Result<()> {
+    require_command("xcodegen", "brew install xcodegen")?;
+    let app_dir = project_root()?.join(IOS_APP_DIR);
+    let status = Command::new("xcodegen")
+        .arg("generate")
+        .current_dir(&app_dir)
+        .status()?;
+    if status.success() {
+        println!(
+            "✓ Generated {}",
+            app_dir.join("Gromnie.xcodeproj").display()
+        );
+        Ok(())
+    } else {
+        Err(anyhow::anyhow!(
+            "xcodegen failed to generate the Xcode project"
+        ))
+    }
+}
+
+/// The app links `GromnieKit` against GromnieCore.xcframework, so require it
+/// before building or testing rather than silently failing deep in xcodebuild.
+fn ensure_xcframework() -> Result<()> {
+    let output = project_root()?.join("ios/Gromnie/Frameworks/GromnieCore.xcframework");
+    if output.exists() {
+        Ok(())
+    } else {
+        Err(anyhow::anyhow!(
+            "{} is missing. Build it first with `cargo xtask ios build-core`.",
+            output.display()
+        ))
+    }
+}
+
+/// Run `xcodebuild` for the Gromnie scheme. `xcodebuild` logs are extremely
+/// chatty (one line per compile step), so the output is piped through
+/// `xcbeautify` when it is installed, matching the standard
+/// `xcodebuild ... | xcbeautify` workflow; otherwise the raw log is shown.
+fn run_xcodebuild(app_dir: &Path, destination: &str, action: &str) -> Result<()> {
+    require_command(
+        "xcodebuild",
+        "install the full Xcode app and run xcode-select --switch",
+    )?;
+
+    let mut command = Command::new("xcodebuild");
+    command
+        .args(["-project", "Gromnie.xcodeproj", "-scheme", "Gromnie"])
+        .args(["-destination"])
+        .arg(destination)
+        .arg(action)
+        .env("CODE_SIGNING_ALLOWED", "NO")
+        .current_dir(app_dir);
+
+    let beautify = Command::new("xcbeautify")
+        .arg("--version")
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .status()
+        .is_ok();
+
+    let succeeded = if beautify {
+        let mut xcodebuild = command
+            .stdout(Stdio::piped())
+            .spawn()
+            .map_err(|error| anyhow::anyhow!("failed to start xcodebuild: {error}"))?;
+        let stdout = xcodebuild.stdout.take().expect("stdout was piped");
+        let formatter_status = Command::new("xcbeautify")
+            .stdin(Stdio::from(stdout))
+            .status();
+        let build_status = xcodebuild.wait()?;
+        build_status.success() && formatter_status.is_ok_and(|status| status.success())
+    } else {
+        command.status()?.success()
+    };
+
+    if succeeded {
+        println!("✓ xcodebuild {action} succeeded\n");
+        Ok(())
+    } else {
+        Err(anyhow::anyhow!("xcodebuild {action} failed"))
+    }
+}
+
+/// Pick the first available iPhone simulator (matching CI) and return its UDID.
+fn first_iphone_simulator() -> Result<String> {
+    let output = Command::new("xcrun")
+        .args(["simctl", "list", "devices", "available"])
+        .output()
+        .map_err(|error| anyhow::anyhow!("failed to list simulators: {error}"))?;
+    let devices = String::from_utf8(output.stdout)?;
+    for line in devices.lines() {
+        if !line.contains("iPhone") {
+            continue;
+        }
+        let Some(open) = line.find('(') else {
+            continue;
+        };
+        let Some(close) = line[open..].find(')') else {
+            continue;
+        };
+        let udid = line[open + 1..open + close].trim();
+        if is_udid(udid) {
+            println!("✓ Using simulator {udid}");
+            return Ok(udid.to_string());
+        }
+    }
+    Err(anyhow::anyhow!(
+        "no available iPhone simulator found; install one with `xcodebuild -downloadPlatform iOS`"
+    ))
+}
+
+fn is_udid(value: &str) -> bool {
+    value.len() == 36
+        && value
+            .bytes()
+            .all(|byte| byte.is_ascii_hexdigit() || byte == b'-')
 }
 
 fn project_root() -> Result<PathBuf> {

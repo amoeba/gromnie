@@ -87,6 +87,8 @@ pub enum ClientError {
     PatchingFailed(String),
     LoginTimeout,
     PatchingTimeout,
+    /// Account-level authentication was rejected (e.g. wrong password)
+    Authentication(String),
 }
 
 impl Default for ConnectingScene {

@@ -35,6 +35,7 @@ The repository is a Cargo workspace. The most important crates:
 | `gromnie-proxy` | WISP proxy server: WebSocket ⇄ UDP, used to reach AC servers from the browser. |
 | `gromnie-wisp` | Shared WISP protocol helpers used by the proxy and web client. |
 | `gromnie-web` | `wasm-bindgen` browser bindings plus a demo UI. |
+| `gromnie-ios-bridge` | `staticlib` C ABI that exposes the client to the SwiftUI iPhone/iPad app. |
 | `xtask` | Build automation (`cargo xtask ...`). |
 
 ### Binaries
@@ -46,6 +47,10 @@ The repository is a Cargo workspace. The most important crates:
 | `discord-bot` | `gromnie-cli` | Bridges a Discord channel and the in-game chat. |
 | `load-tester` | `gromnie-cli` | Spawns many clients to load-test an AC server. |
 | `gromnie-proxy` | `gromnie-proxy` | WISP-over-WebSocket proxy for the browser client. |
+
+The SwiftUI iOS app lives in [`ios/Gromnie`](ios/Gromnie/README.md). Build the
+Rust core with `cargo xtask ios build-core` before generating and building the
+Xcode project; that README has the full steps and the test command.
 
 ### Event flow
 

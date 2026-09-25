@@ -1308,6 +1308,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "gromnie-ios-bridge"
+version = "0.1.0"
+dependencies = [
+ "asheron-rs",
+ "gromnie-client",
+ "gromnie-events",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.18",
+ "tokio",
+]
+
+[[package]]
 name = "gromnie-proxy"
 version = "0.1.0"
 dependencies = [

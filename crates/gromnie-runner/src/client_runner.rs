@@ -632,7 +632,9 @@ async fn run_client_loop(
                     }
                 }
 
-                // Check if we should retry in current state
+                // Check if we should retry in current state. Login retries are
+                // opt-in and off by default (`Client::set_login_retry`), so this
+                // block is inactive unless explicitly enabled.
                 {
                     let mut client_guard = client.write().await;
                     if client_guard.should_retry() {
