@@ -2,8 +2,11 @@ use anyhow::Result;
 use clap::{Parser, Subcommand};
 use std::env;
 use std::fs;
-use std::path::PathBuf;
-use std::process::Command;
+use std::path::{Path, PathBuf};
+use std::process::{Command, Stdio};
+
+/// Directory holding the iOS XcodeGen project, relative to the repo root.
+const IOS_APP_DIR: &str = "ios/Gromnie";
 
 #[derive(Parser)]
 struct Cli {
@@ -48,6 +51,10 @@ enum WebCommands {
 enum IosCommands {
     /// Generate the C header and package GromnieCore.xcframework
     BuildCore,
+    /// Generate the Xcode project and build the app for the iOS Simulator
+    BuildApp,
+    /// Generate the Xcode project and run the unit tests on an iOS Simulator
+    Test,
 }
 
 fn main() -> Result<()> {
@@ -63,6 +70,8 @@ fn main() -> Result<()> {
         },
         Commands::Ios { command } => match command {
             IosCommands::BuildCore => build_ios_core()?,
+            IosCommands::BuildApp => build_ios_app()?,
+            IosCommands::Test => test_ios_app()?,
         },
     }
 
@@ -148,7 +157,7 @@ fn build_ios_core() -> Result<()> {
     }
 
     for target in IOS_TARGETS {
-        let status = Command::new("cargo")
+        let status = Command::new(cargo_bin()?)
             .args([
                 "build",
                 "-p",
@@ -215,6 +224,161 @@ fn build_ios_core() -> Result<()> {
 
     println!("Built {}", output.display());
     Ok(())
+}
+
+/// Resolve the cargo that owns the active rustup toolchain. This keeps the
+/// nested cross-target builds (for example the iOS staticlib) on the same
+/// toolchain that has the platform targets installed, even when a different
+/// `cargo` shadows it on `PATH` (for example Homebrew's). Falls back to
+/// `cargo` from `PATH`.
+fn cargo_bin() -> Result<PathBuf> {
+    if let Ok(output) = Command::new("rustup").args(["which", "cargo"]).output()
+        && output.status.success()
+    {
+        let path = String::from_utf8(output.stdout)?;
+        let path = path.trim();
+        if !path.is_empty() {
+            return Ok(PathBuf::from(path));
+        }
+    }
+    Ok(PathBuf::from("cargo"))
+}
+
+fn build_ios_app() -> Result<()> {
+    println!("Building the Gromnie iOS app for the simulator...\n");
+    generate_xcode_project()?;
+    ensure_xcframework()?;
+    let app_dir = project_root()?.join(IOS_APP_DIR);
+    run_xcodebuild(&app_dir, "generic/platform=iOS Simulator", "build")
+}
+
+fn test_ios_app() -> Result<()> {
+    println!("Running the Gromnie iOS unit tests...\n");
+    generate_xcode_project()?;
+    ensure_xcframework()?;
+    let app_dir = project_root()?.join(IOS_APP_DIR);
+    let destination = format!("platform=iOS Simulator,id={}", first_iphone_simulator()?);
+    run_xcodebuild(&app_dir, &destination, "test")
+}
+
+/// Regenerate `ios/Gromnie/Gromnie.xcodeproj` from `project.yml`; the project
+/// file is XcodeGen output and is not committed.
+fn generate_xcode_project() -> Result<()> {
+    require_command("xcodegen", "brew install xcodegen")?;
+    let app_dir = project_root()?.join(IOS_APP_DIR);
+    let status = Command::new("xcodegen")
+        .arg("generate")
+        .current_dir(&app_dir)
+        .status()?;
+    if status.success() {
+        println!(
+            "✓ Generated {}",
+            app_dir.join("Gromnie.xcodeproj").display()
+        );
+        Ok(())
+    } else {
+        Err(anyhow::anyhow!(
+            "xcodegen failed to generate the Xcode project"
+        ))
+    }
+}
+
+/// The app links `GromnieKit` against GromnieCore.xcframework, so require it
+/// before building or testing rather than silently failing deep in xcodebuild.
+fn ensure_xcframework() -> Result<()> {
+    let output = project_root()?.join("ios/Gromnie/Frameworks/GromnieCore.xcframework");
+    if output.exists() {
+        Ok(())
+    } else {
+        Err(anyhow::anyhow!(
+            "{} is missing. Build it first with `cargo xtask ios build-core`.",
+            output.display()
+        ))
+    }
+}
+
+/// Run `xcodebuild` for the Gromnie scheme. `xcodebuild` logs are extremely
+/// chatty (one line per compile step), so the output is piped through
+/// `xcbeautify` when it is installed, matching the standard
+/// `xcodebuild ... | xcbeautify` workflow; otherwise the raw log is shown.
+fn run_xcodebuild(app_dir: &Path, destination: &str, action: &str) -> Result<()> {
+    require_command(
+        "xcodebuild",
+        "install the full Xcode app and run xcode-select --switch",
+    )?;
+
+    let mut command = Command::new("xcodebuild");
+    command
+        .args(["-project", "Gromnie.xcodeproj", "-scheme", "Gromnie"])
+        .args(["-destination"])
+        .arg(destination)
+        .arg(action)
+        .env("CODE_SIGNING_ALLOWED", "NO")
+        .current_dir(app_dir);
+
+    let beautify = Command::new("xcbeautify")
+        .arg("--version")
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .status()
+        .is_ok();
+
+    let succeeded = if beautify {
+        let mut xcodebuild = command
+            .stdout(Stdio::piped())
+            .spawn()
+            .map_err(|error| anyhow::anyhow!("failed to start xcodebuild: {error}"))?;
+        let stdout = xcodebuild.stdout.take().expect("stdout was piped");
+        let formatter_status = Command::new("xcbeautify")
+            .stdin(Stdio::from(stdout))
+            .status();
+        let build_status = xcodebuild.wait()?;
+        build_status.success() && formatter_status.is_ok_and(|status| status.success())
+    } else {
+        command.status()?.success()
+    };
+
+    if succeeded {
+        println!("✓ xcodebuild {action} succeeded\n");
+        Ok(())
+    } else {
+        Err(anyhow::anyhow!("xcodebuild {action} failed"))
+    }
+}
+
+/// Pick the first available iPhone simulator (matching CI) and return its UDID.
+fn first_iphone_simulator() -> Result<String> {
+    let output = Command::new("xcrun")
+        .args(["simctl", "list", "devices", "available"])
+        .output()
+        .map_err(|error| anyhow::anyhow!("failed to list simulators: {error}"))?;
+    let devices = String::from_utf8(output.stdout)?;
+    for line in devices.lines() {
+        if !line.contains("iPhone") {
+            continue;
+        }
+        let Some(open) = line.find('(') else {
+            continue;
+        };
+        let Some(close) = line[open..].find(')') else {
+            continue;
+        };
+        let udid = line[open + 1..open + close].trim();
+        if is_udid(udid) {
+            println!("✓ Using simulator {udid}");
+            return Ok(udid.to_string());
+        }
+    }
+    Err(anyhow::anyhow!(
+        "no available iPhone simulator found; install one with `xcodebuild -downloadPlatform iOS`"
+    ))
+}
+
+fn is_udid(value: &str) -> bool {
+    value.len() == 36
+        && value
+            .bytes()
+            .all(|byte| byte.is_ascii_hexdigit() || byte == b'-')
 }
 
 fn project_root() -> Result<PathBuf> {

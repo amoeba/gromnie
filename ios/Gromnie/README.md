@@ -49,10 +49,32 @@ xcodebuild -project Gromnie.xcodeproj -scheme Gromnie \
 XcodeGen and are not committed. Re-run `xcodegen generate` after editing
 `project.yml` or adding/removing source files.
 
+### One-liners through xtask
+
+The `build-core` step above already funnels through
+`cargo xtask ios build-core`; the app build and tests use the same entry point:
+
+```bash
+cargo xtask ios build-app   # xcodegen generate + xcodebuild build (simulator)
+cargo xtask ios test        # xcodegen generate + xcodebuild test (first iPhone simulator)
+```
+
+Both require the XCFramework built by `cargo xtask ios build-core` first, and
+fail with a hint if it is missing. If `xcbeautify` is installed (`brew install
+xcbeautify`), their logs are formatted instead of dumping every compile line;
+otherwise the raw `xcodebuild` log is shown.
+
 ## Running tests
 
 The `GromnieTests` target (in `Tests/GromnieTests`) covers bridge JSON decoding
-and the `SessionViewModel` reducer. Run it against an installed simulator:
+and the `SessionViewModel` reducer. Run it with the same entry point (it picks
+the first available iPhone simulator):
+
+```bash
+cargo xtask ios test
+```
+
+Or with an explicit simulator:
 
 ```bash
 cd ios/Gromnie
