@@ -2,6 +2,8 @@ use std::future::Future;
 use std::net::SocketAddr;
 use std::pin::Pin;
 
+use tracing::debug;
+
 use crate::client::ServerInfo;
 
 pub type TransportFuture<'a, T> =
@@ -50,12 +52,30 @@ impl ClientTransport for NativeUdpTransport {
                 TransportChannel::Login => server.login_addr().await?,
                 TransportChannel::World => server.world_addr().await?,
             };
+            debug!(
+                target: "net",
+                "📤 TX {} bytes -> {} [{:?}]: {:02X?}",
+                bytes.len(),
+                dest_addr,
+                channel,
+                bytes
+            );
             self.socket.send_to(&bytes, dest_addr).await?;
             Ok(())
         })
     }
 
     fn recv<'a>(&'a mut self, buf: &'a mut [u8]) -> TransportFuture<'a, (usize, SocketAddr)> {
-        Box::pin(async move { self.socket.recv_from(buf).await })
+        Box::pin(async move {
+            let (size, from_addr) = self.socket.recv_from(buf).await?;
+            debug!(
+                target: "net",
+                "📥 RX {} bytes <- {}: {:02X?}",
+                size,
+                from_addr,
+                &buf[..size]
+            );
+            Ok((size, from_addr))
+        })
     }
 }

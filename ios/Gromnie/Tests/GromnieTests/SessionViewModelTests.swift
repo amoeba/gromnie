@@ -136,6 +136,45 @@ final class SessionViewModelTests: XCTestCase {
         XCTAssertEqual(viewModel.status, .disconnected("Disconnected"))
     }
 
+    func testCancellingWhileConnectingReturnsToForm() {
+        // The Cancel button during the handshake must tear the session down
+        // and return to the server form instead of pinning "Connecting…".
+        let viewModel = SessionViewModel()
+        viewModel.handle(
+            decode(#"{"sequence":1,"timestamp_ms":1,"type":"connecting"}"#)
+        )
+        XCTAssertTrue(viewModel.isConnecting)
+
+        viewModel.disconnect()
+
+        XCTAssertEqual(viewModel.screen, .form)
+        XCTAssertEqual(viewModel.status, .disconnected("Disconnected"))
+        XCTAssertFalse(viewModel.isConnecting)
+    }
+
+    func testRejectedPasswordShowsServerReasonAndReturnsToForm() {
+        // The server rejects a wrong password with LoginAccountBooted; the
+        // bridge forwards it as an authentication error and then ends the
+        // session. The server's reason must survive the terminal disconnect.
+        let viewModel = SessionViewModel()
+        viewModel.handle(
+            decode(
+                #"{"sequence":1,"timestamp_ms":1,"type":"error","code":"authentication","message":"because the password entered for this account was not correct","recover_to":"form"}"#
+            )
+        )
+        viewModel.handle(
+            decode(
+                #"{"sequence":2,"timestamp_ms":2,"type":"disconnected","reason":"authentication failed","user_initiated":false}"#
+            )
+        )
+
+        XCTAssertEqual(viewModel.screen, .form)
+        XCTAssertEqual(
+            viewModel.status,
+            .error("because the password entered for this account was not correct")
+        )
+    }
+
     func testChatTranscriptIsBounded() {
         let viewModel = SessionViewModel()
 

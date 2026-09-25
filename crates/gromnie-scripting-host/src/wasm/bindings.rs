@@ -280,6 +280,9 @@ fn convert_scene_to_wit(scene: &gromnie_client::client::Scene) -> gromnie::scrip
                 ClientError::PatchingTimeout => {
                     gromnie::scripting::host::ClientError::PatchingTimeout
                 }
+                ClientError::Authentication(msg) => {
+                    gromnie::scripting::host::ClientError::Authentication(msg.clone())
+                }
             };
 
             gromnie::scripting::host::Scene::Error(gromnie::scripting::host::ErrorScene {

@@ -99,6 +99,10 @@ pub struct Client {
     reconnect_config: crate::config::ReconnectConfig,
     pub(crate) reconnect_attempt_count: u32, // Track reconnection attempts across state transitions
     pub(crate) reconnect_at: Option<crate::instant::Instant>, // When to attempt reconnection (None if not waiting)
+    /// How long a Connecting scene may sit without a response before it is
+    /// considered to have timed out. Defaults to 20s; UIs that want faster
+    /// login-failure feedback can shorten it with `set_login_timeout`.
+    login_timeout: std::time::Duration,
     /// Optional character name to auto-login with after receiving character list
     pub(crate) character: Option<String>,
     /// Pending auto-login action to be processed after character list is received
@@ -205,6 +209,8 @@ impl Client {
             crate::config::ReconnectConfig::default()
         };
 
+        const DEFAULT_LOGIN_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(20);
+
         let client = Client {
             id,
             server: ServerInfo::new(host, login_port),
@@ -234,6 +240,7 @@ impl Client {
             reconnect_config,
             reconnect_attempt_count: 0,
             reconnect_at: None,
+            login_timeout: DEFAULT_LOGIN_TIMEOUT,
             character,
             pending_auto_login: None,
             pending_trade: None,
@@ -691,12 +698,12 @@ impl Client {
         self.id
     }
 
-    /// Check if current state has timed out (20s timeout for Connecting and Patching)
+    /// Check if current state has timed out (configurable timeout for Connecting/Patching)
     pub fn check_state_timeout(&mut self) -> bool {
-        const TIMEOUT_DURATION: std::time::Duration = std::time::Duration::from_secs(20);
+        let timeout_duration = self.login_timeout;
 
         if let Some(connecting) = self.scene.as_connecting()
-            && connecting.has_timed_out(TIMEOUT_DURATION)
+            && connecting.has_timed_out(timeout_duration)
         {
             // Determine if we're in Connecting or Patching phase
             let phase = if matches!(connecting.patch_progress, PatchingProgress::NotStarted) {
@@ -705,7 +712,7 @@ impl Client {
                 "Patching"
             };
 
-            info!(target: "net", "{} timeout - no response after 20s (patch_progress: {:?})", phase, connecting.patch_progress);
+            info!(target: "net", "{} timeout - no response after {:?} (patch_progress: {:?})", phase, timeout_duration, connecting.patch_progress);
 
             // Reconnection behavior on timeout:
             // - Initial connection attempts (reconnect_attempt_count == 0) always fail permanently
@@ -753,6 +760,12 @@ impl Client {
         if let Some(connecting) = self.scene.as_connecting_mut() {
             connecting.update_retry_time();
         }
+    }
+
+    /// Override how long a Connecting scene may wait for a response before
+    /// `check_state_timeout` fails it. Defaults to 20 seconds.
+    pub fn set_login_timeout(&mut self, timeout: std::time::Duration) {
+        self.login_timeout = timeout;
     }
 
     /// Check if client should attempt to reconnect
@@ -1330,6 +1343,12 @@ impl Client {
                             self, message, &event_tx,
                         )
                         .ok();
+                    }
+                    S2CMessage::LoginAccountBooted => {
+                        // Parsed tolerantly: servers send the reason as one or
+                        // more AC strings, not always the two fields the
+                        // generated reader expects.
+                        self.handle_login_account_booted(message);
                     }
                     S2CMessage::QualitiesPrivateUpdateInt => {
                         dispatch_message::<asheron_rs::messages::s2c::QualitiesPrivateUpdateInt, _>(
@@ -2256,5 +2275,133 @@ impl GameEventHandler<MagicRemoveEnchantment> for Client {
     fn handle(&mut self, event: MagicRemoveEnchantment) -> Option<GameEvent> {
         info!(target: "net", "Enchantment removed: spell_id={}", event.spell_id.id.0);
         None
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::client::message_handlers::parse_boot_reason;
+    use crate::transport::TransportFuture;
+
+    /// A transport that never talks to the network.
+    struct NoopTransport;
+
+    impl ClientTransport for NoopTransport {
+        fn send<'a>(
+            &'a mut self,
+            _server: &'a ServerInfo,
+            _channel: TransportChannel,
+            _bytes: Vec<u8>,
+        ) -> TransportFuture<'a, ()> {
+            Box::pin(async { Ok(()) })
+        }
+
+        fn recv<'a>(&'a mut self, _buf: &'a mut [u8]) -> TransportFuture<'a, (usize, SocketAddr)> {
+            Box::pin(async { Ok((0, "127.0.0.1:1".parse().unwrap())) })
+        }
+    }
+
+    /// Append an AC-protocol string (u16 length prefix + bytes).
+    fn push_ac_string(data: &mut Vec<u8>, text: &str) {
+        data.extend_from_slice(&(text.len() as u16).to_le_bytes());
+        data.extend_from_slice(text.as_bytes());
+    }
+
+    #[test]
+    fn boot_reason_tolerates_single_string_payload() {
+        // The payload coldeve actually sends: one AC string (u16 length + bytes,
+        // padded to 4 bytes) and nothing else.
+        let mut payload = Vec::new();
+        push_ac_string(
+            &mut payload,
+            " because the password entered for this account was not correct",
+        );
+        assert_eq!(
+            parse_boot_reason(&payload),
+            "because the password entered for this account was not correct"
+        );
+
+        // The generated two-field layout (additional_reason_text + empty
+        // reason_text, each padded to 4 bytes) parses to the same reason.
+        let mut padded = Vec::new();
+        push_ac_string(
+            &mut padded,
+            " because the password entered for this account was not correct",
+        );
+        push_ac_string(&mut padded, "");
+        assert_eq!(
+            parse_boot_reason(&padded),
+            "because the password entered for this account was not correct"
+        );
+    }
+
+    #[tokio::test]
+    async fn login_account_booted_fails_authentication_and_stops_retries() {
+        let (event_tx, mut event_rx) = mpsc::channel(8);
+        let (mut client, _action_tx) = Client::new_with_transport(
+            1,
+            "127.0.0.1:9000".to_string(),
+            "acct".to_string(),
+            "pw".to_string(),
+            None,
+            event_tx,
+            false,
+            Box::new(NoopTransport),
+        )
+        .await;
+
+        // Synthesize the LoginAccountBooted (0xF7DC) message exactly as a
+        // server fragments it, using the payload captured from a real
+        // wrong-password login: opcode + one AC-reason string.
+        let mut data = Vec::new();
+        data.extend_from_slice(&0xF7DCu32.to_le_bytes());
+        push_ac_string(
+            &mut data,
+            " because the password entered for this account was not correct",
+        );
+
+        client.message_queue.push_back(RawMessage {
+            id: 0x8000_0000,
+            opcode: 0xF7DC,
+            message_type: "Login_AccountBooted".to_string(),
+            direction: "Recv".to_string(),
+            queue: None,
+            data,
+            sequence: 2,
+            iteration: Some(0x24),
+            header_flags: Some(0x0006),
+        });
+        client.process_messages();
+
+        // The scene must leave Connecting and be non-retryable so the running
+        // loop stops re-sending LoginRequest (the pre-fix pinning behavior).
+        match &client.scene {
+            Scene::Error(error) => {
+                assert!(!error.can_retry);
+                match &error.error {
+                    ClientError::Authentication(reason) => assert_eq!(
+                        reason,
+                        "because the password entered for this account was not correct"
+                    ),
+                    other => panic!("expected Authentication error, got {:?}", other),
+                }
+            }
+            other => panic!("expected Error scene, got {:?}", other),
+        }
+
+        // The failure must be surfaced for the UI (the bridge maps this to an
+        // authentication error that returns to the server-select form).
+        let mut auth_reason = None;
+        while let Ok(event) = event_rx.try_recv() {
+            if let ClientEvent::System(ClientSystemEvent::AuthenticationFailed { reason }) = event {
+                auth_reason = Some(reason);
+            }
+        }
+        let auth_reason = auth_reason.expect("expected an AuthenticationFailed event");
+        assert_eq!(
+            auth_reason,
+            "because the password entered for this account was not correct"
+        );
     }
 }

@@ -24,6 +24,10 @@ pub struct Cli {
     #[arg(short, long)]
     account: Option<String>,
 
+    /// Password to use. Overrides password set in config.toml.
+    #[arg(long)]
+    password: Option<String>,
+
     /// Enable automatic reconnection on connection loss
     #[arg(long, conflicts_with = "no_reconnect")]
     reconnect: bool,
@@ -134,7 +138,10 @@ async fn main() -> Result<(), Box<dyn Error>> {
                 id: 0,
                 address,
                 account_name: account.username.clone(),
-                password: account.password.clone(),
+                password: cli
+                    .password
+                    .clone()
+                    .unwrap_or_else(|| account.password.clone()),
                 // CLI flags override config file: --reconnect enables, --no-reconnect disables
                 reconnect: if cli.no_reconnect {
                     false
@@ -193,7 +200,10 @@ async fn main() -> Result<(), Box<dyn Error>> {
             id: 0,
             address,
             account_name: account.username.clone(),
-            password: account.password.clone(),
+            password: cli
+                .password
+                .clone()
+                .unwrap_or_else(|| account.password.clone()),
             // CLI flags override config file: --reconnect enables, --no-reconnect disables
             reconnect: if cli.no_reconnect {
                 false

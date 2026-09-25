@@ -31,20 +31,24 @@ struct ConnectionView: View {
                 }
 
                 Section {
-                    Button {
-                        session.connect()
-                    } label: {
-                        if session.isConnecting {
+                    if session.isConnecting {
+                        Button {
+                            session.disconnect()
+                        } label: {
                             HStack {
                                 ProgressView()
-                                Text("Connecting…")
+                                Text("Cancel")
                             }
-                        } else {
+                        }
+                        .accessibilityIdentifier("cancelConnectButton")
+                    } else {
+                        Button {
+                            session.connect()
+                        } label: {
                             Text("Connect")
                         }
+                        .accessibilityIdentifier("connectButton")
                     }
-                    .disabled(session.isConnecting)
-                    .accessibilityIdentifier("connectButton")
                 }
 
                 if case .error(let message) = session.status {

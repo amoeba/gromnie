@@ -21,6 +21,13 @@ const RAW_EVENT_CAPACITY: usize = 4_096;
 /// The client does not retransmit `CharacterEnterWorldRequest`, so give up if
 /// the character login is not acknowledged within this window.
 const ENTER_WORLD_TIMEOUT: Duration = Duration::from_secs(20);
+/// How long the initial login may sit without a server response before we
+/// surface an authentication failure. Rejected credentials are usually reported
+/// much faster via the server's `LoginAccountBooted` message (see
+/// `message_handlers.rs`); this is the fallback for an unreachable or silent
+/// host so the app never pins the "Connecting…" spinner. Shorter than the
+/// client's 20s default.
+const LOGIN_TIMEOUT: Duration = Duration::from_secs(10);
 
 #[derive(Debug)]
 pub enum Command {
@@ -36,7 +43,7 @@ pub struct RunningSession {
 }
 
 pub fn start(host: String, port: u16, username: String, password: String) -> RunningSession {
-    start_with_transport(host, port, username, password, None)
+    start_with_timeout(host, port, username, password, LOGIN_TIMEOUT, None)
 }
 
 /// Start a session with an explicitly supplied transport.
@@ -50,13 +57,33 @@ pub fn start_with_transport(
     password: String,
     transport: Option<Box<dyn ClientTransport>>,
 ) -> RunningSession {
+    start_with_timeout(host, port, username, password, LOGIN_TIMEOUT, transport)
+}
+
+/// Start a session with both a custom login timeout and transport; tests use a
+/// short timeout to exercise the login-failure path quickly.
+fn start_with_timeout(
+    host: String,
+    port: u16,
+    username: String,
+    password: String,
+    login_timeout: Duration,
+    transport: Option<Box<dyn ClientTransport>>,
+) -> RunningSession {
     let (command_tx, command_rx) = tokio::sync::mpsc::channel(COMMAND_CAPACITY);
     let (event_tx, event_rx) = mpsc::sync_channel(EVENT_CAPACITY);
     let worker = thread::Builder::new()
         .name("gromnie-ios-session".to_string())
         .spawn(move || {
             run(
-                host, port, username, password, command_rx, event_tx, transport,
+                host,
+                port,
+                username,
+                password,
+                command_rx,
+                event_tx,
+                login_timeout,
+                transport,
             )
         })
         .expect("failed to create gromnie session thread");
@@ -75,6 +102,7 @@ fn run(
     password: String,
     command_rx: CommandReceiver<Command>,
     event_tx: SyncSender<BridgeEvent>,
+    login_timeout: Duration,
     transport: Option<Box<dyn ClientTransport>>,
 ) {
     let mut emitter = Emitter::new(event_tx);
@@ -99,6 +127,7 @@ fn run(
             username,
             password,
             command_rx,
+            login_timeout,
             &mut emitter,
             transport,
         ));
@@ -119,6 +148,7 @@ async fn run_client(
     username: String,
     password: String,
     mut command_rx: CommandReceiver<Command>,
+    login_timeout: Duration,
     emitter: &mut Emitter,
     transport: Option<Box<dyn ClientTransport>>,
 ) {
@@ -148,6 +178,7 @@ async fn run_client(
         transport,
     )
     .await;
+    client.set_login_timeout(login_timeout);
 
     if let Err(error) = client.do_login().await {
         emitter.error("connect", error.to_string(), "form");
@@ -259,6 +290,19 @@ async fn run_client(
                 )
             ) {
                 entering_world_since = None;
+            }
+            // An authentication failure ends the session. Servers accept any
+            // LoginRequest at the transport handshake and reject the
+            // credentials afterwards with `LoginAccountBooted`; `check_state_timeout`
+            // covers the silent-host case. Either way, forward the failure
+            // before the terminal event so Swift returns to the server form
+            // with the real reason instead of pinning "Connecting…".
+            if matches!(
+                event,
+                ClientEvent::System(ClientSystemEvent::AuthenticationFailed { .. })
+            ) {
+                forward_event(emitter, event, &mut character_names);
+                break 'session "authentication failed".to_string();
             }
             forward_event(emitter, event, &mut character_names);
         }

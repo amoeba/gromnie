@@ -13,7 +13,8 @@ use crate::client::messages::{OutgoingMessage, OutgoingMessageContent};
 use crate::client::protocol_conversions::ToProtocolEvent;
 use crate::client::scene::ClientError;
 use crate::client::{ClientEvent, GameEvent};
-use gromnie_events::ProtocolEvent;
+use asheron_rs::network::RawMessage;
+use gromnie_events::{ClientSystemEvent, ProtocolEvent};
 
 /// Handle LoginCreatePlayer messages
 impl MessageHandler<asheron_rs::messages::s2c::LoginCreatePlayer> for Client {
@@ -170,6 +171,61 @@ impl MessageHandler<asheron_rs::messages::s2c::CharacterCharacterError> for Clie
             error_code,
             error_message,
         })
+    }
+}
+
+/// Tolerantly read the reason strings from a `LoginAccountBooted` payload.
+///
+/// Servers send the boot reason as 16-bit-length-prefixed AC strings (padded to
+/// a 4-byte boundary). Some servers send only the reason text; the generated
+/// `LoginAccountBooted` reader unconditionally reads a second `reason_text`
+/// field and fails on that layout, so read whatever strings are present.
+pub(crate) fn parse_boot_reason(payload: &[u8]) -> String {
+    use asheron_rs::readers::read_string;
+
+    let mut parts = Vec::new();
+    let mut cursor = std::io::Cursor::new(payload);
+    while let Ok(text) = read_string(&mut cursor) {
+        let trimmed = text.trim();
+        if !trimmed.is_empty() {
+            parts.push(trimmed.to_string());
+        }
+    }
+    parts.join(" ")
+}
+
+/// Handle LoginAccountBooted messages.
+///
+/// Servers accept any LoginRequest at the transport handshake (they reply with
+/// a ConnectRequest regardless of credentials) and reject the credentials
+/// afterwards with this message. It must be surfaced as an authentication
+/// failure and end the connecting phase — otherwise the client keeps retrying
+/// LoginRequest while the server bounces every retry with a fresh
+/// ConnectRequest (which re-arms the connecting timeout, pinning the UI on
+/// "Connecting…" indefinitely).
+impl Client {
+    pub(crate) fn handle_login_account_booted(&mut self, message: RawMessage) {
+        let reason = if message.data.len() >= 4 {
+            parse_boot_reason(&message.data[4..])
+        } else {
+            String::new()
+        };
+        let reason = if reason.is_empty() {
+            "The server rejected this account.".to_string()
+        } else {
+            reason
+        };
+
+        error!(target: "net", "Account booted — login rejected: {}", reason);
+
+        // Stop the retry loop: this login attempt is over.
+        self.transition_to_error(ClientError::Authentication(reason.clone()), false);
+
+        // Surface the failure with the server's reason so UIs return to the
+        // server-select screen instead of staying stuck on "Connecting…".
+        let _ = self.raw_event_tx.try_send(ClientEvent::System(
+            ClientSystemEvent::AuthenticationFailed { reason },
+        ));
     }
 }
 

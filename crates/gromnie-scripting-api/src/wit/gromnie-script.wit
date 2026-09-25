@@ -116,6 +116,7 @@ interface host {
         patching-failed(string),
         login-timeout,
         patching-timeout,
+        authentication(string),
     }
 
     /// ===== Events =====
