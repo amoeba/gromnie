@@ -21,14 +21,6 @@ const RAW_EVENT_CAPACITY: usize = 4_096;
 /// The client does not retransmit `CharacterEnterWorldRequest`, so give up if
 /// the character login is not acknowledged within this window.
 const ENTER_WORLD_TIMEOUT: Duration = Duration::from_secs(20);
-/// How long the initial login may sit without a server response before we
-/// surface an authentication failure. Rejected credentials are usually reported
-/// much faster via the server's `LoginAccountBooted` message (see
-/// `message_handlers.rs`); this is the fallback for an unreachable or silent
-/// host so the app never pins the "Connecting…" spinner. Shorter than the
-/// client's 20s default.
-const LOGIN_TIMEOUT: Duration = Duration::from_secs(10);
-
 #[derive(Debug)]
 pub enum Command {
     SelectCharacter(u32),
@@ -43,7 +35,7 @@ pub struct RunningSession {
 }
 
 pub fn start(host: String, port: u16, username: String, password: String) -> RunningSession {
-    start_with_timeout(host, port, username, password, LOGIN_TIMEOUT, None)
+    start_with_settings(host, port, username, password, None, None)
 }
 
 /// Start a session with an explicitly supplied transport.
@@ -57,17 +49,19 @@ pub fn start_with_transport(
     password: String,
     transport: Option<Box<dyn ClientTransport>>,
 ) -> RunningSession {
-    start_with_timeout(host, port, username, password, LOGIN_TIMEOUT, transport)
+    start_with_settings(host, port, username, password, None, transport)
 }
 
-/// Start a session with both a custom login timeout and transport; tests use a
-/// short timeout to exercise the login-failure path quickly.
-fn start_with_timeout(
+/// Start a session with an optional login-timeout override and transport.
+/// `None` for the timeout keeps the client's 20s default (a connecting
+/// handshake with no server response times out after 20s); tests pass a short
+/// timeout to exercise the login-failure path quickly.
+fn start_with_settings(
     host: String,
     port: u16,
     username: String,
     password: String,
-    login_timeout: Duration,
+    login_timeout: Option<Duration>,
     transport: Option<Box<dyn ClientTransport>>,
 ) -> RunningSession {
     let (command_tx, command_rx) = tokio::sync::mpsc::channel(COMMAND_CAPACITY);
@@ -102,7 +96,7 @@ fn run(
     password: String,
     command_rx: CommandReceiver<Command>,
     event_tx: SyncSender<BridgeEvent>,
-    login_timeout: Duration,
+    login_timeout: Option<Duration>,
     transport: Option<Box<dyn ClientTransport>>,
 ) {
     let mut emitter = Emitter::new(event_tx);
@@ -148,7 +142,7 @@ async fn run_client(
     username: String,
     password: String,
     mut command_rx: CommandReceiver<Command>,
-    login_timeout: Duration,
+    login_timeout: Option<Duration>,
     emitter: &mut Emitter,
     transport: Option<Box<dyn ClientTransport>>,
 ) {
@@ -178,7 +172,10 @@ async fn run_client(
         transport,
     )
     .await;
-    client.set_login_timeout(login_timeout);
+    // `None` keeps the client's 20s default; tests may shorten it.
+    if let Some(timeout) = login_timeout {
+        client.set_login_timeout(timeout);
+    }
 
     if let Err(error) = client.do_login().await {
         emitter.error("connect", error.to_string(), "form");
@@ -327,8 +324,9 @@ async fn run_client(
             break 'session "entering world timed out".to_string();
         }
 
-        // If the initial LoginRequest was lost, retry it like the native
-        // runner does (only true while the scene is still Connecting).
+        // Login retries are opt-in and off by default, so this only fires when
+        // a caller explicitly enabled them (see `Client::set_login_retry`).
+        // Otherwise a stalled handshake times out via `check_state_timeout`.
         if client.should_retry() {
             if let Err(error) = client.do_login().await {
                 emitter.error("connect", error.to_string(), "form");
@@ -462,6 +460,8 @@ mod tests {
     use gromnie_client::transport::{TransportChannel, TransportFuture};
     use gromnie_events::ClientStateEvent;
     use std::net::SocketAddr;
+    use std::sync::Arc;
+    use std::sync::atomic::{AtomicUsize, Ordering};
 
     /// A transport that accepts outgoing packets but fails every receive, which
     /// exercises the actor's fatal-error path without a network.
@@ -498,6 +498,29 @@ mod tests {
             _channel: TransportChannel,
             _bytes: Vec<u8>,
         ) -> TransportFuture<'a, ()> {
+            Box::pin(async { Ok(()) })
+        }
+
+        fn recv<'a>(&'a mut self, _buf: &'a mut [u8]) -> TransportFuture<'a, (usize, SocketAddr)> {
+            Box::pin(std::future::pending::<
+                Result<(usize, SocketAddr), std::io::Error>,
+            >())
+        }
+    }
+
+    /// A transport that counts every outgoing packet and never delivers one, so
+    /// a test can assert the actor's send behavior while the session idles
+    /// until the login timeout fires.
+    struct CountingTransport(Arc<AtomicUsize>);
+
+    impl ClientTransport for CountingTransport {
+        fn send<'a>(
+            &'a mut self,
+            _server: &'a ServerInfo,
+            _channel: TransportChannel,
+            _bytes: Vec<u8>,
+        ) -> TransportFuture<'a, ()> {
+            self.0.fetch_add(1, Ordering::SeqCst);
             Box::pin(async { Ok(()) })
         }
 
@@ -756,5 +779,64 @@ mod tests {
                 ..
             })
         ));
+    }
+
+    #[test]
+    fn silent_login_times_out_without_auto_retrying() {
+        // Auto-retry is off by default: the initial LoginRequest is sent once,
+        // but a silent host must not be re-sent forever. Instead the
+        // connecting handshake times out (shortened here via the test-only
+        // settings hook) and surfaces a single authentication failure before
+        // disconnecting.
+        let sends = Arc::new(AtomicUsize::new(0));
+        let session = start_with_settings(
+            "127.0.0.1".to_string(),
+            9000,
+            "acct".to_string(),
+            "pw".to_string(),
+            Some(Duration::from_millis(600)),
+            Some(Box::new(CountingTransport(sends.clone()))),
+        );
+
+        let events = collect_until_terminal(&session.event_rx);
+        session.worker.join().unwrap();
+
+        assert!(
+            matches!(
+                events.first().map(|event| &event.kind),
+                Some(BridgeEventKind::Connecting)
+            ),
+            "the session must start in the connecting state"
+        );
+        let auth_failures = events
+            .iter()
+            .filter(|event| {
+                matches!(
+                    event.kind,
+                    BridgeEventKind::Error {
+                        code: "authentication",
+                        ..
+                    }
+                )
+            })
+            .count();
+        assert_eq!(
+            auth_failures, 1,
+            "a silent login must surface exactly one authentication failure"
+        );
+        assert_eq!(terminal_count(&events), 1);
+        assert!(matches!(
+            events.last().map(|event| &event.kind),
+            Some(BridgeEventKind::Disconnected {
+                user_initiated: false,
+                ..
+            })
+        ));
+
+        assert_eq!(
+            sends.load(Ordering::SeqCst),
+            1,
+            "the LoginRequest must be sent exactly once with auto-retry off"
+        );
     }
 }

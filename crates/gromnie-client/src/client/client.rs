@@ -103,6 +103,11 @@ pub struct Client {
     /// considered to have timed out. Defaults to 20s; UIs that want faster
     /// login-failure feedback can shorten it with `set_login_timeout`.
     login_timeout: std::time::Duration,
+    /// Re-send the LoginRequest while stuck in Connecting. Off by default: a
+    /// stalled handshake fails via `check_state_timeout` (20s) instead, and a
+    /// rejected login surfaces quickly via the server's `LoginAccountBooted`
+    /// message. Opt in with `set_login_retry(true)`.
+    retry_login: bool,
     /// Optional character name to auto-login with after receiving character list
     pub(crate) character: Option<String>,
     /// Pending auto-login action to be processed after character list is received
@@ -241,6 +246,7 @@ impl Client {
             reconnect_attempt_count: 0,
             reconnect_at: None,
             login_timeout: DEFAULT_LOGIN_TIMEOUT,
+            retry_login: false,
             character,
             pending_auto_login: None,
             pending_trade: None,
@@ -744,8 +750,17 @@ impl Client {
         false
     }
 
-    /// Check if it's time to retry in current state (2s retry interval)
+    /// Check if it's time to retry in current state (2s retry interval).
+    ///
+    /// Login retries are off by default: a connecting handshake that stalls
+    /// fails through `check_state_timeout` (20s), and a rejected login is
+    /// surfaced quickly by the `LoginAccountBooted` handler instead of being
+    /// retried. Enable explicitly with `set_login_retry(true)`.
     pub fn should_retry(&self) -> bool {
+        if !self.retry_login {
+            return false;
+        }
+
         const RETRY_INTERVAL: std::time::Duration = std::time::Duration::from_secs(2);
 
         if let Some(connecting) = self.scene.as_connecting() {
@@ -760,6 +775,14 @@ impl Client {
         if let Some(connecting) = self.scene.as_connecting_mut() {
             connecting.update_retry_time();
         }
+    }
+
+    /// Enable or disable re-sending the LoginRequest while Connecting.
+    /// Disabled by default so a bad password or silent host surfaces as an
+    /// authentication failure (via `LoginAccountBooted` or the 20s timeout)
+    /// instead of retrying forever.
+    pub fn set_login_retry(&mut self, enabled: bool) {
+        self.retry_login = enabled;
     }
 
     /// Override how long a Connecting scene may wait for a response before
@@ -2403,5 +2426,50 @@ mod tests {
             auth_reason,
             "because the password entered for this account was not correct"
         );
+    }
+
+    #[tokio::test]
+    async fn login_retry_is_off_by_default_and_opt_in() {
+        let (event_tx, _event_rx) = mpsc::channel(8);
+        let (mut client, _action_tx) = Client::new_with_transport(
+            1,
+            "127.0.0.1:9000".to_string(),
+            "acct".to_string(),
+            "pw".to_string(),
+            None,
+            event_tx,
+            false,
+            Box::new(NoopTransport),
+        )
+        .await;
+
+        // Force the Connecting scene to be "due" for a retry: auto-retry is
+        // off by default, so `should_retry` must report false regardless.
+        let connecting = client
+            .scene
+            .as_connecting_mut()
+            .expect("a fresh client starts in Connecting");
+        connecting.last_retry_at =
+            crate::instant::Instant::now() - std::time::Duration::from_secs(5);
+        assert!(
+            !client.should_retry(),
+            "auto retry must be off by default even when a retry is due"
+        );
+
+        // Opt in: once explicitly enabled, a due retry is reported so the
+        // caller can re-send the LoginRequest.
+        client.set_login_retry(true);
+        assert!(client.should_retry(), "enabled retry should report due");
+
+        // After retrying, the timer is refreshed and it is not due again.
+        client.update_retry_time();
+        assert!(
+            !client.should_retry(),
+            "a fresh retry must not be immediately due"
+        );
+
+        // And back off turns the gate off again.
+        client.set_login_retry(false);
+        assert!(!client.should_retry());
     }
 }
