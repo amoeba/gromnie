@@ -73,6 +73,69 @@ final class SessionViewModelTests: XCTestCase {
         XCTAssertEqual(toCharacters.screen, .characters)
     }
 
+    func testLoginFailureMessageSurvivesTheTerminalDisconnect() {
+        // The bridge always ends a failed login with a terminal disconnect
+        // event. That generic transport reason must not erase the specific
+        // failure message shown on the server select screen.
+        let viewModel = SessionViewModel()
+        viewModel.handle(
+            decode(
+                #"{"sequence":1,"timestamp_ms":1,"type":"error","code":"authentication","message":"Connection timeout - server not responding","recover_to":"form"}"#
+            )
+        )
+        viewModel.handle(
+            decode(
+                #"{"sequence":2,"timestamp_ms":2,"type":"disconnected","reason":"connection timed out","user_initiated":false}"#
+            )
+        )
+
+        XCTAssertEqual(viewModel.screen, .form)
+        XCTAssertEqual(
+            viewModel.status,
+            .error("Connection timeout - server not responding")
+        )
+    }
+
+    func testCharacterLoginFailureKeepsMessageOnCharactersScreen() {
+        let viewModel = SessionViewModel()
+        viewModel.handle(
+            decode(
+                #"{"sequence":1,"timestamp_ms":1,"type":"characters","account":"acct","slots":1,"characters":[{"id":5,"name":"Bob"}]}"#
+            )
+        )
+        viewModel.handle(
+            decode(
+                #"{"sequence":2,"timestamp_ms":2,"type":"error","code":"login","message":"EnterGameCharacterLocked","recover_to":"characters"}"#
+            )
+        )
+
+        XCTAssertEqual(viewModel.screen, .characters)
+        XCTAssertEqual(viewModel.status, .error("EnterGameCharacterLocked"))
+    }
+
+    func testDisconnectFromACharacterErrorKeepsTheFailureMessage() {
+        // Returning to the server select after a rejected character login
+        // must keep the failure message so the user knows what to fix.
+        let viewModel = SessionViewModel()
+        viewModel.handle(
+            decode(
+                #"{"sequence":1,"timestamp_ms":1,"type":"error","code":"character","message":"LogonServerFull","recover_to":"characters"}"#
+            )
+        )
+        viewModel.disconnect()
+
+        XCTAssertEqual(viewModel.screen, .form)
+        XCTAssertEqual(viewModel.status, .error("LogonServerFull"))
+    }
+
+    func testDisconnectWithoutAPendingErrorReportsDisconnected() {
+        let viewModel = SessionViewModel()
+        viewModel.disconnect()
+
+        XCTAssertEqual(viewModel.screen, .form)
+        XCTAssertEqual(viewModel.status, .disconnected("Disconnected"))
+    }
+
     func testChatTranscriptIsBounded() {
         let viewModel = SessionViewModel()
 

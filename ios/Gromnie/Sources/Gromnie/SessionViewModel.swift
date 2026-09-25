@@ -126,7 +126,7 @@ final class SessionViewModel: ObservableObject {
         eventTask = nil
         reset()
         screen = .form
-        status = .disconnected("Disconnected")
+        preservePendingErrorOrSetDisconnected("Disconnected")
     }
 
     func handleScenePhase(_ phase: ScenePhase) {
@@ -170,7 +170,12 @@ final class SessionViewModel: ObservableObject {
             }
 
         case .disconnected:
-            status = .disconnected(event.reason ?? "Disconnected.")
+            // The actor always follows a fatal error (bad credentials, a
+            // rejected character login, a lost network) with a terminal
+            // disconnect event. Keep the specific failure message instead of
+            // replacing it with the generic transport reason, so the server
+            // select screen still explains why the session ended.
+            preservePendingErrorOrSetDisconnected(event.reason ?? "Disconnected.")
             eventTask = nil
             reset()
             screen = .form
@@ -178,6 +183,16 @@ final class SessionViewModel: ObservableObject {
         case nil:
             break
         }
+    }
+
+    /// Sets a `.disconnected` status only when no failure message is already
+    /// waiting to be shown. Returning to the server select after a failed
+    /// login should keep the error visible so the user knows what to fix.
+    private func preservePendingErrorOrSetDisconnected(_ reason: String) {
+        if case .error = status {
+            return
+        }
+        status = .disconnected(reason)
     }
 
     private func appendChat(_ message: String) {
