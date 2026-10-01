@@ -11,7 +11,6 @@ use std::time::Instant;
 use tokio::sync::RwLock;
 use tracing::{error, info};
 
-use gromnie_events::SimpleGameEvent;
 use gromnie_runner::{ClientConfig, DiscordConsumer, EventBusManager, UptimeData, logging};
 
 #[derive(Parser)]
@@ -179,7 +178,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Create channels for client communication
     let (_client_event_tx, _client_event_rx) =
-        tokio::sync::mpsc::unbounded_channel::<SimpleGameEvent>();
+        tokio::sync::mpsc::unbounded_channel::<gromnie_events::ProtocolEvent>();
     let (action_tx_channel, mut action_tx_rx) = tokio::sync::mpsc::unbounded_channel::<
         tokio::sync::mpsc::UnboundedSender<gromnie_events::SimpleClientAction>,
     >();

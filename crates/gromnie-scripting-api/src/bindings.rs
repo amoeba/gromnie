@@ -13,7 +13,7 @@ pub use crate::gromnie::scripting::host as host_interface;
 pub use crate::gromnie::scripting::host;
 
 // Re-export event types
-pub use crate::gromnie::scripting::host::{GameEvent, ScriptEvent, StateEvent, SystemEvent};
+pub use crate::gromnie::scripting::host::{ProtocolEvent, ScriptEvent, StateEvent, SystemEvent};
 
 // Re-export host functions for WASM scripts
 pub use crate::gromnie::scripting::host::{

@@ -2,14 +2,6 @@ package gromnie:scripting@0.1.0;
 
 /// Interface defining what the host (Gromnie) provides to WASM scripts
 interface host {
-    /// ===== Common Types =====
-
-    /// A game world object (character, NPC, item, etc.)
-    record world-object {
-        id: u32,
-        name: string,
-    }
-
     /// ===== Client Information =====
 
     /// Current client state snapshot
@@ -125,34 +117,6 @@ interface host {
     record character-error {
         error-code: u32,
         error-message: string,
-    }
-
-    /// Account information with character list (event payload)
-    record account-data {
-        account: string,
-        characters: list<character-identity>,
-        num-slots: u32,
-    }
-
-    /// Game events from the server
-    variant game-event {
-        /// Character list received from server
-        character-list-received(account-data),
-        /// Character error received from server
-        character-error(character-error),
-        /// Object created in game world
-        create-object(world-object),
-        /// Chat message received
-        chat-message-received(chat-message),
-
-        /// Full protocol event access (new replacement for SimpleGameEvent)
-        protocol(protocol-event),
-    }
-
-    /// Chat message from the game
-    record chat-message {
-        channel: u8,
-        message: string,
     }
 
     /// ===== Protocol Event Types (Full acprotocol access) =====
@@ -394,8 +358,8 @@ interface host {
 
     /// Unified event type that scripts receive
     variant script-event {
-        /// Game event from server
-        game(game-event),
+        /// Protocol event from server
+        protocol(protocol-event),
         /// Client state change
         state(state-event),
         /// System lifecycle event
@@ -506,7 +470,7 @@ interface guest {
     /// Values correspond to EventFilter enum discriminants (see host interface)
     subscribed-events: func() -> list<u32>;
 
-    /// Handle a script event (game, state, or system)
+    /// Handle a script event (protocol, state, or system)
     on-event: func(event: script-event);
 
     /// Called periodically at fixed rate (default 20Hz)

@@ -2,49 +2,35 @@ use asheron_rs::readers::{ACDataType, ACReader};
 use tokio::sync::mpsc;
 use tracing::error;
 
-use crate::client::{ClientEvent, GameEvent};
 use gromnie_events::{OrderedGameEvent, ProtocolEvent};
+
+use crate::client::ClientEvent;
 
 /// Trait for handling a specific parsed game event type.
 ///
-/// Implementers focus ONLY on business logic - parsing, error handling,
-/// and event emission are handled by the dispatcher.
-///
-/// # Example
-///
-/// ```ignore
-/// impl GameEventHandler<CommunicationHearDirectSpeech> for Client {
-///     fn handle(&mut self, event: CommunicationHearDirectSpeech) -> Option<GameEvent> {
-///         let text = format!("{} tells you, \"{}\"", event.sender_name, event.message);
-///         Some(GameEvent::ChatMessageReceived {
-///             message: text,
-///             message_type: event.message_type,
-///         })
-///     }
-/// }
-/// ```
+/// Implementers focus ONLY on business logic. The protocol event is emitted
+/// automatically by [`dispatch_game_event`] before `handle` is called, so
+/// implementers only need to react to the event, not re-publish it.
 pub trait GameEventHandler<T: ACDataType> {
-    /// Process the parsed game event and optionally return a GameEvent.
+    /// Process the parsed game event.
     ///
-    /// Return None if no event should be emitted (e.g., internal state updates only
-    /// or when the event is sent asynchronously).
-    ///
-    /// Mutate self for state updates as needed.
+    /// Mutate self for state updates as needed. The corresponding
+    /// [`ClientEvent::Protocol`] event has already been emitted by the
+    /// dispatcher before this runs.
     ///
     /// # Arguments
     ///
     /// * `parsed` - The parsed event data
-    fn handle(&mut self, parsed: T) -> Option<GameEvent>;
+    fn handle(&mut self, parsed: T);
 }
 
-/// Dispatch a game event: parse → emit protocol event → handle → emit game event.
+/// Dispatch a game event: parse → emit protocol event → handle.
 ///
 /// Centralizes the repetitive pattern across all game event handlers:
 /// 1. Parse the cursor data into the specific event type T
 /// 2. Handle parse errors by logging (non-fatal)
 /// 3. Emit the ProtocolEvent automatically (infrastructure)
 /// 4. Call the handler's handle() method with the parsed data (business logic)
-/// 5. Emit the resulting GameEvent to the event bus (if any)
 ///
 /// # Type Parameters
 ///
@@ -93,10 +79,7 @@ where
     });
     let _ = event_tx.try_send(ClientEvent::Protocol(protocol_event));
 
-    // Handle and optionally emit game event (business logic)
-    if let Some(game_event) = handler.handle(parsed) {
-        let _ = event_tx.try_send(ClientEvent::Game(game_event));
-    }
+    handler.handle(parsed);
 
     Ok(())
 }

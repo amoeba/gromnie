@@ -25,7 +25,6 @@ pub struct GromnieClient {
 
 fn event_to_js(event: &ClientEvent) -> JsValue {
     let desc = match event {
-        ClientEvent::Game(ge) => format!("game:{:?}", ge),
         ClientEvent::Protocol(pe) => format!("protocol:{:?}", pe),
         ClientEvent::State(se) => format!("state:{:?}", se),
         ClientEvent::System(se) => format!("system:{:?}", se),

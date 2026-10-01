@@ -1,46 +1,37 @@
 use asheron_rs::network::RawMessage;
 use asheron_rs::readers::ACDataType;
 use std::io::Cursor;
-use tokio::sync::mpsc;
 use tracing::error;
-
-use crate::client::{ClientEvent, GameEvent};
 
 /// Trait for handling a specific parsed message type.
 ///
-/// Implementers focus ONLY on business logic - parsing, error handling,
-/// and event emission are handled by the dispatcher.
+/// Implementers focus on business logic only. Each handler is responsible for
+/// emitting its own `ClientEvent::Protocol` event, since only the handler knows
+/// how to convert its message into the strongly-typed protocol representation.
 ///
 /// # Example
 ///
 /// ```ignore
 /// impl MessageHandler<CommunicationHearRangedSpeech> for Client {
-///     fn handle(&mut self, speech: CommunicationHearRangedSpeech) -> Option<GameEvent> {
-///         let text = format!("{} says, \"{}\"", speech.sender_name, speech.message);
-///         Some(GameEvent::ChatMessageReceived {
-///             message: text,
-///             message_type: speech.type_ as u32,
-///         })
+///     fn handle(&mut self, speech: CommunicationHearRangedSpeech) {
+///         self.emit_protocol(speech.to_protocol_event());
 ///     }
 /// }
 /// ```
 pub trait MessageHandler<T: ACDataType> {
-    /// Process the parsed message and optionally return a GameEvent.
+    /// Process the parsed message.
     ///
-    /// Return None if no event should be emitted (e.g., internal state updates only
-    /// or when the event is sent asynchronously).
-    ///
-    /// Mutate self for state updates as needed.
-    fn handle(&mut self, parsed: T) -> Option<GameEvent>;
+    /// Mutate self for state updates as needed, and emit any events this
+    /// message implies.
+    fn handle(&mut self, parsed: T);
 }
 
-/// Dispatch a message: parse → handle → emit event.
+/// Dispatch a message: parse → handle.
 ///
 /// Centralizes the repetitive pattern across all message handlers:
 /// 1. Parse the RawMessage into the specific message type T
 /// 2. Handle parse errors by logging (non-fatal)
 /// 3. Call the handler's handle() method with the parsed data
-/// 4. Emit the resulting GameEvent to the event bus (if any)
 ///
 /// # Type Parameters
 ///
@@ -51,16 +42,11 @@ pub trait MessageHandler<T: ACDataType> {
 ///
 /// - `handler`: The client or handler instance
 /// - `message`: The raw message from the network
-/// - `event_tx`: Channel to send events to
 ///
 /// # Returns
 ///
 /// Ok(()) if parsing and handling succeeded, Err with error message if parsing failed.
-pub fn dispatch_message<T, H>(
-    handler: &mut H,
-    message: RawMessage,
-    event_tx: &mpsc::Sender<ClientEvent>,
-) -> Result<(), String>
+pub fn dispatch_message<T, H>(handler: &mut H, message: RawMessage) -> Result<(), String>
 where
     T: ACDataType,
     H: MessageHandler<T>,
@@ -75,10 +61,7 @@ where
         }
     };
 
-    // Handle and optionally emit event
-    if let Some(game_event) = handler.handle(parsed) {
-        let _ = event_tx.try_send(ClientEvent::Game(game_event));
-    }
+    handler.handle(parsed);
 
     Ok(())
 }

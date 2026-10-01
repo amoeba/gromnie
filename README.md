@@ -26,7 +26,7 @@ The repository is a Cargo workspace. The most important crates:
 | Crate | Description |
 | --- | --- |
 | `gromnie-client` | Core client library: protocol state machine, scenes, native + WASM transports. |
-| `gromnie-events` | Event types (`SimpleGameEvent`, `ProtocolEvent`, client/system/state events) and the `EventConsumer` abstraction. |
+| `gromnie-events` | Event types (`ProtocolEvent`, client/system/state events) and the `EventConsumer` abstraction. |
 | `gromnie-runner` | Runs clients, wires up event consumers, multi-client/load-test orchestration, and logging. |
 | `gromnie-scripting-api` | Guest-side API (WIT + Rust) that scripts are written against. |
 | `gromnie-scripting-host` | Host runtime that loads/runs WASM scripts in Wasmtime (async, timers, hot reload). |

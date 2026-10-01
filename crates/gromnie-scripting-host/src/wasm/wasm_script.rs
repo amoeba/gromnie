@@ -12,7 +12,6 @@ use crate::Script as HostScript;
 use crate::{EventFilter, context::ScriptContext};
 use gromnie_events::{
     ClientEvent, ClientStateEvent, ClientSystemEvent, GameEventMsg, ProtocolEvent, S2CEvent,
-    SimpleGameEvent as GameEvent,
 };
 
 // Generate bindings from WIT (use the canonical definition from gromnie-scripting-api)
@@ -303,72 +302,12 @@ fn client_event_to_wasm(event: &ClientEvent) -> gromnie::scripting::host::Script
     use gromnie::scripting::host::ScriptEvent as WitScriptEvent;
 
     match event {
-        ClientEvent::Game(game_event) => WitScriptEvent::Game(game_event_to_wasm(game_event)),
-        ClientEvent::Protocol(protocol_event) => WitScriptEvent::Game(
-            gromnie::scripting::host::GameEvent::Protocol(protocol_event_to_wit(protocol_event)),
-        ),
+        ClientEvent::Protocol(protocol_event) => {
+            WitScriptEvent::Protocol(protocol_event_to_wit(protocol_event))
+        }
         ClientEvent::State(state_event) => WitScriptEvent::State(state_event_to_wasm(state_event)),
         ClientEvent::System(system_event) => {
             WitScriptEvent::System(system_event_to_wasm(system_event))
-        }
-    }
-}
-
-/// Convert Rust GameEvent to WIT GameEvent
-fn game_event_to_wasm(event: &GameEvent) -> gromnie::scripting::host::GameEvent {
-    use gromnie::scripting::host::{
-        AccountData, CharacterError as WitCharacterError, CharacterIdentity, ChatMessage,
-        GameEvent as WitGameEvent,
-    };
-
-    match event {
-        GameEvent::CharacterListReceived {
-            account,
-            characters,
-            num_slots,
-        } => WitGameEvent::CharacterListReceived(AccountData {
-            account: account.clone(),
-            num_slots: *num_slots,
-            characters: characters
-                .iter()
-                .map(|c| CharacterIdentity {
-                    character_id: c.character_id.0,
-                    name: c.name.clone(),
-                    seconds_greyed_out: c.seconds_greyed_out,
-                })
-                .collect(),
-        }),
-
-        GameEvent::CharacterError {
-            error_code,
-            error_message,
-        } => WitGameEvent::CharacterError(WitCharacterError {
-            error_code: *error_code,
-            error_message: error_message.clone(),
-        }),
-
-        GameEvent::ChatMessageReceived {
-            message,
-            message_type,
-        } => WitGameEvent::ChatMessageReceived(ChatMessage {
-            channel: *message_type as u8,
-            message: message.clone(),
-        }),
-
-        // Handle events that still exist in GameEvent but aren't in WIT
-        // These will be filtered out by the event filter in the future
-        _ => {
-            tracing::warn!(
-                target: "scripting",
-                "Received event {:?} that is not supported in WIT interface - skipping",
-                event
-            );
-            // Return a dummy event - this should never reach WASM scripts
-            // since they won't be subscribed to events not in the WIT
-            WitGameEvent::ChatMessageReceived(ChatMessage {
-                channel: 0,
-                message: String::new(),
-            })
         }
     }
 }
@@ -406,8 +345,10 @@ fn system_event_to_wasm(event: &ClientSystemEvent) -> gromnie::scripting::host::
             WitSystemEvent::AuthenticationFailed(reason.clone())
         }
         ClientSystemEvent::ConnectingStarted => WitSystemEvent::ConnectingStarted,
+        ClientSystemEvent::ConnectingProgress { .. } => WitSystemEvent::ConnectingStarted,
         ClientSystemEvent::ConnectingDone => WitSystemEvent::ConnectingDone,
         ClientSystemEvent::UpdatingStarted => WitSystemEvent::UpdatingStarted,
+        ClientSystemEvent::UpdatingProgress { .. } => WitSystemEvent::UpdatingStarted,
         ClientSystemEvent::UpdatingDone => WitSystemEvent::UpdatingDone,
         ClientSystemEvent::LoginSucceeded {
             character_id,

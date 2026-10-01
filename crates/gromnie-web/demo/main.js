@@ -59,6 +59,42 @@ let selectedCharId = null;
 let inWorld = false;
 let currentLoginTimeout = null;
 
+// Chat arrives as several protocol messages. The debug rendering keeps the
+// sender and text as separate fields, so reconstruct the display line here to
+// mirror `ProtocolEvent::as_chat_message` on the Rust side.
+function parseChatEvent(eventDesc) {
+  const isDirect = eventDesc.includes("HearDirectSpeech");
+  const isSpeech =
+    eventDesc.includes("HearSpeech") || eventDesc.includes("HearRangedSpeech");
+  const isText =
+    eventDesc.includes("TextboxChatMessage") ||
+    eventDesc.includes("TransientString");
+  if (!isDirect && !isSpeech && !isText) {
+    return null;
+  }
+
+  const unescape = (raw) =>
+    raw.replace(/\\n/g, "\n").replace(/\\"/g, '"').replace(/\\\\/g, "\\");
+
+  const msgMatch = eventDesc.match(/message:\s*"((?:[^"\\]|\\.)*)"/);
+  if (!msgMatch) {
+    return null;
+  }
+  const message = unescape(msgMatch[1]);
+  const senderMatch = eventDesc.match(/sender_name:\s*"((?:[^"\\]|\\.)*)"/);
+  const sender = senderMatch ? unescape(senderMatch[1]) : "";
+  const typeMatch = eventDesc.match(/message_type:\s*(\d+)/);
+  const messageType = typeMatch ? parseInt(typeMatch[1]) : 0;
+
+  let text = message;
+  if (isDirect) {
+    text = `${sender} tells you, "${message}"`;
+  } else if (isSpeech) {
+    text = `${sender} says, "${message}"`;
+  }
+  return { text, messageType };
+}
+
 // Event handling (from worker-forwarded events)
 function handleEvent(eventDesc) {
   if (
@@ -66,7 +102,7 @@ function handleEvent(eventDesc) {
     !eventDesc.includes("Disconnected") &&
     !eventDesc.includes("AuthenticationFailed") &&
     !eventDesc.includes("CharacterError") &&
-    !eventDesc.includes("CharacterListReceived")
+    !eventDesc.includes("LoginCharacterSet")
   ) {
     return;
   }
@@ -105,7 +141,7 @@ function handleEvent(eventDesc) {
     }
   }
 
-  if (eventDesc.includes("CharacterListReceived")) {
+  if (eventDesc.includes("LoginCharacterSet")) {
     const charRegex =
       /CharacterIdentity\s*\{\s*character_id:\s*ObjectId\((\d+)\),\s*name:\s*"([^"]+)"/g;
     characters = [];
@@ -121,19 +157,9 @@ function handleEvent(eventDesc) {
     }
   }
 
-  if (eventDesc.includes("ChatMessageReceived")) {
-    const msgMatch = eventDesc.match(
-      /message:\s*"((?:[^"\\]|\\.)*)"/,
-    );
-    const typeMatch = eventDesc.match(/message_type:\s*(\d+)/);
-    if (msgMatch) {
-      const text = msgMatch[1]
-        .replace(/\\n/g, "\n")
-        .replace(/\\"/g, '"')
-        .replace(/\\\\/g, "\\");
-      const msgType = typeMatch ? parseInt(typeMatch[1]) : 0;
-      text.split("\n").forEach((line) => worldView.appendChat(line, msgType));
-    }
+  const chat = parseChatEvent(eventDesc);
+  if (chat) {
+    chat.text.split("\n").forEach((line) => worldView.appendChat(line, chat.messageType));
   }
 }
 

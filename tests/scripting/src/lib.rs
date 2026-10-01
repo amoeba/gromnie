@@ -162,43 +162,14 @@ impl gromnie::Script for TestScript {
         event: ScriptEvent,
     ) -> std::pin::Pin<Box<dyn std::future::Future<Output = ()> + 'a>> {
         Box::pin(async move {
-            use gromnie::GameEvent::*;
             use gromnie::ScriptEvent::*;
             use gromnie::SystemEvent::*;
 
             match event {
-                Game(game_event) => match game_event {
-                    CharacterListReceived(account_data) => {
-                        let msg = format!(
-                            "Character list received for account: {} with {} characters",
-                            account_data.account,
-                            account_data.characters.len()
-                        );
-                        gromnie::log(&msg);
-                    }
-                    CharacterError(error_data) => {
-                        let msg = format!(
-                            "Character error: code={}, msg={}",
-                            error_data.error_code, error_data.error_message
-                        );
-                        gromnie::log(&msg);
-                    }
-                    CreateObject(object_data) => {
-                        let msg = format!(
-                            "Object created: {} (ID: {})",
-                            object_data.name, object_data.id
-                        );
-                        gromnie::log(&msg);
-                    }
-                    ChatMessageReceived(chat_data) => {
-                        let msg = format!("Chat message: {}", chat_data.message);
-                        gromnie::log(&msg);
-                    }
-                    Protocol(protocol_event) => {
-                        // Demonstrate full protocol event handling
-                        handle_protocol_event(protocol_event);
-                    }
-                },
+                Protocol(protocol_event) => {
+                    // Demonstrate full protocol event handling
+                    handle_protocol_event(protocol_event);
+                }
                 State(state_event) => {
                     let msg = format!("State event: {:?}", state_event);
                     gromnie::log(&msg);

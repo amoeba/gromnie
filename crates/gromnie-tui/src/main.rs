@@ -235,9 +235,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             Some(tui_event) = client_event_rx.recv() => {
                 // Handle game events through centralized message passing
                 match tui_event {
-                    TuiEvent::Game(game_event) => {
-                        tracing::info!(target: "tui_main", "TUI main received GameEvent: {:?}", std::mem::discriminant(&game_event));
-                        app.update_from_event(game_event);
+                    TuiEvent::Protocol(protocol_event) => {
+                        tracing::info!(target: "tui_main", "TUI main received ProtocolEvent: {:?}", std::mem::discriminant(&protocol_event));
+                        app.update_from_event(protocol_event);
                     }
                     TuiEvent::System(system_event) => {
                         tracing::info!(target: "tui_main", "TUI main received SystemEvent: {:?}", std::mem::discriminant(&system_event));

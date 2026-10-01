@@ -951,7 +951,9 @@ impl EventConsumer for ScriptConsumer {
 
         // Extract ClientEvent from EventEnvelope
         let client_event = match envelope.event {
-            gromnie_events::EventType::Game(game_event) => ClientEvent::Game(game_event),
+            gromnie_events::EventType::Protocol(protocol_event) => {
+                ClientEvent::Protocol(protocol_event)
+            }
             gromnie_events::EventType::State(state_event) => ClientEvent::State(state_event),
             gromnie_events::EventType::System(system_event) => match system_event {
                 gromnie_events::SystemEvent::AuthenticationSucceeded { .. } => {
@@ -963,11 +965,17 @@ impl EventConsumer for ScriptConsumer {
                 gromnie_events::SystemEvent::ConnectingStarted { .. } => {
                     ClientEvent::System(ClientSystemEvent::ConnectingStarted)
                 }
+                gromnie_events::SystemEvent::ConnectingProgress { progress, .. } => {
+                    ClientEvent::System(ClientSystemEvent::ConnectingProgress { progress })
+                }
                 gromnie_events::SystemEvent::ConnectingDone { .. } => {
                     ClientEvent::System(ClientSystemEvent::ConnectingDone)
                 }
                 gromnie_events::SystemEvent::UpdatingStarted { .. } => {
                     ClientEvent::System(ClientSystemEvent::UpdatingStarted)
+                }
+                gromnie_events::SystemEvent::UpdatingProgress { progress, .. } => {
+                    ClientEvent::System(ClientSystemEvent::UpdatingProgress { progress })
                 }
                 gromnie_events::SystemEvent::UpdatingDone { .. } => {
                     ClientEvent::System(ClientSystemEvent::UpdatingDone)

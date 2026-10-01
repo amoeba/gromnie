@@ -1,10 +1,8 @@
 use crate::protocol_events::ProtocolEvent;
-use crate::simple_game_events::SimpleGameEvent;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone)]
 pub enum ClientEvent {
-    Game(SimpleGameEvent),
     Protocol(ProtocolEvent),
     State(ClientStateEvent),
     System(ClientSystemEvent),
@@ -19,8 +17,16 @@ pub enum ClientSystemEvent {
     },
     ConnectingStarted,
     ConnectingDone,
+    /// Progress within the connecting phase, from 0.0 to 1.0
+    ConnectingProgress {
+        progress: f64,
+    },
     UpdatingStarted,
     UpdatingDone,
+    /// Progress within the updating/patching phase, from 0.0 to 1.0
+    UpdatingProgress {
+        progress: f64,
+    },
     LoginSucceeded {
         character_id: u32,
         character_name: String,

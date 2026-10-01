@@ -37,7 +37,7 @@ pub use gromnie::scripting::host as host_interface;
 pub use gromnie::scripting::host;
 
 // Re-export event types
-pub use gromnie::scripting::host::{GameEvent, ScriptEvent, StateEvent, SystemEvent};
+pub use gromnie::scripting::host::{ProtocolEvent, ScriptEvent, StateEvent, SystemEvent};
 
 // Re-export Scene type
 pub use gromnie::scripting::host::Scene;

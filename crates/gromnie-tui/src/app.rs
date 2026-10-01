@@ -1,8 +1,6 @@
 use asheron_rs::types::CharacterIdentity;
-use gromnie_events::{ClientStateEvent, SimpleClientAction, SimpleGameEvent};
+use gromnie_events::{ClientStateEvent, ProtocolEvent, S2CEvent, SimpleClientAction};
 
-// Type alias for backward compatibility
-pub type GameEvent = SimpleGameEvent;
 use crate::object_tracker::ObjectTracker;
 use std::collections::{HashMap, VecDeque};
 use tokio::sync::{broadcast, mpsc};
@@ -298,7 +296,7 @@ pub struct App {
     pub client_status: ClientStatus,
     pub network_messages: VecDeque<NetworkMessage>,
     pub max_network_messages: usize,
-    pub event_rx: Option<broadcast::Receiver<GameEvent>>,
+    pub event_rx: Option<broadcast::Receiver<ProtocolEvent>>,
     pub action_tx: Option<mpsc::UnboundedSender<SimpleClientAction>>,
     /// Currently selected character index in the character list
     pub selected_character_index: usize,
@@ -357,7 +355,7 @@ impl App {
 
     pub fn set_channels(
         &mut self,
-        event_rx: broadcast::Receiver<GameEvent>,
+        event_rx: broadcast::Receiver<ProtocolEvent>,
         action_tx: mpsc::UnboundedSender<SimpleClientAction>,
     ) {
         self.event_rx = Some(event_rx);
@@ -401,6 +399,12 @@ impl App {
                     timestamp: chrono::Utc::now(),
                 });
             }
+            gromnie_runner::SystemEvent::ConnectingProgress { progress, .. } => {
+                self.connecting_progress = progress.clamp(0.0, 1.0);
+            }
+            gromnie_runner::SystemEvent::UpdatingProgress { progress, .. } => {
+                self.updating_progress = progress.clamp(0.0, 1.0);
+            }
             gromnie_runner::SystemEvent::LoginSucceeded {
                 character_id,
                 character_name,
@@ -422,15 +426,31 @@ impl App {
         }
     }
 
-    pub fn update_from_event(&mut self, event: GameEvent) {
-        match event {
-            GameEvent::CharacterListReceived {
+    pub fn update_from_event(&mut self, event: ProtocolEvent) {
+        if let Some(chat) = event.as_chat_message() {
+            // Add chat message to the list
+            self.add_chat_message(ChatMessage {
+                text: chat.text.clone(),
+                message_type: chat.message_type,
+                timestamp: chrono::Utc::now(),
+            });
+
+            self.add_network_message(NetworkMessage::Received {
+                opcode: "0xF7E0".to_string(),
+                description: format!("Chat (type {}): {}", chat.message_type, chat.text),
+                timestamp: chrono::Utc::now(),
+            });
+            return;
+        }
+
+        match &event {
+            ProtocolEvent::S2C(S2CEvent::LoginCharacterSet {
                 account,
                 characters,
                 num_slots: _,
-            } => {
-                self.client_status.account_name = account;
-                self.client_status.characters = characters;
+            }) => {
+                self.client_status.account_name = account.clone();
+                self.client_status.characters = characters.clone();
                 self.selected_character_index = 0; // Reset to first character when list updates
 
                 // Transition to CharacterSelect scene when we receive the character list
@@ -445,32 +465,10 @@ impl App {
                 });
             }
 
-            GameEvent::LoginSucceeded {
-                character_id,
-                character_name,
-            } => {
-                self.client_status.current_character = Some(character_name.clone());
-
-                self.add_network_message(NetworkMessage::Received {
-                    opcode: "0xF656".to_string(),
-                    description: format!(
-                        "Login succeeded: {} (ID: {})",
-                        character_name, character_id
-                    ),
-                    timestamp: chrono::Utc::now(),
-                });
-            }
-            GameEvent::LoginFailed { reason } => {
-                self.add_network_message(NetworkMessage::Received {
-                    opcode: "0xF656".to_string(),
-                    description: format!("Login failed: {}", reason),
-                    timestamp: chrono::Utc::now(),
-                });
-            }
-            GameEvent::CharacterError {
+            ProtocolEvent::S2C(S2CEvent::CharacterError {
                 error_code,
                 error_message,
-            } => {
+            }) => {
                 self.game_scene = GameScene::Error(error_message.clone());
 
                 self.add_network_message(NetworkMessage::Received {
@@ -479,31 +477,10 @@ impl App {
                     timestamp: chrono::Utc::now(),
                 });
             }
-            GameEvent::ChatMessageReceived {
-                message,
-                message_type,
-            } => {
-                // Add chat message to the list
-                self.add_chat_message(ChatMessage {
-                    text: message.clone(),
-                    message_type,
-                    timestamp: chrono::Utc::now(),
-                });
 
-                self.add_network_message(NetworkMessage::Received {
-                    opcode: "0xF7E0".to_string(),
-                    description: format!("Chat (type {}): {}", message_type, message),
-                    timestamp: chrono::Utc::now(),
-                });
-            }
-            GameEvent::ConnectingSetProgress { progress } => {
-                self.connecting_progress = progress.clamp(0.0, 1.0);
-            }
-            GameEvent::UpdatingSetProgress { progress } => {
-                self.updating_progress = progress.clamp(0.0, 1.0);
-            }
+            ProtocolEvent::S2C(S2CEvent::LoginCreatePlayer { character_id }) => {
+                let character_id = *character_id;
 
-            GameEvent::CreatePlayer { character_id } => {
                 // Set the player ID for inventory tracking
                 self.inventory_state.player_id = Some(character_id);
                 self.inventory_state.selected_container = self.inventory_state.player_id;
@@ -532,7 +509,8 @@ impl App {
                     timestamp: chrono::Utc::now(),
                 });
             }
-            GameEvent::ItemCreateObject {
+
+            ProtocolEvent::S2C(S2CEvent::ItemCreateObject {
                 object_id,
                 name,
                 item_type,
@@ -541,7 +519,9 @@ impl App {
                 value,
                 items_capacity,
                 container_capacity,
-            } => {
+            }) => {
+                let (object_id, container_id) = (*object_id, *container_id);
+
                 // Store the item in inventory state (we receive all items, not just player's)
                 self.inventory_state.items.insert(
                     object_id,
@@ -550,10 +530,10 @@ impl App {
                         name: name.clone(),
                         item_type: item_type.clone(),
                         container_id,
-                        burden,
-                        value,
-                        items_capacity,
-                        container_capacity,
+                        burden: *burden,
+                        value: *value,
+                        items_capacity: *items_capacity,
+                        container_capacity: *container_capacity,
                     },
                 );
 
@@ -573,10 +553,10 @@ impl App {
                     item_type.clone(),
                 );
                 obj.container_id = container_id;
-                obj.burden = burden;
-                obj.value = value;
-                obj.items_capacity = items_capacity;
-                obj.container_capacity = container_capacity;
+                obj.burden = *burden;
+                obj.value = *value;
+                obj.items_capacity = *items_capacity;
+                obj.container_capacity = *container_capacity;
                 self.object_tracker.handle_item_create(obj);
 
                 // Add object to the list if we're in the game world scene
@@ -599,14 +579,15 @@ impl App {
                     timestamp: chrono::Utc::now(),
                 });
             }
-            GameEvent::ItemOnViewContents {
+
+            ProtocolEvent::S2C(S2CEvent::ItemOnViewContents {
                 container_id,
                 items,
-            } => {
+            }) => {
                 // Store the container->items mapping
                 self.inventory_state
                     .container_items
-                    .insert(container_id, items.clone());
+                    .insert(*container_id, items.clone());
 
                 self.add_network_message(NetworkMessage::Received {
                     opcode: "0xF7E0".to_string(),
@@ -618,12 +599,10 @@ impl App {
                     timestamp: chrono::Utc::now(),
                 });
             }
-            GameEvent::PlayerContainersReceived {
-                player_id,
-                containers: _,
-            } => {
+
+            ProtocolEvent::S2C(S2CEvent::PlayerContainersReceived { player_id, .. }) => {
                 // Store the player ID
-                self.inventory_state.player_id = Some(player_id);
+                self.inventory_state.player_id = Some(*player_id);
 
                 // Initialize selected container to player's main inventory
                 self.inventory_state.selected_container = self.inventory_state.player_id;
@@ -635,7 +614,10 @@ impl App {
                     timestamp: chrono::Utc::now(),
                 });
             }
-            GameEvent::ItemDeleteObject { object_id } => {
+
+            ProtocolEvent::S2C(S2CEvent::ItemDeleteObject { object_id }) => {
+                let object_id = *object_id;
+
                 // Remove from inventory state
                 self.inventory_state.items.remove(&object_id);
 
@@ -655,88 +637,38 @@ impl App {
                     timestamp: chrono::Utc::now(),
                 });
             }
-            GameEvent::ItemMovedObject {
-                object_id,
-                new_container_id,
-            } => {
-                // Update inventory state
-                if let Some(item) = self.inventory_state.items.get_mut(&object_id) {
-                    let old_container = item.container_id;
-                    item.container_id = Some(new_container_id);
 
-                    // Remove from old container's contents
-                    if let Some(old_cid) = old_container
-                        && let Some(contents) =
-                            self.inventory_state.container_items.get_mut(&old_cid)
-                    {
-                        contents.retain(|&id| id != object_id);
-                    }
-
-                    // Add to new container's contents
-                    self.inventory_state
-                        .container_items
-                        .entry(new_container_id)
-                        .or_default()
-                        .push(object_id);
-                }
-
-                // Update object tracker
+            ProtocolEvent::S2C(S2CEvent::QualitiesPrivateUpdateInt { property, value }) => {
+                // `QualitiesPrivateUpdateInt` is a global quality update and does
+                // not carry a target object id; the tracker keys on object id, so
+                // record it against object 0 as before.
                 self.object_tracker
-                    .handle_item_moved(object_id, new_container_id);
-
-                let from = self
-                    .inventory_state
-                    .items
-                    .get(&object_id)
-                    .map(|i| i.name.as_str())
-                    .unwrap_or("Unknown");
+                    .handle_quality_update(0, property.clone(), *value);
 
                 self.add_network_message(NetworkMessage::Received {
                     opcode: "0xF7E0".to_string(),
                     description: format!(
-                        "ItemMovedObject: {} moved to container {}",
-                        from, new_container_id
+                        "QualitiesPrivateUpdateInt: Object 0 {} = {}",
+                        property, value
                     ),
                     timestamp: chrono::Utc::now(),
                 });
             }
-            GameEvent::QualitiesPrivateUpdateInt {
-                object_id,
-                property_name,
-                value,
-            } => {
-                // Update object tracker
-                self.object_tracker
-                    .handle_quality_update(object_id, property_name.clone(), value);
 
-                // For now, just log the update
+            ProtocolEvent::S2C(S2CEvent::ItemSetState { object_id, state }) => {
+                // Update object tracker with the server-reported state string
+                self.object_tracker
+                    .handle_item_set_state(*object_id, state.clone());
+
                 self.add_network_message(NetworkMessage::Received {
                     opcode: "0xF7E0".to_string(),
-                    description: format!(
-                        "QualitiesPrivateUpdateInt: Object {} {} = {}",
-                        object_id, property_name, value
-                    ),
+                    description: format!("ItemSetState: Object {} state = {}", object_id, state),
                     timestamp: chrono::Utc::now(),
                 });
             }
-            GameEvent::ItemSetState {
-                object_id,
-                property_name,
-                value,
-            } => {
-                // Update object tracker
-                self.object_tracker
-                    .handle_item_set_state(object_id, property_name.clone(), value);
 
-                // For now, just log the update
-                self.add_network_message(NetworkMessage::Received {
-                    opcode: "0xF7E0".to_string(),
-                    description: format!(
-                        "ItemSetState: Object {} {} = {}",
-                        object_id, property_name, value
-                    ),
-                    timestamp: chrono::Utc::now(),
-                });
+            _ => {
+                // Other protocol events have no TUI presentation yet.
             }
         }
     }

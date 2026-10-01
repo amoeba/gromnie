@@ -79,6 +79,13 @@ pub enum S2CEvent {
         property: String,
         value: i32,
     },
+    /// Communication_TextboxString - server chat/system text with a message type.
+    ///
+    /// This message carries text verbatim (no sender), unlike `HearSpeech`.
+    TextboxChatMessage {
+        message: String,
+        message_type: u32,
+    },
     /// Movement_PositionEvent (0xF748) - position/motion update for an object
     MovementPositionEvent {
         object_id: u32,
@@ -185,6 +192,91 @@ pub enum GameEventMsg {
     EnchantmentRemoved {
         spell_id: u32,
     },
+}
+
+// ============================================================================
+// Chat normalization
+// ============================================================================
+
+/// A chat line rendered into a display string plus its message type.
+///
+/// The server splits chat across several message types: some carry a sender,
+/// some carry raw text, and one carries a channel rather than a sender. UIs and
+/// log consumers want the same rendered form from all of them, so this
+/// normalization lives next to the types themselves.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ChatMessage {
+    /// Fully rendered text, e.g. `Bob says, "hi"` or `You have 3 new items`.
+    pub text: String,
+    /// The server's chat message type.
+    pub message_type: u32,
+}
+
+/// Message type used for `TransientString` (system/error notices).
+const TRANSIENT_STRING_TYPE: u32 = 0x05;
+
+impl ProtocolEvent {
+    /// Render this event as a chat line, if it carries player-visible text.
+    ///
+    /// Returns `None` for every non-chat event. This covers both top-level S2C
+    /// messages and nested game events.
+    pub fn as_chat_message(&self) -> Option<ChatMessage> {
+        match self {
+            ProtocolEvent::S2C(s2c) => s2c.as_chat_message(),
+            ProtocolEvent::GameEvent(ordered) => ordered.event.as_chat_message(),
+        }
+    }
+}
+
+impl S2CEvent {
+    /// Render this event as a chat line, if it carries player-visible text.
+    pub fn as_chat_message(&self) -> Option<ChatMessage> {
+        match self {
+            S2CEvent::HearSpeech {
+                sender_name,
+                message,
+                message_type,
+            }
+            | S2CEvent::HearRangedSpeech {
+                sender_name,
+                message,
+                message_type,
+            } => Some(ChatMessage {
+                text: format!("{} says, \"{}\"", sender_name, message),
+                message_type: *message_type,
+            }),
+            S2CEvent::TextboxChatMessage {
+                message,
+                message_type,
+            } => Some(ChatMessage {
+                text: message.clone(),
+                message_type: *message_type,
+            }),
+            _ => None,
+        }
+    }
+}
+
+impl GameEventMsg {
+    /// Render this event as a chat line, if it carries player-visible text.
+    pub fn as_chat_message(&self) -> Option<ChatMessage> {
+        match self {
+            GameEventMsg::HearDirectSpeech {
+                message,
+                sender_name,
+                message_type,
+                ..
+            } => Some(ChatMessage {
+                text: format!("{} tells you, \"{}\"", sender_name, message),
+                message_type: *message_type,
+            }),
+            GameEventMsg::TransientString { message } => Some(ChatMessage {
+                text: message.clone(),
+                message_type: TRANSIENT_STRING_TYPE,
+            }),
+            _ => None,
+        }
+    }
 }
 
 // ============================================================================

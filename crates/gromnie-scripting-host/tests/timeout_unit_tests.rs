@@ -2,7 +2,7 @@ use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::{RwLock, mpsc};
 
-use gromnie_events::{ClientEvent, SimpleClientAction, SimpleGameEvent};
+use gromnie_events::{ClientEvent, ProtocolEvent, S2CEvent, SimpleClientAction};
 use gromnie_scripting_host::ScriptRunner;
 
 // Helper to create a mock client for testing (based on existing integration tests)
@@ -175,10 +175,10 @@ async fn test_script_runner_with_timeout_integration() {
     }
 
     // Test that handle_event doesn't crash (even with no scripts)
-    let event = ClientEvent::Game(SimpleGameEvent::ChatMessageReceived {
+    let event = ClientEvent::Protocol(ProtocolEvent::S2C(S2CEvent::TextboxChatMessage {
         message: "test message".to_string(),
         message_type: 0,
-    });
+    }));
 
     let start = std::time::Instant::now();
     runner.handle_event(event).await;
