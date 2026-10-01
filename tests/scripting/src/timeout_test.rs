@@ -44,7 +44,7 @@ impl gromnie::Script for TimeoutTestScript {
 
     fn subscribed_events(&self) -> Vec<u32> {
         // Subscribe to chat messages for testing
-        vec![3] // ChatMessageReceived event ID
+        vec![gromnie::events::EVENT_PROTOCOL_CHAT_MESSAGE]
     }
 
     fn on_event<'a>(

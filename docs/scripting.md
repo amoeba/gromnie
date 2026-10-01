@@ -196,8 +196,8 @@ impl Guest for MyScript {
 
     fn on_event(event: gromnie::ScriptEvent) {
         match event {
-            gromnie::ScriptEvent::Game(game_event) => {
-                handle_game_event(game_event);
+            gromnie::ScriptEvent::Protocol(protocol_event) => {
+                handle_protocol_event(protocol_event);
             }
             gromnie::ScriptEvent::State(state_event) => {
                 handle_state_event(state_event);
@@ -221,24 +221,19 @@ impl Guest for MyScript {
     }
 }
 
-fn handle_game_event(game_event: gromnie::GameEvent) {
-    match game_event {
-        gromnie::GameEvent::Protocol(proto_event) => {
-            match proto_event {
-                host::ProtocolEvent::S2c(host::S2cEvent::ItemCreateObject(msg)) => {
-                    host::log(&format!("Object: {} created", msg.name));
-                }
-                host::ProtocolEvent::GameEvent(game) => {
-                    match game.event {
-                        host::GameEventMsg::HearDirectSpeech(msg) => {
-                            host::log(&format!("{}: {}", msg.sender_name, msg.message));
+fn handle_protocol_event(protocol_event: gromnie::ProtocolEvent) {
+    match protocol_event {
+        host::ProtocolEvent::S2c(host::S2cEvent::ItemCreateObject(msg)) => {
+            host::log(&format!("Object: {} created", msg.name));
+        }
+        host::ProtocolEvent::GameEvent(game) => {
+            match game.event {
+                host::GameEventMsg::HearDirectSpeech(msg) => {
+                    host::log(&format!("{}: {}", msg.sender_name, msg.message));
 
-                            // Respond to specific messages
-                            if msg.message.contains("hello") {
-                                host::send_chat("Hello there!");
-                            }
-                        }
-                        _ => {}
+                    // Respond to specific messages
+                    if msg.message.contains("hello") {
+                        host::send_chat("Hello there!");
                     }
                 }
                 _ => {}

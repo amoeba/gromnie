@@ -4,10 +4,10 @@
 /// Filter 0: All events
 pub const EVENT_ALL: u32 = 0;
 
-// Game events (1-99)
-pub const EVENT_CHARACTER_LIST_RECEIVED: u32 = 1;
-pub const EVENT_CREATE_OBJECT: u32 = 2;
-pub const EVENT_CHAT_MESSAGE_RECEIVED: u32 = 3;
+// Protocol events (1-99)
+pub const EVENT_PROTOCOL_LOGIN_CHARACTER_SET: u32 = 1;
+pub const EVENT_PROTOCOL_CHARACTER_ERROR: u32 = 2;
+pub const EVENT_PROTOCOL_CHAT_MESSAGE: u32 = 3;
 
 // State events (100-199)
 pub const EVENT_STATE_CONNECTING: u32 = 100;

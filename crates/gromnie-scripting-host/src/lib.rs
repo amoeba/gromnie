@@ -76,13 +76,13 @@ pub enum EventFilter {
     /// Subscribe to all events
     All,
 
-    // Game events
-    /// Character list received from server
-    CharacterListReceived,
-    /// Character error received from server
-    CharacterError,
-    /// Chat message received
-    ChatMessageReceived,
+    // Protocol events
+    /// Character list received from server (`S2CEvent::LoginCharacterSet`)
+    ProtocolLoginCharacterSet,
+    /// Character error received from server (`S2CEvent::CharacterError`)
+    ProtocolCharacterError,
+    /// Chat message received (`ProtocolEvent::as_chat_message`)
+    ProtocolChatMessage,
 
     // State events
     /// Client state: Connecting
@@ -138,15 +138,15 @@ impl EventFilter {
             EventFilter::All => true,
 
             // Protocol event filters
-            EventFilter::CharacterListReceived => matches!(
+            EventFilter::ProtocolLoginCharacterSet => matches!(
                 event,
                 ClientEvent::Protocol(ProtocolEvent::S2C(S2CEvent::LoginCharacterSet { .. }))
             ),
-            EventFilter::CharacterError => matches!(
+            EventFilter::ProtocolCharacterError => matches!(
                 event,
                 ClientEvent::Protocol(ProtocolEvent::S2C(S2CEvent::CharacterError { .. }))
             ),
-            EventFilter::ChatMessageReceived => matches!(
+            EventFilter::ProtocolChatMessage => matches!(
                 event,
                 ClientEvent::Protocol(protocol) if protocol.as_chat_message().is_some()
             ),
@@ -255,10 +255,10 @@ impl EventFilter {
     pub fn from_discriminant(id: u32) -> Option<Self> {
         match id {
             0 => Some(EventFilter::All),
-            // Game events (1-99)
-            1 => Some(EventFilter::CharacterListReceived),
-            2 => Some(EventFilter::CharacterError),
-            3 => Some(EventFilter::ChatMessageReceived),
+            // Protocol events (1-99)
+            1 => Some(EventFilter::ProtocolLoginCharacterSet),
+            2 => Some(EventFilter::ProtocolCharacterError),
+            3 => Some(EventFilter::ProtocolChatMessage),
             // State events (100-199)
             100 => Some(EventFilter::StateConnecting),
             101 => Some(EventFilter::StateConnected),
@@ -289,10 +289,10 @@ impl EventFilter {
     pub fn to_discriminant(&self) -> u32 {
         match self {
             EventFilter::All => 0,
-            // Game events (1-99)
-            EventFilter::CharacterListReceived => 1,
-            EventFilter::CharacterError => 2,
-            EventFilter::ChatMessageReceived => 3,
+            // Protocol events (1-99)
+            EventFilter::ProtocolLoginCharacterSet => 1,
+            EventFilter::ProtocolCharacterError => 2,
+            EventFilter::ProtocolChatMessage => 3,
             // State events (100-199)
             EventFilter::StateConnecting => 100,
             EventFilter::StateConnected => 101,

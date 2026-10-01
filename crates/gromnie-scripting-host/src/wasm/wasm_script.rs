@@ -302,9 +302,9 @@ fn client_event_to_wasm(event: &ClientEvent) -> gromnie::scripting::host::Script
     use gromnie::scripting::host::ScriptEvent as WitScriptEvent;
 
     match event {
-        ClientEvent::Protocol(protocol_event) => WitScriptEvent::Game(
-            gromnie::scripting::host::GameEvent::Protocol(protocol_event_to_wit(protocol_event)),
-        ),
+        ClientEvent::Protocol(protocol_event) => {
+            WitScriptEvent::Protocol(protocol_event_to_wit(protocol_event))
+        }
         ClientEvent::State(state_event) => WitScriptEvent::State(state_event_to_wasm(state_event)),
         ClientEvent::System(system_event) => {
             WitScriptEvent::System(system_event_to_wasm(system_event))
