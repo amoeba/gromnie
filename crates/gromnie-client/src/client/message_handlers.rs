@@ -7,29 +7,23 @@
 use tracing::{error, info, warn};
 
 use crate::client::Client;
+use crate::client::ClientEvent;
 use crate::client::constants::UI_DELAY_MS;
 use crate::client::message_handler::MessageHandler;
 use crate::client::messages::{OutgoingMessage, OutgoingMessageContent};
 use crate::client::protocol_conversions::ToProtocolEvent;
 use crate::client::scene::ClientError;
-use crate::client::{ClientEvent, GameEvent};
 use asheron_rs::network::RawMessage;
 use gromnie_events::{ClientSystemEvent, ProtocolEvent};
 
 /// Handle LoginCreatePlayer messages
 impl MessageHandler<asheron_rs::messages::s2c::LoginCreatePlayer> for Client {
-    fn handle(
-        &mut self,
-        create_player: asheron_rs::messages::s2c::LoginCreatePlayer,
-    ) -> Option<GameEvent> {
+    fn handle(&mut self, create_player: asheron_rs::messages::s2c::LoginCreatePlayer) {
         let character_id = create_player.character_id.0;
         info!(target: "net", "Character in world: 0x{:08X}", character_id);
 
         // Emit protocol event
-        let protocol_event = ProtocolEvent::S2C(create_player.to_protocol_event());
-        let _ = self
-            .raw_event_tx
-            .try_send(ClientEvent::Protocol(protocol_event));
+        self.emit_protocol(create_player.to_protocol_event());
 
         // Check if we're in the process of entering the world
         if let Some(entering) = self
@@ -50,110 +44,48 @@ impl MessageHandler<asheron_rs::messages::s2c::LoginCreatePlayer> for Client {
         } else {
             warn!(target: "net", "LoginCreatePlayer received but not in CharacterSelect with entering_world state");
         }
-
-        Some(GameEvent::CreatePlayer { character_id })
     }
 }
+
 /// Handle ItemCreateObject messages
 impl MessageHandler<asheron_rs::messages::s2c::ItemCreateObject> for Client {
-    fn handle(
-        &mut self,
-        create_obj: asheron_rs::messages::s2c::ItemCreateObject,
-    ) -> Option<GameEvent> {
-        let object_id = create_obj.object_id.0;
-        let object_name = create_obj.weenie_description.name.clone();
+    fn handle(&mut self, create_obj: asheron_rs::messages::s2c::ItemCreateObject) {
+        info!(target: "net", "Object created in world: {} (ID: 0x{:08X})",
+            create_obj.weenie_description.name, create_obj.object_id.0);
 
-        info!(target: "net", "Object created in world: {} (ID: 0x{:08X})", object_name, object_id);
-
-        // Emit protocol event
-        let protocol_event = ProtocolEvent::S2C(create_obj.to_protocol_event());
-        let _ = self
-            .raw_event_tx
-            .try_send(ClientEvent::Protocol(protocol_event));
-
-        Some(GameEvent::ItemCreateObject {
-            object_id,
-            name: object_name,
-            item_type: format!("{:?}", create_obj.weenie_description.type_),
-            container_id: create_obj.weenie_description.container_id.map(|id| id.0),
-            burden: create_obj.weenie_description.burden.unwrap_or(0) as u32,
-            value: create_obj.weenie_description.value.unwrap_or(0),
-            items_capacity: create_obj
-                .weenie_description
-                .items_capacity
-                .map(|c| c as u32),
-            container_capacity: create_obj
-                .weenie_description
-                .container_capacity
-                .map(|c| c as u32),
-        })
+        self.emit_protocol(create_obj.to_protocol_event());
     }
 }
 
 /// Handle CommunicationHearSpeech messages
 impl MessageHandler<asheron_rs::messages::s2c::CommunicationHearSpeech> for Client {
-    fn handle(
-        &mut self,
-        speech: asheron_rs::messages::s2c::CommunicationHearSpeech,
-    ) -> Option<GameEvent> {
-        let chat_text = format!("{} says, \"{}\"", speech.sender_name, speech.message);
-        let message_type = speech.type_.clone() as u32;
+    fn handle(&mut self, speech: asheron_rs::messages::s2c::CommunicationHearSpeech) {
+        self.emit_protocol(speech.to_protocol_event());
 
-        info!(target: "net", "Hear speech received - Type: {}, Text: {}", message_type, chat_text);
-
-        // Emit protocol event
-        let protocol_event = ProtocolEvent::S2C(speech.to_protocol_event());
-        let _ = self
-            .raw_event_tx
-            .try_send(ClientEvent::Protocol(protocol_event));
-
-        Some(GameEvent::ChatMessageReceived {
-            message: chat_text,
-            message_type,
-        })
+        info!(target: "net", "Hear speech received - Type: {}, Text: {}",
+            speech.type_ as u32, speech.message);
     }
 }
 
 /// Handle CommunicationHearRangedSpeech messages
 impl MessageHandler<asheron_rs::messages::s2c::CommunicationHearRangedSpeech> for Client {
-    fn handle(
-        &mut self,
-        speech: asheron_rs::messages::s2c::CommunicationHearRangedSpeech,
-    ) -> Option<GameEvent> {
-        let chat_text = format!("{} says, \"{}\"", speech.sender_name, speech.message);
-        let message_type = speech.type_.clone() as u32;
+    fn handle(&mut self, speech: asheron_rs::messages::s2c::CommunicationHearRangedSpeech) {
+        self.emit_protocol(speech.to_protocol_event());
 
-        info!(target: "net", "Hear ranged speech received - Type: {}, Text: {}", message_type, chat_text);
-
-        // Emit protocol event
-        let protocol_event = ProtocolEvent::S2C(speech.to_protocol_event());
-        let _ = self
-            .raw_event_tx
-            .try_send(ClientEvent::Protocol(protocol_event));
-
-        Some(GameEvent::ChatMessageReceived {
-            message: chat_text,
-            message_type,
-        })
+        info!(target: "net", "Hear ranged speech received - Type: {}, Text: {}",
+            speech.type_ as u32, speech.message);
     }
 }
 
 /// Handle CharacterCharacterError messages
 impl MessageHandler<asheron_rs::messages::s2c::CharacterCharacterError> for Client {
-    fn handle(
-        &mut self,
-        char_error: asheron_rs::messages::s2c::CharacterCharacterError,
-    ) -> Option<GameEvent> {
+    fn handle(&mut self, char_error: asheron_rs::messages::s2c::CharacterCharacterError) {
         let error_code = char_error.reason.clone() as u32;
-        let error_message = format!("{}", char_error.reason);
 
-        error!(target: "net", "Character error received - Code: 0x{:04X} ({})", error_code, error_message);
+        error!(target: "net", "Character error received - Code: 0x{:04X} ({})",
+            error_code, format!("{}", char_error.reason));
 
-        // Emit protocol event
-        let protocol_event = ProtocolEvent::S2C(char_error.to_protocol_event());
-        let _ = self
-            .raw_event_tx
-            .try_send(ClientEvent::Protocol(protocol_event));
+        self.emit_protocol(char_error.to_protocol_event());
 
         // ServerCrash (0x0004) means the server is going down - trigger reconnection
         if error_code == 0x0004 {
@@ -166,11 +98,6 @@ impl MessageHandler<asheron_rs::messages::s2c::CharacterCharacterError> for Clie
                 true, // Can retry from character error
             );
         }
-
-        Some(GameEvent::CharacterError {
-            error_code,
-            error_message,
-        })
     }
 }
 
@@ -231,10 +158,7 @@ impl Client {
 
 /// Handle LoginLoginCharacterSet messages
 impl MessageHandler<asheron_rs::messages::s2c::LoginLoginCharacterSet> for Client {
-    fn handle(
-        &mut self,
-        char_list: asheron_rs::messages::s2c::LoginLoginCharacterSet,
-    ) -> Option<GameEvent> {
+    fn handle(&mut self, char_list: asheron_rs::messages::s2c::LoginLoginCharacterSet) {
         // Format character list for logging
         let chars = char_list
             .characters
@@ -256,11 +180,11 @@ impl MessageHandler<asheron_rs::messages::s2c::LoginLoginCharacterSet> for Clien
         info!(target: "net", "CharacterList -- Account: {}, Slots: {}, Characters: [{}]",
             char_list.account, char_list.num_allowed_characters, chars);
 
-        // Emit protocol event
-        let protocol_event = ProtocolEvent::S2C(char_list.to_protocol_event());
-        let _ = self
-            .raw_event_tx
-            .try_send(ClientEvent::Protocol(protocol_event));
+        self.emit_protocol(char_list.to_protocol_event());
+
+        // Update progress to 100% after transitioning
+        self.emit_progress(ClientSystemEvent::UpdatingProgress { progress: 1.0 });
+        info!(target: "net", "Progress: CharacterList received (100%)");
 
         // Use characters directly from acprotocol message
         let characters = char_list.characters.list.clone();
@@ -269,14 +193,7 @@ impl MessageHandler<asheron_rs::messages::s2c::LoginLoginCharacterSet> for Clien
         self.known_characters = characters.clone();
 
         // Transition from Patching to CharSelect scene
-        self.transition_to_char_select(characters.clone());
-
-        // Update progress to 100% after transitioning
-        let progress_event = GameEvent::UpdatingSetProgress { progress: 1.0 };
-        let _ = self
-            .raw_event_tx
-            .try_send(ClientEvent::Game(progress_event));
-        info!(target: "net", "Progress: CharacterList received (100%)");
+        self.transition_to_char_select(characters);
 
         // Clear cached DDD response since we successfully received character list
         self.ddd_response = None;
@@ -320,50 +237,21 @@ impl MessageHandler<asheron_rs::messages::s2c::LoginLoginCharacterSet> for Clien
                     char_name, available_names.join(", "));
             }
         }
-
-        // Delay sending the CharacterListReceived event (to make UI progress visible)
-        let game_event = GameEvent::CharacterListReceived {
-            account: char_list.account.clone(),
-            characters,
-            num_slots: char_list.num_allowed_characters,
-        };
-        let raw_tx = self.raw_event_tx.clone();
-        crate::instant::spawn_detached(async move {
-            crate::instant::sleep(std::time::Duration::from_millis(UI_DELAY_MS)).await;
-            info!(target: "net", "Sending CharacterListReceived event after delay");
-            if raw_tx.send(ClientEvent::Game(game_event)).await.is_err() {
-                error!(target: "net", "Failed to send CharacterListReceived event");
-            } else {
-                info!(target: "net", "CharacterListReceived event sent successfully");
-            }
-        });
-        info!(target: "net", "CharacterListReceived event scheduled with {}ms delay", UI_DELAY_MS);
-
-        // Return None since event is sent asynchronously
-        None
     }
 }
 
 /// Handle DDDInterrogationMessage messages
 impl MessageHandler<asheron_rs::messages::s2c::DDDInterrogationMessage> for Client {
-    fn handle(
-        &mut self,
-        ddd_msg: asheron_rs::messages::s2c::DDDInterrogationMessage,
-    ) -> Option<GameEvent> {
+    fn handle(&mut self, ddd_msg: asheron_rs::messages::s2c::DDDInterrogationMessage) {
         info!(target: "net", "Received DDD Interrogation - Language: {}, Region: {}, Product: {}",
             ddd_msg.name_rule_language, ddd_msg.servers_region, ddd_msg.product_id);
 
-        // Emit protocol event
-        let protocol_event = ProtocolEvent::S2C(ddd_msg.to_protocol_event());
-        let _ = self
-            .raw_event_tx
-            .try_send(ClientEvent::Protocol(protocol_event));
+        self.emit_protocol(ddd_msg.to_protocol_event());
 
         // Update progress to ReceivedDDD using new scene API
         use crate::client::scene::PatchingProgress as ScenePatchingProgress;
         self.update_patch_progress(ScenePatchingProgress::ReceivedDDD);
-        let game_event = GameEvent::UpdatingSetProgress { progress: 0.33 };
-        let _ = self.raw_event_tx.try_send(ClientEvent::Game(game_event));
+        self.emit_progress(ClientSystemEvent::UpdatingProgress { progress: 0.33 });
         info!(target: "net", "Progress: DDDInterrogation received (33%)");
 
         // Send static DDD response indicating client is up-to-date
@@ -378,8 +266,6 @@ impl MessageHandler<asheron_rs::messages::s2c::DDDInterrogationMessage> for Clie
         self.outgoing_message_queue
             .push_back(OutgoingMessage::new(response_content).with_delay_ms(UI_DELAY_MS));
         info!(target: "net", "DDD response cached and queued for sending with {}ms delay", UI_DELAY_MS);
-
-        None
     }
 }
 
@@ -388,101 +274,58 @@ impl MessageHandler<asheron_rs::messages::s2c::CharacterCharGenVerificationRespo
     fn handle(
         &mut self,
         response: asheron_rs::messages::s2c::CharacterCharGenVerificationResponse,
-    ) -> Option<GameEvent> {
+    ) {
         info!(target: "net", "Character creation verification response received");
 
-        // Emit protocol event
-        let protocol_event = ProtocolEvent::S2C(response.to_protocol_event());
-        let _ = self
-            .raw_event_tx
-            .try_send(ClientEvent::Protocol(protocol_event));
+        self.emit_protocol(response.to_protocol_event());
 
-        // Delay emitting CharacterListReceived event
-        let game_event = GameEvent::CharacterListReceived {
-            account: String::new(),
-            characters: self.known_characters.clone(),
-            num_slots: 0,
-        };
+        // The protocol event carries no character list, so re-publish the known
+        // characters as a `LoginCharacterSet` after a short delay. This lets the
+        // UI show the character-creation progress before swapping to the list.
+        let characters = self.known_characters.clone();
+        let account = self.account.name.clone();
         let raw_tx = self.raw_event_tx.clone();
         crate::instant::spawn_detached(async move {
             crate::instant::sleep(std::time::Duration::from_millis(UI_DELAY_MS)).await;
-            info!(target: "net", "Sending CharacterListReceived event after character creation");
-            if raw_tx.send(ClientEvent::Game(game_event)).await.is_err() {
-                error!(target: "net", "Failed to send CharacterListReceived event");
-            } else {
-                info!(target: "net", "CharacterListReceived event sent successfully");
+            info!(target: "net", "Sending character list after character creation");
+            let event = ProtocolEvent::S2C(gromnie_events::S2CEvent::LoginCharacterSet {
+                account,
+                characters,
+                num_slots: 0,
+            });
+            if raw_tx.send(ClientEvent::Protocol(event)).await.is_err() {
+                error!(target: "net", "Failed to send character list after character creation");
             }
         });
-
-        None
     }
 }
 
 /// Handle ItemSetState messages
 impl MessageHandler<asheron_rs::messages::s2c::ItemSetState> for Client {
-    fn handle(&mut self, state_msg: asheron_rs::messages::s2c::ItemSetState) -> Option<GameEvent> {
-        let object_id = state_msg.object_id.0;
-        let new_state = format!("{:?}", state_msg.new_state);
-
-        info!(target: "net", "ItemSetState: Object {} state changed to {}", object_id, new_state);
-
-        // For now, we'll just emit as a generic state property update
-        Some(GameEvent::ItemSetState {
-            object_id,
-            property_name: "State".to_string(),
-            value: 0, // State is a bitfield, not a simple int
-        })
+    fn handle(&mut self, state_msg: asheron_rs::messages::s2c::ItemSetState) {
+        self.emit_protocol(state_msg.to_protocol_event());
     }
 }
 
 /// Handle QualitiesPrivateUpdateInt messages
 impl MessageHandler<asheron_rs::messages::s2c::QualitiesPrivateUpdateInt> for Client {
-    fn handle(
-        &mut self,
-        quality_msg: asheron_rs::messages::s2c::QualitiesPrivateUpdateInt,
-    ) -> Option<GameEvent> {
-        let property_name = format!("{:?}", quality_msg.key);
-        let value = quality_msg.value;
-
-        info!(target: "net", "QualitiesPrivateUpdateInt: Property {} = {}", property_name, value);
-
-        // This is a global quality update, not tied to a specific object
-        // For now we'll emit with object_id 0 (or handle this differently)
-        // In reality, this might update the player or a specific object
-        Some(GameEvent::QualitiesPrivateUpdateInt {
-            object_id: 0, // TODO: determine which object this applies to
-            property_name,
-            value,
-        })
+    fn handle(&mut self, quality_msg: asheron_rs::messages::s2c::QualitiesPrivateUpdateInt) {
+        self.emit_protocol(quality_msg.to_protocol_event());
     }
 }
 
 /// Handle ItemDeleteObject messages
 impl MessageHandler<asheron_rs::messages::s2c::ItemDeleteObject> for Client {
-    fn handle(
-        &mut self,
-        delete_obj: asheron_rs::messages::s2c::ItemDeleteObject,
-    ) -> Option<GameEvent> {
-        let object_id = delete_obj.object_id.0;
+    fn handle(&mut self, delete_obj: asheron_rs::messages::s2c::ItemDeleteObject) {
+        info!(target: "net", "Object deleted from world: 0x{:08X}", delete_obj.object_id.0);
 
-        info!(target: "net", "Object deleted from world: 0x{:08X}", object_id);
-
-        // Emit protocol event
-        let protocol_event = ProtocolEvent::S2C(delete_obj.to_protocol_event());
-        let _ = self
-            .raw_event_tx
-            .try_send(ClientEvent::Protocol(protocol_event));
-
-        Some(GameEvent::ItemDeleteObject { object_id })
+        self.emit_protocol(delete_obj.to_protocol_event());
     }
 }
 
 /// Handle MovementPositionEvent messages (0xF748)
 impl MessageHandler<asheron_rs::messages::s2c::MovementPositionEvent> for Client {
-    fn handle(
-        &mut self,
-        msg: asheron_rs::messages::s2c::MovementPositionEvent,
-    ) -> Option<GameEvent> {
+    fn handle(&mut self, msg: asheron_rs::messages::s2c::MovementPositionEvent) {
         let object_id = msg.object_id.0;
         let landcell = msg.position.origin.landcell.0;
         info!(target: "net", "Position update: 0x{:08X} at cell 0x{:08X} ({}, {}, {})",
@@ -491,21 +334,13 @@ impl MessageHandler<asheron_rs::messages::s2c::MovementPositionEvent> for Client
             msg.position.origin.location.y,
             msg.position.origin.location.z);
 
-        let protocol_event = ProtocolEvent::S2C(msg.to_protocol_event());
-        let _ = self
-            .raw_event_tx
-            .try_send(ClientEvent::Protocol(protocol_event));
-
-        None
+        self.emit_protocol(msg.to_protocol_event());
     }
 }
 
 /// Handle MovementPositionAndMovementEvent messages (0xF619)
 impl MessageHandler<asheron_rs::messages::s2c::MovementPositionAndMovementEvent> for Client {
-    fn handle(
-        &mut self,
-        msg: asheron_rs::messages::s2c::MovementPositionAndMovementEvent,
-    ) -> Option<GameEvent> {
+    fn handle(&mut self, msg: asheron_rs::messages::s2c::MovementPositionAndMovementEvent) {
         let object_id = msg.object_id.0;
         let landcell = msg.position.origin.landcell.0;
         info!(target: "net", "Position+movement update: 0x{:08X} at cell 0x{:08X} ({}, {}, {})",
@@ -514,47 +349,25 @@ impl MessageHandler<asheron_rs::messages::s2c::MovementPositionAndMovementEvent>
             msg.position.origin.location.y,
             msg.position.origin.location.z);
 
-        let protocol_event = ProtocolEvent::S2C(msg.to_protocol_event());
-        let _ = self
-            .raw_event_tx
-            .try_send(ClientEvent::Protocol(protocol_event));
-
-        None
+        self.emit_protocol(msg.to_protocol_event());
     }
 }
 
 /// Handle MovementSetObjectMovement messages (0xF74C)
 impl MessageHandler<asheron_rs::messages::s2c::MovementSetObjectMovement> for Client {
-    fn handle(
-        &mut self,
-        msg: asheron_rs::messages::s2c::MovementSetObjectMovement,
-    ) -> Option<GameEvent> {
-        let object_id = msg.object_id.0;
+    fn handle(&mut self, msg: asheron_rs::messages::s2c::MovementSetObjectMovement) {
         info!(target: "net", "Object movement update: 0x{:08X} (seq {})",
-            object_id, msg.object_instance_sequence);
+            msg.object_id.0, msg.object_instance_sequence);
 
-        let protocol_event = ProtocolEvent::S2C(msg.to_protocol_event());
-        let _ = self
-            .raw_event_tx
-            .try_send(ClientEvent::Protocol(protocol_event));
-
-        None
+        self.emit_protocol(msg.to_protocol_event());
     }
 }
 
 /// Handle EffectsPlayerTeleport messages (0xF751)
 impl MessageHandler<asheron_rs::messages::s2c::EffectsPlayerTeleport> for Client {
-    fn handle(
-        &mut self,
-        msg: asheron_rs::messages::s2c::EffectsPlayerTeleport,
-    ) -> Option<GameEvent> {
+    fn handle(&mut self, msg: asheron_rs::messages::s2c::EffectsPlayerTeleport) {
         info!(target: "net", "Player teleport effect (seq {})", msg.object_teleport_sequence);
 
-        let protocol_event = ProtocolEvent::S2C(msg.to_protocol_event());
-        let _ = self
-            .raw_event_tx
-            .try_send(ClientEvent::Protocol(protocol_event));
-
-        None
+        self.emit_protocol(msg.to_protocol_event());
     }
 }

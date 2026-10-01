@@ -62,10 +62,10 @@ Events are delivered as structured JS objects via the `on_event` callback. Each
 event has a `type` field that discriminates the variant:
 
 ```ts
-// Game events
-{ type: "CharacterListReceived", account: "...", characters: [...], num_slots: 11 }
-{ type: "ChatMessageReceived", message: "...", message_type: 0 }
-{ type: "LoginSucceeded", character_id: 1, character_name: "..." }
+// Protocol events (rendered as "protocol:<debug>")
+{ type: "protocol:S2C(LoginCharacterSet { ... })" }
+{ type: "protocol:S2C(TextboxChatMessage { message: "...", message_type: 0 })" }
+{ type: "protocol:S2C(CharacterError { error_code: ..., error_message: "..." })" }
 
 // State events
 { type: "Connecting" }
@@ -75,6 +75,7 @@ event has a `type` field that discriminates the variant:
 // System events
 { type: "Disconnected", will_reconnect: false, reconnect_attempt: 0, delay_secs: 0 }
 { type: "AuthenticationFailed", reason: "..." }
+{ type: 'system:LoginSucceeded { character_id: 1, character_name: "Bob" }' }
 ```
 
 ### Internal transport

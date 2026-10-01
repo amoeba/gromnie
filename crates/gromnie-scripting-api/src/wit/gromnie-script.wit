@@ -145,7 +145,7 @@ interface host {
         /// Chat message received
         chat-message-received(chat-message),
 
-        /// Full protocol event access (new replacement for SimpleGameEvent)
+        /// Full protocol event access
         protocol(protocol-event),
     }
 

@@ -12,8 +12,7 @@ pub use self::session::{Account, ClientSession, ConnectionState, SessionState};
 
 // Re-export event types from gromnie-events for compatibility
 pub use gromnie_events::{
-    ClientEvent, ClientStateEvent, ClientSystemEvent, SimpleClientAction,
-    SimpleGameEvent as GameEvent,
+    ClientEvent, ClientStateEvent, ClientSystemEvent, ProtocolEvent, SimpleClientAction,
 };
 // Re-export internal types
 pub use types::ClientAction;

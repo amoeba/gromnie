@@ -10,7 +10,6 @@ mod instant;
 pub mod protocol_events;
 pub mod script_events;
 pub mod simple_client_actions;
-pub mod simple_game_events;
 pub mod system_events;
 
 use instant::Instant;
@@ -18,11 +17,10 @@ use instant::Instant;
 // Re-export key types for convenience
 pub use client_events::{ClientEvent, ClientStateEvent, ClientSystemEvent};
 pub use protocol_events::{
-    GameEventMsg, IntoGameEventMsg, OrderedGameEvent, ProtocolEvent, S2CEvent,
+    ChatMessage, GameEventMsg, IntoGameEventMsg, OrderedGameEvent, ProtocolEvent, S2CEvent,
 };
 pub use script_events::ScriptEventType;
 pub use simple_client_actions::SimpleClientAction;
-pub use simple_game_events::SimpleGameEvent;
 pub use system_events::SystemEvent;
 
 // ============================================================================
@@ -71,7 +69,7 @@ impl EventContext {
 /// Unified event type (enriched event from the runner's perspective)
 #[derive(Debug, Clone)]
 pub enum EventType {
-    Game(SimpleGameEvent),
+    Protocol(ProtocolEvent),
     State(ClientStateEvent),
     System(SystemEvent),
 }
@@ -99,14 +97,14 @@ impl EventEnvelope {
         }
     }
 
-    pub fn game_event(
-        game_event: SimpleGameEvent,
+    pub fn protocol_event(
+        protocol_event: ProtocolEvent,
         client_id: u32,
         client_sequence: u64,
         source: EventSource,
     ) -> Self {
         let context = EventContext::new(client_id, client_sequence);
-        Self::new(EventType::Game(game_event), context, source)
+        Self::new(EventType::Protocol(protocol_event), context, source)
     }
 
     pub fn state_event(
@@ -129,9 +127,9 @@ impl EventEnvelope {
         Self::new(EventType::System(system_event), context, source)
     }
 
-    pub fn extract_game_event(&self) -> Option<SimpleGameEvent> {
+    pub fn extract_protocol_event(&self) -> Option<ProtocolEvent> {
         match &self.event {
-            EventType::Game(game_event) => Some(game_event.clone()),
+            EventType::Protocol(protocol_event) => Some(protocol_event.clone()),
             _ => None,
         }
     }

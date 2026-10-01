@@ -40,20 +40,9 @@ impl EventWrapper {
         let context = EventContext::new(self.client_id, self.sequence_counter);
 
         let event = match raw {
-            ClientEvent::Game(game) => EventType::Game(game),
+            ClientEvent::Protocol(protocol) => EventType::Protocol(protocol),
             ClientEvent::State(state) => EventType::State(state),
             ClientEvent::System(sys) => EventType::System(self.convert_system_event(sys)),
-            ClientEvent::Protocol(_) => {
-                // Protocol events are not yet fully supported in the event bus
-                // For now, convert to a placeholder system event
-                tracing::debug!(target: "event_wrapper", "Protocol event received, converting to System event");
-                EventType::System(SystemEvent::Disconnected {
-                    client_id: self.client_id,
-                    will_reconnect: false,
-                    reconnect_attempt: 0,
-                    delay_secs: 0,
-                })
-            }
         };
 
         EventEnvelope::new(event, context, source)
@@ -61,10 +50,9 @@ impl EventWrapper {
 
     fn determine_source(&self, raw: &ClientEvent) -> EventSource {
         match raw {
-            ClientEvent::Game(_) => EventSource::Network,
+            ClientEvent::Protocol(_) => EventSource::Network,
             ClientEvent::State(_) => EventSource::ClientInternal,
             ClientEvent::System(_) => EventSource::System,
-            ClientEvent::Protocol(_) => EventSource::Network,
         }
     }
 
@@ -82,11 +70,19 @@ impl EventWrapper {
             ClientSystemEvent::ConnectingStarted => SystemEvent::ConnectingStarted {
                 client_id: self.client_id,
             },
+            ClientSystemEvent::ConnectingProgress { progress } => SystemEvent::ConnectingProgress {
+                client_id: self.client_id,
+                progress,
+            },
             ClientSystemEvent::ConnectingDone => SystemEvent::ConnectingDone {
                 client_id: self.client_id,
             },
             ClientSystemEvent::UpdatingStarted => SystemEvent::UpdatingStarted {
                 client_id: self.client_id,
+            },
+            ClientSystemEvent::UpdatingProgress { progress } => SystemEvent::UpdatingProgress {
+                client_id: self.client_id,
+                progress,
             },
             ClientSystemEvent::UpdatingDone => SystemEvent::UpdatingDone {
                 client_id: self.client_id,

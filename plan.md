@@ -114,12 +114,12 @@ The implementation consumes only these current `gromnie-events` variants:
 | Rust event | Bridge event / UI action |
 | --- | --- |
 | `ClientSystemEvent::ConnectingStarted` | `.connecting` |
-| `SimpleGameEvent::CharacterListReceived { characters, .. }` | `.characters` and character-list screen |
+| `ProtocolEvent::S2C(S2CEvent::LoginCharacterSet { characters, .. })` | `.characters` and character-list screen |
 | `ClientStateEvent::EnteringWorld` | `.enteringWorld` spinner |
-| `SimpleGameEvent::LoginSucceeded { character_id, character_name }` | `.enteredWorld`; present chat |
+| `ClientSystemEvent::LoginSucceeded { character_id, character_name }` | `.enteredWorld`; present chat |
 | `ClientStateEvent::InWorld` | internal confirmation only; it must follow `LoginSucceeded` before accepting chat input |
-| `SimpleGameEvent::ChatMessageReceived { message, message_type }` | `.chat` |
-| `SimpleGameEvent::LoginFailed` or `CharacterError` | `.error` and return to character list or form as applicable |
+| `ProtocolEvent::as_chat_message()` (`HearSpeech`, `HearRangedSpeech`, `TextboxChatMessage`, `HearDirectSpeech`, `TransientString`) | `.chat` |
+| `ProtocolEvent::S2C(S2CEvent::CharacterError { .. })` | `.error` and return to character list |
 | `ClientSystemEvent::AuthenticationFailed` | `.error`; return to form |
 | `ClientSystemEvent::Disconnected` | `.disconnected`; return to form |
 

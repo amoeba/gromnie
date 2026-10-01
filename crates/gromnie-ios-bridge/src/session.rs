@@ -7,7 +7,7 @@ use std::{
 
 use gromnie_client::client::{Client, ClientEvent};
 use gromnie_client::transport::{ClientTransport, NativeUdpTransport};
-use gromnie_events::{ClientSystemEvent, SimpleClientAction, SimpleGameEvent};
+use gromnie_events::{ClientSystemEvent, ProtocolEvent, S2CEvent, SimpleClientAction};
 use tokio::sync::mpsc::{Receiver as CommandReceiver, Sender as CommandSender};
 
 use crate::event::{BridgeEvent, BridgeEventKind, Character};
@@ -283,11 +283,8 @@ async fn run_client(
         while let Ok(event) = raw_events.try_recv() {
             if matches!(
                 event,
-                ClientEvent::Game(
-                    SimpleGameEvent::LoginSucceeded { .. }
-                        | SimpleGameEvent::CharacterError { .. }
-                        | SimpleGameEvent::LoginFailed { .. }
-                )
+                ClientEvent::System(ClientSystemEvent::LoginSucceeded { .. })
+                    | ClientEvent::Protocol(ProtocolEvent::S2C(S2CEvent::CharacterError { .. }))
             ) {
                 entering_world_since = None;
             }
@@ -362,11 +359,11 @@ fn forward_event(
     character_names: &mut HashMap<u32, String>,
 ) {
     match event {
-        ClientEvent::Game(SimpleGameEvent::CharacterListReceived {
+        ClientEvent::Protocol(ProtocolEvent::S2C(S2CEvent::LoginCharacterSet {
             account,
             characters,
             num_slots,
-        }) => {
+        })) => {
             let characters = characters
                 .into_iter()
                 .map(|character| {
@@ -383,7 +380,13 @@ fn forward_event(
                 characters,
             });
         }
-        ClientEvent::Game(SimpleGameEvent::LoginSucceeded {
+        ClientEvent::Protocol(ProtocolEvent::S2C(S2CEvent::CharacterError {
+            error_message,
+            ..
+        })) => {
+            emitter.error("character", error_message, "characters");
+        }
+        ClientEvent::System(ClientSystemEvent::LoginSucceeded {
             character_id,
             character_name,
         }) => {
@@ -392,23 +395,19 @@ fn forward_event(
                 character_name,
             });
         }
-        ClientEvent::Game(SimpleGameEvent::ChatMessageReceived {
-            message,
-            message_type,
-        }) => {
-            emitter.emit(BridgeEventKind::Chat {
-                message,
-                message_type,
-            });
-        }
-        ClientEvent::Game(SimpleGameEvent::LoginFailed { reason }) => {
-            emitter.error("login", reason, "characters")
-        }
-        ClientEvent::Game(SimpleGameEvent::CharacterError { error_message, .. }) => {
-            emitter.error("character", error_message, "characters");
-        }
         ClientEvent::System(ClientSystemEvent::AuthenticationFailed { reason }) => {
             emitter.error("authentication", reason, "form")
+        }
+        ClientEvent::Protocol(protocol) => {
+            // Chat arrives as several protocol messages (speech, ranged
+            // speech, textbox, transient strings); normalizing here keeps the
+            // bridge free of protocol-shape knowledge.
+            if let Some(chat) = protocol.as_chat_message() {
+                emitter.emit(BridgeEventKind::Chat {
+                    message: chat.text,
+                    message_type: chat.message_type,
+                });
+            }
         }
         _ => {}
     }
@@ -572,11 +571,11 @@ mod tests {
         let mut names = HashMap::new();
         forward_event(
             &mut emitter,
-            ClientEvent::Game(SimpleGameEvent::CharacterListReceived {
+            ClientEvent::Protocol(ProtocolEvent::S2C(S2CEvent::LoginCharacterSet {
                 account: "acct".to_string(),
                 characters: vec![character(1, "Alice"), character(2, "Bob")],
                 num_slots: 5,
-            }),
+            })),
             &mut names,
         );
 
@@ -605,7 +604,7 @@ mod tests {
         let mut names = HashMap::new();
         forward_event(
             &mut emitter,
-            ClientEvent::Game(SimpleGameEvent::LoginSucceeded {
+            ClientEvent::System(ClientSystemEvent::LoginSucceeded {
                 character_id: 7,
                 character_name: "Alice".to_string(),
             }),
@@ -630,10 +629,10 @@ mod tests {
         let mut names = HashMap::new();
         forward_event(
             &mut emitter,
-            ClientEvent::Game(SimpleGameEvent::ChatMessageReceived {
+            ClientEvent::Protocol(ProtocolEvent::S2C(S2CEvent::TextboxChatMessage {
                 message: "hello".to_string(),
                 message_type: 2,
-            }),
+            })),
             &mut names,
         );
 
@@ -653,17 +652,10 @@ mod tests {
     fn forward_event_routes_failures_to_the_right_screen() {
         let cases = [
             (
-                ClientEvent::Game(SimpleGameEvent::LoginFailed {
-                    reason: "nope".to_string(),
-                }),
-                "login",
-                "characters",
-            ),
-            (
-                ClientEvent::Game(SimpleGameEvent::CharacterError {
+                ClientEvent::Protocol(ProtocolEvent::S2C(S2CEvent::CharacterError {
                     error_code: 1,
                     error_message: "bad".to_string(),
-                }),
+                })),
                 "character",
                 "characters",
             ),

@@ -45,7 +45,7 @@ use crate::client::protocol_conversions::{
     trade_remove_from_trade_to_game_event_msg, trade_reset_trade_event_to_game_event_msg,
     transient_string_to_game_event_msg,
 };
-use crate::client::{ClientEvent, ClientSystemEvent, GameEvent};
+use crate::client::{ClientEvent, ClientSystemEvent};
 use crate::crypto::crypto_system::CryptoSystem;
 use crate::crypto::magic_number::get_magic_number;
 #[cfg(not(target_arch = "wasm32"))]
@@ -58,6 +58,7 @@ use asheron_rs::gameevents::{
     TradeRegisterTrade, TradeRemoveFromTrade, TradeResetTrade as TradeResetTradeEvent,
     TradeTradeFailure,
 };
+use gromnie_events::ProtocolEvent;
 
 /// Maximum number of packets we can send without receiving before considering connection dead
 const MAX_UNACKED_SENDS: u32 = 20;
@@ -73,7 +74,7 @@ pub struct Client {
     pub id: u32,
     pub server: ServerInfo,
     transport: Box<dyn ClientTransport>,
-    account: Account,
+    pub(crate) account: Account,
 
     // ========== Session-Based Architecture ==========
     pub session: ClientSession, // Protocol state + metadata
@@ -452,6 +453,20 @@ impl Client {
         Ok(())
     }
 
+    /// Emit a strongly-typed protocol event on the raw event channel.
+    ///
+    /// Dropped silently when no consumer is attached.
+    pub(crate) fn emit_protocol(&self, event: gromnie_events::S2CEvent) {
+        let _ = self
+            .raw_event_tx
+            .try_send(ClientEvent::Protocol(ProtocolEvent::S2C(event)));
+    }
+
+    /// Emit a client lifecycle event (progress reporting and friends).
+    pub(crate) fn emit_progress(&self, event: ClientSystemEvent) {
+        let _ = self.raw_event_tx.try_send(ClientEvent::System(event));
+    }
+
     /// Send LoginComplete notification to server after receiving initial world state
     /// Also handles the transition to InWorld and emits LoginSucceeded event
     pub fn send_login_complete_notification(&mut self) {
@@ -499,12 +514,12 @@ impl Client {
         let character_name = entering.character_name.clone();
 
         // Emit LoginSucceeded event to update UI
-        let game_event = GameEvent::LoginSucceeded {
-            character_id,
-            character_name: character_name.clone(),
-        };
-
-        let _ = self.raw_event_tx.try_send(ClientEvent::Game(game_event));
+        let _ =
+            self.raw_event_tx
+                .try_send(ClientEvent::System(ClientSystemEvent::LoginSucceeded {
+                    character_id,
+                    character_name: character_name.clone(),
+                }));
 
         // Mark login as complete in scene
         if let Some(char_select) = self.scene.as_character_select_mut() {
@@ -1277,15 +1292,14 @@ impl Client {
     fn handle_message(&mut self, message: RawMessage) {
         debug!(target: "net", "Received message: {} (0x{:08X})", message.message_type, message.opcode);
 
-        let event_tx = self.raw_event_tx.clone();
-
         // Otherwise try to parse as S2CMessage
         match S2CMessage::try_from(message.opcode) {
             Ok(msg_type) => {
                 info!(target: "net", "Client got S2CMessage: {:?} (0x{:04X})", msg_type, message.opcode);
 
-                // TODO: NetworkMessage event removed in simplified event model
-                // Could be added back to SimpleGameEvent if debug visibility is needed
+                // TODO: raw network messages are not surfaced as events; the TUI
+                // reconstructs a debug view from protocol events. Add a
+                // `S2CEvent::RawNetworkMessage` if full fidelity is needed.
 
                 match msg_type {
                     S2CMessage::OrderedGameEvent => {
@@ -1309,19 +1323,19 @@ impl Client {
                     }
                     S2CMessage::LoginCreatePlayer => {
                         dispatch_message::<asheron_rs::messages::s2c::LoginCreatePlayer, _>(
-                            self, message, &event_tx,
+                            self, message,
                         )
                         .ok();
                     }
                     S2CMessage::LoginLoginCharacterSet => {
                         dispatch_message::<asheron_rs::messages::s2c::LoginLoginCharacterSet, _>(
-                            self, message, &event_tx,
+                            self, message,
                         )
                         .ok();
                     }
                     S2CMessage::DDDInterrogationMessage => {
                         dispatch_message::<asheron_rs::messages::s2c::DDDInterrogationMessage, _>(
-                            self, message, &event_tx,
+                            self, message,
                         )
                         .ok();
                     }
@@ -1329,7 +1343,7 @@ impl Client {
                         dispatch_message::<
                             asheron_rs::messages::s2c::CharacterCharGenVerificationResponse,
                             _,
-                        >(self, message, &event_tx)
+                        >(self, message)
                         .ok();
                     }
                     S2CMessage::LoginEnterGameServerReady => {
@@ -1337,20 +1351,20 @@ impl Client {
                     }
                     S2CMessage::ItemCreateObject => {
                         dispatch_message::<asheron_rs::messages::s2c::ItemCreateObject, _>(
-                            self, message, &event_tx,
+                            self, message,
                         )
                         .ok();
                     }
                     S2CMessage::ItemDeleteObject => {
                         dispatch_message::<asheron_rs::messages::s2c::ItemDeleteObject, _>(
-                            self, message, &event_tx,
+                            self, message,
                         )
                         .ok();
                     }
                     S2CMessage::CommunicationTextboxString => self.handle_chat_message(message),
                     S2CMessage::CommunicationHearSpeech => {
                         dispatch_message::<asheron_rs::messages::s2c::CommunicationHearSpeech, _>(
-                            self, message, &event_tx,
+                            self, message,
                         )
                         .ok();
                     }
@@ -1358,12 +1372,12 @@ impl Client {
                         dispatch_message::<
                             asheron_rs::messages::s2c::CommunicationHearRangedSpeech,
                             _,
-                        >(self, message, &event_tx)
+                        >(self, message)
                         .ok();
                     }
                     S2CMessage::CharacterCharacterError => {
                         dispatch_message::<asheron_rs::messages::s2c::CharacterCharacterError, _>(
-                            self, message, &event_tx,
+                            self, message,
                         )
                         .ok();
                     }
@@ -1374,20 +1388,18 @@ impl Client {
                         self.handle_login_account_booted(message);
                     }
                     S2CMessage::QualitiesPrivateUpdateInt => {
-                        dispatch_message::<asheron_rs::messages::s2c::QualitiesPrivateUpdateInt, _>(
-                            self, message, &event_tx,
-                        )
+                        dispatch_message::<asheron_rs::messages::s2c::QualitiesPrivateUpdateInt, _>(self, message)
                         .ok();
                     }
                     S2CMessage::ItemSetState => {
                         dispatch_message::<asheron_rs::messages::s2c::ItemSetState, _>(
-                            self, message, &event_tx,
+                            self, message,
                         )
                         .ok();
                     }
                     S2CMessage::MovementPositionEvent => {
                         dispatch_message::<asheron_rs::messages::s2c::MovementPositionEvent, _>(
-                            self, message, &event_tx,
+                            self, message,
                         )
                         .ok();
                     }
@@ -1395,19 +1407,19 @@ impl Client {
                         dispatch_message::<
                             asheron_rs::messages::s2c::MovementPositionAndMovementEvent,
                             _,
-                        >(self, message, &event_tx)
+                        >(self, message)
                         .ok();
                     }
                     S2CMessage::MovementSetObjectMovement => {
                         dispatch_message::<
                             asheron_rs::messages::s2c::MovementSetObjectMovement,
                             _,
-                        >(self, message, &event_tx)
+                        >(self, message)
                         .ok();
                     }
                     S2CMessage::EffectsPlayerTeleport => {
                         dispatch_message::<asheron_rs::messages::s2c::EffectsPlayerTeleport, _>(
-                            self, message, &event_tx,
+                            self, message,
                         )
                         .ok();
                     }
@@ -1660,13 +1672,11 @@ impl Client {
                         info!(target: "net", "Chat message received - Opcode: 0x{:04X}, Type: {}, Text: {}",
                               message.opcode, message_type, chat_text);
 
-                        let game_event = GameEvent::ChatMessageReceived {
+                        // Send on channel (ignore error if no subscribers)
+                        self.emit_protocol(gromnie_events::S2CEvent::TextboxChatMessage {
                             message: chat_text,
                             message_type,
-                        };
-
-                        // Send on channel (ignore error if no subscribers)
-                        let _ = self.raw_event_tx.try_send(ClientEvent::Game(game_event));
+                        });
                     }
                     Err(e) => {
                         error!(target: "net", "Failed to parse chat message type: {}", e);
@@ -1794,8 +1804,7 @@ impl Client {
             // Update progress to ConnectRequestReceived (66%)
             if let Some(connecting) = self.scene.as_connecting_mut() {
                 connecting.connect_progress = ConnectingProgress::ConnectRequestReceived;
-                let game_event = GameEvent::ConnectingSetProgress { progress: 0.66 };
-                let _ = self.raw_event_tx.try_send(ClientEvent::Game(game_event));
+                self.emit_progress(ClientSystemEvent::ConnectingProgress { progress: 0.66 });
                 info!(target: "net", "Progress: ConnectRequest received (66%)");
             }
 
@@ -1810,8 +1819,7 @@ impl Client {
                 connecting.connect_progress = ConnectingProgress::ConnectResponseSent;
                 connecting.patch_progress = PatchingProgress::WaitingForDDD;
                 connecting.reset(); // Reset timing for patching phase
-                let game_event = GameEvent::ConnectingSetProgress { progress: 1.0 };
-                let _ = self.raw_event_tx.try_send(ClientEvent::Game(game_event));
+                self.emit_progress(ClientSystemEvent::ConnectingProgress { progress: 1.0 });
                 info!(target: "net", "Progress: ConnectResponse sent (100%)");
                 info!(target: "net", "Scene transition: Connecting phase -> Patching phase");
             }
@@ -1986,8 +1994,7 @@ impl Client {
             && connecting.connect_progress == ConnectingProgress::Initial
         {
             connecting.connect_progress = ConnectingProgress::LoginRequestSent;
-            let game_event = GameEvent::ConnectingSetProgress { progress: 0.33 };
-            let _ = self.raw_event_tx.send(ClientEvent::Game(game_event)).await;
+            self.emit_progress(ClientSystemEvent::ConnectingProgress { progress: 0.33 });
             info!(target: "net", "Progress: LoginRequest sent (33%)");
         }
 
@@ -2175,35 +2182,18 @@ use crate::client::game_event_handler::GameEventHandler;
 
 /// Handle Communication_HearDirectSpeech game events
 impl GameEventHandler<asheron_rs::gameevents::CommunicationHearDirectSpeech> for Client {
-    fn handle(
-        &mut self,
-        event: asheron_rs::gameevents::CommunicationHearDirectSpeech,
-    ) -> Option<GameEvent> {
+    fn handle(&mut self, event: asheron_rs::gameevents::CommunicationHearDirectSpeech) {
         let chat_text = format!("{} tells you, \"{}\"", event.sender_name, event.message);
         let message_type = event.type_ as u32;
 
         info!(target: "net", "Direct speech received - Type: {}, Text: {}", message_type, chat_text);
-
-        Some(GameEvent::ChatMessageReceived {
-            message: chat_text,
-            message_type,
-        })
     }
 }
 
 /// Handle Communication_TransientString game events
 impl GameEventHandler<asheron_rs::gameevents::CommunicationTransientString> for Client {
-    fn handle(
-        &mut self,
-        event: asheron_rs::gameevents::CommunicationTransientString,
-    ) -> Option<GameEvent> {
-        let message = event.message;
-        info!(target: "net", "Transient string: {}", message);
-
-        Some(GameEvent::ChatMessageReceived {
-            message,
-            message_type: 0x05, // System message type
-        })
+    fn handle(&mut self, event: asheron_rs::gameevents::CommunicationTransientString) {
+        info!(target: "net", "Transient string: {}", event.message);
     }
 }
 
@@ -2212,7 +2202,7 @@ impl GameEventHandler<asheron_rs::gameevents::CommunicationTransientString> for 
 // ============================================================================
 
 impl GameEventHandler<TradeRegisterTrade> for Client {
-    fn handle(&mut self, event: TradeRegisterTrade) -> Option<GameEvent> {
+    fn handle(&mut self, event: TradeRegisterTrade) {
         info!(target: "net", "Trade registered: initiator=0x{:08X}, partner=0x{:08X}, stamp={}",
             event.initiator_id.0, event.partner_id.0, event.stamp);
         self.pending_trade = Some(PendingTradeState {
@@ -2220,66 +2210,57 @@ impl GameEventHandler<TradeRegisterTrade> for Client {
             partner_id: event.partner_id.0,
             stamp: event.stamp,
         });
-        None
     }
 }
 
 impl GameEventHandler<TradeOpenTrade> for Client {
-    fn handle(&mut self, event: TradeOpenTrade) -> Option<GameEvent> {
+    fn handle(&mut self, event: TradeOpenTrade) {
         info!(target: "net", "Trade window opened: object_id=0x{:08X}", event.object_id.0);
-        None
     }
 }
 
 impl GameEventHandler<TradeCloseTrade> for Client {
-    fn handle(&mut self, _event: TradeCloseTrade) -> Option<GameEvent> {
+    fn handle(&mut self, _event: TradeCloseTrade) {
         info!(target: "net", "Trade closed");
         self.pending_trade = None;
-        None
     }
 }
 
 impl GameEventHandler<TradeAddToTrade> for Client {
-    fn handle(&mut self, event: TradeAddToTrade) -> Option<GameEvent> {
+    fn handle(&mut self, event: TradeAddToTrade) {
         info!(target: "net", "Item added to trade: item_id=0x{:08X}", event.object_id.0);
-        None
     }
 }
 
 impl GameEventHandler<TradeRemoveFromTrade> for Client {
-    fn handle(&mut self, event: TradeRemoveFromTrade) -> Option<GameEvent> {
+    fn handle(&mut self, event: TradeRemoveFromTrade) {
         info!(target: "net", "Item removed from trade: item_id=0x{:08X}", event.object_id.0);
-        None
     }
 }
 
 impl GameEventHandler<TradeAcceptTradeEvent> for Client {
-    fn handle(&mut self, _event: TradeAcceptTradeEvent) -> Option<GameEvent> {
+    fn handle(&mut self, _event: TradeAcceptTradeEvent) {
         info!(target: "net", "Trade accepted by a participant");
-        None
     }
 }
 
 impl GameEventHandler<TradeDeclineTradeEvent> for Client {
-    fn handle(&mut self, _event: TradeDeclineTradeEvent) -> Option<GameEvent> {
+    fn handle(&mut self, _event: TradeDeclineTradeEvent) {
         info!(target: "net", "Trade declined");
         self.pending_trade = None;
-        None
     }
 }
 
 impl GameEventHandler<TradeResetTradeEvent> for Client {
-    fn handle(&mut self, _event: TradeResetTradeEvent) -> Option<GameEvent> {
+    fn handle(&mut self, _event: TradeResetTradeEvent) {
         info!(target: "net", "Trade reset");
-        None
     }
 }
 
 impl GameEventHandler<TradeTradeFailure> for Client {
-    fn handle(&mut self, event: TradeTradeFailure) -> Option<GameEvent> {
+    fn handle(&mut self, event: TradeTradeFailure) {
         info!(target: "net", "Trade failure: {:?}", event);
         self.pending_trade = None;
-        None
     }
 }
 
@@ -2288,16 +2269,14 @@ impl GameEventHandler<TradeTradeFailure> for Client {
 // ============================================================================
 
 impl GameEventHandler<MagicUpdateEnchantment> for Client {
-    fn handle(&mut self, event: MagicUpdateEnchantment) -> Option<GameEvent> {
+    fn handle(&mut self, event: MagicUpdateEnchantment) {
         info!(target: "net", "Enchantment updated: spell_id={}", event.enchantment.id.id.0);
-        None
     }
 }
 
 impl GameEventHandler<MagicRemoveEnchantment> for Client {
-    fn handle(&mut self, event: MagicRemoveEnchantment) -> Option<GameEvent> {
+    fn handle(&mut self, event: MagicRemoveEnchantment) {
         info!(target: "net", "Enchantment removed: spell_id={}", event.spell_id.id.0);
-        None
     }
 }
 

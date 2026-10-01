@@ -10,10 +10,14 @@ pub enum SystemEvent {
     AuthenticationFailed { client_id: u32, reason: String },
     /// Client started connecting phase
     ConnectingStarted { client_id: u32 },
+    /// Progress within the connecting phase, from 0.0 to 1.0
+    ConnectingProgress { client_id: u32, progress: f64 },
     /// Client finished connecting phase
     ConnectingDone { client_id: u32 },
     /// Client started updating/patching phase
     UpdatingStarted { client_id: u32 },
+    /// Progress within the updating/patching phase, from 0.0 to 1.0
+    UpdatingProgress { client_id: u32, progress: f64 },
     /// Client finished updating/patching phase
     UpdatingDone { client_id: u32 },
     /// Character login succeeded

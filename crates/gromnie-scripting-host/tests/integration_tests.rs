@@ -2,10 +2,7 @@
 
 use asheron_rs::types::{CharacterIdentity, ObjectId};
 use gromnie_client::client::Client;
-use gromnie_events::{
-    ClientEvent, GameEventMsg, OrderedGameEvent, ProtocolEvent, S2CEvent,
-    SimpleGameEvent as GameEvent,
-};
+use gromnie_events::{ClientEvent, GameEventMsg, OrderedGameEvent, ProtocolEvent, S2CEvent};
 use gromnie_scripting_host::ScriptRunner;
 use std::collections::HashMap;
 use std::path::Path;
@@ -89,15 +86,15 @@ async fn test_event_handling() {
     }
 
     // Create test events
-    let test_events = vec![GameEvent::ChatMessageReceived {
+    let test_events = vec![ProtocolEvent::S2C(S2CEvent::TextboxChatMessage {
         message: "Hello World".to_string(),
         message_type: 1,
-    }];
+    })];
 
     // Process events
     for event in test_events {
         runner
-            .handle_event(gromnie_events::ClientEvent::Game(event))
+            .handle_event(gromnie_events::ClientEvent::Protocol(event))
             .await;
     }
 
@@ -125,13 +122,13 @@ async fn test_timer_functionality() {
 
     // Handle a few events to trigger ticks
     for i in 0..5 {
-        let event = GameEvent::ChatMessageReceived {
+        let event = ProtocolEvent::S2C(S2CEvent::TextboxChatMessage {
             message: format!("Test message {}", i),
             message_type: 1,
-        };
+        });
 
         runner
-            .handle_event(gromnie_events::ClientEvent::Game(event))
+            .handle_event(gromnie_events::ClientEvent::Protocol(event))
             .await;
 
         // Small delay to allow timers to progress
@@ -180,13 +177,13 @@ async fn test_host_function_calls() {
     }
 
     // Trigger script execution by sending events
-    let event = GameEvent::ChatMessageReceived {
+    let event = ProtocolEvent::S2C(S2CEvent::TextboxChatMessage {
         message: "Test trigger".to_string(),
         message_type: 1,
-    };
+    });
 
     runner
-        .handle_event(gromnie_events::ClientEvent::Game(event))
+        .handle_event(gromnie_events::ClientEvent::Protocol(event))
         .await;
 
     // Check if scripts generated any actions

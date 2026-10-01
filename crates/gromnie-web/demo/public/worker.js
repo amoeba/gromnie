@@ -35,7 +35,7 @@ function getState() {
 
 function handleEvent(eventDesc) {
   // Track state from events for reconnection
-  if (eventDesc.includes("CharacterListReceived")) {
+  if (eventDesc.includes("LoginCharacterSet")) {
     const charRegex =
       /CharacterIdentity\s*\{\s*character_id:\s*ObjectId\((\d+)\),\s*name:\s*"([^"]+)"/g;
     characters = [];

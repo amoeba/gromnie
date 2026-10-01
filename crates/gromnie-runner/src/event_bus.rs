@@ -66,14 +66,14 @@ impl EventBus {
 /// This allows the TUI to receive all types of events
 #[derive(Debug, Clone)]
 pub enum TuiEvent {
-    Game(gromnie_events::SimpleGameEvent),
+    Protocol(gromnie_events::ProtocolEvent),
     System(SystemEvent),
     State(ClientStateEvent),
 }
 
-impl From<gromnie_events::SimpleGameEvent> for TuiEvent {
-    fn from(event: gromnie_events::SimpleGameEvent) -> Self {
-        TuiEvent::Game(event)
+impl From<gromnie_events::ProtocolEvent> for TuiEvent {
+    fn from(event: gromnie_events::ProtocolEvent) -> Self {
+        TuiEvent::Protocol(event)
     }
 }
 
@@ -100,8 +100,8 @@ pub struct LoggingEventHandler;
 impl EventHandler for LoggingEventHandler {
     fn handle_event(&mut self, envelope: EventEnvelope) {
         match envelope.event {
-            EventType::Game(game_event) => {
-                tracing::debug!(target: "events", "Game Event: {:?}", game_event);
+            EventType::Protocol(protocol_event) => {
+                tracing::debug!(target: "events", "Protocol Event: {:?}", protocol_event);
             }
             EventType::State(state_event) => {
                 tracing::info!(target: "events", "State Event: {:?}", state_event);

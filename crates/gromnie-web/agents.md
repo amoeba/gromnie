@@ -248,7 +248,7 @@ Expected log output:
 ```
 connecting to play.coldeve.ac:9000...
 connected and login sent, waiting for server response...
-event: game:CharacterListReceived { account: "<GROMNIE_GAME_ACCOUNT>", characters: [...], num_slots: 11 }
+event: protocol:S2C(LoginCharacterSet { account: "<GROMNIE_GAME_ACCOUNT>", characters: [...], num_slots: 11 })
 found N character(s)
 ```
 
@@ -268,10 +268,9 @@ Expected log output:
 ```
 entering world with character: <name> (ID: <id>)...
 character selected, entering world...
-event: game:ChatMessageReceived { message: "Welcome to Coldeve. ...", message_type: 0 }
+event: protocol:S2C(TextboxChatMessage { message: "Welcome to Coldeve. ...", message_type: 0 })
 event: protocol:S2C(LoginCreatePlayer { character_id: <id> })
-event: game:LoginSucceeded { character_id: <id>, character_name: "" }
-event: game:CreatePlayer { character_id: <id> }
+event: system:LoginSucceeded { character_id: <id>, character_name: "" }
 ```
 
 The world view should appear with a chat input and message area.

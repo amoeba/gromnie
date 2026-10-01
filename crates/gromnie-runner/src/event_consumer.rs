@@ -7,12 +7,9 @@ use tracing::{debug, error, info};
 
 use crate::client_runner::MultiClientStats;
 use crate::event_bus::{EventEnvelope, EventType, SystemEvent};
-use gromnie_events::{SimpleClientAction, SimpleGameEvent};
+use gromnie_events::{ProtocolEvent, S2CEvent, SimpleClientAction};
 use serenity::http::Http;
 use serenity::model::id::ChannelId;
-
-// Alias for backward compatibility in this file
-use SimpleGameEvent as GameEvent;
 
 /// Format a Duration as (hours, minutes, seconds)
 fn format_uptime(duration: Duration) -> (u64, u64, u64) {
@@ -20,15 +17,15 @@ fn format_uptime(duration: Duration) -> (u64, u64, u64) {
     (secs / 3600, (secs % 3600) / 60, secs % 60)
 }
 
-/// Log game events shared between LoggingConsumer and DiscordConsumer.
+/// Log protocol events shared between LoggingConsumer and DiscordConsumer.
 /// Returns true if the event was handled.
-fn log_common_game_event(event: &GameEvent) -> bool {
+fn log_common_protocol_event(event: &ProtocolEvent) -> bool {
     match event {
-        GameEvent::CharacterListReceived {
+        ProtocolEvent::S2C(S2CEvent::LoginCharacterSet {
             account,
             characters,
             num_slots,
-        } => {
+        }) => {
             let names = characters
                 .iter()
                 .map(|c| format!("{} ({})", c.name, c.character_id.0))
@@ -37,22 +34,10 @@ fn log_common_game_event(event: &GameEvent) -> bool {
             info!(target: "events", "CharacterList -- Account: {}, Slots: {}, Number of Chars: {}, Chars: {}", account, num_slots, characters.len(), names);
             true
         }
-        GameEvent::LoginFailed { reason } => {
-            error!(target: "events", "LoginFailed -- Reason: {}", reason);
-            true
-        }
-        GameEvent::ConnectingSetProgress { progress } => {
-            debug!(target: "events", "Connecting progress: {:.1}%", progress * 100.0);
-            true
-        }
-        GameEvent::UpdatingSetProgress { progress } => {
-            debug!(target: "events", "Updating progress: {:.1}%", progress * 100.0);
-            true
-        }
-        GameEvent::CharacterError {
+        ProtocolEvent::S2C(S2CEvent::CharacterError {
             error_code,
             error_message,
-        } => {
+        }) => {
             error!(target: "events", "Character error (code {}): {}", error_code, error_message);
             true
         }
@@ -64,6 +49,14 @@ fn log_common_game_event(event: &GameEvent) -> bool {
 /// Returns true if the event was handled.
 fn log_common_system_event(event: &SystemEvent) -> bool {
     match event {
+        SystemEvent::ConnectingProgress { progress, .. } => {
+            debug!(target: "events", "Connecting progress: {:.1}%", progress * 100.0);
+            true
+        }
+        SystemEvent::UpdatingProgress { progress, .. } => {
+            debug!(target: "events", "Updating progress: {:.1}%", progress * 100.0);
+            true
+        }
         SystemEvent::AuthenticationSucceeded { .. } => {
             info!(target: "events", "Authentication succeeded - connected to server");
             true
@@ -132,75 +125,57 @@ impl crate::client_runner_builder::ConsumerFactory for LoggingConsumerFactory {
 impl EventConsumer for LoggingConsumer {
     fn handle_event(&mut self, envelope: EventEnvelope) {
         match envelope.event {
-            EventType::Game(game_event) => {
-                if log_common_game_event(&game_event) {
+            EventType::Protocol(protocol_event) => {
+                if log_common_protocol_event(&protocol_event) {
                     return;
                 }
-                match game_event {
-                    GameEvent::LoginSucceeded {
-                        character_id,
-                        character_name,
-                    } => {
-                        info!(target: "events", "LoginSucceeded -- Character: {} (ID: {})", character_name, character_id);
+                // Chat arrives under several protocol messages; `as_chat_message`
+                // normalizes them so log output is identical to what UIs show.
+                if let Some(chat) = protocol_event.as_chat_message() {
+                    info!(target: "events", "CHAT [{}]: {}", chat.message_type, chat.text);
+                    return;
+                }
+                if let ProtocolEvent::S2C(s2c) = &protocol_event {
+                    match s2c {
+                        S2CEvent::LoginCreatePlayer { character_id } => {
+                            info!(target: "events", "CREATE PLAYER: Character ID {}", character_id);
+                        }
+                        S2CEvent::ItemCreateObject {
+                            object_id,
+                            name,
+                            item_type,
+                            container_id,
+                            burden,
+                            value,
+                            items_capacity: _,
+                            container_capacity: _,
+                        } => {
+                            info!(target: "events", "ITEM CREATE: {} (ID: {}, Type: {}, Container: {:?}, Burden: {}, Value: {})",
+                                name, object_id, item_type, container_id, burden, value);
+                        }
+                        S2CEvent::ItemOnViewContents {
+                            container_id,
+                            items,
+                        } => {
+                            info!(target: "events", "ITEM VIEW CONTENTS: Container {} has {} items", container_id, items.len());
+                        }
+                        S2CEvent::PlayerContainersReceived {
+                            player_id,
+                            containers,
+                        } => {
+                            info!(target: "events", "PLAYER CONTAINERS: Player {} has {} containers", player_id, containers.len());
+                        }
+                        S2CEvent::ItemDeleteObject { object_id } => {
+                            info!(target: "events", "ITEM DELETE: Object ID {}", object_id);
+                        }
+                        S2CEvent::QualitiesPrivateUpdateInt { property, value } => {
+                            info!(target: "events", "QUALITY UPDATE: property {} = {}", property, value);
+                        }
+                        S2CEvent::ItemSetState { object_id, state } => {
+                            info!(target: "events", "ITEM SET STATE: Object {} state = {}", object_id, state);
+                        }
+                        _ => {}
                     }
-                    GameEvent::ChatMessageReceived {
-                        message,
-                        message_type,
-                    } => {
-                        info!(target: "events", "CHAT [{}]: {}", message_type, message);
-                    }
-                    GameEvent::CreatePlayer { character_id } => {
-                        info!(target: "events", "CREATE PLAYER: Character ID {}", character_id);
-                    }
-                    GameEvent::ItemCreateObject {
-                        object_id,
-                        name,
-                        item_type,
-                        container_id,
-                        burden,
-                        value,
-                        items_capacity: _,
-                        container_capacity: _,
-                    } => {
-                        info!(target: "events", "ITEM CREATE: {} (ID: {}, Type: {}, Container: {:?}, Burden: {}, Value: {})",
-                            name, object_id, item_type, container_id, burden, value);
-                    }
-                    GameEvent::ItemOnViewContents {
-                        container_id,
-                        items,
-                    } => {
-                        info!(target: "events", "ITEM VIEW CONTENTS: Container {} has {} items", container_id, items.len());
-                    }
-                    GameEvent::PlayerContainersReceived {
-                        player_id,
-                        containers,
-                    } => {
-                        info!(target: "events", "PLAYER CONTAINERS: Player {} has {} containers", player_id, containers.len());
-                    }
-                    GameEvent::ItemDeleteObject { object_id } => {
-                        info!(target: "events", "ITEM DELETE: Object ID {}", object_id);
-                    }
-                    GameEvent::ItemMovedObject {
-                        object_id,
-                        new_container_id,
-                    } => {
-                        info!(target: "events", "ITEM MOVED: Object {} moved to container {}", object_id, new_container_id);
-                    }
-                    GameEvent::QualitiesPrivateUpdateInt {
-                        object_id,
-                        property_name,
-                        value,
-                    } => {
-                        info!(target: "events", "QUALITY UPDATE: Object {} property {} = {}", object_id, property_name, value);
-                    }
-                    GameEvent::ItemSetState {
-                        object_id,
-                        property_name,
-                        value,
-                    } => {
-                        info!(target: "events", "ITEM SET STATE: Object {} property {} = {}", object_id, property_name, value);
-                    }
-                    _ => {}
                 }
             }
             EventType::State(state_event) => {
@@ -289,9 +264,9 @@ impl crate::client_runner_builder::ConsumerFactory for TuiConsumerFactory {
 impl EventConsumer for TuiConsumer {
     fn handle_event(&mut self, envelope: EventEnvelope) {
         match envelope.event {
-            EventType::Game(game_event) => {
-                tracing::info!(target: "tui_consumer", "TuiConsumer forwarding GameEvent: {:?}", std::mem::discriminant(&game_event));
-                let _ = self.tui_event_tx.send(game_event.into());
+            EventType::Protocol(protocol_event) => {
+                tracing::info!(target: "tui_consumer", "TuiConsumer forwarding ProtocolEvent: {:?}", std::mem::discriminant(&protocol_event));
+                let _ = self.tui_event_tx.send(protocol_event.into());
             }
             EventType::System(system_event) => {
                 tracing::info!(target: "tui_consumer", "TuiConsumer forwarding SystemEvent: {:?}", std::mem::discriminant(&system_event));
@@ -443,52 +418,30 @@ impl crate::client_runner_builder::ConsumerFactory for DiscordConsumerFactory {
 impl EventConsumer for DiscordConsumer {
     fn handle_event(&mut self, envelope: EventEnvelope) {
         match envelope.event {
-            EventType::Game(game_event) => {
-                if log_common_game_event(&game_event) {
+            EventType::Protocol(protocol_event) => {
+                if log_common_protocol_event(&protocol_event) {
                     return;
                 }
-                match game_event {
-                    GameEvent::LoginSucceeded {
-                        character_id,
-                        character_name,
-                    } => {
-                        self.handle_login_succeeded(character_id, &character_name);
+                if let Some(chat) = protocol_event.as_chat_message() {
+                    if let Some(ingame_start) = self.ingame_start_time {
+                        let (h, m, s) = format_uptime(ingame_start.elapsed());
+                        info!(target: "events", "CHAT [{}]: {} | In-game: {:02}:{:02}:{:02}", chat.message_type, chat.text, h, m, s);
+                    } else {
+                        info!(target: "events", "CHAT [{}]: {}", chat.message_type, chat.text);
                     }
-                    GameEvent::ChatMessageReceived {
-                        message,
-                        message_type,
-                    } => {
-                        if let Some(ingame_start) = self.ingame_start_time {
-                            let (h, m, s) = format_uptime(ingame_start.elapsed());
-                            info!(target: "events", "CHAT [{}]: {} | In-game: {:02}:{:02}:{:02}", message_type, message, h, m, s);
-                        } else {
-                            info!(target: "events", "CHAT [{}]: {}", message_type, message);
+
+                    let discord_message = format!("[{}] {}", chat.message_type, chat.text);
+                    let http = self.http.clone();
+                    let channel_id = self.channel_id;
+
+                    tokio::spawn(async move {
+                        if let Err(e) = channel_id.say(&http, &discord_message).await {
+                            error!("Failed to send Discord message: {}", e);
                         }
-
-                        let discord_message = format!("[{}] {}", message_type, message);
-                        let http = self.http.clone();
-                        let channel_id = self.channel_id;
-
-                        tokio::spawn(async move {
-                            if let Err(e) = channel_id.say(&http, &discord_message).await {
-                                error!("Failed to send Discord message: {}", e);
-                            }
-                        });
-                    }
-                    GameEvent::CreatePlayer { character_id } => {
-                        debug!(target: "events", "CREATE PLAYER: Character ID {}", character_id);
-                    }
-                    GameEvent::ItemCreateObject { .. }
-                    | GameEvent::ItemOnViewContents { .. }
-                    | GameEvent::PlayerContainersReceived { .. }
-                    | GameEvent::ItemDeleteObject { .. }
-                    | GameEvent::ItemMovedObject { .. }
-                    | GameEvent::QualitiesPrivateUpdateInt { .. }
-                    | GameEvent::ItemSetState { .. } => {
-                        // Ignore inventory events in Discord consumer
-                    }
-                    _ => {}
+                    });
                 }
+                // Everything else (inventory, movement, trade) is not chat and
+                // is intentionally ignored here.
             }
             EventType::State(state_event) => {
                 info!(target: "events", "STATE CHANGE: {:?}", state_event);
@@ -558,22 +511,21 @@ impl crate::client_runner_builder::ConsumerFactory for StatsConsumerFactory {
 impl EventConsumer for StatsConsumer {
     fn handle_event(&mut self, envelope: EventEnvelope) {
         match envelope.event {
-            EventType::Game(event) => match event {
-                GameEvent::LoginSucceeded { .. } => {
+            EventType::Protocol(event) => {
+                if let ProtocolEvent::S2C(S2CEvent::CharacterError { .. }) = event {
+                    self.stats.errors.fetch_add(1, Ordering::SeqCst);
+                    if self.verbose {
+                        error!("[Client {}] Character error", self.client_id);
+                    }
+                }
+            }
+            EventType::System(event) => match event {
+                SystemEvent::LoginSucceeded { .. } => {
                     self.stats.logged_in.fetch_add(1, Ordering::SeqCst);
                     if self.verbose {
                         info!("[Client {}] Login succeeded", self.client_id);
                     }
                 }
-                GameEvent::LoginFailed { .. } => {
-                    self.stats.errors.fetch_add(1, Ordering::SeqCst);
-                    if self.verbose {
-                        error!("[Client {}] Login failed", self.client_id);
-                    }
-                }
-                _ => {}
-            },
-            EventType::System(event) => match event {
                 SystemEvent::AuthenticationSucceeded { .. } => {
                     self.stats.authenticated.fetch_add(1, Ordering::SeqCst);
                     if self.verbose {
@@ -607,7 +559,7 @@ pub enum AutoLoginState {
 /// Consumer that automatically creates a character and logs in
 ///
 /// This consumer implements the load tester behavior:
-/// 1. Wait for CharacterListReceived
+/// 1. Wait for `LoginCharacterSet`
 /// 2. If character doesn't exist, create it
 /// 3. Log in with the character
 pub struct AutoLoginConsumer {
@@ -685,11 +637,11 @@ impl crate::client_runner_builder::ConsumerFactory for AutoLoginConsumerFactory 
 
 impl EventConsumer for AutoLoginConsumer {
     fn handle_event(&mut self, envelope: EventEnvelope) {
-        if let Some(GameEvent::CharacterListReceived {
+        if let Some(ProtocolEvent::S2C(S2CEvent::LoginCharacterSet {
             characters,
             account,
             ..
-        }) = envelope.extract_game_event()
+        })) = envelope.extract_protocol_event()
         {
             if self.verbose {
                 info!(

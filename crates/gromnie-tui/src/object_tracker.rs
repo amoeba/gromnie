@@ -33,6 +33,9 @@ pub struct WorldObject {
     // Quality/condition tracking
     pub properties: HashMap<String, i32>,
 
+    /// Latest `ItemSetState` state reported by the server, verbatim.
+    pub state_text: Option<String>,
+
     /// Timestamp when this object was last updated (created, modified, or deleted)
     pub last_updated: Instant,
 
@@ -54,6 +57,7 @@ impl WorldObject {
             stack_size: None,
             max_stack_size: None,
             properties: HashMap::new(),
+            state_text: None,
             last_updated: Instant::now(),
             state: ObjectState::Created,
         }
@@ -120,27 +124,6 @@ impl ObjectTracker {
         self.container_contents.remove(&object_id);
     }
 
-    /// Process ItemMovedObject message - move item between containers
-    pub fn handle_item_moved(&mut self, object_id: u32, new_container_id: u32) {
-        if let Some(obj) = self.objects.get_mut(&object_id) {
-            // Remove from old container
-            if let Some(old_cid) = obj.container_id
-                && let Some(contents) = self.container_contents.get_mut(&old_cid)
-            {
-                contents.retain(|&id| id != object_id);
-            }
-
-            // Add to new container
-            obj.container_id = Some(new_container_id);
-            obj.state = ObjectState::Updated;
-            obj.last_updated = Instant::now();
-            self.container_contents
-                .entry(new_container_id)
-                .or_default()
-                .push(object_id);
-        }
-    }
-
     /// Process QualitiesPrivateUpdateInt message
     pub fn handle_quality_update(&mut self, object_id: u32, property_name: String, value: i32) {
         if let Some(obj) = self.objects.get_mut(&object_id) {
@@ -155,10 +138,13 @@ impl ObjectTracker {
         }
     }
 
-    /// Process ItemSetState message (generic state update)
-    pub fn handle_item_set_state(&mut self, object_id: u32, property_name: String, value: i32) {
+    /// Process ItemSetState message.
+    ///
+    /// The server sends the new state as an enum variant name (e.g. `Wielded`),
+    /// not a numeric property value, so it is recorded verbatim.
+    pub fn handle_item_set_state(&mut self, object_id: u32, new_state: String) {
         if let Some(obj) = self.objects.get_mut(&object_id) {
-            obj.properties.insert(property_name, value);
+            obj.state_text = Some(new_state);
             obj.state = ObjectState::Updated;
             obj.last_updated = Instant::now();
         }
@@ -269,41 +255,5 @@ mod tests {
         let contents = tracker.get_container_contents(2000);
         assert_eq!(contents.len(), 1);
         assert_eq!(contents[0].name, "Potion");
-    }
-
-    #[test]
-    fn test_move_item() {
-        let mut tracker = ObjectTracker::new();
-        tracker.set_player_id(1000);
-
-        // Create two containers
-        let mut obj = WorldObject::new(2000, "Belt Pouch".to_string(), "CONTAINER".to_string());
-        obj.container_id = Some(1000);
-        obj.burden = 500;
-        obj.value = 195725;
-        obj.items_capacity = Some(24);
-        tracker.handle_item_create(obj);
-
-        let mut obj = WorldObject::new(2001, "Backpack".to_string(), "CONTAINER".to_string());
-        obj.container_id = Some(1000);
-        obj.burden = 1000;
-        obj.value = 395725;
-        obj.items_capacity = Some(50);
-        tracker.handle_item_create(obj);
-
-        // Create item in first container
-        let mut obj = WorldObject::new(3000, "Potion".to_string(), "CONSUMABLE".to_string());
-        obj.container_id = Some(2000);
-        obj.burden = 10;
-        obj.value = 50;
-        tracker.handle_item_create(obj);
-
-        assert_eq!(tracker.get_container_contents(2000).len(), 1);
-
-        // Move item to second container
-        tracker.handle_item_moved(3000, 2001);
-
-        assert_eq!(tracker.get_container_contents(2000).len(), 0);
-        assert_eq!(tracker.get_container_contents(2001).len(), 1);
     }
 }

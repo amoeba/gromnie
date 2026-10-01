@@ -132,27 +132,24 @@ pub enum EventFilter {
 impl EventFilter {
     /// Check if this filter matches the given event
     pub fn matches(&self, event: &gromnie_events::ClientEvent) -> bool {
-        use gromnie_events::{ClientEvent, ClientStateEvent, SimpleGameEvent as GameEvent};
+        use gromnie_events::{ClientEvent, ClientStateEvent, ProtocolEvent, S2CEvent};
 
         match self {
             EventFilter::All => true,
 
-            // Game event filters
-            EventFilter::CharacterListReceived => {
-                matches!(
-                    event,
-                    ClientEvent::Game(GameEvent::CharacterListReceived { .. })
-                )
-            }
-            EventFilter::CharacterError => {
-                matches!(event, ClientEvent::Game(GameEvent::CharacterError { .. }))
-            }
-            EventFilter::ChatMessageReceived => {
-                matches!(
-                    event,
-                    ClientEvent::Game(GameEvent::ChatMessageReceived { .. })
-                )
-            }
+            // Protocol event filters
+            EventFilter::CharacterListReceived => matches!(
+                event,
+                ClientEvent::Protocol(ProtocolEvent::S2C(S2CEvent::LoginCharacterSet { .. }))
+            ),
+            EventFilter::CharacterError => matches!(
+                event,
+                ClientEvent::Protocol(ProtocolEvent::S2C(S2CEvent::CharacterError { .. }))
+            ),
+            EventFilter::ChatMessageReceived => matches!(
+                event,
+                ClientEvent::Protocol(protocol) if protocol.as_chat_message().is_some()
+            ),
 
             // State event filters
             EventFilter::StateConnecting => {
