@@ -18,13 +18,10 @@ use gromnie_events::{
 wasmtime::component::bindgen!({
     path: "../gromnie-scripting-api/src/wit",
     world: "script",
-    imports: {
-        default: async,
-    },
-    exports: {
-        default: async,
-    },
+
 });
+
+// Re-export for convenience
 
 /// State held in the WASM store
 pub struct WasmScriptState {
@@ -99,15 +96,14 @@ impl WasmScript {
         let mut linker = Linker::new(engine);
 
         // Add WASI support
-        wasmtime_wasi::p2::add_to_linker_async(&mut linker)
+        wasmtime_wasi::p2::add_to_linker_sync(&mut linker)
             .context("Failed to add WASI to linker")?;
 
         // Add our host imports (will be implemented separately)
         crate::wasm::bindings::add_host_imports(&mut linker)?;
 
         // Instantiate the component (async)
-        let script = Script::instantiate_async(&mut store, &component, &linker)
-            .await
+        let script = Script::instantiate(&mut store, &component, &linker)
             .context("Failed to instantiate WASM script")?;
 
         // Call metadata functions to cache values
@@ -116,12 +112,10 @@ impl WasmScript {
         // Initialize the script first
         guest
             .call_init(&mut store)
-            .await
             .context("Failed to initialize script")?;
 
         let id = guest
             .call_get_id(&mut store)
-            .await
             .context("Failed to get script ID")?;
 
         // Update the script_id in the store state now that we have it
@@ -129,17 +123,14 @@ impl WasmScript {
 
         let name = guest
             .call_get_name(&mut store)
-            .await
             .context("Failed to get script name")?;
 
         let description = guest
             .call_get_description(&mut store)
-            .await
             .context("Failed to get script description")?;
 
         let subscribed_event_ids = guest
             .call_subscribed_events(&mut store)
-            .await
             .context("Failed to get subscribed events")?;
 
         // Convert u32 discriminants to EventFilter enum
@@ -184,100 +175,74 @@ impl HostScript for WasmScript {
         &self.description
     }
 
-    fn on_load<'a>(
-        &'a mut self,
-        ctx: Arc<ScriptContext>,
-    ) -> ::core::pin::Pin<Box<dyn ::core::future::Future<Output = ()> + ::core::marker::Send + 'a>>
-    {
+    fn on_load(&mut self, ctx: Arc<ScriptContext>) {
         self.set_context(ctx);
-        Box::pin(async move {
-            let guest = self.script.gromnie_scripting_guest();
-            let result = guest.call_on_load(&mut self.store).await;
-            self.clear_context();
-            if let Err(err) = result {
-                warn!(
-                    target: "scripting",
-                    "Script {} ({}) on_load failed: {:#}",
-                    self.name,
-                    self.id,
-                    err
-                );
-            }
-        })
+        let guest = self.script.gromnie_scripting_guest();
+        let result = guest.call_on_load(&mut self.store);
+        self.clear_context();
+        if let Err(err) = result {
+            warn!(
+                target: "scripting",
+                "Script {} ({}) on_load failed: {:#}",
+                self.name,
+                self.id,
+                err
+            );
+        }
     }
 
-    fn on_unload<'a>(
-        &'a mut self,
-        ctx: Arc<ScriptContext>,
-    ) -> ::core::pin::Pin<Box<dyn ::core::future::Future<Output = ()> + ::core::marker::Send + 'a>>
-    {
+    fn on_unload(&mut self, ctx: Arc<ScriptContext>) {
         self.set_context(ctx);
-        Box::pin(async move {
-            let guest = self.script.gromnie_scripting_guest();
-            let result = guest.call_on_unload(&mut self.store).await;
-            self.clear_context();
-            if let Err(err) = result {
-                warn!(
-                    target: "scripting",
-                    "Script {} ({}) on_unload failed: {:#}",
-                    self.name,
-                    self.id,
-                    err
-                );
-            }
-        })
+        let guest = self.script.gromnie_scripting_guest();
+        let result = guest.call_on_unload(&mut self.store);
+        self.clear_context();
+        if let Err(err) = result {
+            warn!(
+                target: "scripting",
+                "Script {} ({}) on_unload failed: {:#}",
+                self.name,
+                self.id,
+                err
+            );
+        }
     }
 
     fn subscribed_events(&self) -> &[EventFilter] {
         &self.subscribed_events
     }
 
-    fn on_event<'a>(
-        &'a mut self,
-        event: &'a ClientEvent,
-        ctx: Arc<ScriptContext>,
-    ) -> ::core::pin::Pin<Box<dyn ::core::future::Future<Output = ()> + ::core::marker::Send + 'a>>
-    {
+    fn on_event(&mut self, event: &ClientEvent, ctx: Arc<ScriptContext>) {
         let wasm_event = client_event_to_wasm(event);
         self.set_context(ctx);
-        Box::pin(async move {
-            let guest = self.script.gromnie_scripting_guest();
-            let result = guest.call_on_event(&mut self.store, &wasm_event).await;
-            self.clear_context();
-            if let Err(err) = result {
-                warn!(
-                    target: "scripting",
-                    "Script {} ({}) on_event failed: {:#}",
-                    self.name,
-                    self.id,
-                    err
-                );
-            }
-        })
+        let guest = self.script.gromnie_scripting_guest();
+        let result = guest.call_on_event(&mut self.store, &wasm_event);
+        self.clear_context();
+        if let Err(err) = result {
+            warn!(
+                target: "scripting",
+                "Script {} ({}) on_event failed: {:#}",
+                self.name,
+                self.id,
+                err
+            );
+        }
     }
 
-    fn on_tick<'a>(
-        &'a mut self,
-        ctx: Arc<ScriptContext>,
-        delta: Duration,
-    ) -> ::core::pin::Pin<Box<dyn ::core::future::Future<Output = ()> + ::core::marker::Send + 'a>>
-    {
+    fn on_tick(&mut self, ctx: Arc<ScriptContext>, delta: Duration) {
         let delta_millis = delta.as_millis() as u64;
         self.set_context(ctx);
-        Box::pin(async move {
-            let guest = self.script.gromnie_scripting_guest();
-            let result = guest.call_on_tick(&mut self.store, delta_millis).await;
-            self.clear_context();
-            if let Err(err) = result {
-                warn!(
-                    target: "scripting",
-                    "Script {} ({}) on_tick failed: {:#}",
-                    self.name,
-                    self.id,
-                    err
-                );
-            }
-        })
+        let guest = self.script.gromnie_scripting_guest();
+        let result = guest.call_on_tick(&mut self.store, delta_millis);
+        self.clear_context();
+        if let Err(err) = result {
+            warn!(
+                target: "scripting",
+                "Script {} ({}) on_tick failed: {:#}",
+                self.name,
+                self.id,
+                err
+            );
+        }
     }
 
     fn as_any_mut(&mut self) -> &mut dyn Any {

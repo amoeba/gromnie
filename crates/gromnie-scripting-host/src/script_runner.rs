@@ -158,7 +158,7 @@ impl ScriptRunner {
 
         // Call on_load
         let mut script = script;
-        script.on_load(Arc::clone(&ctx)).await;
+        script.on_load(Arc::clone(&ctx));
 
         self.scripts.push(script);
     }
@@ -325,7 +325,7 @@ impl ScriptRunner {
                 script.name(),
                 script.id()
             );
-            script.on_unload(Arc::clone(&ctx)).await;
+            script.on_unload(Arc::clone(&ctx));
             unloaded += 1;
         }
 
@@ -500,7 +500,7 @@ impl ScriptRunner {
                 SystemTime::now(),
             )
             .await;
-            script.on_load(Arc::clone(&ctx)).await;
+            script.on_load(Arc::clone(&ctx));
 
             if let Some(index) = self.script_index_by_path(&path) {
                 let mut old_script = std::mem::replace(&mut self.scripts[index], script);
@@ -517,7 +517,7 @@ impl ScriptRunner {
                     old_script.name(),
                     old_script.id()
                 );
-                old_script.on_unload(Arc::clone(&unload_ctx)).await;
+                old_script.on_unload(Arc::clone(&unload_ctx));
             } else {
                 self.scripts.push(script);
             }
@@ -574,7 +574,7 @@ impl ScriptRunner {
         // Unload all scripts
         for script in self.scripts.iter_mut() {
             debug!(target: "scripting", "Calling on_unload for: {} ({})", script.name(), script.id());
-            script.on_unload(Arc::clone(&ctx)).await;
+            script.on_unload(Arc::clone(&ctx));
         }
 
         self.scripts.clear();
@@ -606,32 +606,12 @@ impl ScriptRunner {
 
         // Execute each script's tick with timeout protection
         for script in &mut self.scripts {
-            let script_name = script.name().to_string();
-            let script_id = script.id().to_string();
+            let _script_name = script.name().to_string();
+            let _script_id = script.id().to_string();
             let ctx_clone = Arc::clone(&ctx);
-            let timeout = self.script_timeout;
+            let _timeout = self.script_timeout;
 
-            let result = tokio::time::timeout(timeout, script.on_tick(ctx_clone, elapsed)).await;
-
-            match result {
-                Ok(()) => {
-                    debug!(
-                        target: "scripting",
-                        "Script {} ({}) completed tick",
-                        script_name,
-                        script_id
-                    );
-                }
-                Err(_) => {
-                    tracing::warn!(
-                        target: "scripting",
-                        "Script {} ({}) timed out after {}ms during tick",
-                        script_name,
-                        script_id,
-                        timeout.as_millis()
-                    );
-                }
-            }
+            script.on_tick(ctx_clone, elapsed);
         }
     }
 
@@ -689,35 +669,15 @@ impl ScriptRunner {
 
         // Execute each subscribed script with timeout protection
         for (_index, script) in subscribed_scripts {
-            let script_name = script.name().to_string();
-            let script_id = script.id().to_string();
+            let _script_name = script.name().to_string();
+            let _script_id = script.id().to_string();
             let ctx = Arc::clone(&ctx);
             let event_copy = raw_event.clone();
-            let timeout = self.script_timeout;
+            let _timeout = self.script_timeout;
 
             // We need to handle this carefully since we can't move mutable references across tasks
             // For now, we'll execute them sequentially but with timeout protection
-            let result = tokio::time::timeout(timeout, script.on_event(&event_copy, ctx)).await;
-
-            match result {
-                Ok(()) => {
-                    debug!(
-                        target: "scripting",
-                        "Script {} ({}) completed event handling",
-                        script_name,
-                        script_id
-                    );
-                }
-                Err(_) => {
-                    tracing::warn!(
-                        target: "scripting",
-                        "Script {} ({}) timed out after {}ms during event handling",
-                        script_name,
-                        script_id,
-                        timeout.as_millis()
-                    );
-                }
-            }
+            script.on_event(&event_copy, ctx);
         }
     }
 }
