@@ -38,33 +38,19 @@ pub trait Script: Send + 'static {
     fn description(&self) -> &str;
 
     /// Called when the script is first loaded
-    fn on_load<'a>(
-        &'a mut self,
-        ctx: Arc<ScriptContext>,
-    ) -> ::core::pin::Pin<Box<dyn ::core::future::Future<Output = ()> + ::core::marker::Send + 'a>>;
+    fn on_load(&mut self, ctx: Arc<ScriptContext>);
 
     /// Called when the script is being unloaded
-    fn on_unload<'a>(
-        &'a mut self,
-        ctx: Arc<ScriptContext>,
-    ) -> ::core::pin::Pin<Box<dyn ::core::future::Future<Output = ()> + ::core::marker::Send + 'a>>;
+    fn on_unload(&mut self, ctx: Arc<ScriptContext>);
 
     /// Return the list of events this script wants to receive
     fn subscribed_events(&self) -> &[EventFilter];
 
     /// Handle an event that matches one of the subscribed filters
-    fn on_event<'a>(
-        &'a mut self,
-        event: &'a gromnie_events::ClientEvent,
-        ctx: Arc<ScriptContext>,
-    ) -> ::core::pin::Pin<Box<dyn ::core::future::Future<Output = ()> + ::core::marker::Send + 'a>>;
+    fn on_event(&mut self, event: &gromnie_events::ClientEvent, ctx: Arc<ScriptContext>);
 
     /// Called periodically at a fixed rate (configurable, default ~20Hz)
-    fn on_tick<'a>(
-        &'a mut self,
-        ctx: Arc<ScriptContext>,
-        delta: Duration,
-    ) -> ::core::pin::Pin<Box<dyn ::core::future::Future<Output = ()> + ::core::marker::Send + 'a>>;
+    fn on_tick(&mut self, ctx: Arc<ScriptContext>, delta: Duration);
 
     /// Allow downcasting to concrete script type for state access
     fn as_any_mut(&mut self) -> &mut dyn Any;

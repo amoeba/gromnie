@@ -77,13 +77,12 @@ async fn test_event_handling() {
     let mut runner = ScriptRunner::new_with_wasm(client, action_tx);
 
     // Load test scripts
-    let test_scripts_dir = Path::new("../../../tests/scripting");
-    runner.load_scripts(test_scripts_dir, &HashMap::new()).await;
+    let test_scripts_dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/scripting");
+    runner
+        .load_scripts(&test_scripts_dir, &HashMap::new())
+        .await;
 
-    if runner.script_count() == 0 {
-        println!("Warning: No scripts loaded for event test");
-        return;
-    }
+    assert!(runner.script_count() > 0, "Test script should be loaded");
 
     // Create test events
     let test_events = vec![ProtocolEvent::S2C(S2CEvent::TextboxChatMessage {
@@ -109,13 +108,12 @@ async fn test_timer_functionality() {
     let mut runner = ScriptRunner::new_with_wasm(client, action_tx);
 
     // Load test scripts
-    let test_scripts_dir = Path::new("../../../tests/scripting");
-    runner.load_scripts(test_scripts_dir, &HashMap::new()).await;
+    let test_scripts_dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/scripting");
+    runner
+        .load_scripts(&test_scripts_dir, &HashMap::new())
+        .await;
 
-    if runner.script_count() == 0 {
-        println!("Warning: No scripts loaded for timer test");
-        return;
-    }
+    assert!(runner.script_count() > 0, "Test script should be loaded");
 
     // Simulate time passing by handling events with different timestamps
     let _start_time = Instant::now();
@@ -142,15 +140,17 @@ async fn test_script_reload() {
     let client = create_mock_client().await;
     let mut runner = ScriptRunner::new_with_wasm(client, action_tx);
 
-    let test_scripts_dir = Path::new("../../../tests/scripting");
+    let test_scripts_dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/scripting");
 
     // First load
-    runner.load_scripts(test_scripts_dir, &HashMap::new()).await;
+    runner
+        .load_scripts(&test_scripts_dir, &HashMap::new())
+        .await;
     let first_count = runner.script_count();
 
     // Reload
     runner
-        .reload_scripts(test_scripts_dir, &HashMap::new())
+        .reload_scripts(&test_scripts_dir, &HashMap::new())
         .await;
     let second_count = runner.script_count();
 
@@ -168,13 +168,12 @@ async fn test_host_function_calls() {
     let mut runner = ScriptRunner::new_with_wasm(client, action_tx);
 
     // Load test scripts
-    let test_scripts_dir = Path::new("../../../tests/scripting");
-    runner.load_scripts(test_scripts_dir, &HashMap::new()).await;
+    let test_scripts_dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/scripting");
+    runner
+        .load_scripts(&test_scripts_dir, &HashMap::new())
+        .await;
 
-    if runner.script_count() == 0 {
-        println!("Warning: No scripts loaded for host function test");
-        return;
-    }
+    assert!(runner.script_count() > 0, "Test script should be loaded");
 
     // Trigger script execution by sending events
     let event = ProtocolEvent::S2C(S2CEvent::TextboxChatMessage {
@@ -213,13 +212,12 @@ async fn test_protocol_event_flow() {
     let mut runner = ScriptRunner::new_with_wasm(client, action_tx);
 
     // Load test scripts
-    let test_scripts_dir = Path::new("../../../tests/scripting");
-    runner.load_scripts(test_scripts_dir, &HashMap::new()).await;
+    let test_scripts_dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/scripting");
+    runner
+        .load_scripts(&test_scripts_dir, &HashMap::new())
+        .await;
 
-    if runner.script_count() == 0 {
-        println!("Warning: No scripts loaded for protocol event test");
-        return;
-    }
+    assert!(runner.script_count() > 0, "Test script should be loaded");
 
     // Test S2C protocol events
     let s2c_events = vec![
@@ -316,13 +314,12 @@ async fn test_protocol_event_data_integrity() {
     let mut runner = ScriptRunner::new_with_wasm(client, action_tx);
 
     // Load test scripts
-    let test_scripts_dir = Path::new("../../../tests/scripting");
-    runner.load_scripts(test_scripts_dir, &HashMap::new()).await;
+    let test_scripts_dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/scripting");
+    runner
+        .load_scripts(&test_scripts_dir, &HashMap::new())
+        .await;
 
-    if runner.script_count() == 0 {
-        println!("Warning: No scripts loaded for data integrity test");
-        return;
-    }
+    assert!(runner.script_count() > 0, "Test script should be loaded");
 
     // Test with complex data structures
     let character_set_event = ProtocolEvent::S2C(S2CEvent::LoginCharacterSet {

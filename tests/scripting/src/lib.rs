@@ -137,19 +137,13 @@ impl gromnie::Script for TestScript {
         "Comprehensive test script for scripting system"
     }
 
-    fn on_load<'a>(&'a mut self) -> std::pin::Pin<Box<dyn std::future::Future<Output = ()> + 'a>> {
-        Box::pin(async move {
-            gromnie::log("Test script loaded successfully");
-            gromnie::send_chat("Hello from test script!");
-        })
+    fn on_load(&mut self) {
+        gromnie::log("Test script loaded successfully");
+        gromnie::send_chat("Hello from test script!");
     }
 
-    fn on_unload<'a>(
-        &'a mut self,
-    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = ()> + 'a>> {
-        Box::pin(async move {
-            gromnie::log("Test script unloaded successfully");
-        })
+    fn on_unload(&mut self) {
+        gromnie::log("Test script unloaded successfully");
     }
 
     fn subscribed_events(&self) -> Vec<u32> {
@@ -157,60 +151,50 @@ impl gromnie::Script for TestScript {
         vec![0xFFFFFFFF] // All events
     }
 
-    fn on_event<'a>(
-        &'a mut self,
-        event: ScriptEvent,
-    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = ()> + 'a>> {
-        Box::pin(async move {
-            use gromnie::ScriptEvent::*;
-            use gromnie::SystemEvent::*;
+    fn on_event(&mut self, event: ScriptEvent) {
+        use gromnie::ScriptEvent::*;
+        use gromnie::SystemEvent::*;
 
-            match event {
-                Protocol(protocol_event) => {
-                    // Demonstrate full protocol event handling
-                    handle_protocol_event(protocol_event);
+        match event {
+            Protocol(protocol_event) => {
+                // Demonstrate full protocol event handling
+                handle_protocol_event(protocol_event);
+            }
+            State(state_event) => {
+                let msg = format!("State event: {:?}", state_event);
+                gromnie::log(&msg);
+            }
+            System(system_event) => match system_event {
+                AuthenticationSucceeded => {
+                    gromnie::log("System: AuthenticationSucceeded");
                 }
-                State(state_event) => {
-                    let msg = format!("State event: {:?}", state_event);
+                LoginSucceeded(login_info) => {
+                    let msg = format!(
+                        "System: LoginSucceeded - {} (ID: {})",
+                        login_info.character_name, login_info.character_id
+                    );
                     gromnie::log(&msg);
                 }
-                System(system_event) => match system_event {
-                    AuthenticationSucceeded => {
-                        gromnie::log("System: AuthenticationSucceeded");
-                    }
-                    LoginSucceeded(login_info) => {
-                        let msg = format!(
-                            "System: LoginSucceeded - {} (ID: {})",
-                            login_info.character_name, login_info.character_id
-                        );
-                        gromnie::log(&msg);
-                    }
-                    _ => {
-                        let msg = format!("System event: {:?}", system_event);
-                        gromnie::log(&msg);
-                    }
-                },
-            }
-        })
+                _ => {
+                    let msg = format!("System event: {:?}", system_event);
+                    gromnie::log(&msg);
+                }
+            },
+        }
     }
 
-    fn on_tick<'a>(
-        &'a mut self,
-        delta_millis: u64,
-    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = ()> + 'a>> {
-        Box::pin(async move {
-            // Test periodic functionality
-            let msg = format!("Tick: {}ms", delta_millis);
-            gromnie::log(&msg);
+    fn on_tick(&mut self, delta_millis: u64) {
+        // Test periodic functionality
+        let msg = format!("Tick: {}ms", delta_millis);
+        gromnie::log(&msg);
 
-            // Test client state access
-            let state = gromnie::get_client_state();
-            let msg = format!(
-                "Client state: session={:?}, scene={:?}",
-                state.session.state, state.scene
-            );
-            gromnie::log(&msg);
-        })
+        // Test client state access
+        let state = gromnie::get_client_state();
+        let msg = format!(
+            "Client state: session={:?}, scene={:?}",
+            state.session.state, state.scene
+        );
+        gromnie::log(&msg);
     }
 }
 

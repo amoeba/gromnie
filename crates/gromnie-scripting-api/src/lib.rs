@@ -147,29 +147,19 @@ pub trait WasmScript {
     fn description(&self) -> &str;
 
     /// Called when the script is first loaded
-    fn on_load<'a>(
-        &'a mut self,
-    ) -> ::core::pin::Pin<Box<dyn ::core::future::Future<Output = ()> + 'a>>;
+    fn on_load(&mut self);
 
     /// Called when the script is being unloaded
-    fn on_unload<'a>(
-        &'a mut self,
-    ) -> ::core::pin::Pin<Box<dyn ::core::future::Future<Output = ()> + 'a>>;
+    fn on_unload(&mut self);
 
     /// Return the list of event IDs this script wants to receive
     fn subscribed_events(&self) -> Vec<u32>;
 
     /// Handle an event (game, state, or system)
-    fn on_event<'a>(
-        &'a mut self,
-        event: ScriptEvent,
-    ) -> ::core::pin::Pin<Box<dyn ::core::future::Future<Output = ()> + 'a>>;
+    fn on_event(&mut self, event: ScriptEvent);
 
     /// Called periodically (delta_millis is time since last tick)
-    fn on_tick<'a>(
-        &'a mut self,
-        delta_millis: u64,
-    ) -> ::core::pin::Pin<Box<dyn ::core::future::Future<Output = ()> + 'a>>;
+    fn on_tick(&mut self, delta_millis: u64);
 }
 
 pub use WasmScript as Script;
@@ -250,24 +240,24 @@ impl Guest for ScriptComponent {
         script().description().to_string()
     }
 
-    async fn on_load() {
-        script().on_load().await
+    fn on_load() {
+        script().on_load();
     }
 
-    async fn on_unload() {
-        script().on_unload().await
+    fn on_unload() {
+        script().on_unload();
     }
 
     fn subscribed_events() -> Vec<u32> {
         script().subscribed_events()
     }
 
-    async fn on_event(event: host::ScriptEvent) {
-        script().on_event(event).await
+    fn on_event(event: host::ScriptEvent) {
+        script().on_event(event);
     }
 
-    async fn on_tick(delta_millis: u64) {
-        script().on_tick(delta_millis).await
+    fn on_tick(delta_millis: u64) {
+        script().on_tick(delta_millis);
     }
 }
 

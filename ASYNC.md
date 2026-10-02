@@ -13,7 +13,7 @@ Convert the Gromnie WASM scripting system from synchronous to fully asynchronous
 
 ## Architecture Decisions
 
-- WIT interface remains sync (`func`) because async is controlled purely by bindgen config, not WIT keywords.
+- WIT interface remains sync (`func`). wit-bindgen 0.57 drives async behavior via the WIT `async` keyword; the current design keeps the WIT sync and implements sync guest/host bindings, with wasmtime fibers handling host-side suspension where needed.
 - `async: true` in wasmtime bindgen generates `async_trait`-style methods with explicit `'life0` and `'async_trait` lifetimes returning `Pin<Box<dyn Future...>>`. Implementations must match this exactly.
 - `ScriptConsumer` uses a channel (`UnboundedSender<RunnerMessage>`) to bridge the sync `EventConsumer` trait to the async runner task, avoiding `block_in_place`.
 

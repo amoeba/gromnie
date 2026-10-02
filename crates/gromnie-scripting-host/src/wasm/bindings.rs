@@ -28,62 +28,57 @@ fn get_context(state: &WasmScriptState) -> Arc<ScriptContext> {
 }
 
 impl gromnie::scripting::host::Host for WasmScriptState {
-    async fn send_chat(&mut self, message: String) {
+    fn send_chat(&mut self, message: String) {
         let ctx = get_context(self);
         ctx.send_chat(message);
     }
 
-    async fn send_tell(&mut self, recipient: String, message: String) {
+    fn send_tell(&mut self, recipient: String, message: String) {
         let ctx = get_context(self);
         ctx.send_tell(recipient, message);
     }
 
-    async fn open_trade(&mut self, partner_id: u32) {
+    fn open_trade(&mut self, partner_id: u32) {
         let ctx = get_context(self);
         ctx.open_trade(partner_id);
     }
 
-    async fn add_to_trade(&mut self, item_id: u32, slot: u32) {
+    fn add_to_trade(&mut self, item_id: u32, slot: u32) {
         let ctx = get_context(self);
         ctx.add_to_trade(item_id, slot);
     }
 
-    async fn accept_trade(&mut self) {
+    fn accept_trade(&mut self) {
         let ctx = get_context(self);
         ctx.accept_trade();
     }
 
-    async fn decline_trade(&mut self) {
+    fn decline_trade(&mut self) {
         let ctx = get_context(self);
         ctx.decline_trade();
     }
 
-    async fn reset_trade(&mut self) {
+    fn reset_trade(&mut self) {
         let ctx = get_context(self);
         ctx.reset_trade();
     }
 
-    async fn close_trade(&mut self) {
+    fn close_trade(&mut self) {
         let ctx = get_context(self);
         ctx.close_trade();
     }
 
-    async fn cast_targeted_spell(&mut self, target_id: u32, spell_id: u32) {
+    fn cast_targeted_spell(&mut self, target_id: u32, spell_id: u32) {
         let ctx = get_context(self);
         ctx.cast_targeted_spell(target_id, spell_id);
     }
 
-    async fn cast_untargeted_spell(&mut self, spell_id: u32) {
+    fn cast_untargeted_spell(&mut self, spell_id: u32) {
         let ctx = get_context(self);
         ctx.cast_untargeted_spell(spell_id);
     }
 
-    async fn login_character(
-        &mut self,
-        account_name: String,
-        character_id: u32,
-        character_name: String,
-    ) {
+    fn login_character(&mut self, account_name: String, character_id: u32, character_name: String) {
         let ctx = get_context(self);
         ctx.send_action(SimpleClientAction::LoginCharacter {
             character_id,
@@ -92,13 +87,13 @@ impl gromnie::scripting::host::Host for WasmScriptState {
         });
     }
 
-    async fn log(&mut self, message: String) {
+    fn log(&mut self, message: String) {
         let script_id = self.script_id.clone();
         let ctx = get_context(self);
         ctx.send_action(SimpleClientAction::LogScriptMessage { script_id, message });
     }
 
-    async fn do_movement_command(&mut self, motion: u32, speed: f32, hold_key: u32) {
+    fn do_movement_command(&mut self, motion: u32, speed: f32, hold_key: u32) {
         let ctx = get_context(self);
         ctx.send_action(SimpleClientAction::DoMovementCommand {
             motion,
@@ -107,36 +102,36 @@ impl gromnie::scripting::host::Host for WasmScriptState {
         });
     }
 
-    async fn stop_movement_command(&mut self, motion: u32, hold_key: u32) {
+    fn stop_movement_command(&mut self, motion: u32, hold_key: u32) {
         let ctx = get_context(self);
         ctx.send_action(SimpleClientAction::StopMovementCommand { motion, hold_key });
     }
 
-    async fn schedule_timer(&mut self, delay_secs: u64, name: String) -> u64 {
+    fn schedule_timer(&mut self, delay_secs: u64, name: String) -> u64 {
         let ctx = get_context(self);
         let timer_id = ctx.schedule_timer(delay_secs, name);
         timer_id_to_u64(timer_id)
     }
 
-    async fn schedule_recurring(&mut self, interval_secs: u64, name: String) -> u64 {
+    fn schedule_recurring(&mut self, interval_secs: u64, name: String) -> u64 {
         let ctx = get_context(self);
         let timer_id = ctx.schedule_recurring(interval_secs, name);
         timer_id_to_u64(timer_id)
     }
 
-    async fn cancel_timer(&mut self, timer_id: u64) -> bool {
+    fn cancel_timer(&mut self, timer_id: u64) -> bool {
         let ctx = get_context(self);
         let timer_id = timer_id_from_u64(timer_id);
         ctx.cancel_timer(timer_id)
     }
 
-    async fn check_timer(&mut self, timer_id: u64) -> bool {
+    fn check_timer(&mut self, timer_id: u64) -> bool {
         let ctx = get_context(self);
         let timer_id = timer_id_from_u64(timer_id);
         ctx.check_timer(timer_id)
     }
 
-    async fn get_client_state(&mut self) -> gromnie::scripting::host::ClientState {
+    fn get_client_state(&mut self) -> gromnie::scripting::host::ClientState {
         use gromnie_client::client::SessionState;
 
         let ctx = get_context(self);
@@ -165,7 +160,7 @@ impl gromnie::scripting::host::Host for WasmScriptState {
         gromnie::scripting::host::ClientState { session, scene }
     }
 
-    async fn get_event_time_millis(&mut self) -> u64 {
+    fn get_event_time_millis(&mut self) -> u64 {
         use std::time::SystemTime;
         let now = SystemTime::now();
         now.duration_since(SystemTime::UNIX_EPOCH)
