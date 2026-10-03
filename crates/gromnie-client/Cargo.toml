@@ -22,7 +22,13 @@ native = [
   "dep:wasmtime",
   "dep:wasmtime-wasi",
   "dep:wit-bindgen",
+  "sockets",
 ]
+
+# Sockets: tokio/net for UDP transport and DNS resolution, plus tokio/time
+# for driver-loop deadlines and the headless facade. Both are native-only.
+# Enabled by `native` and by gromnie-ios-bridge.
+sockets = ["tokio/net", "tokio/time"]
 wasm = ["dep:js-sys", "dep:web-sys", "dep:wasm-bindgen-futures", "gromnie-events/wasm"]
 
 [dependencies]
@@ -44,7 +50,7 @@ ratatui = { workspace = true, optional = true }
 serde = { version = "1.0", features = ["derive"] }
 serenity = { workspace = true, optional = true }
 strum_macros = "0.26.1"
-tokio = { workspace = true, features = ["sync", "rt", "macros", "io-util", "net", "time"] }
+tokio = { workspace = true, features = ["sync", "rt", "macros"] }
 toml = "0.8"
 tracing.workspace = true
 tracing-appender = { workspace = true, optional = true }
