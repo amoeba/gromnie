@@ -91,6 +91,23 @@ pub enum ClientError {
     Authentication(String),
 }
 
+impl std::fmt::Display for ClientError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ClientError::CharacterError(kind) => write!(f, "character error: {kind}"),
+            ClientError::ConnectionFailed(msg) => write!(f, "connection failed: {msg}"),
+            ClientError::PatchingFailed(msg) => write!(f, "patching failed: {msg}"),
+            ClientError::LoginTimeout => write!(f, "login timed out"),
+            ClientError::PatchingTimeout => write!(f, "patching timed out"),
+            ClientError::Authentication(reason) => {
+                write!(f, "authentication rejected: {reason}")
+            }
+        }
+    }
+}
+
+impl std::error::Error for ClientError {}
+
 impl Default for ConnectingScene {
     fn default() -> Self {
         Self::new()

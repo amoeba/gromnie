@@ -2,6 +2,10 @@
 pub use self::client::Client;
 pub use self::connection::ServerInfo;
 pub use self::constants::UI_DELAY_MS;
+#[cfg(not(target_arch = "wasm32"))]
+pub use self::driver::{
+    ClientCommand, ClientHandle, ClientLoopStopped, LoopExit, spawn_client_loop,
+};
 pub use self::messages::{OutgoingMessage, OutgoingMessageContent};
 pub use self::protocol::{C2SPacketExt, CustomLoginRequest};
 pub use self::scene::{
@@ -22,6 +26,11 @@ pub mod ace_protocol;
 mod client;
 mod connection;
 mod constants;
+// The driver loop uses `tokio::time` deadlines, which have no timer driver on
+// wasm32 (see `crate::instant` for the same reason). `gromnie-web` drives its
+// own loop over a WISP transport.
+#[cfg(not(target_arch = "wasm32"))]
+pub mod driver;
 pub mod game_event_handler;
 pub mod message_handler;
 mod message_handlers;

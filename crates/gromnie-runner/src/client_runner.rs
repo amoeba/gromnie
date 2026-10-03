@@ -538,162 +538,55 @@ pub(crate) async fn run_client_internal(
     }
 }
 
-/// Run the main client network loop
+/// Run the main client network loop.
+///
+/// The loop itself lives in `gromnie-client::client::driver` so every embedder
+/// (runner, TUI, headless facade) drives the client identically. This wrapper
+/// only owns signal wiring.
 async fn run_client_loop(
     client: Arc<RwLock<Client>>,
     mut shutdown_rx: Option<tokio::sync::watch::Receiver<bool>>,
 ) {
     use tracing::error;
 
-    let client_id = client.read().await.client_id();
-    info!(target: "net", "Client {} network loop started", client_id);
-
-    // Note: We don't call client.connect() here anymore - the client starts in Connecting state
-    // and we handle retries in the main loop below
+    // Note: We don't call client.connect() here anymore - the client starts in
+    // Connecting state and the loop handles retries.
 
     // Wait before sending initial LoginRequest (to make UI progress visible)
-    tokio::time::sleep(tokio::time::Duration::from_millis(
-        gromnie_client::client::UI_DELAY_MS,
-    ))
+    let handle = gromnie_client::client::spawn_client_loop(
+        client,
+        std::time::Duration::from_millis(gromnie_client::client::UI_DELAY_MS),
+    )
     .await;
 
-    // Send initial LoginRequest
-    if let Err(e) = client.write().await.do_login().await {
-        error!("Failed to send initial LoginRequest: {}", e);
-        panic!("Failed to send initial LoginRequest");
-    }
-    info!("Initial LoginRequest sent - entering state machine loop");
-
-    // Main network loop
-    let mut buf = [0u8; 1024];
-    let mut last_keepalive = tokio::time::Instant::now();
-    // Send keepalive every 5 seconds to stay well within the server's timeout window
-    // (Server timeout is configurable but defaults to 60s for gameplay, could be as low as 10s)
-    let keepalive_interval = tokio::time::Duration::from_secs(5);
-
-    // Tick interval for checking retries and timeouts
-    let tick_interval = tokio::time::Duration::from_millis(100); // Check every 100ms
-    let mut last_tick = tokio::time::Instant::now();
-
-    loop {
-        tokio::select! {
-            // Add a timeout to transport recv so we can respond to shutdown signals
-            recv_result = async {
-                let mut client_guard = client.write().await;
-                tokio::time::timeout(tokio::time::Duration::from_millis(100), client_guard.recv_packet(&mut buf)).await
-            } => {
-                match recv_result {
-                    Ok(Ok((size, peer))) => {
-                        let mut client_guard = client.write().await;
-                        client_guard.process_packet(&buf[..size], size, &peer).await;
-
-                        if client_guard.has_messages() {
-                            client_guard.process_messages();
-                        }
-
-                        client_guard.process_actions();
-                        client_guard.process_game_actions();
-
-                        if client_guard.has_pending_outgoing_messages()
-                            && let Err(e) = client_guard.send_pending_messages().await {
-                            error!("Failed to send pending messages: {}", e);
-                        }
-                    }
-                    Ok(Err(e)) => {
-                        error!("Error in receive loop: {}", e);
-                        // Always transition to disconnected state on transport error
-                        client.write().await.enter_disconnected();
-                    }
-                    Err(_) => {
-                        // Timeout - this is normal, just continue to check other branches
-                    }
+    // Ctrl+C handling stays in the runner: `gromnie-client` deliberately does
+    // not depend on tokio's `signal` feature, which its wasm32 build cannot
+    // support. So when the caller supplies no shutdown channel we own one and
+    // drive it from a Ctrl+C watcher.
+    let shutdown_tx = handle.shutdown_sender();
+    match shutdown_rx.take() {
+        Some(mut rx) => {
+            tokio::spawn(async move {
+                if rx.changed().await.is_ok() {
+                    info!("External shutdown signal received");
+                    let _ = shutdown_tx.send(true);
                 }
-            }
-            _ = tokio::time::sleep_until(last_tick + tick_interval) => {
-                last_tick = tokio::time::Instant::now();
-
-                // Check for state timeouts
-                if client.write().await.check_state_timeout() {
-                    error!("Client entered Failed state - shutting down");
-                    break;
+            });
+        }
+        None => {
+            tokio::spawn(async move {
+                if tokio::signal::ctrl_c().await.is_ok() {
+                    info!("Received Ctrl+C, shutting down gracefully...");
+                    let _ = shutdown_tx.send(true);
                 }
-
-                // Check if we should attempt reconnection (separate from retry logic)
-                if client.write().await.should_reconnect() {
-                    let mut client_guard = client.write().await;
-                    info!("Reconnection timer expired, attempting reconnection...");
-                    if !client_guard.start_reconnection() {
-                        info!("Reconnection not available (max attempts or disabled), exiting loop");
-                        break;
-                    }
-                    // Send initial LoginRequest for reconnection
-                    if let Err(e) = client_guard.do_login().await {
-                        error!("Failed to send LoginRequest for reconnection: {}", e);
-                    }
-                }
-
-                // Check if we should retry in current state. Login retries are
-                // opt-in and off by default (`Client::set_login_retry`), so this
-                // block is inactive unless explicitly enabled.
-                {
-                    let mut client_guard = client.write().await;
-                    if client_guard.should_retry() {
-                        use gromnie_client::client::Scene;
-                        match &client_guard.scene {
-                            Scene::Connecting(_connecting) => {
-                                info!("Retrying LoginRequest...");
-                                if let Err(e) = client_guard.do_login().await {
-                                    error!("Failed to send LoginRequest retry: {}", e);
-                                }
-                                if let Some(connecting) = client_guard.scene.as_connecting_mut() {
-                                    connecting.update_retry_time();
-                                }
-                            }
-                            Scene::CharacterSelect(_) => {
-                                // In character select, no automatic retry for now
-                                // Waiting for character selection from user
-                            }
-                            Scene::InWorld(_) => {
-                                // Already in world, no retry needed
-                            }
-                            Scene::CharacterCreate(_) => {
-                                // Character creation in progress, no retry
-                            }
-                            Scene::Error(_) => {
-                                // Error state - reconnection is handled above, not here
-                            }
-                        }
-                    }
-                }
-
-                // Send keepalive if needed
-                if last_keepalive.elapsed() >= keepalive_interval {
-                    if let Err(e) = client.write().await.send_keepalive().await {
-                        error!("Failed to send keep-alive: {}", e);
-                    }
-                    last_keepalive = tokio::time::Instant::now();
-                }
-            }
-            _ = async {
-                if let Some(ref mut rx) = shutdown_rx {
-                    rx.changed().await
-                } else {
-                    std::future::pending().await
-                }
-            } => {
-                info!("Client task received shutdown signal");
-                break;
-            }
-            _ = tokio::signal::ctrl_c(), if shutdown_rx.is_none() => {
-                info!("Received Ctrl+C, shutting down gracefully...");
-                break;
-            }
+            });
         }
     }
 
-    let client_id = client.read().await.client_id();
-    info!("Client {} network loop stopped", client_id);
-    info!("Client task shutting down - cleaning up network connections...");
+    match handle.join().await {
+        Some(reason) => info!(target: "net", "Client network loop exited: {reason:?}"),
+        None => error!(target: "net", "Client network loop stopped without reporting a reason"),
+    }
 }
 
 /// Create a new EventBusManager for managing a shared event bus
