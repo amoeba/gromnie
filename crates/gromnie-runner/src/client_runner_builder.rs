@@ -7,11 +7,11 @@ use tokio::sync::{mpsc, watch};
 
 use crate::client_runner::TransportFactory;
 use crate::event_consumer::EventConsumer;
-use gromnie_events::SimpleClientAction;
+use gromnie_client::client::ClientSender;
 
 // Re-export types
+pub use gromnie_client::client::{ConsumerContext, ConsumerFactory};
 pub use gromnie_client::config::ClientConfig;
-pub use gromnie_events::{ConsumerContext, ConsumerFactory};
 
 /// Client mode - either static configs or dynamic generation
 pub enum ClientMode {
@@ -69,7 +69,7 @@ impl IntoClientConfigs for Vec<ClientConfig> {
 pub struct ClientRunnerBuilder {
     mode: Option<ClientMode>,
     consumers: Vec<Box<dyn ConsumerFactory>>,
-    action_channel: Option<mpsc::UnboundedSender<mpsc::UnboundedSender<SimpleClientAction>>>,
+    command_channel: Option<mpsc::UnboundedSender<ClientSender>>,
     shutdown_rx: Option<watch::Receiver<bool>>,
     event_bus_capacity: usize,
     app_config: Option<gromnie_client::config::GromnieConfig>,
@@ -82,7 +82,7 @@ impl ClientRunnerBuilder {
         Self {
             mode: None,
             consumers: Vec::new(),
-            action_channel: None,
+            command_channel: None,
             shutdown_rx: None,
             event_bus_capacity: 100,
             app_config: None,
@@ -209,12 +209,9 @@ impl ClientRunnerBuilder {
         self
     }
 
-    /// Provide a channel to receive the action_tx (useful for TUI)
-    pub fn with_action_channel(
-        mut self,
-        tx: mpsc::UnboundedSender<mpsc::UnboundedSender<SimpleClientAction>>,
-    ) -> Self {
-        self.action_channel = Some(tx);
+    /// Provide a channel to receive the sender (useful for TUI)
+    pub fn with_command_channel(mut self, tx: mpsc::UnboundedSender<ClientSender>) -> Self {
+        self.command_channel = Some(tx);
         self
     }
 
@@ -313,7 +310,7 @@ impl ClientRunnerBuilder {
         Ok(ClientRunner {
             mode,
             consumers: self.consumers,
-            action_channel: self.action_channel,
+            command_channel: self.command_channel,
             shutdown_rx: self.shutdown_rx,
             event_bus_capacity: self.event_bus_capacity,
             app_config: Some(config),
@@ -332,8 +329,7 @@ impl Default for ClientRunnerBuilder {
 pub struct ClientRunner {
     pub(crate) mode: ClientMode,
     pub(crate) consumers: Vec<Box<dyn ConsumerFactory>>,
-    pub(crate) action_channel:
-        Option<mpsc::UnboundedSender<mpsc::UnboundedSender<SimpleClientAction>>>,
+    pub(crate) command_channel: Option<mpsc::UnboundedSender<ClientSender>>,
     pub(crate) shutdown_rx: Option<watch::Receiver<bool>>,
     pub(crate) event_bus_capacity: usize,
     pub(crate) app_config: Option<gromnie_client::config::GromnieConfig>,
@@ -441,7 +437,7 @@ impl ClientRunner {
         let event_rx = event_bus_manager.subscribe();
 
         // Create the client
-        let (client, action_tx) = crate::client_runner::create_client_from_config(
+        let (client, client_sender) = crate::client_runner::create_client_from_config(
             &config,
             raw_event_tx,
             self.transport_factory.as_ref(),
@@ -451,18 +447,18 @@ impl ClientRunner {
         // Wrap client in Arc<RwLock<>> for shared access
         let client = Arc::new(tokio::sync::RwLock::new(client));
 
-        // Send action_tx back if requested (for TUI)
-        if let Some(ref sender) = self.action_channel {
-            let _ = sender.send(action_tx.clone());
+        // Send the sender back if requested (for TUI)
+        if let Some(ref tx) = self.command_channel {
+            let _ = tx.send(client_sender.clone());
         }
 
         // Create consumer context with default () config type.
         // We use () instead of &ClientConfig to avoid circular dependencies between
-        // gromnie-events and gromnie-client. Consumers only need client_id and action_tx.
+        // gromnie-events and gromnie-client. Consumers only need client_id and sender.
         let ctx = ConsumerContext {
             client_id: config.id,
             client_config: &(),
-            action_tx: action_tx.clone(),
+            sender: client_sender.clone(),
         };
 
         // Create all consumers from factories
@@ -478,7 +474,7 @@ impl ClientRunner {
         {
             let script_consumer = gromnie_scripting_host::create_script_consumer(
                 client.clone(),
-                action_tx.clone(),
+                client_sender.clone(),
                 &app_config.scripting,
             );
             consumers.push(Box::new(script_consumer));
@@ -531,13 +527,13 @@ impl ClientRunner {
                 &self,
                 client_id: u32,
                 _client_config: &ClientConfig,
-                action_tx: mpsc::UnboundedSender<SimpleClientAction>,
+                sender: ClientSender,
             ) -> Box<dyn EventConsumer> {
                 // Use () as config type to avoid circular dependencies
                 let ctx = ConsumerContext {
                     client_id,
                     client_config: &(),
-                    action_tx: action_tx.clone(),
+                    sender: sender.clone(),
                 };
 
                 let consumers: Vec<Box<dyn EventConsumer>> = self

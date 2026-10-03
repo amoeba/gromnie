@@ -1,12 +1,11 @@
 use std::sync::Arc;
 use std::time::{Duration, SystemTime};
 use tokio::sync::RwLock;
-use tokio::sync::mpsc::UnboundedSender;
+use tracing::info;
 
 use super::timer::TimerId;
 use asheron_rs::message::GameActionMessage;
-use gromnie_client::client::Client;
-use gromnie_events::SimpleClientAction;
+use gromnie_client::client::{Client, ClientSender};
 
 /// Client state snapshot for scripts (clones of session and scene state)
 #[derive(Debug, Clone)]
@@ -50,10 +49,8 @@ impl Default for ClientStateSnapshot {
 pub struct ScriptContext {
     /// Shared reference to the client
     client: Arc<RwLock<Client>>,
-    /// Channel for sending client actions
-    action_tx: UnboundedSender<SimpleClientAction>,
-    /// Channel for sending GameActionMessage directly to the client
-    game_action_tx: UnboundedSender<GameActionMessage>,
+    /// Channels for driving the client: session commands and game actions
+    sender: ClientSender,
     /// Shared timer manager
     timer_manager: Arc<super::timer::TimerManager>,
     /// Timestamp when the current event occurred
@@ -64,15 +61,13 @@ impl ScriptContext {
     /// Create a new script context
     pub(crate) async fn new(
         client: Arc<RwLock<Client>>,
-        action_tx: UnboundedSender<SimpleClientAction>,
+        sender: ClientSender,
         timer_manager: Arc<super::timer::TimerManager>,
         event_time: SystemTime,
     ) -> Self {
-        let game_action_tx = client.read().await.game_action_tx.clone();
         Self {
             client,
-            action_tx,
-            game_action_tx,
+            sender,
             timer_manager,
             event_time,
         }
@@ -108,17 +103,47 @@ impl ScriptContext {
 
     /// Send a chat message (say to nearby players)
     pub fn send_chat(&self, message: impl Into<String>) {
-        let _ = self.action_tx.send(SimpleClientAction::SendChatSay {
-            message: message.into(),
-        });
+        let _ = self.sender.say(message);
     }
 
     /// Send a direct message to a specific player
     pub fn send_tell(&self, recipient: impl Into<String>, message: impl Into<String>) {
-        let _ = self.action_tx.send(SimpleClientAction::SendChatTell {
-            recipient_name: recipient.into(),
-            message: message.into(),
-        });
+        let _ = self.sender.tell(recipient, message);
+    }
+
+    /// Send a raw game action, for anything without a typed helper above.
+    pub fn send_game_action(&self, action: GameActionMessage) {
+        let _ = self.sender.send_game_action(action);
+    }
+
+    /// Request entry into the world for a character.
+    pub fn login_character(
+        &self,
+        character_id: u32,
+        character_name: impl Into<String>,
+        account: impl Into<String>,
+    ) {
+        let _ = self
+            .sender
+            .enter_world(character_id, character_name, account);
+    }
+
+    /// Send a movement command to the server.
+    ///
+    /// `hold_key` is a `HoldKey` discriminant: `0` is Invalid, `1` None, `2` Run.
+    pub fn do_movement_command(&self, motion: u32, speed: f32, hold_key: u32) {
+        let _ = self.sender.do_movement_command(motion, speed, hold_key);
+    }
+
+    /// Stop a movement command. `motion` and `hold_key` must match the
+    /// originating [`do_movement_command`](Self::do_movement_command).
+    pub fn stop_movement_command(&self, motion: u32, hold_key: u32) {
+        let _ = self.sender.stop_movement_command(motion, hold_key);
+    }
+
+    /// Write a script log line through the `script` tracing target.
+    pub fn log_script_message(&self, script_id: &str, message: &str) {
+        info!(target: "script", "[{}] {}", script_id, message);
     }
 
     // ===== Trading =====
@@ -126,24 +151,20 @@ impl ScriptContext {
     pub fn open_trade(&self, partner_id: u32) {
         use asheron_rs::gameactions::TradeOpenTradeNegotiations;
         use asheron_rs::types::ObjectId;
-        let _ = self
-            .game_action_tx
-            .send(GameActionMessage::TradeOpenTradeNegotiations(
-                TradeOpenTradeNegotiations {
-                    object_id: ObjectId(partner_id),
-                },
-            ));
+        self.send_game_action(GameActionMessage::TradeOpenTradeNegotiations(
+            TradeOpenTradeNegotiations {
+                object_id: ObjectId(partner_id),
+            },
+        ));
     }
 
     pub fn add_to_trade(&self, item_id: u32, slot: u32) {
         use asheron_rs::gameactions::TradeAddToTrade;
         use asheron_rs::types::ObjectId;
-        let _ = self
-            .game_action_tx
-            .send(GameActionMessage::TradeAddToTrade(TradeAddToTrade {
-                object_id: ObjectId(item_id),
-                slot_index: slot,
-            }));
+        self.send_game_action(GameActionMessage::TradeAddToTrade(TradeAddToTrade {
+            object_id: ObjectId(item_id),
+            slot_index: slot,
+        }));
     }
 
     pub fn accept_trade(&self) {
@@ -157,41 +178,33 @@ impl ScriptContext {
             tracing::warn!(target: "scripting", "accept_trade called but no pending trade");
             return;
         };
-        let _ = self
-            .game_action_tx
-            .send(GameActionMessage::TradeAcceptTrade(TradeAcceptTrade {
-                contents: Trade {
-                    partner_id: ObjectId(trade.partner_id),
-                    sequence: trade.stamp as u64,
-                    status: 0,
-                    initiator_id: ObjectId(trade.initiator_id),
-                    accepted: true,
-                    partner_accepted: false,
-                },
-            }));
+        self.send_game_action(GameActionMessage::TradeAcceptTrade(TradeAcceptTrade {
+            contents: Trade {
+                partner_id: ObjectId(trade.partner_id),
+                sequence: trade.stamp as u64,
+                status: 0,
+                initiator_id: ObjectId(trade.initiator_id),
+                accepted: true,
+                partner_accepted: false,
+            },
+        }));
     }
 
     pub fn decline_trade(&self) {
         use asheron_rs::gameactions::TradeDeclineTrade;
-        let _ = self
-            .game_action_tx
-            .send(GameActionMessage::TradeDeclineTrade(TradeDeclineTrade {}));
+        self.send_game_action(GameActionMessage::TradeDeclineTrade(TradeDeclineTrade {}));
     }
 
     pub fn reset_trade(&self) {
         use asheron_rs::gameactions::TradeResetTrade;
-        let _ = self
-            .game_action_tx
-            .send(GameActionMessage::TradeResetTrade(TradeResetTrade {}));
+        self.send_game_action(GameActionMessage::TradeResetTrade(TradeResetTrade {}));
     }
 
     pub fn close_trade(&self) {
         use asheron_rs::gameactions::TradeCloseTradeNegotiations;
-        let _ = self
-            .game_action_tx
-            .send(GameActionMessage::TradeCloseTradeNegotiations(
-                TradeCloseTradeNegotiations {},
-            ));
+        self.send_game_action(GameActionMessage::TradeCloseTradeNegotiations(
+            TradeCloseTradeNegotiations {},
+        ));
     }
 
     // ===== Spell Casting =====
@@ -199,43 +212,28 @@ impl ScriptContext {
     pub fn cast_targeted_spell(&self, target_id: u32, spell_id: u32) {
         use asheron_rs::gameactions::MagicCastTargetedSpell;
         use asheron_rs::types::{LayeredSpellId, ObjectId, SpellId};
-        let _ = self
-            .game_action_tx
-            .send(GameActionMessage::MagicCastTargetedSpell(
-                MagicCastTargetedSpell {
-                    object_id: ObjectId(target_id),
-                    spell_id: LayeredSpellId {
-                        id: SpellId(spell_id as u16),
-                        layer: 0,
-                    },
+        self.send_game_action(GameActionMessage::MagicCastTargetedSpell(
+            MagicCastTargetedSpell {
+                object_id: ObjectId(target_id),
+                spell_id: LayeredSpellId {
+                    id: SpellId(spell_id as u16),
+                    layer: 0,
                 },
-            ));
+            },
+        ));
     }
 
     pub fn cast_untargeted_spell(&self, spell_id: u32) {
         use asheron_rs::gameactions::MagicCastUntargetedSpell;
         use asheron_rs::types::{LayeredSpellId, SpellId};
-        let _ = self
-            .game_action_tx
-            .send(GameActionMessage::MagicCastUntargetedSpell(
-                MagicCastUntargetedSpell {
-                    spell_id: LayeredSpellId {
-                        id: SpellId(spell_id as u16),
-                        layer: 0,
-                    },
+        self.send_game_action(GameActionMessage::MagicCastUntargetedSpell(
+            MagicCastUntargetedSpell {
+                spell_id: LayeredSpellId {
+                    id: SpellId(spell_id as u16),
+                    layer: 0,
                 },
-            ));
-    }
-
-    /// Send a client action
-    pub fn send_action(&self, action: SimpleClientAction) {
-        let _ = self.action_tx.send(action);
-    }
-
-    /// Send a raw message (advanced usage) - deprecated, use send_action instead
-    pub fn send_message_deprecated(&self, _message: &str) {
-        // This method is no longer supported with SimpleClientAction
-        // Use send_action() with the appropriate variant instead
+            },
+        ));
     }
 
     // ===== Timer Methods =====

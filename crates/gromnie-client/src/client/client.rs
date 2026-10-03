@@ -33,6 +33,7 @@ use asheron_rs::types::{BlobFragments, ConnectRequestHeader};
 use asheron_rs::writers::{ACWritable, write_string, write_u32};
 use tracing::{debug, error, info, warn};
 
+use crate::client::command::{ClientCommand, ClientSender, LoopExit};
 use crate::client::constants::*;
 use crate::client::game_event_handler::dispatch_game_event;
 use crate::client::message_handler::dispatch_message;
@@ -91,7 +92,9 @@ pub struct Client {
     message_queue: VecDeque<RawMessage>,                // Queue of parsed messages to process
     pub(crate) outgoing_message_queue: VecDeque<OutgoingMessage>, // Queue of messages to send with optional delays
     pub(crate) raw_event_tx: mpsc::Sender<ClientEvent>,           // Raw event sender to runner
-    action_rx: mpsc::UnboundedReceiver<gromnie_events::SimpleClientAction>, // Receive actions from handlers
+    /// Session-level commands from embedders, drained by whoever drives the loop
+    command_rx: mpsc::UnboundedReceiver<ClientCommand>,
+    commands_tx: mpsc::UnboundedSender<ClientCommand>, // Kept so `ClientSender` can be minted
     pub game_action_tx: mpsc::UnboundedSender<GameActionMessage>, // Direct game action sender for scripting
     game_action_rx: mpsc::UnboundedReceiver<GameActionMessage>,   // Receive direct game actions
     pub(crate) ddd_response: Option<OutgoingMessageContent>,      // Cached DDD response for retries
@@ -111,8 +114,8 @@ pub struct Client {
     retry_login: bool,
     /// Optional character name to auto-login with after receiving character list
     pub(crate) character: Option<String>,
-    /// Pending auto-login action to be processed after character list is received
-    pub(crate) pending_auto_login: Option<gromnie_events::SimpleClientAction>,
+    /// Whether a driver loop has claimed this client. See [`Self::claim_driver`].
+    driven: bool,
     /// Cached trade registration data (set when server sends TradeRegisterTrade)
     pub(crate) pending_trade: Option<PendingTradeState>,
 }
@@ -135,10 +138,7 @@ impl Client {
         character: Option<String>,
         raw_event_tx: mpsc::Sender<ClientEvent>, // Raw event sender to runner
         reconnect: bool,
-    ) -> (
-        Client,
-        mpsc::UnboundedSender<gromnie_events::SimpleClientAction>,
-    ) {
+    ) -> (Client, ClientSender) {
         Self::new_with_reconnect(
             id,
             address,
@@ -160,10 +160,7 @@ impl Client {
         character: Option<String>,
         raw_event_tx: mpsc::Sender<ClientEvent>, // Raw event sender to runner
         reconnect_enabled: bool,
-    ) -> (
-        Client,
-        mpsc::UnboundedSender<gromnie_events::SimpleClientAction>,
-    ) {
+    ) -> (Client, ClientSender) {
         let transport = NativeUdpTransport::bind_ephemeral()
             .await
             .expect("failed to bind client transport");
@@ -190,17 +187,14 @@ impl Client {
         raw_event_tx: mpsc::Sender<ClientEvent>,
         reconnect_enabled: bool,
         transport: Box<dyn ClientTransport>,
-    ) -> (
-        Client,
-        mpsc::UnboundedSender<gromnie_events::SimpleClientAction>,
-    ) {
+    ) -> (Client, ClientSender) {
         // Parse address to extract host and port
         let parts: Vec<&str> = address.split(':').collect();
         let host = parts[0].to_string();
         let login_port = parts.get(1).and_then(|p| p.parse().ok()).unwrap_or(9000);
 
-        // Action channel: Handlers send actions back to client
-        let (action_tx, action_rx) = mpsc::unbounded_channel();
+        // Command channel: embedders send session transitions back to the client
+        let (commands_tx, command_rx) = mpsc::unbounded_channel();
 
         // Direct game action channel: scripting host sends GameActionMessage directly
         let (game_action_tx, game_action_rx) = mpsc::unbounded_channel();
@@ -238,7 +232,8 @@ impl Client {
             message_queue: VecDeque::new(),
             outgoing_message_queue: VecDeque::new(),
             raw_event_tx, // Raw event sender to runner
-            action_rx,
+            command_rx,
+            commands_tx,
             game_action_tx,
             game_action_rx,
             ddd_response: None,
@@ -249,11 +244,12 @@ impl Client {
             login_timeout: DEFAULT_LOGIN_TIMEOUT,
             retry_login: false,
             character,
-            pending_auto_login: None,
+            driven: false,
             pending_trade: None,
         };
 
-        (client, action_tx)
+        let sender = client.sender();
+        (client, sender)
     }
 
     /// Centralized packet sending with sequence management
@@ -531,64 +527,6 @@ impl Client {
         info!(target: "net", "Scene transition: CharacterSelect -> InWorld");
     }
 
-    /// Send a chat message to the server
-    /// This sends a general chat message that will appear as a /say command
-    /// TODO: Parse message for @tell, /say, /emote, etc. commands
-    fn send_chat_say(&mut self, message: String) {
-        info!(target: "net", "Sending chat say: {}", message);
-
-        // Create OrderedGameAction with CommunicationTalk (for general chat)
-        // This is the correct message type for general chat (equivalent to /say command)
-        let mut message_data = Vec::new();
-        {
-            let mut cursor = Cursor::new(&mut message_data);
-            use asheron_rs::gameactions::CommunicationTalk;
-            let action = GameActionMessage::CommunicationTalk(CommunicationTalk {
-                message: message.clone(),
-            });
-            let msg = C2SMessage::OrderedGameAction {
-                sequence: self.next_game_action_sequence,
-                action,
-            };
-            self.next_game_action_sequence += 1;
-            msg.write(&mut cursor).expect("write failed");
-        }
-
-        // Queue for sending
-        self.outgoing_message_queue.push_back(OutgoingMessage::new(
-            OutgoingMessageContent::GameAction(message_data),
-        ));
-        info!(target: "net", "Chat say message queued for sending");
-    }
-
-    fn send_chat_tell(&mut self, recipient_name: String, message: String) {
-        info!(target: "net", "Sending tell to '{}': {}", recipient_name, message);
-
-        // Create OrderedGameAction with CommunicationTalkDirectByName (for direct messages)
-        let mut message_data = Vec::new();
-        {
-            let mut cursor = Cursor::new(&mut message_data);
-            use asheron_rs::gameactions::CommunicationTalkDirectByName;
-            let action =
-                GameActionMessage::CommunicationTalkDirectByName(CommunicationTalkDirectByName {
-                    message: message.clone(),
-                    target_name: recipient_name.clone(),
-                });
-            let msg = C2SMessage::OrderedGameAction {
-                sequence: self.next_game_action_sequence,
-                action,
-            };
-            self.next_game_action_sequence += 1;
-            msg.write(&mut cursor).expect("write failed");
-        }
-
-        // Queue for sending
-        self.outgoing_message_queue.push_back(OutgoingMessage::new(
-            OutgoingMessageContent::GameAction(message_data),
-        ));
-        info!(target: "net", "Chat tell message queued for sending");
-    }
-
     // ===== Direct Game Actions =====
 
     /// Get a reference to cached pending trade data (needed by scripting host to build AcceptTrade)
@@ -620,37 +558,6 @@ impl Client {
         while let Ok(action) = self.game_action_rx.try_recv() {
             self.queue_game_action(action);
         }
-    }
-
-    fn send_do_movement_command(&mut self, motion: u32, speed: f32, hold_key: u32) {
-        use asheron_rs::enums::HoldKey;
-        use asheron_rs::gameactions::MovementDoMovementCommand;
-
-        let hold_key_enum = HoldKey::try_from(hold_key).unwrap_or(HoldKey::None);
-        info!(target: "net", "Sending movement command: motion=0x{:08X}, speed={}, hold_key={:?}",
-            motion, speed, hold_key_enum);
-        self.queue_game_action(GameActionMessage::MovementDoMovementCommand(
-            MovementDoMovementCommand {
-                motion,
-                speed,
-                hold_key: hold_key_enum,
-            },
-        ));
-    }
-
-    fn send_stop_movement_command(&mut self, motion: u32, hold_key: u32) {
-        use asheron_rs::enums::HoldKey;
-        use asheron_rs::gameactions::MovementStopMovementCommand;
-
-        let hold_key_enum = HoldKey::try_from(hold_key).unwrap_or(HoldKey::None);
-        info!(target: "net", "Sending stop movement command: motion=0x{:08X}, hold_key={:?}",
-            motion, hold_key_enum);
-        self.queue_game_action(GameActionMessage::MovementStopMovementCommand(
-            MovementStopMovementCommand {
-                motion,
-                hold_key: hold_key_enum,
-            },
-        ));
     }
 
     /// Send a TimeSync packet to keep connection alive
@@ -943,92 +850,65 @@ impl Client {
         }
     }
 
-    /// Process actions sent from event handlers
-    pub fn process_actions(&mut self) {
-        // Process pending auto-login action first (if any)
-        if let Some(action) = self.pending_auto_login.take() {
-            match action {
-                gromnie_events::SimpleClientAction::LoginCharacter {
-                    character_id,
-                    character_name,
-                    account,
-                } => {
-                    info!(target: "events", "Auto-login: Logging in as character {} (ID: {})", character_name, character_id);
-                    if let Err(e) =
-                        self.attempt_character_login(character_id, character_name, account)
-                    {
-                        error!(target: "events", "Failed to attempt auto-login: {}", e);
-                    }
-                }
-                _ => {
-                    // Put it back if it's not a LoginCharacter action (shouldn't happen)
-                    self.pending_auto_login = Some(action);
-                }
-            }
-        }
+    /// A clone of the channels an embedder acts on.
+    ///
+    /// Handed out by the constructor and by
+    /// [`spawn_client_loop`](crate::client::spawn_client_loop); both wrap the
+    /// same two channels, so a sender obtained before the loop started keeps
+    /// working once it is running.
+    pub fn sender(&self) -> ClientSender {
+        ClientSender::new(self.commands_tx.clone(), self.game_action_tx.clone())
+    }
 
-        // Process all pending actions without blocking
-        while let Ok(action) = self.action_rx.try_recv() {
-            match action {
-                gromnie_events::SimpleClientAction::Disconnect => {
-                    info!(target: "events", "Action: Disconnecting");
-                    // Disconnect action - transition to Error state
-                    self.scene = Scene::Error(ErrorScene::new(
-                        ClientError::ConnectionFailed("Disconnected by client action".to_string()),
-                        true, // Can retry
-                    ));
-                }
-                gromnie_events::SimpleClientAction::LoginCharacter {
+    /// Claim this client for a driver loop.
+    ///
+    /// Returns `false` if a loop already claimed it. Two loops draining one
+    /// client would interleave their commands and both believe they own the
+    /// socket, so the second one is refused rather than left to guess.
+    pub(crate) fn claim_driver(&mut self) -> bool {
+        let first_claim = !self.driven;
+        self.driven = true;
+        first_claim
+    }
+
+    /// Apply every queued session command, without blocking.
+    ///
+    /// Returns a [`LoopExit`] when the caller should stop driving the client —
+    /// currently only for [`ClientCommand::Disconnect`], which also moves the
+    /// client into its error scene so observers see the disconnect.
+    pub fn drain_commands(&mut self) -> Option<LoopExit> {
+        let mut exit = None;
+
+        while let Ok(command) = self.command_rx.try_recv() {
+            match command {
+                ClientCommand::EnterWorld {
                     character_id,
                     character_name,
                     account,
                 } => {
-                    debug!(target: "events", "Action: Logging in as character {} (ID: {})", character_name, character_id);
+                    debug!(target: "events", "Command: entering world as character {} (ID: {})", character_name, character_id);
                     if let Err(e) =
                         self.attempt_character_login(character_id, character_name, account)
                     {
                         error!(target: "events", "Failed to attempt character login: {}", e);
                     }
                 }
-                gromnie_events::SimpleClientAction::SendLoginComplete => {
-                    debug!(target: "events", "Action: Sending LoginComplete notification to server");
+                ClientCommand::SendLoginComplete => {
+                    debug!(target: "events", "Command: sending LoginComplete notification to server");
                     self.send_login_complete_notification();
                 }
-                gromnie_events::SimpleClientAction::SendChatSay { message } => {
-                    debug!(target: "events", "Action: Sending chat say: {}", message);
-                    self.send_chat_say(message);
-                }
-                gromnie_events::SimpleClientAction::SendChatTell {
-                    recipient_name,
-                    message,
-                } => {
-                    debug!(target: "events", "Action: Sending tell to {}: {}", recipient_name, message);
-                    self.send_chat_tell(recipient_name, message);
-                }
-                gromnie_events::SimpleClientAction::ReloadScripts { script_dir } => {
-                    debug!(target: "events", "Action: Reloading scripts from {:?}", script_dir);
-                    // Note: This action is handled by ScriptRunner, not here
-                    // The client just forwards it via the event channel
-                    // We shouldn't see this here, but handle it gracefully
-                    warn!(target: "events", "ReloadScripts action received in Client - this should be handled by ScriptRunner");
-                }
-                gromnie_events::SimpleClientAction::LogScriptMessage { script_id, message } => {
-                    info!(target: "script", "[{}] {}", script_id, message);
-                }
-                gromnie_events::SimpleClientAction::DoMovementCommand {
-                    motion,
-                    speed,
-                    hold_key,
-                } => {
-                    debug!(target: "events", "Action: DoMovementCommand motion=0x{:08X}", motion);
-                    self.send_do_movement_command(motion, speed, hold_key);
-                }
-                gromnie_events::SimpleClientAction::StopMovementCommand { motion, hold_key } => {
-                    debug!(target: "events", "Action: StopMovementCommand motion=0x{:08X}", motion);
-                    self.send_stop_movement_command(motion, hold_key);
+                ClientCommand::Disconnect => {
+                    info!(target: "events", "Command: disconnecting");
+                    self.scene = Scene::Error(ErrorScene::new(
+                        ClientError::ConnectionFailed("Disconnected by client command".to_string()),
+                        true, // Can retry
+                    ));
+                    exit = Some(LoopExit::DisconnectRequested);
                 }
             }
         }
+
+        exit
     }
 
     /// Check and send delayed messages based on login time

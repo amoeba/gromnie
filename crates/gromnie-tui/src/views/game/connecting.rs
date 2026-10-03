@@ -1,6 +1,5 @@
 use crate::app::{App, GameScene};
 use asheron_rs::types::CharacterIdentity;
-use gromnie_events::SimpleClientAction;
 
 // Character selection functions that belong with the character selection view
 impl App {
@@ -40,21 +39,22 @@ impl App {
             return Err("No character selected".to_string());
         };
 
-        if let Some(ref tx) = self.action_tx {
-            // Transition to GameWorld::InPortalSpace when LoginCharacter is sent
+        if let Some(ref sender) = self.sender {
+            // Transition to GameWorld::InPortalSpace when the login command is sent
             self.game_scene = GameScene::GameWorld {
                 state: crate::app::GameWorldState::InPortalSpace,
                 created_objects: Vec::new(),
             };
 
-            tx.send(SimpleClientAction::LoginCharacter {
-                character_id,
-                character_name,
-                account: self.client_status.account_name.clone(),
-            })
-            .map_err(|e| format!("Failed to send login action: {}", e))
+            sender
+                .enter_world(
+                    character_id,
+                    character_name,
+                    self.client_status.account_name.clone(),
+                )
+                .map_err(|e| format!("Failed to send login command: {}", e))
         } else {
-            Err("No action channel available".to_string())
+            Err("No client sender available".to_string())
         }
     }
 }

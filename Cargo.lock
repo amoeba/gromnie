@@ -1304,7 +1304,6 @@ dependencies = [
  "asheron-rs",
  "js-sys",
  "serde",
- "tokio",
 ]
 
 [[package]]

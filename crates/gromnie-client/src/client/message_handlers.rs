@@ -209,32 +209,42 @@ impl MessageHandler<asheron_rs::messages::s2c::LoginLoginCharacterSet> for Clien
 
         // Check if auto-login is configured
         if let Some(ref char_name) = self.character {
-            // Find the character in the list
-            let found_char = self
+            // Find the character in the list. Clone what we need and drop the
+            // borrow on `known_characters` before touching the scene.
+            let auto_login = self
                 .known_characters
                 .iter()
-                .find(|c| c.name.eq_ignore_ascii_case(char_name) && c.seconds_greyed_out == 0);
+                .find(|c| c.name.eq_ignore_ascii_case(char_name) && c.seconds_greyed_out == 0)
+                .map(|c| (c.character_id.0, c.name.clone()));
 
-            if let Some(character) = found_char {
-                info!(target: "net", "Auto-login enabled, queuing login for character: {} (ID: {})", character.name, character.character_id.0);
+            match auto_login {
+                Some((character_id, character_name)) => {
+                    info!(target: "net", "Auto-login enabled, logging in as character: {} (ID: {})", character_name, character_id);
 
-                // Store the pending auto-login action to be processed in the main loop
-                self.pending_auto_login =
-                    Some(gromnie_events::SimpleClientAction::LoginCharacter {
-                        character_id: character.character_id.0,
-                        character_name: character.name.clone(),
-                        account: char_list.account.clone(),
-                    });
-            } else {
-                let available_names: Vec<&str> = self
-                    .known_characters
-                    .iter()
-                    .filter(|c| c.seconds_greyed_out == 0)
-                    .map(|c| c.name.as_str())
-                    .collect();
+                    // `transition_to_char_select` above already moved us to
+                    // CharacterSelect, so `attempt_character_login` can run
+                    // straight away. The enter-world request lands in the
+                    // outgoing queue and is flushed at the end of this
+                    // iteration, exactly as a UI-initiated login would.
+                    if let Err(e) = self.attempt_character_login(
+                        character_id,
+                        character_name,
+                        char_list.account.clone(),
+                    ) {
+                        error!(target: "net", "Failed to attempt auto-login: {}", e);
+                    }
+                }
+                None => {
+                    let available_names: Vec<&str> = self
+                        .known_characters
+                        .iter()
+                        .filter(|c| c.seconds_greyed_out == 0)
+                        .map(|c| c.name.as_str())
+                        .collect();
 
-                error!(target: "net", "Auto-login character '{}' not found in character list. Available characters: [{}]",
-                    char_name, available_names.join(", "));
+                    error!(target: "net", "Auto-login character '{}' not found in character list. Available characters: [{}]",
+                        char_name, available_names.join(", "));
+                }
             }
         }
     }

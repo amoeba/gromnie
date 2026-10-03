@@ -106,10 +106,10 @@ Found while implementing. Each is a correction, not a scope change.
    held for a full second during the handshake. The facade exposes no `&mut Client` and no
    `Arc<RwLock<Client>>`.
 
-3. **The facade does not depend on `SimpleClientAction`.** Game-level operations
-   (`say`, `tell`, movement) use `game_action_tx` / `GameActionMessage`. Lifecycle operations
-   (`enter_world`, `disconnect`) use a new narrow command enum owned by the facade. Removing
-   `SimpleClientAction` is a separate PR — see "Explicit non-goals".
+3. **Game-level operations use `GameActionMessage`.** `say`, `tell`, and movement go over
+   `game_action_tx`. Lifecycle operations (`enter_world`, `disconnect`) use the narrow
+   `ClientCommand` enum owned by the facade. Both are reachable through the one `ClientSender`
+   value, which is what finally let `SimpleClientAction` be deleted — see "Explicit non-goals".
 
 4. **The driver loop moves into `gromnie-client`.** The loop has no dependency on the runner's
    event bus (`EventEnvelope`/`EventType` already live in `gromnie-events`; `event_bus.rs:8-11`
@@ -233,34 +233,40 @@ These were established by reading the code before designing. They constrain the 
 
 ### `SimpleClientAction` status
 
-It is **not** removed. `git log --diff-filter=D` on `simple_client_actions.rs` returns nothing.
-What was removed in `036725a` is `SimpleGameEvent`, a different type. `SimpleClientAction` is
-still referenced by 21 files.
+**Removed** in `refactor/remove-simple-client-action` (issue #60). `simple_client_actions.rs` is
+deleted and `ClientAction`/`types.rs` went with it.
 
-The codebase is mid-migration with two parallel action paths:
+The split was: `action_rx` drained by `process_actions`, versus `game_action_tx` drained by
+`process_game_actions`. That collapsed into `ClientSender` (`client/command.rs`), which bundles
+both channels so an embedder holds one clonable value:
 
-| Path | Mechanism | Consumers |
-|---|---|---|
-| `SimpleClientAction` (legacy) | `action_rx` drained in `process_actions` (`client.rs:971`) | TUI, iOS, web, runner, and the scripting host for chat (`context.rs:111`, `:118`) |
-| `GameActionMessage` (new) | `game_action_tx` drained in `process_game_actions` (`client.rs:619`) | scripting host for trade/movement (`context.rs:130+`) |
-
-The scripting host holds both (`context.rs:54-56`). Variant breakdown, which is why removal is
-reasonable:
-
-| Variant | Fate |
+| Method | Underlying channel |
 |---|---|
-| `SendChatSay` | expressible as `GameActionMessage::CommunicationTalk` (`client.rs:547`) |
-| `SendChatTell` | expressible as `CommunicationTalkDirectByName` (`client.rs:569`) |
-| `DoMovementCommand` | expressible as `MovementDoMovementCommand` (`client.rs:632`) |
-| `StopMovementCommand` | expressible as `MovementStopMovementCommand` (`client.rs:646`) |
-| `LoginCharacter` | lifecycle — no `GameActionMessage` equivalent |
-| `SendLoginComplete` | lifecycle |
-| `Disconnect` | lifecycle |
-| `ReloadScripts` | **not the client's job** — `client.rs:1013` warns it should not arrive there |
-| `LogScriptMessage` | **not the client's job** — belongs to the scripting host |
+| `say`, `tell`, `do_movement_command`, `stop_movement_command`, `send_game_action` | `game_action_tx` → `GameActionMessage` |
+| `enter_world`, `send_login_complete`, `disconnect` | `commands_tx` → `ClientCommand` |
 
-Removing it is easier *after* this plan lands, because the facade will not be a fourth consumer
-keeping it alive.
+The old variants mapped as:
+
+| Old variant | Fate |
+|---|---|
+| `SendChatSay` | `ClientSender::say` → `CommunicationTalk` |
+| `SendChatTell` | `ClientSender::tell` → `CommunicationTalkDirectByName` |
+| `DoMovementCommand` | `ClientSender::do_movement_command` |
+| `StopMovementCommand` | `ClientSender::stop_movement_command` |
+| `LoginCharacter` | `ClientSender::enter_world` → `ClientCommand::EnterWorld` |
+| `SendLoginComplete` | `ClientCommand::SendLoginComplete` |
+| `Disconnect` | `ClientCommand::Disconnect` |
+| `ReloadScripts` | dropped — the client already warned it did not belong there |
+| `LogScriptMessage` | `ScriptContext::log_script_message`, straight to the `script` tracing target |
+
+Two side effects worth knowing:
+
+- `pending_auto_login` is gone. Auto-login used to stash the action on the client and pick it up
+  on the next loop iteration; `message_handlers.rs` now calls `attempt_character_login` inline,
+  since the scene has already transitioned to `CharacterSelect`.
+- `ConsumerContext`/`ConsumerFactory` moved from `gromnie-events` to `client/consumer.rs`, because
+  the context hands out a `ClientSender` and `gromnie-client` depends on `gromnie-events`, not the
+  reverse. `gromnie-runner` still re-exports both names.
 
 ## Design
 
@@ -370,7 +376,8 @@ Duration) -> ClientHandle`, wrapping the body of `run_client_loop` with `gromnie
 rewritten to `crate::`. The `panic!` at `client_runner.rs:563` became
 `LoopExit::LoginRequestFailed`. A `ClientCommand` channel is drained at the top of each iteration,
 alongside — not instead of — `process_actions()`, so legacy `SimpleClientAction` consumers keep
-working unchanged.
+working unchanged. (Superseded: `process_actions()` is now `drain_commands()` and
+`SimpleClientAction` is gone — see "`SimpleClientAction` status".)
 
 **Stage 3 — delegate from the runner.** `run_client_loop` is now ~50 lines of signal wiring and
 delegation. `create_client_from_config` still returns `(Client, action_tx)` and every public
@@ -398,7 +405,6 @@ adding.
   from the event bus in `gromnie-tui/src/app.rs:560`. Doing this later means moving `ObjectTracker`
   to a shared crate and updating it inside the client.
 - **Unifying the web and iOS loops.** Review finding 1.
-- **Removing `SimpleClientAction`.** A separate PR touching 21 files.
 - **Removing or shortening `UI_DELAY_MS`.** Review finding 6; load-bearing for TUI progress.
 - **Reconnect support in the facade.** Decision 6.
 - **WASM support for the facade.** Review finding 10; `gromnie-web` keeps its own loop.

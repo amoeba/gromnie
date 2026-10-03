@@ -7,7 +7,7 @@ use tracing::{error, info};
 use crate::event_bus::{EventBus, EventEnvelope};
 use crate::event_consumer::EventConsumer;
 use crate::event_wrapper::EventWrapper;
-use gromnie_client::client::Client;
+use gromnie_client::client::{Client, ClientSender};
 use gromnie_client::transport::ClientTransport;
 
 // Re-export ClientConfig from gromnie-client
@@ -19,10 +19,7 @@ pub(crate) async fn create_client_from_config(
     config: &ClientConfig,
     raw_event_tx: mpsc::Sender<gromnie_events::ClientEvent>,
     transport_factory: Option<&TransportFactory>,
-) -> (
-    Client,
-    mpsc::UnboundedSender<gromnie_events::SimpleClientAction>,
-) {
+) -> (Client, ClientSender) {
     if let Some(factory) = transport_factory {
         Client::new_with_transport(
             config.id,
@@ -228,33 +225,21 @@ pub trait MultiClientConsumerFactory: Send + Sync {
         &self,
         client_id: u32,
         client_config: &ClientConfig,
-        action_tx: mpsc::UnboundedSender<gromnie_events::SimpleClientAction>,
+        sender: ClientSender,
     ) -> Box<dyn EventConsumer>;
 }
 
 /// Simple adapter to convert a closure into a MultiClientConsumerFactory
 pub struct FnConsumerFactory<F>
 where
-    F: Fn(
-            u32,
-            &ClientConfig,
-            mpsc::UnboundedSender<gromnie_events::SimpleClientAction>,
-        ) -> Box<dyn EventConsumer>
-        + Send
-        + Sync,
+    F: Fn(u32, &ClientConfig, ClientSender) -> Box<dyn EventConsumer> + Send + Sync,
 {
     f: F,
 }
 
 impl<F> FnConsumerFactory<F>
 where
-    F: Fn(
-            u32,
-            &ClientConfig,
-            mpsc::UnboundedSender<gromnie_events::SimpleClientAction>,
-        ) -> Box<dyn EventConsumer>
-        + Send
-        + Sync,
+    F: Fn(u32, &ClientConfig, ClientSender) -> Box<dyn EventConsumer> + Send + Sync,
 {
     pub fn new(f: F) -> Self {
         Self { f }
@@ -263,21 +248,15 @@ where
 
 impl<F> MultiClientConsumerFactory for FnConsumerFactory<F>
 where
-    F: Fn(
-            u32,
-            &ClientConfig,
-            mpsc::UnboundedSender<gromnie_events::SimpleClientAction>,
-        ) -> Box<dyn EventConsumer>
-        + Send
-        + Sync,
+    F: Fn(u32, &ClientConfig, ClientSender) -> Box<dyn EventConsumer> + Send + Sync,
 {
     fn create_consumer(
         &self,
         client_id: u32,
         client_config: &ClientConfig,
-        action_tx: mpsc::UnboundedSender<gromnie_events::SimpleClientAction>,
+        sender: ClientSender,
     ) -> Box<dyn EventConsumer> {
-        (self.f)(client_id, client_config, action_tx)
+        (self.f)(client_id, client_config, sender)
     }
 }
 
@@ -320,7 +299,7 @@ impl EventBusManager {
 /// - Runs the network loop with keepalive
 /// - Handles graceful shutdown
 ///
-/// The event_consumer_factory is called with the action_tx channel after the client is created.
+/// The event_consumer_factory is called with the sender channel after the client is created.
 pub async fn run_client<C, F>(
     config: ClientConfig,
     event_bus_manager: Arc<EventBusManager>,
@@ -328,7 +307,7 @@ pub async fn run_client<C, F>(
     shutdown_rx: Option<tokio::sync::watch::Receiver<bool>>,
 ) where
     C: EventConsumer,
-    F: FnOnce(mpsc::UnboundedSender<gromnie_events::SimpleClientAction>) -> C,
+    F: FnOnce(ClientSender) -> C,
 {
     // Create a channel for raw events from client to EventWrapper
     let (raw_event_tx, raw_event_rx) = mpsc::channel::<gromnie_events::ClientEvent>(256);
@@ -342,13 +321,13 @@ pub async fn run_client<C, F>(
     // Subscribe to the event bus for the consumer
     let event_rx = event_bus_manager.subscribe();
 
-    let (client, action_tx) = create_client_from_config(&config, raw_event_tx, None).await;
+    let (client, sender) = create_client_from_config(&config, raw_event_tx, None).await;
 
     // Wrap client in Arc<RwLock<>> for shared access
     let client = Arc::new(RwLock::new(client));
 
-    // Create the event consumer with the action_tx
-    let event_consumer = event_consumer_factory(action_tx);
+    // Create the event consumer with the sender
+    let event_consumer = event_consumer_factory(sender);
 
     // Run the client with the event consumer
     run_client_internal(client, event_rx, Box::new(event_consumer), shutdown_rx).await;
@@ -364,9 +343,7 @@ pub async fn run_client_with_consumers<F>(
     consumers_factory: F,
     shutdown_rx: Option<tokio::sync::watch::Receiver<bool>>,
 ) where
-    F: FnOnce(
-        mpsc::UnboundedSender<gromnie_events::SimpleClientAction>,
-    ) -> Vec<Box<dyn EventConsumer>>,
+    F: FnOnce(ClientSender) -> Vec<Box<dyn EventConsumer>>,
 {
     use crate::event_bus::{EventEnvelope, EventSource, EventType, SystemEvent};
 
@@ -379,13 +356,13 @@ pub async fn run_client_with_consumers<F>(
         event_wrapper.run(raw_event_rx).await;
     });
 
-    let (client, action_tx) = create_client_from_config(&config, raw_event_tx, None).await;
+    let (client, sender) = create_client_from_config(&config, raw_event_tx, None).await;
 
     // Wrap client in Arc<RwLock<>> for shared access
     let client = Arc::new(RwLock::new(client));
 
     // Create all event consumers
-    let mut consumers = consumers_factory(action_tx);
+    let mut consumers = consumers_factory(sender);
 
     // Create a shutdown sender that will be used to signal consumers to stop
     let shutdown_sender = event_bus_manager.create_sender(config.id);
@@ -441,21 +418,19 @@ pub async fn run_client_with_consumers<F>(
     }
 }
 
-/// Run the client and also send the action_tx channel back to the caller
+/// Run the client and also send the sender channel back to the caller
 ///
-/// This variant is useful for the TUI version where the app needs the action_tx
+/// This variant is useful for the TUI version where the app needs the sender
 /// to send commands to the client.
-pub async fn run_client_with_action_channel<C, F>(
+pub async fn run_client_with_command_channel<C, F>(
     config: ClientConfig,
     event_bus_manager: Arc<EventBusManager>,
     event_consumer_factory: F,
-    action_tx_sender: mpsc::UnboundedSender<
-        mpsc::UnboundedSender<gromnie_events::SimpleClientAction>,
-    >,
+    command_channel: mpsc::UnboundedSender<ClientSender>,
     shutdown_rx: tokio::sync::watch::Receiver<bool>,
 ) where
     C: EventConsumer,
-    F: FnOnce(mpsc::UnboundedSender<gromnie_events::SimpleClientAction>) -> C,
+    F: FnOnce(ClientSender) -> C,
 {
     // Create a channel for raw events from client to EventWrapper
     let (raw_event_tx, raw_event_rx) = mpsc::channel::<gromnie_events::ClientEvent>(256);
@@ -469,16 +444,16 @@ pub async fn run_client_with_action_channel<C, F>(
     // Subscribe to the event bus for the consumer
     let event_rx = event_bus_manager.subscribe();
 
-    let (client, action_tx) = create_client_from_config(&config, raw_event_tx, None).await;
+    let (client, sender) = create_client_from_config(&config, raw_event_tx, None).await;
 
     // Wrap client in Arc<RwLock<>> for shared access
     let client = Arc::new(RwLock::new(client));
 
-    // Send the action_tx channel back to the caller (e.g., TUI)
-    let _ = action_tx_sender.send(action_tx.clone());
+    // Send the sender channel back to the caller (e.g., TUI)
+    let _ = command_channel.send(sender.clone());
 
-    // Create the event consumer with the action_tx
-    let event_consumer = event_consumer_factory(action_tx);
+    // Create the event consumer with the sender
+    let event_consumer = event_consumer_factory(sender);
 
     // Run the client with the event consumer
     run_client_internal(
@@ -687,7 +662,7 @@ where
             let event_rx = event_bus_manager.subscribe();
 
             // Create the client
-            let (client, action_tx) =
+            let (client, sender) =
                 create_client_from_config(&client_config, raw_event_tx, transport_factory.as_ref())
                     .await;
 
@@ -699,7 +674,7 @@ where
 
             // Create the event consumer
             let event_consumer =
-                consumer_factory.create_consumer(client_config.id, &client_config, action_tx);
+                consumer_factory.create_consumer(client_config.id, &client_config, sender);
 
             // Run the client
             run_client_internal(client, event_rx, event_consumer, Some(shutdown_rx)).await;
@@ -776,18 +751,13 @@ pub trait ConsumerBuilder: Send + Sync {
         &self,
         client_id: u32,
         client_config: &ClientConfig,
-        action_tx: mpsc::UnboundedSender<gromnie_events::SimpleClientAction>,
+        sender: ClientSender,
     ) -> Box<dyn EventConsumer>;
 }
 
 /// Type alias for consumer factory closure
-type ConsumerFactoryFn = dyn Fn(
-        u32,
-        &ClientConfig,
-        mpsc::UnboundedSender<gromnie_events::SimpleClientAction>,
-    ) -> Box<dyn EventConsumer>
-    + Send
-    + Sync;
+type ConsumerFactoryFn =
+    dyn Fn(u32, &ClientConfig, ClientSender) -> Box<dyn EventConsumer> + Send + Sync;
 
 /// Adapter for closure-based consumer builders
 pub struct FnConsumerBuilder {
@@ -797,14 +767,7 @@ pub struct FnConsumerBuilder {
 impl FnConsumerBuilder {
     pub fn new<F>(f: F) -> Self
     where
-        F: Fn(
-                u32,
-                &ClientConfig,
-                mpsc::UnboundedSender<gromnie_events::SimpleClientAction>,
-            ) -> Box<dyn EventConsumer>
-            + Send
-            + Sync
-            + 'static,
+        F: Fn(u32, &ClientConfig, ClientSender) -> Box<dyn EventConsumer> + Send + Sync + 'static,
     {
         Self { f: Box::new(f) }
     }
@@ -815,9 +778,9 @@ impl ConsumerBuilder for FnConsumerBuilder {
         &self,
         client_id: u32,
         client_config: &ClientConfig,
-        action_tx: mpsc::UnboundedSender<gromnie_events::SimpleClientAction>,
+        sender: ClientSender,
     ) -> Box<dyn EventConsumer> {
-        (self.f)(client_id, client_config, action_tx)
+        (self.f)(client_id, client_config, sender)
     }
 }
 
@@ -856,13 +819,12 @@ where
 
             let event_rx = event_bus_manager.subscribe();
 
-            let (client_obj, action_tx) =
-                create_client_from_config(&client, raw_event_tx, None).await;
+            let (client_obj, sender) = create_client_from_config(&client, raw_event_tx, None).await;
 
             // Wrap client in Arc<RwLock<>> for shared access
             let client_obj = Arc::new(RwLock::new(client_obj));
 
-            let event_consumer = consumer_builder.build(client.id, &client, action_tx);
+            let event_consumer = consumer_builder.build(client.id, &client, sender);
 
             run_client_internal(client_obj, event_rx, event_consumer, shutdown_rx).await;
 
@@ -891,9 +853,9 @@ where
                     &self,
                     client_id: u32,
                     client_config: &ClientConfig,
-                    action_tx: mpsc::UnboundedSender<gromnie_events::SimpleClientAction>,
+                    sender: ClientSender,
                 ) -> Box<dyn EventConsumer> {
-                    self.inner.build(client_id, client_config, action_tx)
+                    self.inner.build(client_id, client_config, sender)
                 }
             }
 

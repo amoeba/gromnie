@@ -2,7 +2,6 @@ use clap::Parser;
 use tracing::{error, info};
 
 use gromnie_client::config::GromnieConfig;
-use gromnie_events::SimpleClientAction;
 use gromnie_runner::{ClientConfig, ClientRunner, TuiConsumer, TuiEvent, logging};
 use gromnie_tui::{App, event_handler::EventHandler, ui::try_init_tui};
 
@@ -166,7 +165,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Set up channels for client communication
     let (client_event_tx, mut client_event_rx) = tokio::sync::mpsc::unbounded_channel::<TuiEvent>();
-    let (action_tx_channel, mut action_tx_rx) = tokio::sync::mpsc::unbounded_channel();
+    let (command_channel, mut sender_rx) = tokio::sync::mpsc::unbounded_channel();
 
     // Create shutdown channel to coordinate graceful shutdown
     let (shutdown_tx, shutdown_rx) = tokio::sync::watch::channel(false);
@@ -186,7 +185,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let runner = ClientRunner::builder()
         .with_clients(client_config)
         .with_consumer(TuiConsumer::from_factory(client_event_tx))
-        .with_action_channel(action_tx_channel)
+        .with_command_channel(command_channel)
         .with_shutdown(shutdown_rx)
         .with_config(config)
         .build()
@@ -196,13 +195,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         runner.run().await;
     });
 
-    // Wait for the action_tx channel from the client task (with timeout)
-    match tokio::time::timeout(tokio::time::Duration::from_secs(5), action_tx_rx.recv()).await {
-        Ok(Some(action_tx)) => {
-            app.action_tx = Some(action_tx);
+    // Wait for the client sender from the client task (with timeout)
+    match tokio::time::timeout(tokio::time::Duration::from_secs(5), sender_rx.recv()).await {
+        Ok(Some(sender)) => {
+            app.sender = Some(sender);
         }
         _ => {
-            error!("Failed to receive action_tx from client task");
+            error!("Failed to receive client sender from client task");
         }
     }
 
@@ -325,11 +324,10 @@ fn handle_tui_event(
                     KeyCode::Enter => {
                         // Send chat message if there's text
                         if !app.chat_input.is_empty() {
-                            if let Some(ref tx) = app.action_tx {
+                            if let Some(ref sender) = app.sender {
                                 let message = app.chat_input.clone();
-                                if let Err(e) = tx.send(SimpleClientAction::SendChatSay { message })
-                                {
-                                    error!("Failed to send chat message action: {}", e);
+                                if let Err(e) = sender.say(message) {
+                                    error!("Failed to send chat message: {}", e);
                                 }
                             }
                             // Clear input

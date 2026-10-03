@@ -100,7 +100,7 @@ async fn main() {
     // Create the consumer builder
     let stats_for_builder = stats.clone();
     let verbose = run_args.verbose;
-    let consumer_builder = FnConsumerBuilder::new(move |client_id, client_config, action_tx| {
+    let consumer_builder = FnConsumerBuilder::new(move |client_id, client_config, sender| {
         // Generate character name from account name
         let character_name = format!("{}-A", client_config.account_name);
 
@@ -109,7 +109,7 @@ async fn main() {
             StatsConsumer::new(client_id, stats_for_builder.clone()).with_verbose(verbose),
         );
         let auto_login_consumer = Box::new(
-            AutoLoginConsumer::new(client_id, character_name, action_tx).with_verbose(verbose),
+            AutoLoginConsumer::new(client_id, character_name, sender).with_verbose(verbose),
         );
 
         Box::new(CompositeConsumer::new(vec![

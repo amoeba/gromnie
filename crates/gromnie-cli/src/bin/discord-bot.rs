@@ -1,4 +1,5 @@
 use clap::Parser;
+use gromnie_client::client::ClientSender;
 use serenity::all::{
     CommandInteraction, CreateCommand, CreateInteractionResponse, CreateInteractionResponseMessage,
     Interaction,
@@ -23,11 +24,7 @@ pub struct Cli {
 
 struct Handler {
     target_channel_id: serenity::model::id::ChannelId,
-    action_tx: Arc<
-        tokio::sync::Mutex<
-            Option<tokio::sync::mpsc::UnboundedSender<gromnie_events::SimpleClientAction>>,
-        >,
-    >,
+    sender: Arc<tokio::sync::Mutex<Option<ClientSender>>>,
     uptime_data: Arc<RwLock<UptimeData>>,
 }
 
@@ -83,12 +80,10 @@ impl EventHandler for Handler {
         // Check if this message is in the target channel
         if msg.channel_id == self.target_channel_id {
             // Forward to game
-            let action_tx = self.action_tx.lock().await;
-            if let Some(ref tx) = *action_tx {
+            let sender = self.sender.lock().await;
+            if let Some(ref sender) = *sender {
                 let game_message = format!("Discord: {}: {}", msg.author.name, msg.content);
-                if let Err(e) = tx.send(gromnie_events::SimpleClientAction::SendChatSay {
-                    message: game_message,
-                }) {
+                if let Err(e) = sender.say(game_message) {
                     error!("Failed to send Discord message to game: {}", e);
                     // Notify the Discord user that their message failed to send
                     if let Err(reply_err) = msg.reply(&ctx.http, "⚠️ Failed to send your message to the game. The game client may be disconnected.").await {
@@ -98,7 +93,7 @@ impl EventHandler for Handler {
                     info!("Forwarded Discord message to game");
                 }
             } else {
-                // No action_tx available (game client not connected)
+                // No client sender available (game client not connected)
                 if let Err(reply_err) = msg.reply(&ctx.http, "⚠️ Game client is not connected yet. Please wait or contact an administrator.").await {
                     error!("Failed to send not-connected notification to Discord user: {}", reply_err);
                 }
@@ -179,9 +174,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Create channels for client communication
     let (_client_event_tx, _client_event_rx) =
         tokio::sync::mpsc::unbounded_channel::<gromnie_events::ProtocolEvent>();
-    let (action_tx_channel, mut action_tx_rx) = tokio::sync::mpsc::unbounded_channel::<
-        tokio::sync::mpsc::UnboundedSender<gromnie_events::SimpleClientAction>,
-    >();
+    let (command_channel, mut sender_rx) = tokio::sync::mpsc::unbounded_channel::<ClientSender>();
 
     // Create shutdown channel
     let (_shutdown_tx, shutdown_rx) = tokio::sync::watch::channel(false);
@@ -207,32 +200,32 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Spawn client task
     let http_clone = http.clone();
     let uptime_data_clone = uptime_data.clone();
-    let _client_handle = tokio::spawn(gromnie_runner::run_client_with_action_channel(
+    let _client_handle = tokio::spawn(gromnie_runner::run_client_with_command_channel(
         config,
         event_bus_manager,
-        move |action_tx| {
+        move |client_sender| {
             DiscordConsumer::new_with_uptime(
-                action_tx.clone(),
+                client_sender,
                 http_clone.clone(),
                 channel_id,
                 uptime_data_clone.clone(),
             )
         },
-        action_tx_channel,
+        command_channel,
         shutdown_rx,
     ));
 
-    // Create Arc<Mutex<>> for action_tx so it can be shared with Discord handler
-    let action_tx_arc = Arc::new(tokio::sync::Mutex::new(None));
+    // Create Arc<Mutex<>> for the client sender so it can be shared with the Discord handler
+    let sender_arc = Arc::new(tokio::sync::Mutex::new(None));
 
-    // Wait for the action_tx channel from the client task (with timeout)
-    match tokio::time::timeout(tokio::time::Duration::from_secs(5), action_tx_rx.recv()).await {
-        Ok(Some(action_tx)) => {
+    // Wait for the client sender from the client task (with timeout)
+    match tokio::time::timeout(tokio::time::Duration::from_secs(5), sender_rx.recv()).await {
+        Ok(Some(client_sender)) => {
             info!("Game client connected");
-            *action_tx_arc.lock().await = Some(action_tx);
+            *sender_arc.lock().await = Some(client_sender);
         }
         _ => {
-            error!("Failed to receive action_tx from game client task");
+            error!("Failed to receive client sender from game client task");
         }
     }
 
@@ -263,7 +256,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     )
     .event_handler(Handler {
         target_channel_id: channel_id,
-        action_tx: action_tx_arc,
+        sender: sender_arc,
         uptime_data: uptime_data.clone(),
     })
     .await

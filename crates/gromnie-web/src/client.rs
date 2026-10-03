@@ -5,7 +5,7 @@ use wasm_bindgen::prelude::*;
 use wasm_bindgen_futures::spawn_local;
 
 use gromnie_client::client::ClientEvent;
-use gromnie_client::client::SimpleClientAction;
+use gromnie_client::client::ClientSender;
 
 use crate::GromnieWispClient;
 use crate::transport::{NetLogCallback, format_net_entry};
@@ -18,7 +18,7 @@ pub struct GromnieClient {
     wisp_url: String,
     account: String,
     wisp_client: Option<GromnieWispClient>,
-    action_tx: Option<tokio::sync::mpsc::UnboundedSender<SimpleClientAction>>,
+    sender: Option<ClientSender>,
     on_event: AsyncCallback,
     on_net_log: NetLogCallback,
 }
@@ -65,7 +65,7 @@ fn spawn_recv_loop(
 
                     client.process_packet(&buf[..len], len, &addr).await;
                     client.process_messages();
-                    client.process_actions();
+                    client.drain_commands();
                     client.process_game_actions();
                     if let Err(e) = client.send_pending_messages().await {
                         web_sys::console::error_1(&format!("send_pending error: {e}").into());
@@ -116,7 +116,7 @@ impl GromnieClient {
             wisp_url,
             account: String::new(),
             wisp_client: None,
-            action_tx: None,
+            sender: None,
             on_event: Rc::new(RefCell::new(None)),
             on_net_log: Rc::new(RefCell::new(None)),
         }
@@ -168,7 +168,7 @@ impl GromnieClient {
 
         // 6. Create the gromnie client with our WISP transport
         let address = format!("{}:{}", server_host, server_port);
-        let (mut client, action_tx) = gromnie_client::client::Client::new_with_transport(
+        let (mut client, sender) = gromnie_client::client::Client::new_with_transport(
             1,
             address,
             account_name,
@@ -195,49 +195,46 @@ impl GromnieClient {
 
         // Store state
         self.wisp_client = Some(wisp_client);
-        self.action_tx = Some(action_tx);
+        self.sender = Some(sender);
 
         Ok(())
     }
 
     pub fn select_character(&self, character_id: u32) -> Result<(), JsValue> {
-        let tx = self
-            .action_tx
+        let sender = self
+            .sender
             .as_ref()
             .ok_or_else(|| js_error("not connected"))?;
 
-        tx.send(SimpleClientAction::LoginCharacter {
-            character_id,
-            character_name: String::new(),
-            account: self.account.clone(),
-        })
-        .map_err(|e| js_error(format!("send failed: {e}")))?;
+        sender
+            .enter_world(character_id, String::new(), self.account.clone())
+            .map_err(|e| js_error(format!("enter_world failed: {e}")))?;
 
         Ok(())
     }
 
     pub fn send_chat(&self, message: &str) -> Result<(), JsValue> {
-        let tx = self
-            .action_tx
+        let sender = self
+            .sender
             .as_ref()
             .ok_or_else(|| js_error("not connected"))?;
 
-        tx.send(SimpleClientAction::SendChatSay {
-            message: message.to_string(),
-        })
-        .map_err(|e| js_error(format!("send failed: {e}")))?;
+        sender
+            .say(message)
+            .map_err(|e| js_error(format!("send failed: {e}")))?;
 
         Ok(())
     }
 
     pub async fn disconnect(&self) -> Result<(), JsValue> {
-        let tx = self
-            .action_tx
+        let sender = self
+            .sender
             .as_ref()
             .ok_or_else(|| js_error("not connected"))?;
 
-        tx.send(SimpleClientAction::Disconnect)
-            .map_err(|e| js_error(format!("send failed: {e}")))?;
+        sender
+            .disconnect()
+            .map_err(|e| js_error(format!("disconnect failed: {e}")))?;
 
         // Close the WebSocket so the recv loop terminates and emits Disconnected
         if let Some(wisp) = &self.wisp_client {
