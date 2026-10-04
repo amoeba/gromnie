@@ -1,288 +1,405 @@
-# Implementation Plan: Minimal iOS Gromnie Client
+# Implementation Plan: Headless Client API
+
+> **Note:** this file previously held the iOS client plan (`feat/ios`, shipped in #50).
+> That content is recoverable with `git checkout 036725a -- plan.md`.
 
 ## Fixed scope
 
-Ship an iPhone/iPad SwiftUI app whose only gameplay capability is chat. Its complete v1 flow is:
+Ship a headless-first Rust API for driving an Asheron's Call client with no UI attached. The
+target shape:
 
-```text
-Connect form → character list → select character → chat transcript + composer → disconnect
+```rust
+let client = GromnieClient::builder()
+    .with_server("play.example.com:9000")
+    .with_account("acct", "password")
+    .connect()                       // returns at CharacterSelect; errors on failure
+    .await?;
+
+let chars = client.list_characters();      // sync, already-known snapshot
+client.enter_world("Character Name").await?; // resolves once InWorld
 ```
 
-The app accepts a hostname (or IPv4 address), port, account name, and password. It uses the existing Rust Gromnie client to communicate directly with the AC server over UDP. It does not render the world, move the player, create characters, handle inventory, reconnect automatically, or stay connected in the background.
-
-Swift is not a reimplementation of Gromnie. Rust retains all AC protocol parsing, packet sequencing, cryptography, UDP, login, character selection, and chat transmission. SwiftUI owns only presentation, user input, app lifecycle, and secure preferences.
+This crate is in development, so the API may change freely. The goal is a usable shape, not
+backwards compatibility.
 
 ## Progress
 
-**Status as of the current `feat/ios` head (verified locally):**
+All six stages are implemented and **verified against the live server** (`play.coldeve.ac`, see
+"Live verification" below). `cargo fmt --check`, `cargo clippy --workspace --all-targets
+--all-features -- -D warnings`, and `cargo test --workspace` (144 tests) all pass.
 
-- The full pipeline works end to end: `cargo xtask ios build-core` →
-  `xcodegen generate` → `xcodebuild` succeeds for both the iOS Simulator and
-  a generic iOS device, and the built app installs and launches in the iOS 27
-  simulator.
-- The bridge has 15 Rust tests: every `ClientEvent` → `BridgeEventKind`
-  mapping, the JSON schema, emitter sequencing, transport-failure surfacing a
-  single terminal event, and disconnect emitting a single terminal event.
-- The app has a `GromnieTests` unit-test target with 11 tests (bridge JSON
-  decoding, host validation, reducer transitions, transcript cap) that pass
-  under `xcodebuild test`.
-- CI runs `cargo check`/`clippy`/`test` with `--workspace` (previously
-  `gromnie-ios-bridge` and `gromnie-web` were skipped via `default-members`) and
-  has an `ios` job that builds the core + XCFramework, generates the project,
-  builds the simulator app, and runs the unit tests.
-- The actor now mirrors the native runner's handshake handling: it retries a
-  lost `LoginRequest` and gives up after the client's 20s state timeout instead
-  of spinning forever.
-- Still unverified: the happy-path login → character list → select → chat flow
-  against a real or fake AC server. `gromnie-client` can still drop raw events
-  if its 1,024-slot channel fills before the actor drains it.
+- [x] Stage 1: `ClientError` implements `Display` + `std::error::Error`
+- [x] Stage 2: move `run_client_loop` from `gromnie-runner` to `gromnie-client` as
+      `spawn_client_loop` → `ClientHandle`
+- [x] Stage 3: `gromnie-runner` delegates to the moved loop
+- [x] Stage 4: publish `Scene` snapshots on a `watch` channel each loop iteration
+- [x] Stage 5: facade — builder, `connect`, `list_characters`, `enter_world`, `say`/`tell`,
+      `subscribe`, `disconnect`
+- [x] Stage 6: unit tests + `examples/hello_world.rs` live smoke test
 
-- [x] Added the `gromnie-ios-bridge` workspace crate as a `staticlib`.
-- [x] Added the opaque C session API, Rust-owned session actor, serialized event queue, and C header/configuration scaffold.
-- [x] Connected `LoginCharacter`, `SendChatSay`, and `Disconnect` to the existing Rust client and mapped its character, login, chat, and error events.
-- [x] Added local ABI/input-validation tests and verified formatting, tests, and Clippy for the bridge.
-- [x] Added the missing Tokio `net` and `time` features required by `gromnie-client`'s existing native UDP code.
-- [x] Verified the bridge's minimal `gromnie-client` dependency build and added `cargo xtask ios build-core` to generate the header and XCFramework.
-- [x] Installed `aarch64-apple-ios`, `aarch64-apple-ios-sim`, `x86_64-apple-ios`, and `cbindgen` 0.29.4.
-- [x] Ran the packaging command through header generation; the checked-in C header is reproducible.
-  - **Corrected by review:** not reproducible at the time. Fixed in `88138e7`: the handle is now opaque to cbindgen, the committed header is regenerated from it, and the xtask fails if it drifts. See Review findings status below.
-- [x] `cargo check` passes for all three iOS targets without linking.
-- [x] Installed full Xcode 27.0 and validated the whole XCFramework build via `DEVELOPER_DIR`; `xcode-select --switch` is still pending a `sudo` step.
-- [x] Added the Swift `GromnieKit` wrapper target and the three SwiftUI screens (`ConnectionView`, `CharacterListView`, `ChatView`), plus the XcodeGen project. Named `GromnieKit` (not `GromnieCore`) to avoid a module-name collision with the C module; simulator and device builds both succeed.
+## Live verification
 
-## Review findings
+Run against `play.coldeve.ac:9000` as `treestats` via
+`cargo run -p gromnie-client --example hello_world`.
 
-**Status update (after review):** fixed since this was written — `lipo`/`xcodebuild` prerequisite checks (`2bc71bf`, `30d8004`), header opacity + drift check (`88138e7`), `destroy` panic guard (`3341ceb`), actor-failure terminal events (`59f524f`), disconnect deadlock + regression test (`55d8845`), and the module map (`f577fd8`). Still open: raw event drops, fake-transport integration test, and an iOS CI job. The Swift app now exists (scaffold commit `d096bf5`).
+| Scenario | Result |
+|---|---|
+| Valid credentials | `connect()` → `CharacterSelect` in **1.26s**, 10 characters listed |
+| `enter_world("Treestats")` | resolved in **1.31s**, `character_id 1342189415` — the requested character |
+| Case-insensitive lookup | `--character treestats` (all lowercase) matched `Treestats` |
+| Event stream | 52 events over a 10s hold, zero `Lagged`, scene still `InWorld` at the end |
+| `disconnect()` | clean; 13.0s total wall clock |
+| Wrong password | `connect()` → `Authentication("...password...not correct")` in 1.11s |
+| Unreachable server (`192.0.2.1`, TEST-NET-1) | `connect()` → `Client(LoginTimeout)` in 20.1s |
 
-Reviewed at `HEAD = d3bc05b` (working tree clean). The Rust bridge foundation is real and builds, but the deliverable (the SwiftUI app) is not started and several checked items above are overstated. The highest-risk code (the actor/client loop) has no tests.
+**Two bugs were found by this testing, and fixed afterwards:**
 
-### Verified working
+1. **The final scene was never published on a `break` path.** Scene snapshots were written at the
+   tail of each loop iteration, but every `break` skipped that. A client that failed via
+   `check_state_timeout` therefore left observers watching a stale `Scene::Connecting` indefinitely.
+   The loop now carries its reason out (`break reason`), publishes the final scene, and only then
+   records the exit reason — so anyone who can observe an exit reason can also read the final scene.
+2. **An unreachable server was reported as an authentication failure.** `pump_events` mapped
+   `ClientSystemEvent::AuthenticationFailed` to `ApiError::Authentication`, but that event is
+   overloaded: the client emits it both for a real rejection (`message_handlers.rs:153`) and for a
+   connect timeout (`client.rs:757`). It now resolves through the scene instead (`Client(LoginTimeout)`),
+   because both paths set `Scene::Error`, making the scene authoritative.
 
-- `cargo test -p gromnie-ios-bridge` — 2 tests pass.
-- `cargo clippy -p gromnie-ios-bridge --all-targets --all-features -- -D warnings` — clean.
-- `cargo fmt --all -- --check` — clean.
-- `cargo check -p gromnie-ios-bridge --target {aarch64-apple-ios, aarch64-apple-ios-sim, x86_64-apple-ios}` — passes for all three.
+**Still unverified:** `say()` / `tell()`. They post real messages into a shared game world, so they
+were left alone deliberately. Each is a single `game_action_tx` send on the same channel the
+scripting host already uses for chat.
 
-### Plan claims contradicted by the implementation
+## Deviations from the original plan
 
-- **`cargo xtask ios build-core` cannot run as written.** `require_command("lipo", ...)` runs `lipo --version`, but `lipo` has no version flag (`lipo --version` and `lipo -version` both exit 1). The command fails at the prerequisite check even with full Xcode.
-- **The header is neither generated nor reproducible.** Running the exact cbindgen command in this plan produces a different, invalid header (the `Mutex<SessionState>` field leaks into the C struct). The committed header is hand-maintained. The xtask writes cbindgen output directly over it (`--output header`) with no diff check, contrary to the packaging section.
-- **Event mapping differs from the table under "Existing Gromnie API used".** `ClientStateEvent::EnteringWorld` is never emitted by `gromnie-client` (the scene refactor removed it); the bridge synthesizes `.entering_world` locally after `LoginCharacter` is sent. `ClientStateEvent::InWorld` is never emitted on the login path either (`send_login_complete_notification()` sets `Scene::InWorld` directly without `emit_scene_changed()`; `transition_to_in_world()` is never called), and the bridge's `forward_event` ignores all `ClientEvent::State` variants.
-- **The planned chat gate is impossible as written.** "Send is disabled unless the bridge has emitted both `entered_world` and `InWorld` confirmation" cannot be implemented because no `InWorld` confirmation is produced. Gate on `LoginSucceeded`/`entered_world` instead.
-- **No module map is generated.** `include/` contains only `gromnie_ios.h`; the "generated C header/module map" promised by the Rust artifact decision is missing.
-- **No iOS CI job exists.** `ci.yml` has no step to build the three iOS targets, build the XCFramework, or run `xcodebuild test`.
-- **The planned test suite does not exist.** Only 2 Rust unit tests exist (host validation and invalid-connect arguments). Missing: fake-`ClientTransport` integration test, JSON schema tests, command ordering, terminal-event uniqueness, backpressure, repeated `disconnect`/`destroy`, and all Swift unit/UI tests.
-- **Minor:** `Connect` while active returns `invalid_state`, not the decision table's "local `already_connected` error" (no such result code exists).
+Found while implementing. Each is a correction, not a scope change.
 
-### Latent defects to fix
-
-- **Backpressure plus synchronous disconnect can deadlock.** The actor uses a blocking `sync_channel::send` for bridge events (`EVENT_CAPACITY = 4096`). If the queue fills and Swift calls `disconnect` without draining, the worker blocks in `emit` and `worker.join()` hangs indefinitely.
-- **"Chat events are never dropped" is not enforced at the client boundary.** `gromnie-client` publishes raw events with `raw_event_tx.try_send` on a 1,024-capacity channel, so a burst can drop events before they reach the bridge queue.
-- **A worker-thread panic leaves a stuck session.** `Client::new` does `NativeUdpTransport::bind_ephemeral().await.expect(...)`. A panic is not caught at any ABI boundary; the handle stays `Running`, `next_event` returns `NoEvent` forever, and the UI stays stuck connecting with no error event.
-- **Panic guarding is incomplete.** `gromnie_session_destroy` calls `disconnect` without `catch_code` (low risk, but it breaks the "every ABI boundary" claim).
-
-### What remains unverified
-
-- The actor/client loop has never run against a fake transport or a real server, so login → character list → select → chat ordering is unproven.
-- No XCFramework has been produced (blocked by the `lipo` check and the header issue).
-- No Swift code exists, so threading, JSON decoding, and lifecycle behavior are unproven.
-- No device or network testing has occurred.
+1. **The driver module is `client/driver.rs`, not `client/loop.rs`.** `loop` is a Rust keyword, so
+   `mod loop;` will not parse.
+2. **The facade is `api.rs`, not `api/mod.rs`.** One file is enough at this size.
+3. **`ClientError` gets a manual `Display` + `Error`, not `thiserror`.** `ConfigLoadError`
+   (`gromnie_config.rs:18`) already established the manual style in this crate; matching it avoids
+   adding a dependency nothing else in `gromnie-client` uses.
+4. **Blast radius was larger than first claimed.** `gromnie-scripting-host` also holds
+   `Arc<RwLock<Client>>` in ~12 places (`context.rs:52,66,103`, `script_runner.rs:42,66,79,100,109,117`,
+   `registry.rs`, tests), fed from `client_runner_builder.rs:452`. So `spawn_client_loop` takes the
+   `Arc` rather than consuming the `Client` — otherwise the scripting host loses access.
+   `run_client_internal`'s signature is unchanged as a result.
+5. **Ctrl+C handling stays in the runner.** `gromnie-client` depends on tokio without the `signal`
+   feature, and cannot enable it: its tokio features are unconditional and `net` already breaks the
+   wasm build (finding 11). The runner bridges either an external shutdown channel or a Ctrl+C
+   watcher into the loop's own shutdown channel.
+6. **`disconnect()` takes `&self`, not `self`.** `GromnieClient` has a `Drop` impl that shuts the
+   loop down, and moving fields out of a `Drop` type is not allowed. `disconnect(&self)` plus the
+   `Drop` fallback also removes the footgun of forgetting to call it.
+7. **`list_characters()` filters out pending-deletion characters.** Returning them would invite
+   `enter_world` calls that always fail with `NoSuchCharacter`.
+8. **Added `LoopExit::TaskFailed(String)` and an `ExitGuard` in the loop.** Without it, a panic in
+   the driver task left the exit slot `None` and `wait_for_exit()` hung forever — turning a crash
+   into a deadlock. This was not in the original plan.
 
 ## Decisions made now
 
-| Question | v1 decision |
-| --- | --- |
-| Protocol implementation | Link the existing Rust `gromnie-client`; no Swift protocol implementation. |
-| Transport | Direct UDP, no WISP/WebSocket proxy. |
-| IP support | IPv4 only. The current `NativeUdpTransport` binds `0.0.0.0` and client address parsing is not IPv6-safe. Reject IPv6 literals and document this limitation. |
-| FFI | A small C ABI plus handwritten Swift wrapper; do not introduce UniFFI. This keeps artifact production, threading, and callback ownership explicit. |
-| Rust artifact | `staticlib` packaged into `GromnieCore.xcframework`, with a generated C header/module map. |
-| Event delivery | Swift polls a Rust-owned FIFO event queue on a dedicated serial queue. Rust never invokes arbitrary Swift callbacks. |
-| One session | Exactly one active Rust session per app process. Connect while active returns a local `already_connected` error. |
-| UI framework | SwiftUI, iOS 17 minimum, portrait and landscape supported. |
-| Credential storage | Host, port, username: `UserDefaults`. Password: Keychain only after an explicit “Save password” toggle; the default is off. |
-| Backgrounding | Send disconnect, stop the actor, and return to the form. No background network entitlement or reconnecting. |
-| Outgoing display | Do not local-echo a sent message. Show it only when received from the server's chat event. |
-| Distribution | Debug/device and TestFlight beta only in v1; App Store submission is out of scope. |
+1. **`connect()` returns at `Scene::CharacterSelect` and errors on failure.** A failed login is a
+   `connect()` error, not a later `list_characters()` error.
+
+2. **Mutations go through channels, never the `Client` lock.** See review finding 2 — the lock is
+   held for a full second during the handshake. The facade exposes no `&mut Client` and no
+   `Arc<RwLock<Client>>`.
+
+3. **The facade does not depend on `SimpleClientAction`.** Game-level operations
+   (`say`, `tell`, movement) use `game_action_tx` / `GameActionMessage`. Lifecycle operations
+   (`enter_world`, `disconnect`) use a new narrow command enum owned by the facade. Removing
+   `SimpleClientAction` is a separate PR — see "Explicit non-goals".
+
+4. **The driver loop moves into `gromnie-client`.** The loop has no dependency on the runner's
+   event bus (`EventEnvelope`/`EventType` already live in `gromnie-events`; `event_bus.rs:8-11`
+   re-exports them), so the move needs no new dependency. Only `client_runner.rs` changed, and its
+   public signatures are unchanged. **Correction:** `client_runner.rs` is *not* the sole holder of
+   `Arc<RwLock<Client>>` — `gromnie-scripting-host` holds it too, so `spawn_client_loop` accepts the
+   `Arc` and leaves that access intact. The TUI never touches the client directly; it only receives
+   `action_tx`.
+
+5. **The web and iOS loops are left alone.** They stay divergent for now. Unifying them is a
+   behavior change, not a code move (review finding 1).
+
+6. **`reconnect` defaults to `false` in the facade.** `start_reconnection` resets the scene to
+   `Connecting` (`client.rs:873`), which silently kills a pending `enter_world` wait.
+
+7. **`UI_DELAY_MS` stays as-is.** See review finding 6. Headless `connect()` still costs ~1.3s, of
+   which ~1s is one artificial sleep.
+
+8. **`ApiError` is new and wraps `ClientError`.** `ClientError` is a protocol-level type; builder
+   validation errors do not belong in it.
+
+## Review findings
+
+These were established by reading the code before designing. They constrain the implementation.
+
+1. **Three divergent copies of the driver loop exist.** Unifying them changes behavior.
+
+   | Copy | Location | Ownership | Cadence | Notes |
+   |---|---|---|---|---|
+   | Runner | `client_runner.rs:542` | `Arc<RwLock<Client>>` | 100ms | full reconnect + tick |
+   | Web/WASM | `gromnie-web/client.rs:40` | owned `Client` | blocks on recv | **no timeouts, no retry, no idle keepalive** |
+   | iOS | `gromnie-ios-bridge/session.rs:194` | owned `Client` | 50ms | own `entering_world_since` watchdog |
+
+   The web copy only checks its keepalive *after a packet arrives*
+   (`gromnie-web/client.rs:60-64`), so an idle connection never sends `TimeSync`. Latent bug;
+   out of scope, but it is why the loops are not interchangeable.
+
+2. **`process_packet` sleeps 1s while the write lock is held.** `client.rs:1812` awaits
+   `instant::sleep(UI_DELAY_MS)` between `ConnectRequest` and `ConnectResponse`, inside a method
+   taking `&mut self`. The runner holds `client.write()` across that call
+   (`client_runner.rs:588`). Any handle method taking `read()`/`write()` can block ~1s during
+   handshake. **This is why decision 2 exists.**
+
+3. **The write lock is contended by design.** `client_runner.rs:581-584` holds `client.write()`
+   across a `timeout(100ms, recv_packet)` on every iteration.
+
+4. **Events are dropped silently when the channel is full.** `emit_protocol` (`client.rs:462`)
+   and `emit_progress` (`client.rs:467`) use `try_send` on a 256-slot channel
+   (`client_runner.rs:334`). The runner always has `EventWrapper` draining it
+   (`client_runner.rs:337`). **The facade must own the `mpsc::Receiver` and republish to a
+   broadcast**, or the first 256 events vanish and `connect()` may never observe the character
+   list. This was already a known issue in the previous plan (see finding: "1,024-slot channel
+   fills before the actor drains it").
+
+5. **A panic goes silent once spawned.** `client_runner.rs:563` is a bare
+   `panic!("Failed to send initial LoginRequest")`. Today it is loud because
+   `run_client_internal` is awaited in the caller's task. Inside `tokio::spawn` it becomes an
+   unawaited `JoinError`. Must be converted to `ApiError::ClientPanicked`.
+
+6. **~3s of hardcoded UI delay is nominally in the connect path — but only ~1s actually costs
+   wall clock.** `UI_DELAY_MS = 1000` (`constants.rs:9`), applied at `client_runner.rs:556` (before
+   `LoginRequest`), `client.rs:1812` (before `ConnectResponse`), `message_handlers.rs:267` (DDD
+   response), and `message_handlers.rs:289`. These exist to animate a progress bar. Two corrections,
+   both from measuring the real server:
+   - The facade passes `Duration::ZERO` for `client_runner.rs:556`, so headless `connect()` skips
+     that second entirely.
+   - `client.rs:1812` is the only *blocking* sleep (it is awaited inside `process_packet`, which
+     holds the write lock). The DDD pause at `message_handlers.rs:267` is a queued *send* delay
+     (`with_delay_ms`), which overlaps with the handshake rather than adding to it.
+
+   Measured: `connect()` to `CharacterSelect` takes **1.26s** against `play.coldeve.ac`, of which
+   ~1s is the `client.rs:1812` sleep. `connecting.reset()` at `client.rs:1821` re-arms the timeout,
+   so this does not consume the 20s login budget.
+
+7. **`ClientError` is not an `Error`.** `scene.rs:83-92` has no `Display` and no
+   `std::error::Error`, so a public `Result<_, ClientError>` cannot `?` into `anyhow::Error` or
+   `Box<dyn Error>`. The crate already depends on `thiserror` (`gromnie_config.rs:28`).
+
+8. **`enter_world().await` can hang if it only watches for `InWorld`.** Completion depends on
+   `entering_world` surviving until `LoginCreatePlayer`; the handler no-ops with a warning
+   otherwise (`message_handlers.rs:45`). Also `attempt_character_login` rejects re-entry with
+   `"Login already in progress"` (`client.rs:438`). A timeout is mandatory.
+
+9. **Reconnect erases the scene being waited on.** `start_reconnection` resets
+   `scene = Scene::Connecting` (`client.rs:873`); `enter_disconnected` clears
+   `session.connection` (`client.rs:905`). Hence decision 6.
+
+10. **WASM cannot share the loop.** The runner loop uses `tokio::time::sleep` /
+    `tokio::time::Instant`, but `crate::instant::sleep` is a deliberate no-op on `wasm32`
+    (`instant.rs:107-116`). `client::driver` is therefore `#[cfg(not(target_arch = "wasm32"))]`,
+    and the web crate keeps its own loop.
+
+11. **Pre-existing: the wasm build is already broken, independent of this work.** `cargo build -p
+    gromnie-web --target wasm32-unknown-unknown` fails with ~48 errors from `mio`. Root cause:
+    `gromnie-client`'s tokio dependency enables `"net"` unconditionally
+    (`gromnie-client/Cargo.toml:47`), and mio refuses to compile for `wasm*-unknown-unknown`.
+    Verified identical failure at `HEAD` (`036725a`) in a clean worktree, so this plan neither
+    caused nor fixed it. Fixing it means moving `"net"` behind the `native` feature, or dropping
+    it if `tokio::net` turns out to be unused. **This means `crates/gromnie-web/agents.md` is
+    currently stale** — the documented `cargo xtask web build` cannot succeed as written.
 
 ## Existing Gromnie API used
 
-The bridge uses `gromnie_client::Client` and its native UDP transport. It does not copy the browser client: browser code needs WISP because browsers lack UDP, while iOS can use native UDP.
+| Need | API | Location |
+|---|---|---|
+| Construct client | `Client::new_with_reconnect` | `client.rs:155` |
+| Custom transport (web/WASM) | `Client::new_with_transport` | `client.rs:184` |
+| Start handshake | `Client::do_login` | `client.rs:1888` |
+| Send game action, no lock | `Client::game_action_tx` | `client.rs:95` |
+| Serialize a game action | `Client::queue_game_action` | `client.rs:600` |
+| Drain game actions in loop | `Client::process_game_actions` | `client.rs:619` |
+| Request world entry | `Client::attempt_character_login` | `client.rs:420` |
+| Read current scene | `Client::scene` (pub field) | `client.rs:81` |
+| Match character select | `Scene::as_character_select` | `scene.rs:223` |
+| Character list snapshot | `CharacterSelectScene::characters` | `scene.rs:62` |
+| Scene snapshots | `Scene` and sub-scenes derive `Clone` | `scene.rs:33-81` |
+| Observe auth failure | `ClientSystemEvent::AuthenticationFailed` | `client_events.rs:15` |
+| Auto-login reference semantics | `character` field handler | `message_handlers.rs:211-239` |
+| Loop being moved | `run_client_loop` | `client_runner.rs:542` |
+| Sendability for spawning | `ClientTransport: Send + Sync` | `transport.rs:18` |
 
-The implementation consumes only these current `gromnie-events` variants:
+### `SimpleClientAction` status
 
-| Rust event | Bridge event / UI action |
-| --- | --- |
-| `ClientSystemEvent::ConnectingStarted` | `.connecting` |
-| `ProtocolEvent::S2C(S2CEvent::LoginCharacterSet { characters, .. })` | `.characters` and character-list screen |
-| `ClientStateEvent::EnteringWorld` | `.enteringWorld` spinner |
-| `ClientSystemEvent::LoginSucceeded { character_id, character_name }` | `.enteredWorld`; present chat |
-| `ClientStateEvent::InWorld` | internal confirmation only; it must follow `LoginSucceeded` before accepting chat input |
-| `ProtocolEvent::as_chat_message()` (`HearSpeech`, `HearRangedSpeech`, `TextboxChatMessage`, `HearDirectSpeech`, `TransientString`) | `.chat` |
-| `ProtocolEvent::S2C(S2CEvent::CharacterError { .. })` | `.error` and return to character list |
-| `ClientSystemEvent::AuthenticationFailed` | `.error`; return to form |
-| `ClientSystemEvent::Disconnected` | `.disconnected`; return to form |
+It is **not** removed. `git log --diff-filter=D` on `simple_client_actions.rs` returns nothing.
+What was removed in `036725a` is `SimpleGameEvent`, a different type. `SimpleClientAction` is
+still referenced by 21 files.
 
-`SimpleClientAction::LoginCharacter`, `SendChatSay`, and `Disconnect` are the only Rust actions exposed by v1. The bridge supplies the account name and selected character ID to `LoginCharacter`; it never exposes arbitrary game actions.
+The codebase is mid-migration with two parallel action paths:
 
-## Rust bridge design
+| Path | Mechanism | Consumers |
+|---|---|---|
+| `SimpleClientAction` (legacy) | `action_rx` drained in `process_actions` (`client.rs:971`) | TUI, iOS, web, runner, and the scripting host for chat (`context.rs:111`, `:118`) |
+| `GameActionMessage` (new) | `game_action_tx` drained in `process_game_actions` (`client.rs:619`) | scripting host for trade/movement (`context.rs:130+`) |
 
-### New crate and files
+The scripting host holds both (`context.rs:54-56`). Variant breakdown, which is why removal is
+reasonable:
 
-Add workspace crate `crates/gromnie-ios-bridge`:
+| Variant | Fate |
+|---|---|
+| `SendChatSay` | expressible as `GameActionMessage::CommunicationTalk` (`client.rs:547`) |
+| `SendChatTell` | expressible as `CommunicationTalkDirectByName` (`client.rs:569`) |
+| `DoMovementCommand` | expressible as `MovementDoMovementCommand` (`client.rs:632`) |
+| `StopMovementCommand` | expressible as `MovementStopMovementCommand` (`client.rs:646`) |
+| `LoginCharacter` | lifecycle — no `GameActionMessage` equivalent |
+| `SendLoginComplete` | lifecycle |
+| `Disconnect` | lifecycle |
+| `ReloadScripts` | **not the client's job** — `client.rs:1013` warns it should not arrive there |
+| `LogScriptMessage` | **not the client's job** — belongs to the scripting host |
+
+Removing it is easier *after* this plan lands, because the facade will not be a fourth consumer
+keeping it alive.
+
+## Design
+
+As built:
 
 ```text
-crates/gromnie-ios-bridge/
-  Cargo.toml                 # crate-type = ["staticlib"]
-  src/lib.rs                 # opaque C handle and exported ABI
-  src/session.rs             # session actor / Gromnie client loop
-  src/event.rs               # serializable, bridge-owned event records
-  include/gromnie_ios.h      # generated by cbindgen; committed
-  cbindgen.toml
+crates/gromnie-client/src/
+  client/driver.rs  ← the loop, moved from gromnie-runner + handle plumbing
+  api.rs            ← GromnieClient, GromnieClientBuilder, ApiError
 ```
 
-It depends on `gromnie-client`, `gromnie-events`, `serde`, `serde_json`, `tokio`, and `thiserror`. No Apple-specific code is added to `gromnie-client`.
+### Handle
 
-### ABI
-
-Use an opaque `gromnie_session_t`; it is allocated by Rust and may be used only from the Swift bridge's one serial `DispatchQueue`. A null handle is invalid. All functions return an integer result code; `0` means success, nonzero means a local API error.
-
-```c
-typedef struct gromnie_session_t gromnie_session_t;
-
-gromnie_session_t *gromnie_session_create(void);
-int32_t gromnie_session_connect(gromnie_session_t *,
-                                const char *host_utf8,
-                                uint16_t port,
-                                const char *username_utf8,
-                                const char *password_utf8);
-int32_t gromnie_session_select_character(gromnie_session_t *, uint32_t character_id);
-int32_t gromnie_session_send_chat(gromnie_session_t *, const char *message_utf8);
-int32_t gromnie_session_next_event(gromnie_session_t *, uint32_t timeout_ms,
-                                   uint8_t **json_utf8, size_t *json_len);
-void gromnie_buffer_free(uint8_t *json_utf8, size_t json_len);
-int32_t gromnie_session_disconnect(gromnie_session_t *);
-void gromnie_session_destroy(gromnie_session_t *);
-const char *gromnie_result_message(int32_t code);
+```rust
+pub struct ClientHandle {
+    commands:     mpsc::UnboundedSender<ClientCommand>,     // lifecycle mutations; never the lock
+    game_actions: mpsc::UnboundedSender<GameActionMessage>, // cloned from Client::game_action_tx
+    scene:        watch::Receiver<Scene>,                   // Scene: Clone
+    exit:         watch::Receiver<Option<LoopExit>>,
+    shutdown:     watch::Sender<bool>,
+    join:         JoinHandle<()>,
+}
 ```
 
-Rules:
+No `broadcast::Receiver` — event fan-out is the embedder's business, so the runner keeps its
+existing `EventWrapper` wiring untouched and the facade does its own republish.
 
-- `connect` validates input then starts the actor and returns immediately. Network success/failure is reported as an event, not a blocking FFI result.
-- `next_event` blocks for at most `timeout_ms`; `0` means no queued event, otherwise Rust allocates an exact UTF-8 JSON buffer. Swift must call `gromnie_buffer_free` exactly once.
-- `disconnect` requests shutdown and waits for the actor to stop. The actor polls UDP with a 50 ms timeout, so a normal disconnect completes on the next poll. The Swift wrapper must call it only from its core queue, never the main actor. A future hard timeout requires a nonblocking worker-completion design and is not claimed by v1.
-- `destroy` is valid after any outcome, is never called on the main thread, and releases the handle only after issuing disconnect if necessary.
-- All C strings must be valid UTF-8, NUL-free, and at most 255 bytes for host/account and 512 bytes for password/chat. Invalid input returns `invalid_argument` and is never logged.
-- Bridge code catches panics at every ABI boundary and returns `internal_error`; no panic may cross C/Swift.
+`exit` is a `watch` rather than a `Mutex<Option<..>>` so `wait_for_exit()` cannot miss a wakeup, and
+`ExitGuard` guarantees the slot is never left `None` after the task ends (see deviation 8).
 
-### Actor and client loop
+The loop publishes `Scene::clone()` to the watch channel at the tail of each iteration, after the
+`select!`, so every non-break path is covered by one line. `send_replace` is synchronous and
+non-blocking, so it adds no await while the client lock is held.
 
-`connect` starts one named Rust thread. That thread creates a multi-thread Tokio runtime, constructs `Client::new(..., reconnect = false)`, calls `do_login()`, and solely owns that `Client` until shutdown. The handle communicates with it through bounded command and event queues; it never accesses `Client` directly.
+Internal control flow uses the scene watch and the exit slot, **not** the broadcast, so a
+lagging subscriber cannot wedge `connect()` on a chatty server.
 
-The actor uses a 1,024-item command queue and a 4,096-item event queue. Commands are `SelectCharacter`, `SendChat`, and `Disconnect`. It must:
+### Facade
 
-1. Receive UDP datagrams and call `recv_packet`, `process_packet`, `process_messages`, `process_actions`, `process_game_actions`, and `send_pending_messages` in that order.
-2. On a command, enqueue the corresponding existing `SimpleClientAction`, then run `process_actions`, `process_game_actions`, and `send_pending_messages` immediately.
-3. Send `send_keepalive()` every five seconds while connected.
-4. Forward the `ClientEvent` channel in source order into bridge events.
-5. Emit exactly one terminal `.disconnected` event, close sockets/channels, and exit on disconnect, fatal socket error, or actor shutdown.
+```rust
+impl GromnieClient {
+    pub fn builder() -> GromnieClientBuilder;
 
-Chat events are never dropped: when the event queue is full, actor progress pauses until Swift drains it. This is deliberate for a chat-only client; it preserves ordering and avoids silent message loss. UI-only progress events may be coalesced before entering the queue. The bridge JSON includes monotonic `sequence` and Unix-millisecond `timestamp` fields so Swift can detect a programming error in ordering.
-
-### JSON event schema
-
-`next_event` returns one object, never an array:
-
-```json
-{"sequence":42,"timestamp_ms":1735689600000,"type":"characters","characters":[{"id":123,"name":"A Character"}]}
+    pub fn list_characters(&self) -> Vec<CharacterIdentity>;      // cached snapshot
+    pub fn character(&self, name: &str) -> Option<&CharacterIdentity>;
+    pub async fn enter_world(&self, name: &str) -> Result<InWorldScene, ApiError>;
+    pub async fn say(&self, msg: impl Into<String>) -> Result<(), ApiError>;
+    pub async fn tell(&self, to: &str, msg: impl Into<String>) -> Result<(), ApiError>;
+    pub fn subscribe(&self) -> broadcast::Receiver<ClientEvent>;
+    pub fn scene(&self) -> Scene;                                 // borrowed, cheap
+    pub async fn disconnect(&self) -> Result<(), ApiError>;
+}
 ```
 
-Allowed `type` values and required fields are fixed:
+`list_characters()` is synchronous because the data is already in the `Scene`; it returns the
+snapshot captured during `connect()`. It cannot be a `const` — it returns a heap `Vec`. It also
+filters pending-deletion characters (deviation 7).
 
-- `connecting`
-- `characters`: `characters: [{ id: u32, name: string }]`, `account: string`, `slots: u32`
-- `entering_world`: `character_id: u32`
-- `entered_world`: `character_id: u32`, `character_name: string`
-- `chat`: `message: string`, `message_type: u32`
-- `error`: `code: string`, `message: string`, `recover_to: "form" | "characters"`
-- `disconnected`: `reason: string`, `user_initiated: bool`
+### `connect()`
 
-Rust, not Swift, selects `recover_to`: bad credentials and transport/login failures go to `form`; a character-specific failure goes to `characters`. Raw protocol event debug strings, passwords, packet bytes, and server addresses are never emitted.
+1. Validate builder fields → `ApiError::MissingServer` / `MissingAccount` / `MissingPassword`
+2. `Client::new_with_reconnect`, with `reconnect: false`
+3. `set_login_timeout(...)` if configured
+4. `spawn_client_loop`, which owns the only shutdown channel — so the facade never hijacks
+   Ctrl+C (contrast `client_runner.rs:687`)
+5. The loop calls `do_login()` on its first turn; the facade does not
+6. `select!` until `Scene::CharacterSelect`
 
-## Swift application design
+| Condition | Signal | `ApiError` |
+|---|---|---|
+| `Scene::CharacterSelect` | scene watch | returns `Ok`, caches `characters` |
+| bad password / account booted | `AuthenticationFailed` (`message_handlers.rs:153`) | `Authentication(reason)` |
+| `Scene::Error(ClientError)` | scene watch | `Client(ClientError)` |
+| `check_state_timeout` broke the loop (`client.rs:754`) | exit watch | `LoopExit::Failed` → `LoopStopped` |
+| reconnect unavailable | exit watch | `LoopStopped(ReconnectUnavailable)` |
+| `Disconnected { will_reconnect: false }` (`client.rs:920`) | terminal slot | `ConnectionLost` |
+| initial `LoginRequest` failed | exit watch | `LoopStopped(LoginRequestFailed)` |
+| task panicked / cancelled | `ExitGuard` → exit watch | `LoopStopped(TaskFailed(..))` |
+| `connect_timeout` elapsed (default 30s) | timer | `ConnectTimeout` |
 
-### Project layout and linking
+All waits `select!` on the scene watch, the terminal slot, and a deadline. The terminal slot is a
+`watch` holding the *first* terminal error, so a later, less specific failure cannot mask the
+original cause.
 
-Create `ios/Gromnie/` containing `Gromnie.xcodeproj`, the `GromnieCore.xcframework`, and a Swift `GromnieCore` wrapper target. Xcode links the framework and imports its module map; app views import only the Swift wrapper, never the C header.
+### `enter_world(name)`
 
-The Swift wrapper owns one `OpaquePointer`, executes every C call on `DispatchQueue(label: "net.gromnie.core")`, and exposes an `AsyncStream<BridgeEvent>`. A single task repeatedly calls `next_event` with a 250 ms timeout, decodes JSON with `JSONDecoder`, frees the Rust buffer in `defer`, and yields typed events. It stops before destroy. No FFI call runs on the main actor.
+1. Look up in the cached list — case-insensitive, skipping `seconds_greyed_out > 0`, matching
+   the existing auto-login semantics at `message_handlers.rs:211-239`
+2. Miss → `ApiError::NoSuchCharacter`
+3. Send `ClientCommand::EnterWorld` over the unbounded sender
+4. Await `Scene::InWorld` with matching `character_id`; `Scene::Error`, a terminal error, or a
+   loop exit aborts early; timeout required (review finding 8)
+5. Return `InWorldScene`
 
-`@MainActor final class SessionViewModel: ObservableObject` is the sole app state owner. It has:
+The constructor's `character` auto-login field is deliberately **not** reused: it only fires on
+`LoginLoginCharacterSet`, so it cannot switch characters after connect. It remains available as
+`with_character()` for callers that know the character up front.
 
-```swift
-enum Screen { case form, characters, enteringWorld, chat }
-enum ConnectionStatus { case idle, connecting, error(String), disconnected(String) }
-```
+## Implementation stages
 
-It holds a selected character, character list, up to 1,000 chat lines, draft message, status, and the wrapper. At 1,000 lines it removes the oldest 100 before appending more. It starts the event task immediately after `connect`; it cancels it only after the terminal event or explicit teardown.
+All complete. Notes on what actually shipped:
 
-Views are fixed as follows:
+**Stage 1 — `ClientError` as an error type.** Manual `Display` + `std::error::Error` (deviation 3).
 
-- `ConnectionView`: Host, port, username, secure password field, “Save password” toggle, Connect. Disable Connect while connecting. Port uses decimal keyboard but still validates `1...65535`.
-- `CharacterListView`: plain list of character names; selecting a row issues `selectCharacter` once and switches to entering state. It has Disconnect.
-- `ChatView`: `ScrollView`/`LazyVStack` transcript, one text field, Send, Disconnect. Send is disabled unless the bridge has emitted both `entered_world` and `InWorld` confirmation. The composer clears only after the local command is accepted into Rust's command queue.
+**Stage 2 — move the loop.** `client/driver.rs` holds `spawn_client_loop(Arc<RwLock<Client>>,
+Duration) -> ClientHandle`, wrapping the body of `run_client_loop` with `gromnie_client::` paths
+rewritten to `crate::`. The `panic!` at `client_runner.rs:563` became
+`LoopExit::LoginRequestFailed`. A `ClientCommand` channel is drained at the top of each iteration,
+alongside — not instead of — `process_actions()`, so legacy `SimpleClientAction` consumers keep
+working unchanged.
 
-The app stores host, port, username, and save-password preference in `UserDefaults`. When Save password is enabled it writes the password to a Keychain item with service `net.gromnie.ios` and account `<host>:<port>:<username>`; disabling it immediately deletes that item. It uses `kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly`. Password fields and raw server responses are excluded from `os.Logger` calls.
+**Stage 3 — delegate from the runner.** `run_client_loop` is now ~50 lines of signal wiring and
+delegation. `create_client_from_config` still returns `(Client, action_tx)` and every public
+`run_client*` / `run_multi_client` / `ClientRunner` signature is unchanged.
 
-## iOS network/lifecycle configuration
+**Stage 4 — scene publication.** Publish `Scene::clone()` each iteration to the watch channel.
 
-- `Info.plist` includes `NSLocalNetworkUsageDescription`: “Gromnie connects directly to game servers on your local network.” It is required for LAN testing; public-server traffic uses the same direct UDP code path.
-- No App Transport Security exceptions are needed because v1 makes no HTTP/HTTPS/WebSocket connection.
-- When the scene becomes inactive or backgrounds, `SessionViewModel` asynchronously disconnects on the core queue and clears chat/character state. It does not request background execution.
-- Host validation accepts a DNS hostname or IPv4 address only, rejects URLs, brackets, spaces, colons, and IPv6 literals. Gromnie resolves the hostname normally; an IPv6-only result is presented as “This version requires an IPv4-reachable server.”
+**Stage 5 — the facade.** Builder + `connect` + `list_characters` + `enter_world` + `say`/`tell`
++ `subscribe` + `disconnect`, plus `ApiError`. The facade owns the `mpsc::Receiver<ClientEvent>` and
+republishes to a broadcast (review finding 4), which is what makes `try_send` lossless.
 
-## Build and packaging pipeline
+**Stage 6 — tests.** 13 unit tests: builder validation, `ApiError` messages, character lookup
+(case-insensitivity, pending-deletion skip), `with_server_addr` formatting, `Send`-ness of the
+facade, terminal-error first-wins and late-waiter resolution, and the `ExitGuard` fail-safe.
 
-Prerequisites are Xcode command-line tools, Rust stable, `cbindgen`, and these Rust targets:
+**Not done: the README example.** The doc comment on `api.rs` carries a compiling `no_run`
+example instead, which is better placed and cannot rot unnoticed. A README section is still worth
+adding.
 
-```bash
-rustup target add aarch64-apple-ios aarch64-apple-ios-sim x86_64-apple-ios
-cargo install cbindgen
-```
+## Explicit non-goals
 
-Add `cargo xtask ios build-core`. It must:
-
-1. Run `cbindgen` from `crates/gromnie-ios-bridge/cbindgen.toml`, fail if the generated header differs from committed `include/gromnie_ios.h`.
-2. Build release static libraries for `aarch64-apple-ios`, `aarch64-apple-ios-sim`, and `x86_64-apple-ios`.
-3. Create a universal simulator library with `lipo` from the two simulator slices.
-4. Run `xcodebuild -create-xcframework` with the device library, universal simulator library, and the generated header directory.
-5. Write the result to `ios/Gromnie/Frameworks/GromnieCore.xcframework` and replace only that generated artifact.
-
-CI runs the Rust bridge tests on the host, builds all three iOS targets, builds the XCFramework, and runs `xcodebuild test` on an iOS simulator. It does not attempt live-server tests in CI.
-
-## Tests and release gate
-
-### Automated
-
-- Rust unit tests: C input validation, JSON schema, every event mapping above, command ordering, terminal-event uniqueness, full-queue backpressure, and repeated `disconnect`/`destroy`.
-- Rust integration test with a fake `ClientTransport`: login event → character selection action → login success → chat event, verifying the exact bridge event sequence.
-- Swift unit tests: decoding, screen reducer transitions, 1,000-line trimming, form validation, and Keychain save/delete behavior.
-- Swift UI tests with a fake `GromnieCoreClient`: form → list → chat, disabled states, error recovery, and accessible labels.
-
-### Manual device matrix
-
-Test a debug build on a physical iPhone on Wi-Fi and cellular, against a non-production account:
-
-1. Valid login and character list.
-2. Bad password.
-3. Invalid hostname, unreachable UDP port, and IPv6-only endpoint.
-4. Empty character list.
-5. Character selection, entered-world confirmation, incoming chat, outgoing chat, and ordering under a burst of messages.
-6. User disconnect, server disconnect, app backgrounding, and returning foreground.
-7. Saved-password opt-in, relaunch restore, and deletion after toggling it off.
-
-Beta is ready only when all automated checks pass and every device scenario succeeds without password leakage, a crash, a retained Rust actor, or a stuck connecting screen.
-
-## Explicit non-goals after v1
-
-World rendering, movement, map, inventory, tells, automatic reconnect, IPv6, a proxy fallback, App Store submission, and multi-account switching require new design work and are not silently added to this implementation.
+- **`list_objects()` / any world-object model.** Deferred at the user's request. There is no
+  object state in `gromnie-client` at all; `ItemCreateObject` only emits a protocol event
+  (`message_handlers.rs:51`). The model lives in `gromnie-tui/src/object_tracker.rs` and is fed
+  from the event bus in `gromnie-tui/src/app.rs:560`. Doing this later means moving `ObjectTracker`
+  to a shared crate and updating it inside the client.
+- **Unifying the web and iOS loops.** Review finding 1.
+- **Removing `SimpleClientAction`.** A separate PR touching 21 files.
+- **Removing or shortening `UI_DELAY_MS`.** Review finding 6; load-bearing for TUI progress.
+- **Reconnect support in the facade.** Decision 6.
+- **WASM support for the facade.** Review finding 10; `gromnie-web` keeps its own loop.
+- **Character creation.** `CharacterCreateScene` remains a stub (`scene.rs:66-69`).
