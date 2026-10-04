@@ -751,7 +751,7 @@ impl Client {
                     ClientError::PatchingTimeout
                 };
 
-                self.scene = Scene::Error(ErrorScene::new(error, false));
+                self.transition_to_error(error, false);
 
                 // Emit authentication failed system event
                 let _ = self.raw_event_tx.try_send(ClientEvent::System(
@@ -2162,10 +2162,23 @@ impl Client {
                     .raw_event_tx
                     .try_send(ClientEvent::State(crate::client::ClientStateEvent::InWorld));
             }
-            Scene::Error(_) => {
-                let _ = self.raw_event_tx.try_send(ClientEvent::State(
-                    crate::client::ClientStateEvent::CharacterError,
-                ));
+            Scene::Error(error) => {
+                use crate::client::ClientStateEvent;
+
+                let event = match &error.error {
+                    ClientError::CharacterError(_) => ClientStateEvent::CharacterError,
+                    ClientError::LoginTimeout
+                    | ClientError::Authentication(_)
+                    | ClientError::ConnectionFailed(_) => ClientStateEvent::ConnectingFailed {
+                        reason: error.error.to_string(),
+                    },
+                    ClientError::PatchingTimeout | ClientError::PatchingFailed(_) => {
+                        ClientStateEvent::PatchingFailed {
+                            reason: error.error.to_string(),
+                        }
+                    }
+                };
+                let _ = self.raw_event_tx.try_send(ClientEvent::State(event));
             }
             Scene::CharacterCreate(_) => {
                 // No specific event for character create yet
@@ -2405,6 +2418,83 @@ mod tests {
             auth_reason,
             "because the password entered for this account was not correct"
         );
+    }
+
+    #[tokio::test]
+    async fn error_scenes_emit_phase_specific_state_events() {
+        let (event_tx, mut event_rx) = mpsc::channel(8);
+        let (mut client, _action_tx) = Client::new_with_transport(
+            1,
+            "127.0.0.1:9000".to_string(),
+            "acct".to_string(),
+            "pw".to_string(),
+            None,
+            event_tx,
+            false,
+            Box::new(NoopTransport),
+        )
+        .await;
+
+        let cases = [
+            (
+                ClientError::Authentication("bad password".into()),
+                "authentication rejected: bad password",
+                true,
+            ),
+            (
+                ClientError::ConnectionFailed("offline".into()),
+                "connection failed: offline",
+                true,
+            ),
+            (
+                ClientError::PatchingFailed("bad patch".into()),
+                "patching failed: bad patch",
+                false,
+            ),
+        ];
+
+        for (error, expected_reason, connecting) in cases {
+            client.transition_to_error(error, false);
+            let event = event_rx.try_recv().expect("state event emitted");
+            match event {
+                ClientEvent::State(crate::client::ClientStateEvent::ConnectingFailed {
+                    reason,
+                }) if connecting => {
+                    assert_eq!(reason, expected_reason);
+                }
+                ClientEvent::State(crate::client::ClientStateEvent::PatchingFailed { reason })
+                    if !connecting =>
+                {
+                    assert_eq!(reason, expected_reason);
+                }
+                other => panic!("unexpected event for {expected_reason}: {other:?}"),
+            }
+        }
+
+        client.transition_to_error(ClientError::LoginTimeout, false);
+        assert!(matches!(
+            event_rx.try_recv().expect("login failure event emitted"),
+            ClientEvent::State(crate::client::ClientStateEvent::ConnectingFailed { ref reason })
+                if reason == "login timed out"
+        ));
+
+        client.transition_to_error(ClientError::PatchingTimeout, false);
+        assert!(matches!(
+            event_rx.try_recv().expect("patching failure event emitted"),
+            ClientEvent::State(crate::client::ClientStateEvent::PatchingFailed { ref reason })
+                if reason == "patching timed out"
+        ));
+
+        client.transition_to_error(
+            ClientError::CharacterError(asheron_rs::enums::CharacterErrorType::LogonServerFull),
+            true,
+        );
+        assert!(matches!(
+            event_rx
+                .try_recv()
+                .expect("character failure event emitted"),
+            ClientEvent::State(crate::client::ClientStateEvent::CharacterError)
+        ));
     }
 
     #[tokio::test]
