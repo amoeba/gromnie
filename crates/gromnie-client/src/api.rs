@@ -517,7 +517,7 @@ impl GromnieClient {
             // rather than waiting until the generic timeout.
             if saw_entering_world
                 && matches!(current_scene, Scene::Connecting(_))
-                && matches!(self.handle.exit_reason(), None)
+                && self.handle.exit_reason().is_none()
             {
                 return Err(ApiError::Reconnecting);
             }
