@@ -8,13 +8,12 @@ use tracing::{error, info, warn};
 
 use crate::client::Client;
 use crate::client::ClientEvent;
-use crate::client::constants::UI_DELAY_MS;
 use crate::client::message_handler::MessageHandler;
 use crate::client::messages::{OutgoingMessage, OutgoingMessageContent};
 use crate::client::protocol_conversions::ToProtocolEvent;
 use crate::client::scene::ClientError;
 use asheron_rs::network::RawMessage;
-use gromnie_events::{ClientSystemEvent, ProtocolEvent};
+use gromnie_events::ClientSystemEvent;
 
 /// Handle LoginCreatePlayer messages
 impl MessageHandler<asheron_rs::messages::s2c::LoginCreatePlayer> for Client {
@@ -272,41 +271,11 @@ impl MessageHandler<asheron_rs::messages::s2c::DDDInterrogationMessage> for Clie
         );
         self.ddd_response = Some(response_content.clone());
 
-        // Queue the response with delay (to make UI progress visible)
+        // The DDD response is the next protocol step, so queue it for the
+        // driver's immediate flush rather than delaying for UI pacing.
         self.outgoing_message_queue
-            .push_back(OutgoingMessage::new(response_content).with_delay_ms(UI_DELAY_MS));
-        info!(target: "net", "DDD response cached and queued for sending with {}ms delay", UI_DELAY_MS);
-    }
-}
-
-/// Handle CharacterCharGenVerificationResponse messages
-impl MessageHandler<asheron_rs::messages::s2c::CharacterCharGenVerificationResponse> for Client {
-    fn handle(
-        &mut self,
-        response: asheron_rs::messages::s2c::CharacterCharGenVerificationResponse,
-    ) {
-        info!(target: "net", "Character creation verification response received");
-
-        self.emit_protocol(response.to_protocol_event());
-
-        // The protocol event carries no character list, so re-publish the known
-        // characters as a `LoginCharacterSet` after a short delay. This lets the
-        // UI show the character-creation progress before swapping to the list.
-        let characters = self.known_characters.clone();
-        let account = self.account.name.clone();
-        let raw_tx = self.raw_event_tx.clone();
-        crate::instant::spawn_detached(async move {
-            crate::instant::sleep(std::time::Duration::from_millis(UI_DELAY_MS)).await;
-            info!(target: "net", "Sending character list after character creation");
-            let event = ProtocolEvent::S2C(gromnie_events::S2CEvent::LoginCharacterSet {
-                account,
-                characters,
-                num_slots: 0,
-            });
-            if raw_tx.send(ClientEvent::Protocol(event)).await.is_err() {
-                error!(target: "net", "Failed to send character list after character creation");
-            }
-        });
+            .push_back(OutgoingMessage::new(response_content));
+        info!(target: "net", "DDD response cached and queued for immediate sending");
     }
 }
 

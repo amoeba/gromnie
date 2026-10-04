@@ -257,9 +257,8 @@ impl GromnieClientBuilder {
     /// rejected login, a dropped connection, a handshake timeout, or a driver
     /// failure all return `Err`.
     ///
-    /// Note this takes ~1.3s even against a healthy server: the handshake
-    /// contains a hardcoded one-second pause that exists to animate a progress
-    /// bar. Measured against `play.coldeve.ac`; see `plan.md`.
+    /// Protocol progress is driven by incoming handshake and login messages;
+    /// there are no UI pacing sleeps in this path.
     pub async fn connect(self) -> Result<GromnieClient, ApiError> {
         let server = self.server.ok_or(ApiError::MissingServer)?;
         let account = self.account.clone().ok_or(ApiError::MissingAccount)?;
@@ -299,9 +298,7 @@ impl GromnieClientBuilder {
             client.set_login_timeout(timeout);
         }
 
-        // `Duration::ZERO` skips the runner's artificial pre-login pause: there
-        // is no progress bar here to animate. The pauses inside the handshake
-        // itself are unchanged.
+        // There is no progress UI to pace before the initial login request.
         let handle = spawn_client_loop(Arc::new(RwLock::new(client)), Duration::ZERO).await;
 
         let (broadcast_tx, _) = broadcast::channel(BROADCAST_CAPACITY);
