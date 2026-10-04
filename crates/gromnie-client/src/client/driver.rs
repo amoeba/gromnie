@@ -110,7 +110,7 @@ impl ClientHandle {
     }
 
     /// Subscribe to scene snapshots. Updated at the end of every loop
-    /// iteration, so it can lag the client by up to one iteration.
+    /// iteration and immediately when reconnection resets the scene.
     pub fn subscribe_scene(&self) -> watch::Receiver<Scene> {
         self.scene.clone()
     }
@@ -384,6 +384,7 @@ async fn run(
                     if let Err(e) = client_guard.do_login().await {
                         error!(target: "net", "Failed to send LoginRequest for reconnection: {}", e);
                     }
+                    scene_tx.send_replace(client_guard.scene.clone());
                 }
 
                 // Check if we should retry in current state. Login retries are

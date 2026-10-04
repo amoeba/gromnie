@@ -96,6 +96,8 @@ pub enum ApiError {
     NoSuchCharacter(String),
     /// The driver loop stopped before the operation completed.
     LoopStopped(LoopExit),
+    /// The connection dropped while entering the world and is reconnecting.
+    Reconnecting,
     /// The driver task panicked or was cancelled.
     DriverFailed(String),
     /// A transport or channel error.
@@ -117,6 +119,9 @@ impl std::fmt::Display for ApiError {
             }
             ApiError::NoSuchCharacter(name) => write!(f, "no character named {name:?}"),
             ApiError::LoopStopped(reason) => write!(f, "client loop stopped: {reason:?}"),
+            ApiError::Reconnecting => {
+                write!(f, "connection lost while entering the world; reconnecting")
+            }
             ApiError::DriverFailed(msg) => write!(f, "client driver failed: {msg}"),
             ApiError::Io(msg) => write!(f, "io error: {msg}"),
         }
@@ -239,7 +244,9 @@ impl GromnieClientBuilder {
     }
 
     /// Override how long [`GromnieClient::enter_world`] waits for the world
-    /// transition. Defaults to 30 seconds.
+    /// transition. Defaults to 30 seconds. If the connection drops during this
+    /// operation, it returns [`ApiError::Reconnecting`] so it can be retried
+    /// after reconnection.
     pub fn with_enter_world_timeout(mut self, timeout: Duration) -> Self {
         self.enter_world_timeout = timeout;
         self
@@ -494,10 +501,25 @@ impl GromnieClient {
         let deadline = tokio::time::Instant::now() + timeout;
         let mut scene = self.handle.subscribe_scene();
         let mut terminal = self.terminal_rx.clone();
+        let mut saw_entering_world = false;
 
         loop {
-            if let Some(value) = predicate(&scene.borrow_and_update()) {
+            let current_scene = scene.borrow_and_update().clone();
+            if let Some(value) = predicate(&current_scene) {
                 return Ok(value);
+            }
+            saw_entering_world |= matches!(
+                current_scene,
+                Scene::CharacterSelect(ref select) if select.entering_world.is_some()
+            );
+            // A reset out of the active enter-world flow means the operation
+            // cannot complete against this scene. Report reconnect explicitly
+            // rather than waiting until the generic timeout.
+            if saw_entering_world
+                && matches!(current_scene, Scene::Connecting(_))
+                && self.handle.exit_reason().is_none()
+            {
+                return Err(ApiError::Reconnecting);
             }
             // An error scene aborts the wait with the real cause rather than
             // the generic `LoopStopped` that the exit reason would give.
@@ -788,6 +810,7 @@ mod tests {
                 .to_string()
                 .contains("Ghost")
         );
+        assert!(ApiError::Reconnecting.to_string().contains("reconnecting"));
     }
 
     /// Minimal blocking bridge so the builder-validation test stays a plain
