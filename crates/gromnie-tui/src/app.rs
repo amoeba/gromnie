@@ -1,9 +1,10 @@
 use asheron_rs::types::CharacterIdentity;
-use gromnie_events::{ClientStateEvent, ProtocolEvent, S2CEvent, SimpleClientAction};
+use gromnie_client::client::ClientSender;
+use gromnie_events::{ClientStateEvent, ProtocolEvent, S2CEvent};
 
 use crate::object_tracker::ObjectTracker;
 use std::collections::{HashMap, VecDeque};
-use tokio::sync::{broadcast, mpsc};
+use tokio::sync::broadcast;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum AppView {
@@ -297,7 +298,7 @@ pub struct App {
     pub network_messages: VecDeque<NetworkMessage>,
     pub max_network_messages: usize,
     pub event_rx: Option<broadcast::Receiver<ProtocolEvent>>,
-    pub action_tx: Option<mpsc::UnboundedSender<SimpleClientAction>>,
+    pub sender: Option<ClientSender>,
     /// Currently selected character index in the character list
     pub selected_character_index: usize,
     /// Chat messages received from the server
@@ -337,7 +338,7 @@ impl App {
             network_messages: VecDeque::new(),
             max_network_messages: 1000,
             event_rx: None,
-            action_tx: None,
+            sender: None,
             selected_character_index: 0,
             chat_messages: VecDeque::new(),
             max_chat_messages: 100,
@@ -356,10 +357,10 @@ impl App {
     pub fn set_channels(
         &mut self,
         event_rx: broadcast::Receiver<ProtocolEvent>,
-        action_tx: mpsc::UnboundedSender<SimpleClientAction>,
+        sender: ClientSender,
     ) {
         self.event_rx = Some(event_rx);
-        self.action_tx = Some(action_tx);
+        self.sender = Some(sender);
     }
 
     pub fn switch_view(&mut self, view: AppView) {

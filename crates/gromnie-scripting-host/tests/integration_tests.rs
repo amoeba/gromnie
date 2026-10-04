@@ -1,7 +1,7 @@
 // Integration tests for scripting system
 
 use asheron_rs::types::{CharacterIdentity, ObjectId};
-use gromnie_client::client::Client;
+use gromnie_client::client::{Client, ClientSender};
 use gromnie_events::{ClientEvent, GameEventMsg, OrderedGameEvent, ProtocolEvent, S2CEvent};
 use gromnie_scripting_host::ScriptRunner;
 use std::collections::HashMap;
@@ -10,8 +10,10 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tokio::sync::{RwLock, mpsc};
 
-async fn create_mock_client() -> Arc<RwLock<Client>> {
-    let (client, _action_tx) = Client::new(
+/// Build a client plus the sender that drives it. The client owns the
+/// receiving ends, so scripts route everything through `sender`.
+async fn create_mock_client() -> (Arc<RwLock<Client>>, ClientSender) {
+    let (client, sender) = Client::new(
         1,
         "127.0.0.1:9000".to_string(),
         "test_user".to_string(),
@@ -21,19 +23,16 @@ async fn create_mock_client() -> Arc<RwLock<Client>> {
         false,
     )
     .await;
-    Arc::new(RwLock::new(client))
+    (Arc::new(RwLock::new(client)), sender)
 }
 
 #[tokio::test]
 async fn test_script_lifecycle() {
-    // Create action channel
-    let (action_tx, _action_rx) = mpsc::unbounded_channel();
-
     // Create mock client
-    let client = create_mock_client().await;
+    let (client, sender) = create_mock_client().await;
 
     // Create script runner with WASM support
-    let runner = ScriptRunner::new_with_wasm(client, action_tx);
+    let runner = ScriptRunner::new_with_wasm(client, sender);
 
     // Check if WASM engine was initialized
     if !runner.has_wasm_engine() {
@@ -72,9 +71,8 @@ async fn test_script_lifecycle() {
 
 #[tokio::test]
 async fn test_event_handling() {
-    let (action_tx, _action_rx) = mpsc::unbounded_channel();
-    let client = create_mock_client().await;
-    let mut runner = ScriptRunner::new_with_wasm(client, action_tx);
+    let (client, sender) = create_mock_client().await;
+    let mut runner = ScriptRunner::new_with_wasm(client, sender);
 
     // Load test scripts
     let test_scripts_dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/scripting");
@@ -103,9 +101,8 @@ async fn test_event_handling() {
 
 #[tokio::test]
 async fn test_timer_functionality() {
-    let (action_tx, _action_rx) = mpsc::unbounded_channel();
-    let client = create_mock_client().await;
-    let mut runner = ScriptRunner::new_with_wasm(client, action_tx);
+    let (client, sender) = create_mock_client().await;
+    let mut runner = ScriptRunner::new_with_wasm(client, sender);
 
     // Load test scripts
     let test_scripts_dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/scripting");
@@ -136,9 +133,8 @@ async fn test_timer_functionality() {
 
 #[tokio::test]
 async fn test_script_reload() {
-    let (action_tx, _action_rx) = mpsc::unbounded_channel();
-    let client = create_mock_client().await;
-    let mut runner = ScriptRunner::new_with_wasm(client, action_tx);
+    let (client, sender) = create_mock_client().await;
+    let mut runner = ScriptRunner::new_with_wasm(client, sender);
 
     let test_scripts_dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/scripting");
 
@@ -163,9 +159,8 @@ async fn test_script_reload() {
 
 #[tokio::test]
 async fn test_host_function_calls() {
-    let (action_tx, mut action_rx) = mpsc::unbounded_channel();
-    let client = create_mock_client().await;
-    let mut runner = ScriptRunner::new_with_wasm(client, action_tx);
+    let (client, sender) = create_mock_client().await;
+    let mut runner = ScriptRunner::new_with_wasm(client.clone(), sender.clone());
 
     // Load test scripts
     let test_scripts_dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/scripting");
@@ -185,17 +180,18 @@ async fn test_host_function_calls() {
         .handle_event(gromnie_events::ClientEvent::Protocol(event))
         .await;
 
-    // Check if scripts generated any actions
-    let mut action_count = 0;
-    while let Ok(action) = action_rx.try_recv() {
-        action_count += 1;
-        println!("Received action: {:?}", action);
-
-        // We can't easily verify specific actions without more complex setup,
-        // but we can verify that actions are being generated
-    }
-
-    println!("Scripts generated {} actions", action_count);
+    // The client owns the receiving ends, so drain from there rather than
+    // from the sender's side. Anything a script's host functions queued is
+    // now sitting in the client's channels.
+    let exit = client.write().await.drain_commands();
+    assert!(
+        exit.is_none(),
+        "a chat trigger should not ask the client to stop driving: {exit:?}"
+    );
+    assert!(
+        sender.is_connected(),
+        "the sender should still be usable after a script event"
+    );
 }
 
 /// Integration test for protocol event flow
@@ -207,9 +203,8 @@ async fn test_host_function_calls() {
 /// 4. Scripts can receive and process them
 #[tokio::test]
 async fn test_protocol_event_flow() {
-    let (action_tx, _action_rx) = mpsc::unbounded_channel();
-    let client = create_mock_client().await;
-    let mut runner = ScriptRunner::new_with_wasm(client, action_tx);
+    let (client, sender) = create_mock_client().await;
+    let mut runner = ScriptRunner::new_with_wasm(client, sender);
 
     // Load test scripts
     let test_scripts_dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/scripting");
@@ -309,9 +304,8 @@ async fn test_protocol_event_flow() {
 /// Test that protocol events preserve all data through conversion
 #[tokio::test]
 async fn test_protocol_event_data_integrity() {
-    let (action_tx, _action_rx) = mpsc::unbounded_channel();
-    let client = create_mock_client().await;
-    let mut runner = ScriptRunner::new_with_wasm(client, action_tx);
+    let (client, sender) = create_mock_client().await;
+    let mut runner = ScriptRunner::new_with_wasm(client, sender);
 
     // Load test scripts
     let test_scripts_dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/scripting");

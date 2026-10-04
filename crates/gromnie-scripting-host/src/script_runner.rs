@@ -1,4 +1,4 @@
-use gromnie_client::client::Client;
+use gromnie_client::client::{Client, ClientSender};
 use gromnie_client::config::scripting_config::ScriptingConfig;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -15,7 +15,7 @@ use super::script_scanner::ScriptScanner;
 use super::timer::TimerManager;
 use super::wasm::WasmScript;
 use crate::create_runner_from_config;
-use gromnie_events::{ClientEvent, ClientSystemEvent, SimpleClientAction};
+use gromnie_events::{ClientEvent, ClientSystemEvent};
 use gromnie_events::{EventConsumer, EventEnvelope};
 
 /// Default tick rate for scripts (50ms = 20Hz)
@@ -45,7 +45,7 @@ pub struct ScriptRunner {
     /// WASM engine (if WASM support is enabled)
     wasm_engine: Option<wasmtime::Engine>,
     /// Channel for sending client actions
-    action_tx: UnboundedSender<SimpleClientAction>,
+    sender: ClientSender,
     /// Timer manager shared across all scripts
     timer_manager: Arc<TimerManager>,
     /// Last time scripts were ticked
@@ -62,13 +62,10 @@ pub struct ScriptRunner {
 
 impl ScriptRunner {
     /// Create a new script runner with default tick rate (20Hz) and default timeout (100ms)
-    pub fn new(
-        client: Arc<RwLock<Client>>,
-        action_tx: UnboundedSender<SimpleClientAction>,
-    ) -> Self {
+    pub fn new(client: Arc<RwLock<Client>>, sender: ClientSender) -> Self {
         Self::new_with_config(
             client,
-            action_tx,
+            sender,
             DEFAULT_TICK_INTERVAL,
             Duration::from_millis(100),
         )
@@ -77,7 +74,7 @@ impl ScriptRunner {
     /// Create a new script runner with custom tick rate and timeout
     pub fn new_with_config(
         client: Arc<RwLock<Client>>,
-        action_tx: UnboundedSender<SimpleClientAction>,
+        sender: ClientSender,
         tick_interval: Duration,
         script_timeout: Duration,
     ) -> Self {
@@ -85,7 +82,7 @@ impl ScriptRunner {
             client,
             scripts: Vec::new(),
             wasm_engine: None,
-            action_tx,
+            sender,
             timer_manager: Arc::new(TimerManager::new()),
             last_tick: Instant::now(),
             tick_interval,
@@ -98,24 +95,21 @@ impl ScriptRunner {
     /// Create a new script runner with custom tick rate
     pub fn new_with_tick_rate(
         client: Arc<RwLock<Client>>,
-        action_tx: UnboundedSender<SimpleClientAction>,
+        sender: ClientSender,
         tick_interval: Duration,
     ) -> Self {
-        Self::new_with_config(client, action_tx, tick_interval, Duration::from_millis(100))
+        Self::new_with_config(client, sender, tick_interval, Duration::from_millis(100))
     }
 
     /// Create a new script runner with WASM support enabled
-    pub fn new_with_wasm(
-        client: Arc<RwLock<Client>>,
-        action_tx: UnboundedSender<SimpleClientAction>,
-    ) -> Self {
-        Self::new_with_wasm_and_config(client, action_tx, Duration::from_millis(100))
+    pub fn new_with_wasm(client: Arc<RwLock<Client>>, sender: ClientSender) -> Self {
+        Self::new_with_wasm_and_config(client, sender, Duration::from_millis(100))
     }
 
     /// Create a new script runner with WASM support and custom timeout
     pub fn new_with_wasm_and_config(
         client: Arc<RwLock<Client>>,
-        action_tx: UnboundedSender<SimpleClientAction>,
+        sender: ClientSender,
         script_timeout: Duration,
     ) -> Self {
         let wasm_engine = match super::wasm::create_engine() {
@@ -133,7 +127,7 @@ impl ScriptRunner {
             client,
             scripts: Vec::new(),
             wasm_engine,
-            action_tx,
+            sender,
             timer_manager: Arc::new(TimerManager::new()),
             last_tick: Instant::now(),
             tick_interval: DEFAULT_TICK_INTERVAL,
@@ -150,7 +144,7 @@ impl ScriptRunner {
         // Create context for on_load
         let ctx = Self::create_script_context(
             self.client.clone(),
-            self.action_tx.clone(),
+            self.sender.clone(),
             Arc::clone(&self.timer_manager),
             SystemTime::now(),
         )
@@ -193,11 +187,11 @@ impl ScriptRunner {
     /// Create a script context for the current state
     async fn create_script_context(
         client: Arc<RwLock<Client>>,
-        action_tx: UnboundedSender<SimpleClientAction>,
+        sender: ClientSender,
         timer_manager: Arc<TimerManager>,
         now: SystemTime,
     ) -> Arc<ScriptContext> {
-        Arc::new(ScriptContext::new(client, action_tx, timer_manager, now).await)
+        Arc::new(ScriptContext::new(client, sender, timer_manager, now).await)
     }
 
     fn is_script_enabled(script_id: &str, script_config: &HashMap<String, toml::Value>) -> bool {
@@ -313,7 +307,7 @@ impl ScriptRunner {
             let mut script = self.scripts.remove(index);
             let ctx = Self::create_script_context(
                 self.client.clone(),
-                self.action_tx.clone(),
+                self.sender.clone(),
                 Arc::clone(&self.timer_manager),
                 SystemTime::now(),
             )
@@ -495,7 +489,7 @@ impl ScriptRunner {
 
             let ctx = Self::create_script_context(
                 self.client.clone(),
-                self.action_tx.clone(),
+                self.sender.clone(),
                 Arc::clone(&self.timer_manager),
                 SystemTime::now(),
             )
@@ -506,7 +500,7 @@ impl ScriptRunner {
                 let mut old_script = std::mem::replace(&mut self.scripts[index], script);
                 let unload_ctx = Self::create_script_context(
                     self.client.clone(),
-                    self.action_tx.clone(),
+                    self.sender.clone(),
                     Arc::clone(&self.timer_manager),
                     SystemTime::now(),
                 )
@@ -565,7 +559,7 @@ impl ScriptRunner {
         // Create context once before the loop
         let ctx = Self::create_script_context(
             self.client.clone(),
-            self.action_tx.clone(),
+            self.sender.clone(),
             Arc::clone(&self.timer_manager),
             SystemTime::now(),
         )
@@ -598,7 +592,7 @@ impl ScriptRunner {
         // Create context once for all scripts
         let ctx = Self::create_script_context(
             self.client.clone(),
-            self.action_tx.clone(),
+            self.sender.clone(),
             Arc::clone(&self.timer_manager),
             SystemTime::now(),
         )
@@ -637,7 +631,7 @@ impl ScriptRunner {
         // Create context once before the loop
         let ctx = Self::create_script_context(
             self.client.clone(),
-            self.action_tx.clone(),
+            self.sender.clone(),
             Arc::clone(&self.timer_manager),
             SystemTime::now(),
         )
@@ -808,10 +802,10 @@ impl ScriptConsumer {
     pub fn start(
         &mut self,
         client: Arc<RwLock<Client>>,
-        action_tx: UnboundedSender<SimpleClientAction>,
+        sender: ClientSender,
         scripting_config: &ScriptingConfig,
     ) {
-        let mut runner = create_runner_from_config(client, action_tx, scripting_config);
+        let mut runner = create_runner_from_config(client, sender, scripting_config);
 
         let (msg_tx, mut msg_rx) = tokio::sync::mpsc::unbounded_channel::<RunnerMessage>();
         self.msg_tx = Some(msg_tx.clone());
@@ -991,10 +985,10 @@ impl Drop for ScriptConsumer {
 /// Create a script runner consumer with the specified configuration
 pub fn create_script_consumer(
     client: Arc<RwLock<Client>>,
-    action_tx: UnboundedSender<SimpleClientAction>,
+    sender: ClientSender,
     scripting_config: &ScriptingConfig,
 ) -> ScriptConsumer {
-    let mut consumer = ScriptConsumer::new(ScriptRunner::new(client.clone(), action_tx.clone()));
-    consumer.start(client, action_tx, scripting_config);
+    let mut consumer = ScriptConsumer::new(ScriptRunner::new(client.clone(), sender.clone()));
+    consumer.start(client, sender, scripting_config);
     consumer
 }

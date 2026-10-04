@@ -17,75 +17,20 @@
 use std::sync::Arc;
 
 use asheron_rs::message::GameActionMessage;
-use tokio::sync::{RwLock, mpsc, watch};
+use tokio::sync::{RwLock, watch};
 use tokio::task::JoinHandle;
-use tracing::{error, info};
+use tracing::{error, info, warn};
 
 use crate::client::Client;
-use crate::client::scene::{ClientError, ErrorScene, Scene};
-
-/// Session-level commands issued by a [`ClientHandle`].
-///
-/// Intentionally narrow. Game-level operations (`say`, `tell`, movement) are
-/// sent as [`GameActionMessage`]s over `game_action_tx`; UI-level observation
-/// happens on the event channel. This channel carries only the transitions
-/// that are not game actions.
-#[derive(Debug, Clone)]
-pub enum ClientCommand {
-    /// Request entry into the world for a character.
-    EnterWorld {
-        character_id: u32,
-        character_name: String,
-        account: String,
-    },
-    /// Send the `LoginComplete` notification once initial world state arrives.
-    SendLoginComplete,
-    /// Disconnect and stop the driver loop.
-    Disconnect,
-}
-
-/// Why the driver loop stopped.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum LoopExit {
-    /// Shutdown was requested through the shutdown channel.
-    Shutdown,
-    /// The client entered an unrecoverable error state (see `ClientError`).
-    Failed,
-    /// Reconnection is disabled or has exhausted its attempts.
-    ReconnectUnavailable,
-    /// The initial `LoginRequest` could not be sent.
-    LoginRequestFailed,
-    /// A [`ClientCommand::Disconnect`] was received.
-    DisconnectRequested,
-    /// The driver task unwound (panicked) or was cancelled. Carries the detail.
-    ///
-    /// Without this the loop would stop silently and anything waiting on
-    /// [`ClientHandle::wait_for_exit`] would hang forever.
-    TaskFailed(String),
-}
-
-/// The driver loop is gone, so the command was never queued.
-///
-/// Returned instead of handing the command back: there is nothing to retry
-/// against, and it keeps the large `GameActionMessage` out of the error type.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct ClientLoopStopped;
-
-impl std::fmt::Display for ClientLoopStopped {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "client driver loop is no longer running")
-    }
-}
-
-impl std::error::Error for ClientLoopStopped {}
+use crate::client::command::{ClientCommand, ClientLoopStopped, ClientSender, LoopExit};
+use crate::client::scene::Scene;
 
 /// Handle to a running client driver loop.
 ///
 /// Obtained from [`spawn_client_loop`]. Dropping the handle does not stop the
 /// loop; call [`ClientHandle::shutdown`] or send [`ClientCommand::Disconnect`].
 pub struct ClientHandle {
-    commands: mpsc::UnboundedSender<ClientCommand>,
-    game_actions: mpsc::UnboundedSender<GameActionMessage>,
+    sender: ClientSender,
     scene: watch::Receiver<Scene>,
     exit: watch::Receiver<Option<LoopExit>>,
     shutdown: watch::Sender<bool>,
@@ -93,20 +38,24 @@ pub struct ClientHandle {
 }
 
 impl ClientHandle {
+    /// The channels this loop accepts actions on, for handing to a UI, a bot,
+    /// or a script that should outlive this handle.
+    pub fn sender(&self) -> ClientSender {
+        self.sender.clone()
+    }
+
     /// Send a session-level command. Never blocks and never takes the client
     /// lock, so it is safe to call from any task.
     pub fn send(&self, command: ClientCommand) -> Result<(), ClientLoopStopped> {
-        self.commands.send(command).map_err(|_| ClientLoopStopped)
+        self.sender.send(command)
     }
 
-    /// Send a game action directly, bypassing `SimpleClientAction`.
+    /// Send a game action directly.
     ///
     /// Prefer this over [`ClientHandle::send`] for anything expressible as a
     /// `GameActionMessage` (chat, movement, trade, magic).
     pub fn send_game_action(&self, action: GameActionMessage) -> Result<(), ClientLoopStopped> {
-        self.game_actions
-            .send(action)
-            .map_err(|_| ClientLoopStopped)
+        self.sender.send_game_action(action)
     }
 
     /// Subscribe to scene snapshots. Updated at the end of every loop
@@ -184,14 +133,13 @@ pub async fn spawn_client_loop(
     client: Arc<RwLock<Client>>,
     initial_login_delay: std::time::Duration,
 ) -> ClientHandle {
-    // Read the initial snapshot and the game-action sender once, before the
-    // loop starts contending for the lock.
-    let (game_actions, initial_scene) = {
-        let guard = client.read().await;
-        (guard.game_action_tx.clone(), guard.scene.clone())
+    // Read the sender, the initial snapshot, and claim the client once, before
+    // the loop starts contending for the lock.
+    let (sender, initial_scene, claimed) = {
+        let mut guard = client.write().await;
+        (guard.sender(), guard.scene.clone(), guard.claim_driver())
     };
 
-    let (command_tx, command_rx) = mpsc::unbounded_channel();
     let (scene_tx, scene_rx) = watch::channel(initial_scene);
     let (shutdown_tx, shutdown_rx) = watch::channel(false);
     let (exit_tx, exit_rx) = watch::channel(None);
@@ -199,7 +147,7 @@ pub async fn spawn_client_loop(
     let join = tokio::spawn(async move {
         run(
             client,
-            command_rx,
+            claimed,
             scene_tx,
             exit_tx,
             shutdown_rx,
@@ -209,8 +157,7 @@ pub async fn spawn_client_loop(
     });
 
     ClientHandle {
-        commands: command_tx,
-        game_actions,
+        sender,
         scene: scene_rx,
         exit: exit_rx,
         shutdown: shutdown_tx,
@@ -249,40 +196,13 @@ impl Drop for ExitGuard {
 
 /// Apply a batch of queued commands. Returns an exit reason if the loop
 /// should stop.
-fn apply_commands(
-    client: &mut Client,
-    command_rx: &mut mpsc::UnboundedReceiver<ClientCommand>,
-) -> Option<LoopExit> {
-    while let Ok(command) = command_rx.try_recv() {
-        match command {
-            ClientCommand::EnterWorld {
-                character_id,
-                character_name,
-                account,
-            } => {
-                if let Err(e) =
-                    client.attempt_character_login(character_id, character_name, account)
-                {
-                    error!(target: "net", "ClientCommand::EnterWorld failed: {}", e);
-                }
-            }
-            ClientCommand::SendLoginComplete => client.send_login_complete_notification(),
-            ClientCommand::Disconnect => {
-                info!(target: "net", "ClientCommand::Disconnect received");
-                client.scene = Scene::Error(ErrorScene::new(
-                    ClientError::ConnectionFailed("Disconnected by client action".to_string()),
-                    true,
-                ));
-                return Some(LoopExit::DisconnectRequested);
-            }
-        }
-    }
-    None
+fn apply_commands(client: &mut Client) -> Option<LoopExit> {
+    client.drain_commands()
 }
 
 async fn run(
     client: Arc<RwLock<Client>>,
-    mut command_rx: mpsc::UnboundedReceiver<ClientCommand>,
+    claimed: bool,
     scene_tx: watch::Sender<Scene>,
     exit: watch::Sender<Option<LoopExit>>,
     mut shutdown_rx: watch::Receiver<bool>,
@@ -291,6 +211,20 @@ async fn run(
     // Armed before anything can fail, so an early panic still unblocks anyone
     // waiting on the exit reason.
     let _exit_guard = ExitGuard { exit: exit.clone() };
+
+    // Two loops draining one client would interleave their commands and both
+    // think they own the socket, so the second claimer refuses instead.
+    if !claimed {
+        warn!(
+            target: "net",
+            "spawn_client_loop called twice for the same client; refusing to drive it again"
+        );
+        set_exit(
+            &exit,
+            LoopExit::TaskFailed("client is already being driven".to_string()),
+        );
+        return;
+    }
 
     let client_id = client.read().await.client_id();
     info!(target: "net", "Client {} network loop started", client_id);
@@ -325,7 +259,7 @@ async fn run(
         // command issued between iterations takes effect on this one.
         {
             let mut guard = client.write().await;
-            if let Some(reason) = apply_commands(&mut guard, &mut command_rx) {
+            if let Some(reason) = apply_commands(&mut guard) {
                 break reason;
             }
         }
@@ -345,7 +279,6 @@ async fn run(
                             client_guard.process_messages();
                         }
 
-                        client_guard.process_actions();
                         client_guard.process_game_actions();
 
                         if client_guard.has_pending_outgoing_messages()

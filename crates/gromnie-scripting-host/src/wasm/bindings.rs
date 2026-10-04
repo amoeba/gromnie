@@ -4,7 +4,6 @@ use wasmtime::component::Linker;
 
 use super::wasm_script::{WasmScriptState, gromnie};
 use crate::ScriptContext;
-use gromnie_events::SimpleClientAction;
 
 /// Add all host imports to the linker
 pub fn add_host_imports(linker: &mut Linker<WasmScriptState>) -> Result<()> {
@@ -80,31 +79,23 @@ impl gromnie::scripting::host::Host for WasmScriptState {
 
     fn login_character(&mut self, account_name: String, character_id: u32, character_name: String) {
         let ctx = get_context(self);
-        ctx.send_action(SimpleClientAction::LoginCharacter {
-            character_id,
-            character_name,
-            account: account_name,
-        });
+        ctx.login_character(character_id, character_name, account_name);
     }
 
     fn log(&mut self, message: String) {
         let script_id = self.script_id.clone();
         let ctx = get_context(self);
-        ctx.send_action(SimpleClientAction::LogScriptMessage { script_id, message });
+        ctx.log_script_message(&script_id, &message);
     }
 
     fn do_movement_command(&mut self, motion: u32, speed: f32, hold_key: u32) {
         let ctx = get_context(self);
-        ctx.send_action(SimpleClientAction::DoMovementCommand {
-            motion,
-            speed,
-            hold_key,
-        });
+        ctx.do_movement_command(motion, speed, hold_key);
     }
 
     fn stop_movement_command(&mut self, motion: u32, hold_key: u32) {
         let ctx = get_context(self);
-        ctx.send_action(SimpleClientAction::StopMovementCommand { motion, hold_key });
+        ctx.stop_movement_command(motion, hold_key);
     }
 
     fn schedule_timer(&mut self, delay_secs: u64, name: String) -> u64 {

@@ -7,7 +7,8 @@ use tracing::{debug, error, info};
 
 use crate::client_runner::MultiClientStats;
 use crate::event_bus::{EventEnvelope, EventType, SystemEvent};
-use gromnie_events::{ProtocolEvent, S2CEvent, SimpleClientAction};
+use gromnie_client::client::ClientSender;
+use gromnie_events::{ProtocolEvent, S2CEvent};
 use serenity::http::Http;
 use serenity::model::id::ChannelId;
 
@@ -95,14 +96,12 @@ pub use gromnie_events::EventConsumer;
 
 /// Event consumer that logs events to the console (for CLI version)
 pub struct LoggingConsumer {
-    _action_tx: UnboundedSender<SimpleClientAction>,
+    _sender: ClientSender,
 }
 
 impl LoggingConsumer {
-    pub fn new(action_tx: UnboundedSender<SimpleClientAction>) -> Self {
-        Self {
-            _action_tx: action_tx,
-        }
+    pub fn new(sender: ClientSender) -> Self {
+        Self { _sender: sender }
     }
 
     /// Create a factory for this consumer
@@ -118,7 +117,7 @@ impl crate::client_runner_builder::ConsumerFactory for LoggingConsumerFactory {
         &self,
         ctx: &crate::client_runner_builder::ConsumerContext,
     ) -> Box<dyn EventConsumer> {
-        Box::new(LoggingConsumer::new(ctx.action_tx.clone()))
+        Box::new(LoggingConsumer::new(ctx.sender.clone()))
     }
 }
 
@@ -222,17 +221,17 @@ impl EventConsumer for LoggingConsumer {
 
 /// Event consumer that forwards events to TUI and logs to console
 pub struct TuiConsumer {
-    _action_tx: UnboundedSender<SimpleClientAction>,
+    _sender: ClientSender,
     tui_event_tx: UnboundedSender<crate::event_bus::TuiEvent>,
 }
 
 impl TuiConsumer {
     pub fn new(
-        action_tx: UnboundedSender<SimpleClientAction>,
+        sender: ClientSender,
         tui_event_tx: UnboundedSender<crate::event_bus::TuiEvent>,
     ) -> Self {
         Self {
-            _action_tx: action_tx,
+            _sender: sender,
             tui_event_tx,
         }
     }
@@ -255,7 +254,7 @@ impl crate::client_runner_builder::ConsumerFactory for TuiConsumerFactory {
         ctx: &crate::client_runner_builder::ConsumerContext,
     ) -> Box<dyn EventConsumer> {
         Box::new(TuiConsumer::new(
-            ctx.action_tx.clone(),
+            ctx.sender.clone(),
             self.tui_event_tx.clone(),
         ))
     }
@@ -303,7 +302,7 @@ impl UptimeData {
 
 /// Event consumer that forwards chat messages to Discord
 pub struct DiscordConsumer {
-    _action_tx: UnboundedSender<SimpleClientAction>,
+    _sender: ClientSender,
     http: Arc<Http>,
     channel_id: ChannelId,
     bot_start_time: Instant,
@@ -312,13 +311,9 @@ pub struct DiscordConsumer {
 }
 
 impl DiscordConsumer {
-    pub fn new(
-        action_tx: UnboundedSender<SimpleClientAction>,
-        http: Arc<Http>,
-        channel_id: ChannelId,
-    ) -> Self {
+    pub fn new(sender: ClientSender, http: Arc<Http>, channel_id: ChannelId) -> Self {
         Self {
-            _action_tx: action_tx,
+            _sender: sender,
             http,
             channel_id,
             bot_start_time: Instant::now(),
@@ -328,13 +323,13 @@ impl DiscordConsumer {
     }
 
     pub fn new_with_uptime(
-        action_tx: UnboundedSender<SimpleClientAction>,
+        sender: ClientSender,
         http: Arc<Http>,
         channel_id: ChannelId,
         uptime_data: Arc<tokio::sync::RwLock<UptimeData>>,
     ) -> Self {
         Self {
-            _action_tx: action_tx,
+            _sender: sender,
             http,
             channel_id,
             bot_start_time: Instant::now(),
@@ -400,14 +395,14 @@ impl crate::client_runner_builder::ConsumerFactory for DiscordConsumerFactory {
     ) -> Box<dyn EventConsumer> {
         if let Some(ref uptime_data) = self.uptime_data {
             Box::new(DiscordConsumer::new_with_uptime(
-                ctx.action_tx.clone(),
+                ctx.sender.clone(),
                 self.http.clone(),
                 self.channel_id,
                 uptime_data.clone(),
             ))
         } else {
             Box::new(DiscordConsumer::new(
-                ctx.action_tx.clone(),
+                ctx.sender.clone(),
                 self.http.clone(),
                 self.channel_id,
             ))
@@ -565,7 +560,7 @@ pub enum AutoLoginState {
 pub struct AutoLoginConsumer {
     client_id: u32,
     character_name: String,
-    action_tx: UnboundedSender<SimpleClientAction>,
+    sender: ClientSender,
     state: AutoLoginState,
     verbose: bool,
 }
@@ -576,16 +571,12 @@ impl AutoLoginConsumer {
     /// # Arguments
     /// * `client_id` - The client ID for logging
     /// * `character_name` - The name of the character to create/login with
-    /// * `action_tx` - Channel to send actions back to the client
-    pub fn new(
-        client_id: u32,
-        character_name: String,
-        action_tx: UnboundedSender<SimpleClientAction>,
-    ) -> Self {
+    /// * `sender` - Channel to send actions back to the client
+    pub fn new(client_id: u32, character_name: String, sender: ClientSender) -> Self {
         Self {
             client_id,
             character_name,
-            action_tx,
+            sender,
             state: AutoLoginState::WaitingForCharList,
             verbose: false,
         }
@@ -628,7 +619,7 @@ impl crate::client_runner_builder::ConsumerFactory for AutoLoginConsumerFactory 
             AutoLoginConsumer::new(
                 ctx.client_id,
                 self.character_name.clone(),
-                ctx.action_tx.clone(),
+                ctx.sender.clone(),
             )
             .with_verbose(self.verbose),
         )
@@ -669,11 +660,11 @@ impl EventConsumer for AutoLoginConsumer {
                         }
                         // Update state and proceed to login
                         self.state = AutoLoginState::CharacterFound;
-                        if let Err(e) = self.action_tx.send(SimpleClientAction::LoginCharacter {
-                            character_id: char_info.character_id.0,
-                            character_name: char_info.name.clone(),
-                            account: account.clone(),
-                        }) {
+                        if let Err(e) = self.sender.enter_world(
+                            char_info.character_id.0,
+                            char_info.name.clone(),
+                            account.clone(),
+                        ) {
                             error!(
                                 "[Client {}] Failed to send login action: {}",
                                 self.client_id, e

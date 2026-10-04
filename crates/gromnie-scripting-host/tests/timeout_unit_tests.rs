@@ -2,12 +2,13 @@ use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::{RwLock, mpsc};
 
-use gromnie_events::{ClientEvent, ProtocolEvent, S2CEvent, SimpleClientAction};
+use gromnie_client::client::ClientSender;
+use gromnie_events::{ClientEvent, ProtocolEvent, S2CEvent};
 use gromnie_scripting_host::ScriptRunner;
 
 // Helper to create a mock client for testing (based on existing integration tests)
-async fn create_test_client() -> Arc<RwLock<gromnie_client::client::Client>> {
-    let (client, _action_tx) = gromnie_client::client::Client::new(
+async fn create_test_client() -> (Arc<RwLock<gromnie_client::client::Client>>, ClientSender) {
+    let (client, sender) = gromnie_client::client::Client::new(
         1,
         "127.0.0.1:9000".to_string(),
         "test_user".to_string(),
@@ -17,14 +18,13 @@ async fn create_test_client() -> Arc<RwLock<gromnie_client::client::Client>> {
         false,
     )
     .await;
-    Arc::new(RwLock::new(client))
+    (Arc::new(RwLock::new(client)), sender)
 }
 
 #[tokio::test]
 async fn test_timeout_configuration_and_behavior() {
     // Create test client
-    let client = create_test_client().await;
-    let (action_tx, _action_rx) = mpsc::unbounded_channel::<SimpleClientAction>();
+    let (client, sender) = create_test_client().await;
 
     // Test creating runner with various timeout configurations
     let very_short_timeout = Duration::from_millis(1);
@@ -34,7 +34,7 @@ async fn test_timeout_configuration_and_behavior() {
     // Test that we can create runners with different timeout values
     let runner1 = ScriptRunner::new_with_config(
         client.clone(),
-        action_tx.clone(),
+        sender.clone(),
         Duration::from_millis(20),
         very_short_timeout,
     );
@@ -42,7 +42,7 @@ async fn test_timeout_configuration_and_behavior() {
 
     let runner2 = ScriptRunner::new_with_config(
         client.clone(),
-        action_tx.clone(),
+        sender.clone(),
         Duration::from_millis(20),
         long_timeout,
     );
@@ -152,14 +152,13 @@ async fn test_script_runner_with_timeout_integration() {
     // Test that ScriptRunner can be created and configured with timeouts
     // This tests the integration without requiring actual WASM scripts
 
-    let client = create_test_client().await;
-    let (action_tx, _action_rx) = mpsc::unbounded_channel::<SimpleClientAction>();
+    let (client, sender) = create_test_client().await;
 
     // Create runner with 50ms timeout
     let timeout = Duration::from_millis(50);
     let mut runner = ScriptRunner::new_with_config(
         client.clone(),
-        action_tx.clone(),
+        sender.clone(),
         Duration::from_millis(20),
         timeout,
     );

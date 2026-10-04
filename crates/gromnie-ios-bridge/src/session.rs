@@ -7,7 +7,7 @@ use std::{
 
 use gromnie_client::client::{Client, ClientEvent};
 use gromnie_client::transport::{ClientTransport, NativeUdpTransport};
-use gromnie_events::{ClientSystemEvent, ProtocolEvent, S2CEvent, SimpleClientAction};
+use gromnie_events::{ClientSystemEvent, ProtocolEvent, S2CEvent};
 use tokio::sync::mpsc::{Receiver as CommandReceiver, Sender as CommandSender};
 
 use crate::event::{BridgeEvent, BridgeEventKind, Character};
@@ -164,7 +164,7 @@ async fn run_client(
             }
         },
     };
-    let (mut client, action_tx) = Client::new_with_transport(
+    let (mut client, sender) = Client::new_with_transport(
         1,
         address,
         username.clone(),
@@ -199,7 +199,7 @@ async fn run_client(
                 if client.has_messages() {
                     client.process_messages();
                 }
-                client.process_actions();
+                client.drain_commands();
                 client.process_game_actions();
                 if client.has_pending_outgoing_messages()
                     && let Err(error) = client.send_pending_messages().await
@@ -226,22 +226,18 @@ async fn run_client(
                         );
                         continue;
                     };
-                    if action_tx
-                        .send(SimpleClientAction::LoginCharacter {
-                            character_id,
-                            character_name,
-                            account: username.clone(),
-                        })
+                    if sender
+                        .enter_world(character_id, character_name, username.clone())
                         .is_err()
                     {
                         emitter.error(
                             "internal",
-                            "The client action channel closed.".to_string(),
+                            "The client is no longer being driven.".to_string(),
                             "form",
                         );
-                        break 'session "client action channel closed".to_string();
+                        break 'session "client is no longer being driven".to_string();
                     }
-                    client.process_actions();
+                    client.drain_commands();
                     client.process_game_actions();
                     if let Err(error) = client.send_pending_messages().await {
                         emitter.error("network", error.to_string(), "characters");
@@ -251,18 +247,15 @@ async fn run_client(
                     }
                 }
                 Ok(Command::SendChat(message)) => {
-                    if action_tx
-                        .send(SimpleClientAction::SendChatSay { message })
-                        .is_err()
-                    {
+                    if sender.say(message).is_err() {
                         emitter.error(
                             "internal",
-                            "The client action channel closed.".to_string(),
+                            "The client is no longer being driven.".to_string(),
                             "form",
                         );
-                        break 'session "client action channel closed".to_string();
+                        break 'session "client is no longer being driven".to_string();
                     }
-                    client.process_actions();
+                    client.drain_commands();
                     client.process_game_actions();
                     if let Err(error) = client.send_pending_messages().await {
                         emitter.error("network", error.to_string(), "form");
