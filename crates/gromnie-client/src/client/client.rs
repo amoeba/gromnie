@@ -1220,11 +1220,11 @@ impl Client {
                         .ok();
                     }
                     S2CMessage::CharacterCharGenVerificationResponse => {
-                        dispatch_message::<
-                            asheron_rs::messages::s2c::CharacterCharGenVerificationResponse,
-                            _,
-                        >(self, message)
-                        .ok();
+                        // The response acknowledges the submitted character
+                        // data, but the server's LoginLoginCharacterSet is the
+                        // authoritative updated list. Ignore this message here
+                        // and let that list drive the scene transition.
+                        info!(target: "net", "Character creation verification response received; waiting for server character list");
                     }
                     S2CMessage::LoginEnterGameServerReady => {
                         self.handle_enter_game_server_ready(message)
@@ -1688,10 +1688,8 @@ impl Client {
                 info!(target: "net", "Progress: ConnectRequest received (66%)");
             }
 
-            // Delay before sending ConnectResponse (to make UI progress visible)
-            crate::instant::sleep(std::time::Duration::from_millis(UI_DELAY_MS)).await;
-
-            // Send ConnectResponse
+            // ConnectRequest is the protocol signal to continue the handshake;
+            // send ConnectResponse immediately rather than delaying for UI pacing.
             let _ = self.do_connect_response().await;
 
             // Update progress to ConnectResponseSent (100%) and transition to Patching phase
@@ -2285,6 +2283,46 @@ mod tests {
             auth_reason,
             "because the password entered for this account was not correct"
         );
+    }
+
+    #[tokio::test]
+    async fn character_creation_verification_does_not_fabricate_character_list() {
+        let (event_tx, mut event_rx) = mpsc::channel(8);
+        let (mut client, _action_tx) = Client::new_with_transport(
+            1,
+            "127.0.0.1:9000".to_string(),
+            "acct".to_string(),
+            "pw".to_string(),
+            None,
+            event_tx,
+            false,
+            Box::new(NoopTransport),
+        )
+        .await;
+        client
+            .known_characters
+            .push(asheron_rs::types::CharacterIdentity {
+                character_id: asheron_rs::types::ObjectId(123),
+                name: "Existing character".to_string(),
+                seconds_greyed_out: 0,
+            });
+
+        let mut data = 0xF7E8u32.to_le_bytes().to_vec();
+        data.extend_from_slice(&[0; 16]);
+        client.handle_message(RawMessage {
+            id: 0x8000_0000,
+            opcode: 0xF7E8,
+            message_type: "Character_CharGenVerificationResponse".to_string(),
+            direction: "Recv".to_string(),
+            queue: None,
+            data,
+            sequence: 1,
+            iteration: Some(0x24),
+            header_flags: Some(0x0006),
+        });
+
+        assert!(client.scene.as_character_select().is_none());
+        assert!(event_rx.try_recv().is_err());
     }
 
     #[tokio::test]

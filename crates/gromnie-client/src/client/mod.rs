@@ -2,7 +2,6 @@
 pub use self::client::Client;
 pub use self::command::{ClientCommand, ClientLoopStopped, ClientSender, LoopExit};
 pub use self::connection::ServerInfo;
-pub use self::constants::UI_DELAY_MS;
 pub use self::consumer::{ConsumerContext, ConsumerFactory};
 #[cfg(not(target_arch = "wasm32"))]
 pub use self::driver::{ClientHandle, spawn_client_loop};

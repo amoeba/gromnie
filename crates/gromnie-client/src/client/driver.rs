@@ -126,9 +126,8 @@ impl ClientHandle {
 /// fires, when a [`ClientCommand::Disconnect`] arrives, when the client enters
 /// an unrecoverable error state, or when reconnection becomes impossible.
 ///
-/// `initial_login_delay` exists because the runner waits a beat before its
-/// first `LoginRequest` to make its progress UI visible (`UI_DELAY_MS`).
-/// Headless callers should pass `Duration::ZERO`.
+/// `initial_login_delay` is an optional caller-requested pause before the first
+/// `LoginRequest`. Protocol responses are processed immediately as they arrive.
 pub async fn spawn_client_loop(
     client: Arc<RwLock<Client>>,
     initial_login_delay: std::time::Duration,
@@ -230,8 +229,7 @@ async fn run(
     info!(target: "net", "Client {} network loop started", client_id);
 
     if !initial_login_delay.is_zero() {
-        // The runner delays the first LoginRequest so its progress UI is
-        // visible. Headless callers pass Duration::ZERO.
+        // Preserve an explicit caller-requested delay, if any.
         tokio::time::sleep(initial_login_delay).await;
     }
 
@@ -248,8 +246,9 @@ async fn run(
     // (Server timeout is configurable but defaults to 60s for gameplay, could be as low as 10s)
     let keepalive_interval = tokio::time::Duration::from_secs(5);
 
-    // Tick interval for checking retries and timeouts
-    let tick_interval = tokio::time::Duration::from_millis(100); // Check every 100ms
+    // Check for timeouts and retries frequently. Packet processing is driven
+    // directly by recv_packet, independent of this maintenance tick.
+    let tick_interval = tokio::time::Duration::from_millis(10);
     let mut last_tick = tokio::time::Instant::now();
 
     // `break` carries the reason out so the final scene is published and the exit
@@ -268,7 +267,7 @@ async fn run(
             // Add a timeout to transport recv so we can respond to shutdown signals
             recv_result = async {
                 let mut client_guard = client.write().await;
-                tokio::time::timeout(tokio::time::Duration::from_millis(100), client_guard.recv_packet(&mut buf)).await
+                tokio::time::timeout(tokio::time::Duration::from_millis(10), client_guard.recv_packet(&mut buf)).await
             } => {
                 match recv_result {
                     Ok(Ok((size, peer))) => {

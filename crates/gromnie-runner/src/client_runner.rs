@@ -527,12 +527,9 @@ async fn run_client_loop(
     // Note: We don't call client.connect() here anymore - the client starts in
     // Connecting state and the loop handles retries.
 
-    // Wait before sending initial LoginRequest (to make UI progress visible)
-    let handle = gromnie_client::client::spawn_client_loop(
-        client,
-        std::time::Duration::from_millis(gromnie_client::client::UI_DELAY_MS),
-    )
-    .await;
+    // Send the initial LoginRequest immediately; protocol responses drive the
+    // connecting progress from here.
+    let handle = gromnie_client::client::spawn_client_loop(client, std::time::Duration::ZERO).await;
 
     // Ctrl+C handling stays in the runner: `gromnie-client` deliberately does
     // not depend on tokio's `signal` feature, which its wasm32 build cannot
