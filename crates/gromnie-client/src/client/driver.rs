@@ -22,6 +22,7 @@ use tokio::task::JoinHandle;
 use tracing::{error, info};
 
 use crate::client::Client;
+use crate::client::messages::{OutgoingMessage, OutgoingMessageContent};
 use crate::client::scene::{ClientError, ErrorScene, Scene};
 
 /// Session-level commands issued by a [`ClientHandle`].
@@ -42,6 +43,11 @@ pub enum ClientCommand {
     SendLoginComplete,
     /// Disconnect and stop the driver loop.
     Disconnect,
+    /// Create a character (ACE wire format) while at character select.
+    CreateCharacterAce {
+        account: String,
+        char_gen: crate::client::ace_protocol::AceCharGenResult,
+    },
 }
 
 /// Why the driver loop stopped.
@@ -267,6 +273,13 @@ fn apply_commands(
                 }
             }
             ClientCommand::SendLoginComplete => client.send_login_complete_notification(),
+            ClientCommand::CreateCharacterAce { account, char_gen } => {
+                client
+                    .outgoing_message_queue
+                    .push_back(OutgoingMessage::new(
+                        OutgoingMessageContent::CharacterCreationAce(account, char_gen),
+                    ));
+            }
             ClientCommand::Disconnect => {
                 info!(target: "net", "ClientCommand::Disconnect received");
                 client.scene = Scene::Error(ErrorScene::new(

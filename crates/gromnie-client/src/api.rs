@@ -398,6 +398,20 @@ impl GromnieClient {
             .map_err(|_| ApiError::ConnectionLost)
     }
 
+    /// Queue an ACE-format character creation request (only valid at character select).
+    /// The new character appears in the list after reconnecting.
+    pub fn create_character_ace(
+        &self,
+        char_gen: crate::client::ace_protocol::AceCharGenResult,
+    ) -> Result<(), ApiError> {
+        self.handle
+            .send(ClientCommand::CreateCharacterAce {
+                account: self.account.clone(),
+                char_gen,
+            })
+            .map_err(|_| ApiError::ConnectionLost)
+    }
+
     /// Send a private message to another player by name.
     pub async fn tell(
         &self,
