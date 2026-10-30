@@ -583,7 +583,10 @@ async fn run_client_loop(
         }
     }
 
-    match handle.join().await {
+    // `join()` requests shutdown before waiting, which would stop the client
+    // immediately after it starts. Wait for the loop's own exit instead; the
+    // signal wiring above (or the client itself) is what terminates it.
+    match handle.wait_for_exit().await {
         Some(reason) => info!(target: "net", "Client network loop exited: {reason:?}"),
         None => error!(target: "net", "Client network loop stopped without reporting a reason"),
     }
@@ -935,5 +938,71 @@ where
 
             RunResult::Multi(stats)
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use gromnie_client::client::Client;
+    use gromnie_client::transport::{ClientTransport, TransportChannel, TransportFuture};
+    use std::net::SocketAddr;
+    use std::sync::Arc;
+    use tokio::sync::{RwLock, mpsc, watch};
+
+    /// A transport that accepts sends but never delivers a server response.
+    struct PendingTransport;
+
+    impl ClientTransport for PendingTransport {
+        fn send<'a>(
+            &'a mut self,
+            _server: &'a gromnie_client::client::ServerInfo,
+            _channel: TransportChannel,
+            _bytes: Vec<u8>,
+        ) -> TransportFuture<'a, ()> {
+            Box::pin(async { Ok(()) })
+        }
+
+        fn recv<'a>(&'a mut self, _buf: &'a mut [u8]) -> TransportFuture<'a, (usize, SocketAddr)> {
+            Box::pin(std::future::pending())
+        }
+    }
+
+    #[tokio::test]
+    async fn runner_does_not_stop_the_client_immediately() {
+        let (raw_event_tx, _raw_event_rx) = mpsc::channel(8);
+        let (client, _action_tx) = Client::new_with_transport(
+            0,
+            "127.0.0.1:9000".to_string(),
+            "account".to_string(),
+            "password".to_string(),
+            None,
+            raw_event_tx,
+            false,
+            Box::new(PendingTransport),
+        )
+        .await;
+        let client = Arc::new(RwLock::new(client));
+        let (shutdown_tx, shutdown_rx) = watch::channel(false);
+
+        let runner = tokio::spawn(run_client_loop(client, Some(shutdown_rx)));
+
+        // `ClientHandle::join()` used to request shutdown before waiting. It
+        // exits shortly after the driver's UI delay, so staying alive past that
+        // proves the runner waits for an external signal instead.
+        tokio::time::sleep(tokio::time::Duration::from_millis(
+            gromnie_client::client::UI_DELAY_MS + 500,
+        ))
+        .await;
+        assert!(
+            !runner.is_finished(),
+            "runner stopped without a shutdown signal"
+        );
+
+        shutdown_tx.send(true).expect("shutdown receiver");
+        tokio::time::timeout(tokio::time::Duration::from_secs(2), runner)
+            .await
+            .expect("runner did not stop after the shutdown signal")
+            .expect("runner task panicked");
     }
 }
