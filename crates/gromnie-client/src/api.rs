@@ -412,6 +412,28 @@ impl GromnieClient {
             .map_err(|_| ApiError::ConnectionLost)
     }
 
+    /// Ask the server to log the current character off (back to character select).
+    pub fn log_off(&self) -> Result<(), ApiError> {
+        self.handle
+            .send(ClientCommand::LogOff)
+            .map_err(|_| ApiError::ConnectionLost)
+    }
+
+    /// Send a Disconnect packet and stop the driver loop, so the server drops the
+    /// session immediately instead of waiting for its network timeout.
+    pub async fn disconnect_clean(&self) -> Result<(), ApiError> {
+        if self.handle.send(ClientCommand::DisconnectClean).is_ok() {
+            // The loop applies commands at the top of each iteration (<=100ms).
+            if tokio::time::timeout(Duration::from_secs(3), self.handle.wait_for_exit())
+                .await
+                .is_ok()
+            {
+                return Ok(());
+            }
+        }
+        self.disconnect().await
+    }
+
     /// Send a private message to another player by name.
     pub async fn tell(
         &self,

@@ -48,6 +48,11 @@ pub enum ClientCommand {
         account: String,
         char_gen: crate::client::ace_protocol::AceCharGenResult,
     },
+    /// Ask the server to log the in-world character off (C2S 0xF653).
+    LogOff,
+    /// Send a Disconnect (0x8000) packet so the server terminates the session
+    /// immediately, then stop the driver loop.
+    DisconnectClean,
 }
 
 /// Why the driver loop stopped.
@@ -280,6 +285,23 @@ fn apply_commands(
                         OutgoingMessageContent::CharacterCreationAce(account, char_gen),
                     ));
             }
+            ClientCommand::LogOff => {
+                info!(target: "net", "ClientCommand::LogOff received");
+                client
+                    .outgoing_message_queue
+                    .push_back(OutgoingMessage::new(OutgoingMessageContent::GameAction(
+                        vec![0x53, 0xF6, 0x00, 0x00],
+                    )));
+            }
+            ClientCommand::DisconnectClean => {
+                info!(target: "net", "ClientCommand::DisconnectClean received");
+                client.send_disconnect_on_exit = true;
+                client.scene = Scene::Error(ErrorScene::new(
+                    ClientError::ConnectionFailed("Disconnected by client action".to_string()),
+                    true,
+                ));
+                return Some(LoopExit::DisconnectRequested);
+            }
             ClientCommand::Disconnect => {
                 info!(target: "net", "ClientCommand::Disconnect received");
                 client.scene = Scene::Error(ErrorScene::new(
@@ -452,6 +474,19 @@ async fn run(
         // lock is held.
         scene_tx.send_replace(client.read().await.scene.clone());
     };
+
+    {
+        let mut guard = client.write().await;
+        if guard.send_disconnect_on_exit {
+            // Flush anything still queued (e.g. a LogOff), then tell the server we're gone.
+            if guard.has_pending_outgoing_messages() {
+                let _ = guard.send_pending_messages().await;
+            }
+            if let Err(e) = guard.send_disconnect_packet().await {
+                error!(target: "net", "Failed to send Disconnect packet: {}", e);
+            }
+        }
+    }
 
     // Publish the scene the client actually stopped in. Without this, a loop
     // that breaks out of `check_state_timeout` would leave observers watching a

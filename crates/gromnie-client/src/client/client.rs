@@ -115,6 +115,8 @@ pub struct Client {
     pub(crate) pending_auto_login: Option<gromnie_events::SimpleClientAction>,
     /// Cached trade registration data (set when server sends TradeRegisterTrade)
     pub(crate) pending_trade: Option<PendingTradeState>,
+    /// Set by `ClientCommand::DisconnectClean`: send a Disconnect packet when the loop exits.
+    pub(crate) send_disconnect_on_exit: bool,
 }
 
 /// Cached state from a server TradeRegisterTrade event, needed to accept the trade
@@ -243,6 +245,7 @@ impl Client {
             game_action_rx,
             ddd_response: None,
             known_characters: Vec::new(),
+            send_disconnect_on_exit: false,
             reconnect_config,
             reconnect_attempt_count: 0,
             reconnect_at: None,
@@ -711,6 +714,42 @@ impl Client {
         };
 
         // TimeSync: includeSequence=false, incrementSequence=false (like actestclient line 678)
+        self.send_packet(packet, false, false).await
+    }
+
+    /// Send a bare Disconnect (0x8000) packet. ACE terminates the session on receipt.
+    pub(crate) async fn send_disconnect_packet(&mut self) -> Result<(), std::io::Error> {
+        let (client_id, table) = match self.session.connection.as_ref() {
+            Some(c) => (c.client_id, c.table),
+            None => return Ok(()),
+        };
+        let (recipient_id, iteration) = if client_id > 0 {
+            (client_id, table)
+        } else {
+            (0, 0)
+        };
+        let packet = C2SPacket {
+            sequence: 0,
+            flags: PacketHeaderFlags::DISCONNECT,
+            checksum: 0,
+            recipient_id,
+            time_since_last_packet: 0,
+            size: 0,
+            iteration,
+            server_switch: None,
+            retransmit_sequences: None,
+            reject_sequences: None,
+            ack_sequence: None,
+            login_request: None,
+            world_login_request: None,
+            connect_response: None,
+            cicmd_command: None,
+            time: None,
+            echo_time: None,
+            flow: None,
+            fragments: None,
+        };
+        info!(target: "net", "Sending Disconnect packet");
         self.send_packet(packet, false, false).await
     }
 
@@ -1364,6 +1403,10 @@ impl Client {
                     }
                     S2CMessage::CommunicationTextboxString => self.handle_chat_message(message),
                     S2CMessage::CommunicationTurbineChat => self.handle_turbine_chat(message),
+                    S2CMessage::LoginLogOffCharacter => {
+                        info!(target: "net", "Server confirmed character logoff");
+                        self.emit_protocol(gromnie_events::S2CEvent::CharacterLogOff);
+                    }
                     S2CMessage::CommunicationHearSpeech => {
                         dispatch_message::<asheron_rs::messages::s2c::CommunicationHearSpeech, _>(
                             self, message,
