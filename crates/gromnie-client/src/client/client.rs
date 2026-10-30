@@ -2312,6 +2312,55 @@ impl GameEventHandler<MagicRemoveEnchantment> for Client {
     }
 }
 
+/// Parse a Communication_TurbineChat (0xF7DE) message (including its opcode) using the
+/// layout ACE's GameMessageTurbineChat writes. Returns `Some(None)` for non-event blobs
+/// (e.g. send acknowledgements) and `None` if the bytes are malformed.
+#[allow(clippy::type_complexity)]
+fn parse_turbine_chat(d: &[u8]) -> Option<Option<(u32, String, String, u32, u32)>> {
+    fn u32_at(d: &[u8], p: &mut usize) -> Option<u32> {
+        let v = d.get(*p..*p + 4)?;
+        *p += 4;
+        Some(u32::from_le_bytes([v[0], v[1], v[2], v[3]]))
+    }
+    fn wstr_at(d: &[u8], p: &mut usize) -> Option<String> {
+        let b0 = *d.get(*p)? as usize;
+        *p += 1;
+        let len = if b0 & 0x80 != 0 {
+            let b1 = *d.get(*p)? as usize;
+            *p += 1;
+            ((b0 & 0x7F) << 8) | b1
+        } else {
+            b0
+        };
+        let raw = d.get(*p..*p + len * 2)?;
+        *p += len * 2;
+        let units: Vec<u16> = raw
+            .chunks(2)
+            .map(|c| u16::from_le_bytes([c[0], c[1]]))
+            .collect();
+        Some(String::from_utf16_lossy(&units))
+    }
+    let mut p = 4usize; // opcode
+    let _size = u32_at(d, &mut p)?;
+    let blob_type = u32_at(d, &mut p)?;
+    let dispatch = u32_at(d, &mut p)?;
+    for _ in 0..5 {
+        u32_at(d, &mut p)?; // target type/id, transport type/id, cookie
+    }
+    let _payload = u32_at(d, &mut p)?;
+    if blob_type != 1 || dispatch != 1 {
+        return Some(None);
+    }
+    let room_id = u32_at(d, &mut p)?;
+    let sender_name = wstr_at(d, &mut p)?;
+    let text = wstr_at(d, &mut p)?;
+    let _extra = u32_at(d, &mut p)?;
+    let speaker_id = u32_at(d, &mut p)?;
+    let _hresult = u32_at(d, &mut p)?;
+    let chat_type = u32_at(d, &mut p)?;
+    Some(Some((room_id, sender_name, text, speaker_id, chat_type)))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -2560,55 +2609,6 @@ mod tests {
         client.set_login_retry(false);
         assert!(!client.should_retry());
     }
-}
-
-/// Parse a Communication_TurbineChat (0xF7DE) message (including its opcode) using the
-/// layout ACE's GameMessageTurbineChat writes. Returns `Some(None)` for non-event blobs
-/// (e.g. send acknowledgements) and `None` if the bytes are malformed.
-#[allow(clippy::type_complexity)]
-pub fn parse_turbine_chat(d: &[u8]) -> Option<Option<(u32, String, String, u32, u32)>> {
-    fn u32_at(d: &[u8], p: &mut usize) -> Option<u32> {
-        let v = d.get(*p..*p + 4)?;
-        *p += 4;
-        Some(u32::from_le_bytes([v[0], v[1], v[2], v[3]]))
-    }
-    fn wstr_at(d: &[u8], p: &mut usize) -> Option<String> {
-        let b0 = *d.get(*p)? as usize;
-        *p += 1;
-        let len = if b0 & 0x80 != 0 {
-            let b1 = *d.get(*p)? as usize;
-            *p += 1;
-            ((b0 & 0x7F) << 8) | b1
-        } else {
-            b0
-        };
-        let raw = d.get(*p..*p + len * 2)?;
-        *p += len * 2;
-        let units: Vec<u16> = raw
-            .chunks(2)
-            .map(|c| u16::from_le_bytes([c[0], c[1]]))
-            .collect();
-        Some(String::from_utf16_lossy(&units))
-    }
-    let mut p = 4usize; // opcode
-    let _size = u32_at(d, &mut p)?;
-    let blob_type = u32_at(d, &mut p)?;
-    let dispatch = u32_at(d, &mut p)?;
-    for _ in 0..5 {
-        u32_at(d, &mut p)?; // target type/id, transport type/id, cookie
-    }
-    let _payload = u32_at(d, &mut p)?;
-    if blob_type != 1 || dispatch != 1 {
-        return Some(None);
-    }
-    let room_id = u32_at(d, &mut p)?;
-    let sender_name = wstr_at(d, &mut p)?;
-    let text = wstr_at(d, &mut p)?;
-    let _extra = u32_at(d, &mut p)?;
-    let speaker_id = u32_at(d, &mut p)?;
-    let _hresult = u32_at(d, &mut p)?;
-    let chat_type = u32_at(d, &mut p)?;
-    Some(Some((room_id, sender_name, text, speaker_id, chat_type)))
 }
 
 #[cfg(test)]
