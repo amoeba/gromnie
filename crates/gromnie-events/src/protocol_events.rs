@@ -119,6 +119,15 @@ pub enum S2CEvent {
     EffectsPlayerTeleport {
         object_teleport_sequence: u16,
     },
+    /// Communication_TurbineChat (0xF7DE) - General/Trade/LFG/Roleplay/Allegiance channel line.
+    /// chat_type: 1=Allegiance 2=General 3=Trade 4=LFG 5=Roleplay 6..10=Society/Olthoi.
+    TurbineChat {
+        room_id: u32,
+        sender_name: String,
+        message: String,
+        speaker_id: u32,
+        chat_type: u32,
+    },
 }
 
 /// Nested game events with OrderedGameEvent metadata
@@ -252,8 +261,39 @@ impl S2CEvent {
                 text: message.clone(),
                 message_type: *message_type,
             }),
+            S2CEvent::TurbineChat {
+                sender_name,
+                message,
+                chat_type,
+                ..
+            } => Some(ChatMessage {
+                text: format!(
+                    "[{}] {} says, \"{}\"",
+                    turbine_channel_name(*chat_type),
+                    sender_name,
+                    message
+                ),
+                message_type: 0x1000 + *chat_type,
+            }),
             _ => None,
         }
+    }
+}
+
+/// Human name for a TurbineChat `chat_type`.
+pub fn turbine_channel_name(chat_type: u32) -> &'static str {
+    match chat_type {
+        1 => "Allegiance",
+        2 => "General",
+        3 => "Trade",
+        4 => "LFG",
+        5 => "Roleplay",
+        6 => "Society",
+        7 => "Celestial Hand",
+        8 => "Eldrytch Web",
+        9 => "Radiant Blood",
+        10 => "Olthoi",
+        _ => "Channel",
     }
 }
 

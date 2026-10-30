@@ -1362,6 +1362,7 @@ impl Client {
                         .ok();
                     }
                     S2CMessage::CommunicationTextboxString => self.handle_chat_message(message),
+                    S2CMessage::CommunicationTurbineChat => self.handle_turbine_chat(message),
                     S2CMessage::CommunicationHearSpeech => {
                         dispatch_message::<asheron_rs::messages::s2c::CommunicationHearSpeech, _>(
                             self, message,
@@ -1648,6 +1649,24 @@ impl Client {
             info!(target: "net", "Queued EnterWorld (0xF657) for character: {} (ID: {})", char_name, char_id);
         } else {
             warn!(target: "net", "Received ServerReady but not in CharacterSelect with entering_world! Current scene: {:?}", self.scene);
+        }
+    }
+
+    /// Handle Communication_TurbineChat (0xF7DE).
+    fn handle_turbine_chat(&mut self, message: RawMessage) {
+        match parse_turbine_chat(&message.data) {
+            Some(Some((room_id, sender_name, message, speaker_id, chat_type))) => {
+                info!(target: "net", "TurbineChat type={} from={}", chat_type, sender_name);
+                self.emit_protocol(gromnie_events::S2CEvent::TurbineChat {
+                    room_id,
+                    sender_name,
+                    message,
+                    speaker_id,
+                    chat_type,
+                });
+            }
+            Some(None) => debug!(target: "net", "TurbineChat non-event blob ignored"),
+            None => warn!(target: "net", "TurbineChat parse failed ({} bytes)", message.data.len()),
         }
     }
 
@@ -2293,6 +2312,55 @@ impl GameEventHandler<MagicRemoveEnchantment> for Client {
     }
 }
 
+/// Parse a Communication_TurbineChat (0xF7DE) message (including its opcode) using the
+/// layout ACE's GameMessageTurbineChat writes. Returns `Some(None)` for non-event blobs
+/// (e.g. send acknowledgements) and `None` if the bytes are malformed.
+#[allow(clippy::type_complexity)]
+fn parse_turbine_chat(d: &[u8]) -> Option<Option<(u32, String, String, u32, u32)>> {
+    fn u32_at(d: &[u8], p: &mut usize) -> Option<u32> {
+        let v = d.get(*p..*p + 4)?;
+        *p += 4;
+        Some(u32::from_le_bytes([v[0], v[1], v[2], v[3]]))
+    }
+    fn wstr_at(d: &[u8], p: &mut usize) -> Option<String> {
+        let b0 = *d.get(*p)? as usize;
+        *p += 1;
+        let len = if b0 & 0x80 != 0 {
+            let b1 = *d.get(*p)? as usize;
+            *p += 1;
+            ((b0 & 0x7F) << 8) | b1
+        } else {
+            b0
+        };
+        let raw = d.get(*p..*p + len * 2)?;
+        *p += len * 2;
+        let units: Vec<u16> = raw
+            .chunks(2)
+            .map(|c| u16::from_le_bytes([c[0], c[1]]))
+            .collect();
+        Some(String::from_utf16_lossy(&units))
+    }
+    let mut p = 4usize; // opcode
+    let _size = u32_at(d, &mut p)?;
+    let blob_type = u32_at(d, &mut p)?;
+    let dispatch = u32_at(d, &mut p)?;
+    for _ in 0..5 {
+        u32_at(d, &mut p)?; // target type/id, transport type/id, cookie
+    }
+    let _payload = u32_at(d, &mut p)?;
+    if blob_type != 1 || dispatch != 1 {
+        return Some(None);
+    }
+    let room_id = u32_at(d, &mut p)?;
+    let sender_name = wstr_at(d, &mut p)?;
+    let text = wstr_at(d, &mut p)?;
+    let _extra = u32_at(d, &mut p)?;
+    let speaker_id = u32_at(d, &mut p)?;
+    let _hresult = u32_at(d, &mut p)?;
+    let chat_type = u32_at(d, &mut p)?;
+    Some(Some((room_id, sender_name, text, speaker_id, chat_type)))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -2540,5 +2608,74 @@ mod tests {
         // And back off turns the gate off again.
         client.set_login_retry(false);
         assert!(!client.should_retry());
+    }
+}
+
+#[cfg(test)]
+mod turbine_chat_tests {
+    use super::parse_turbine_chat;
+
+    /// Mirror of ACE GameMessageTurbineChat (NETBLOB_EVENT_BINARY / SendToRoomChatEvent).
+    fn ace_bytes(channel: u32, sender: &str, msg: &str, sender_id: u32, chat_type: u32) -> Vec<u8> {
+        let mut w = Vec::new();
+        w.extend(0xF7DEu32.to_le_bytes());
+        w.extend(0u32.to_le_bytes()); // size (not checked)
+        w.extend(1u32.to_le_bytes());
+        w.extend(1u32.to_le_bytes());
+        for v in [1u32, 0x000B00B5, 1, 0x000B00B5, 0, 0] {
+            w.extend(v.to_le_bytes());
+        }
+        w.extend(channel.to_le_bytes());
+        for s in [sender, msg] {
+            let n = s.encode_utf16().count();
+            if n < 128 {
+                w.push(n as u8);
+            } else {
+                w.extend(((0x80 | (n << 8)) as u16).to_le_bytes());
+            }
+            for u in s.encode_utf16() {
+                w.extend(u.to_le_bytes());
+            }
+        }
+        w.extend(0x0Cu32.to_le_bytes());
+        w.extend(sender_id.to_le_bytes());
+        w.extend(0u32.to_le_bytes());
+        w.extend(chat_type.to_le_bytes());
+        w
+    }
+
+    #[test]
+    fn parses_general_line() {
+        let b = ace_bytes(
+            0x0B00_0002,
+            "Example Player",
+            "hello, anyone around?",
+            0x5000_0001,
+            2,
+        );
+        let (room, name, text, id, ct) = parse_turbine_chat(&b).unwrap().unwrap();
+        assert_eq!(
+            (room, name.as_str(), text.as_str(), id, ct),
+            (
+                0x0B00_0002,
+                "Example Player",
+                "hello, anyone around?",
+                0x5000_0001,
+                2
+            )
+        );
+    }
+
+    #[test]
+    fn non_event_blob_is_ignored() {
+        let mut b = ace_bytes(1, "a", "b", 1, 2);
+        b[8] = 5; // NETBLOB_RESPONSE_BINARY
+        assert_eq!(parse_turbine_chat(&b), Some(None));
+    }
+
+    #[test]
+    fn truncated_is_none() {
+        let b = ace_bytes(1, "abc", "hello", 1, 3);
+        assert_eq!(parse_turbine_chat(&b[..b.len() - 3]), None);
     }
 }
