@@ -289,9 +289,9 @@ fn apply_commands(
                 info!(target: "net", "ClientCommand::LogOff received");
                 client
                     .outgoing_message_queue
-                    .push_back(OutgoingMessage::new(OutgoingMessageContent::GameAction(
-                        vec![0x53, 0xF6, 0x00, 0x00],
-                    )));
+                    .push_back(OutgoingMessage::new(
+                        OutgoingMessageContent::LogOffCharacter,
+                    ));
             }
             ClientCommand::DisconnectClean => {
                 info!(target: "net", "ClientCommand::DisconnectClean received");

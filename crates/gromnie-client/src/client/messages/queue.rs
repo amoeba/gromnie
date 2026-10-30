@@ -10,6 +10,8 @@ pub enum OutgoingMessageContent {
     CharacterCreationAce(String, crate::client::ace_protocol::AceCharGenResult),
     // Character login request - sent when user clicks "Enter" on character select
     EnterWorldRequest,
+    /// Log off the current character and return to character select.
+    LogOffCharacter,
     // Character login - sent when selecting a character to enter the game world (after server ready)
     EnterWorld(LoginSendEnterWorld),
     // GameAction message (raw bytes including opcode)

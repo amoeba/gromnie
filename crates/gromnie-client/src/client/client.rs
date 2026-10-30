@@ -9,7 +9,8 @@ use asheron_rs::enums::{
 use asheron_rs::gameactions::CharacterLoginCompleteNotification;
 use asheron_rs::message::{C2SMessage, GameActionMessage};
 use asheron_rs::messages::c2s::{
-    CharacterSendCharGenResult, LoginSendEnterWorld, LoginSendEnterWorldRequest,
+    CharacterSendCharGenResult, LoginLogOffCharacter, LoginSendEnterWorld,
+    LoginSendEnterWorldRequest,
 };
 use tokio::sync::mpsc;
 
@@ -1090,6 +1091,10 @@ impl Client {
                 info!(target: "outgoing_msg", "→ 0xF7C8 CharacterEnterWorldRequest");
                 self.send_enter_world_request_internal().await
             }
+            OutgoingMessageContent::LogOffCharacter => {
+                info!(target: "outgoing_msg", "→ LoginLogOffCharacter");
+                self.send_log_off_character_internal().await
+            }
             OutgoingMessageContent::EnterWorld(enter_world) => {
                 info!(target: "outgoing_msg", "→ LoginSendEnterWorld");
                 self.send_enter_world_internal(enter_world).await
@@ -1323,6 +1328,20 @@ impl Client {
         }
 
         // Send as a proper fragmented packet
+        self.send_fragmented_message(message_data, FragmentGroup::Object)
+            .await
+    }
+
+    /// Send Login_LogOffCharacter (0xF653) to return to character select.
+    async fn send_log_off_character_internal(&mut self) -> Result<(), std::io::Error> {
+        let mut message_data = Vec::new();
+        {
+            let mut cursor = Cursor::new(&mut message_data);
+            C2SMessage::LoginLogOffCharacter(LoginLogOffCharacter {})
+                .write(&mut cursor)
+                .map_err(|e| std::io::Error::other(format!("Write error: {}", e)))?;
+        }
+
         self.send_fragmented_message(message_data, FragmentGroup::Object)
             .await
     }
