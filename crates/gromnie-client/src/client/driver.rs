@@ -156,11 +156,15 @@ impl ClientHandle {
         self.shutdown.clone()
     }
 
-    /// Request shutdown and wait for the loop to finish.
+    /// Wait for the loop to finish without requesting shutdown.
+    ///
+    /// This mirrors [`tokio::task::JoinHandle::join`]: it does not stop the
+    /// client. Call [`ClientHandle::shutdown`] (or send a
+    /// [`ClientCommand::Disconnect`]) first if you want the loop to stop;
+    /// otherwise this waits until the client exits on its own.
     ///
     /// Returns `None` only if the task ended without recording a reason.
     pub async fn join(mut self) -> Option<LoopExit> {
-        self.shutdown();
         let outcome = (&mut self.join).await;
         let recorded = self.exit_reason();
 
@@ -175,6 +179,14 @@ impl ClientHandle {
                     .unwrap_or_else(|| LoopExit::TaskFailed("driver task was cancelled".into())),
             ),
         }
+    }
+
+    /// Request shutdown and wait for the loop to finish.
+    ///
+    /// Returns `None` only if the task ended without recording a reason.
+    pub async fn shutdown_and_join(self) -> Option<LoopExit> {
+        self.shutdown();
+        self.join().await
     }
 }
 
@@ -493,6 +505,74 @@ async fn run(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::transport::{ClientTransport, TransportChannel, TransportFuture};
+    use std::net::SocketAddr;
+    use std::time::Duration;
+
+    /// A transport that accepts sends but never delivers a server response.
+    struct PendingTransport;
+
+    impl ClientTransport for PendingTransport {
+        fn send<'a>(
+            &'a mut self,
+            _server: &'a crate::client::ServerInfo,
+            _channel: TransportChannel,
+            _bytes: Vec<u8>,
+        ) -> TransportFuture<'a, ()> {
+            Box::pin(async { Ok(()) })
+        }
+
+        fn recv<'a>(&'a mut self, _buf: &'a mut [u8]) -> TransportFuture<'a, (usize, SocketAddr)> {
+            Box::pin(std::future::pending())
+        }
+    }
+
+    async fn spawn_test_handle() -> ClientHandle {
+        let (raw_event_tx, _raw_event_rx) = mpsc::channel(8);
+        let (client, _action_tx) = Client::new_with_transport(
+            0,
+            "127.0.0.1:9000".to_string(),
+            "account".to_string(),
+            "password".to_string(),
+            None,
+            raw_event_tx,
+            false,
+            Box::new(PendingTransport),
+        )
+        .await;
+        let client = Arc::new(RwLock::new(client));
+        spawn_client_loop(client, Duration::ZERO).await
+    }
+
+    #[tokio::test]
+    async fn join_waits_without_requesting_shutdown() {
+        let handle = spawn_test_handle().await;
+        let shutdown = handle.shutdown_sender();
+
+        let joined = tokio::spawn(handle.join());
+        tokio::time::sleep(Duration::from_millis(500)).await;
+        assert!(
+            !joined.is_finished(),
+            "join() stopped the loop instead of waiting for it"
+        );
+
+        shutdown.send(true).expect("shutdown receiver");
+        let reason = tokio::time::timeout(Duration::from_secs(2), joined)
+            .await
+            .expect("join() did not resolve after shutdown")
+            .expect("join task panicked");
+        assert_eq!(reason, Some(LoopExit::Shutdown));
+    }
+
+    #[tokio::test]
+    async fn shutdown_and_join_requests_shutdown() {
+        let handle = spawn_test_handle().await;
+
+        let reason = tokio::time::timeout(Duration::from_secs(2), handle.shutdown_and_join())
+            .await
+            .expect("shutdown_and_join() timed out");
+        assert_eq!(reason, Some(LoopExit::Shutdown));
+    }
 
     #[test]
     fn first_exit_reason_wins() {
