@@ -50,9 +50,6 @@ pub enum ClientCommand {
     },
     /// Ask the server to log the in-world character off (C2S 0xF653).
     LogOff,
-    /// Send a Disconnect (0x8000) packet so the server terminates the session
-    /// immediately, then stop the driver loop.
-    DisconnectClean,
 }
 
 /// Why the driver loop stopped.
@@ -293,17 +290,9 @@ fn apply_commands(
                         OutgoingMessageContent::LogOffCharacter,
                     ));
             }
-            ClientCommand::DisconnectClean => {
-                info!(target: "net", "ClientCommand::DisconnectClean received");
-                client.send_disconnect_on_exit = true;
-                client.scene = Scene::Error(ErrorScene::new(
-                    ClientError::ConnectionFailed("Disconnected by client action".to_string()),
-                    true,
-                ));
-                return Some(LoopExit::DisconnectRequested);
-            }
             ClientCommand::Disconnect => {
                 info!(target: "net", "ClientCommand::Disconnect received");
+                client.send_disconnect_on_exit = true;
                 client.scene = Scene::Error(ErrorScene::new(
                     ClientError::ConnectionFailed("Disconnected by client action".to_string()),
                     true,

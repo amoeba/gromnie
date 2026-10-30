@@ -116,7 +116,7 @@ pub struct Client {
     pub(crate) pending_auto_login: Option<gromnie_events::SimpleClientAction>,
     /// Cached trade registration data (set when server sends TradeRegisterTrade)
     pub(crate) pending_trade: Option<PendingTradeState>,
-    /// Set by `ClientCommand::DisconnectClean`: send a Disconnect packet when the loop exits.
+    /// Set by `ClientCommand::Disconnect`: send a Disconnect packet when the loop exits.
     pub(crate) send_disconnect_on_exit: bool,
 }
 

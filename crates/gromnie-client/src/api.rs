@@ -419,21 +419,6 @@ impl GromnieClient {
             .map_err(|_| ApiError::ConnectionLost)
     }
 
-    /// Send a Disconnect packet and stop the driver loop, so the server drops the
-    /// session immediately instead of waiting for its network timeout.
-    pub async fn disconnect_clean(&self) -> Result<(), ApiError> {
-        if self.handle.send(ClientCommand::DisconnectClean).is_ok() {
-            // The loop applies commands at the top of each iteration (<=100ms).
-            if tokio::time::timeout(Duration::from_secs(3), self.handle.wait_for_exit())
-                .await
-                .is_ok()
-            {
-                return Ok(());
-            }
-        }
-        self.disconnect().await
-    }
-
     /// Send a private message to another player by name.
     pub async fn tell(
         &self,
@@ -482,14 +467,23 @@ impl GromnieClient {
         .await
     }
 
-    /// Stop the driver loop and wait for it to finish.
+    /// Gracefully disconnect from the server and wait for the driver loop to stop.
     ///
-    /// The client is unusable afterwards; this takes `&self` so it can be
-    /// called from a shared reference, and the client's `Drop` performs the same
-    /// shutdown if you skip this.
+    /// The client is unusable afterwards. Dropping the client without calling this
+    /// performs a best-effort local shutdown instead.
     pub async fn disconnect(&self) -> Result<(), ApiError> {
-        self.handle.shutdown();
-        match self.handle.wait_for_exit().await {
+        let _ = self.handle.send(ClientCommand::Disconnect);
+        let exit =
+            match tokio::time::timeout(Duration::from_secs(3), self.handle.wait_for_exit()).await {
+                Ok(exit) => exit,
+                Err(_) => {
+                    // If the clean disconnect command could not complete, still stop the loop.
+                    self.handle.shutdown();
+                    self.handle.wait_for_exit().await
+                }
+            };
+
+        match exit {
             Some(LoopExit::Shutdown) | Some(LoopExit::DisconnectRequested) | None => Ok(()),
             Some(reason) => Err(ApiError::LoopStopped(reason)),
         }
