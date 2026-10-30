@@ -1304,8 +1304,9 @@ impl Client {
                 match msg_type {
                     S2CMessage::OrderedGameEvent => {
                         // Parse nested event type here instead of deferring
-                        if message.data.len() >= 12 {
-                            let mut cursor = Cursor::new(&message.data[8..]); // Skip outer opcode + seq
+                        // Layout: opcode F7B0 (4) | object_id (4) | sequence (4) | event_type (4) | payload
+                        if message.data.len() >= 16 {
+                            let mut cursor = Cursor::new(&message.data[12..]); // Skip opcode + object_id + sequence
                             match u32::read(&mut cursor) {
                                 Ok(event_opcode) => match GameEventType::try_from(event_opcode) {
                                     Ok(event_type) => self.handle_game_event(event_type, message),
@@ -1442,16 +1443,16 @@ impl Client {
         debug!(target: "net", "Game event type: {:?}", event_type);
 
         // Validate minimum packet length
-        if message.data.len() < 8 {
+        if message.data.len() < 16 {
             warn!(target: "net",
-                  "OrderedGameEvent message too short: {} bytes (expected at least 8)",
+                  "OrderedGameEvent message too short: {} bytes (expected at least 16)",
                   message.data.len());
             return;
         }
 
         // Parse object_id and sequence from message header using acprotocol parsing
-        // OrderedGameEvent format: object_id (4 bytes) + sequence (4 bytes) + event_data
-        let mut cursor = Cursor::new(&message.data);
+        // OrderedGameEvent format: opcode (4) + object_id (4) + sequence (4) + event_type (4) + event_data
+        let mut cursor = Cursor::new(&message.data[4..]);
 
         let object_id = match u32::read(&mut cursor) {
             Ok(id) => id,
@@ -1468,6 +1469,12 @@ impl Client {
                 return;
             }
         };
+
+        // Skip the event type (already decoded by the caller) so the cursor sits on the payload.
+        if u32::read(&mut cursor).is_err() {
+            error!(target: "net", "OrderedGameEvent missing event type");
+            return;
+        }
 
         let event_tx = self.raw_event_tx.clone();
         match event_type {
@@ -2389,6 +2396,73 @@ mod tests {
     fn push_ac_string(data: &mut Vec<u8>, text: &str) {
         data.extend_from_slice(&(text.len() as u16).to_le_bytes());
         data.extend_from_slice(text.as_bytes());
+    }
+
+    fn ordered_game_event_message() -> RawMessage {
+        let mut data = Vec::new();
+        for value in [
+            0xF7B0u32,
+            0x5000_0001, // wrapper object ID
+            0x1234_5678, // sequence (deliberately not an event opcode)
+            GameEventType::TradeOpenTrade as u32,
+            0x5000_0002, // payload object ID
+        ] {
+            data.extend_from_slice(&value.to_le_bytes());
+        }
+        RawMessage {
+            id: 0x8000_0000,
+            opcode: 0xF7B0,
+            message_type: "OrderedGameEvent".to_string(),
+            direction: "Recv".to_string(),
+            queue: None,
+            data,
+            sequence: 2,
+            iteration: None,
+            header_flags: None,
+        }
+    }
+
+    #[tokio::test]
+    async fn ordered_game_event_reads_opcode_metadata_and_payload_at_correct_offsets() {
+        let (event_tx, mut event_rx) = mpsc::channel(8);
+        let (mut client, _action_tx) = Client::new_with_transport(
+            1,
+            "127.0.0.1:9000".to_string(),
+            "acct".to_string(),
+            "pw".to_string(),
+            None,
+            event_tx,
+            false,
+            Box::new(NoopTransport),
+        )
+        .await;
+
+        client.handle_message(ordered_game_event_message());
+
+        let mut found = false;
+        while let Ok(event) = event_rx.try_recv() {
+            if let ClientEvent::Protocol(ProtocolEvent::GameEvent(event)) = event {
+                assert_eq!(event.object_id, 0x5000_0001);
+                assert_eq!(event.sequence, 0x1234_5678);
+                match event.event {
+                    gromnie_events::GameEventMsg::TradeOpened { object_id } => {
+                        assert_eq!(object_id, 0x5000_0002);
+                    }
+                    other => panic!("expected TradeOpened, got {:?}", other),
+                }
+                found = true;
+            }
+        }
+        assert!(found, "expected an ordered game event");
+
+        // Neither entry point may parse or emit an event from an incomplete header.
+        for len in 0..16 {
+            let mut message = ordered_game_event_message();
+            message.data.truncate(len);
+            client.handle_message(message.clone());
+            client.handle_game_event(GameEventType::TradeOpenTrade, message);
+            assert!(event_rx.try_recv().is_err());
+        }
     }
 
     #[test]
