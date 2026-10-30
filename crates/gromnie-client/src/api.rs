@@ -375,6 +375,20 @@ impl GromnieClient {
         find_character(&self.characters, name)
     }
 
+    /// Queue an ACE-format character creation request (only valid at character select).
+    /// The new character appears in the list after reconnecting.
+    pub fn create_character_ace(
+        &self,
+        char_gen: crate::client::ace_protocol::AceCharGenResult,
+    ) -> Result<(), ApiError> {
+        self.handle
+            .send(ClientCommand::CreateCharacterAce {
+                account: self.account.clone(),
+                char_gen,
+            })
+            .map_err(|_| ApiError::ConnectionLost)
+    }
+
     /// The current scene snapshot. Cheap; does not touch the client lock.
     pub fn scene(&self) -> Scene {
         self.handle.scene()
