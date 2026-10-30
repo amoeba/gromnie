@@ -412,6 +412,13 @@ impl GromnieClient {
             .map_err(|_| ApiError::ConnectionLost)
     }
 
+    /// Ask the server to log the current character off (back to character select).
+    pub fn log_off(&self) -> Result<(), ApiError> {
+        self.handle
+            .send(ClientCommand::LogOff)
+            .map_err(|_| ApiError::ConnectionLost)
+    }
+
     /// Send a private message to another player by name.
     pub async fn tell(
         &self,
@@ -460,14 +467,23 @@ impl GromnieClient {
         .await
     }
 
-    /// Stop the driver loop and wait for it to finish.
+    /// Gracefully disconnect from the server and wait for the driver loop to stop.
     ///
-    /// The client is unusable afterwards; this takes `&self` so it can be
-    /// called from a shared reference, and the client's `Drop` performs the same
-    /// shutdown if you skip this.
+    /// The client is unusable afterwards. Dropping the client without calling this
+    /// performs a best-effort local shutdown instead.
     pub async fn disconnect(&self) -> Result<(), ApiError> {
-        self.handle.shutdown();
-        match self.handle.wait_for_exit().await {
+        let _ = self.handle.send(ClientCommand::Disconnect);
+        let exit =
+            match tokio::time::timeout(Duration::from_secs(3), self.handle.wait_for_exit()).await {
+                Ok(exit) => exit,
+                Err(_) => {
+                    // If the clean disconnect command could not complete, still stop the loop.
+                    self.handle.shutdown();
+                    self.handle.wait_for_exit().await
+                }
+            };
+
+        match exit {
             Some(LoopExit::Shutdown) | Some(LoopExit::DisconnectRequested) | None => Ok(()),
             Some(reason) => Err(ApiError::LoopStopped(reason)),
         }

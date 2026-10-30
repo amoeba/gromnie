@@ -9,7 +9,8 @@ use asheron_rs::enums::{
 use asheron_rs::gameactions::CharacterLoginCompleteNotification;
 use asheron_rs::message::{C2SMessage, GameActionMessage};
 use asheron_rs::messages::c2s::{
-    CharacterSendCharGenResult, LoginSendEnterWorld, LoginSendEnterWorldRequest,
+    CharacterSendCharGenResult, LoginLogOffCharacter, LoginSendEnterWorld,
+    LoginSendEnterWorldRequest,
 };
 use tokio::sync::mpsc;
 
@@ -115,6 +116,8 @@ pub struct Client {
     pub(crate) pending_auto_login: Option<gromnie_events::SimpleClientAction>,
     /// Cached trade registration data (set when server sends TradeRegisterTrade)
     pub(crate) pending_trade: Option<PendingTradeState>,
+    /// Set by `ClientCommand::Disconnect`: send a Disconnect packet when the loop exits.
+    pub(crate) send_disconnect_on_exit: bool,
 }
 
 /// Cached state from a server TradeRegisterTrade event, needed to accept the trade
@@ -243,6 +246,7 @@ impl Client {
             game_action_rx,
             ddd_response: None,
             known_characters: Vec::new(),
+            send_disconnect_on_exit: false,
             reconnect_config,
             reconnect_attempt_count: 0,
             reconnect_at: None,
@@ -714,6 +718,42 @@ impl Client {
         self.send_packet(packet, false, false).await
     }
 
+    /// Send a bare Disconnect (0x8000) packet. ACE terminates the session on receipt.
+    pub(crate) async fn send_disconnect_packet(&mut self) -> Result<(), std::io::Error> {
+        let (client_id, table) = match self.session.connection.as_ref() {
+            Some(c) => (c.client_id, c.table),
+            None => return Ok(()),
+        };
+        let (recipient_id, iteration) = if client_id > 0 {
+            (client_id, table)
+        } else {
+            (0, 0)
+        };
+        let packet = C2SPacket {
+            sequence: 0,
+            flags: PacketHeaderFlags::DISCONNECT,
+            checksum: 0,
+            recipient_id,
+            time_since_last_packet: 0,
+            size: 0,
+            iteration,
+            server_switch: None,
+            retransmit_sequences: None,
+            reject_sequences: None,
+            ack_sequence: None,
+            login_request: None,
+            world_login_request: None,
+            connect_response: None,
+            cicmd_command: None,
+            time: None,
+            echo_time: None,
+            flow: None,
+            fragments: None,
+        };
+        info!(target: "net", "Sending Disconnect packet");
+        self.send_packet(packet, false, false).await
+    }
+
     /// Get the client ID
     pub fn client_id(&self) -> u32 {
         self.id
@@ -1051,6 +1091,10 @@ impl Client {
                 info!(target: "outgoing_msg", "→ 0xF7C8 CharacterEnterWorldRequest");
                 self.send_enter_world_request_internal().await
             }
+            OutgoingMessageContent::LogOffCharacter => {
+                info!(target: "outgoing_msg", "→ LoginLogOffCharacter");
+                self.send_log_off_character_internal().await
+            }
             OutgoingMessageContent::EnterWorld(enter_world) => {
                 info!(target: "outgoing_msg", "→ LoginSendEnterWorld");
                 self.send_enter_world_internal(enter_world).await
@@ -1288,6 +1332,20 @@ impl Client {
             .await
     }
 
+    /// Send Login_LogOffCharacter (0xF653) to return to character select.
+    async fn send_log_off_character_internal(&mut self) -> Result<(), std::io::Error> {
+        let mut message_data = Vec::new();
+        {
+            let mut cursor = Cursor::new(&mut message_data);
+            C2SMessage::LoginLogOffCharacter(LoginLogOffCharacter {})
+                .write(&mut cursor)
+                .map_err(|e| std::io::Error::other(format!("Write error: {}", e)))?;
+        }
+
+        self.send_fragmented_message(message_data, FragmentGroup::Object)
+            .await
+    }
+
     /// Handle a single parsed message
     fn handle_message(&mut self, message: RawMessage) {
         debug!(target: "net", "Received message: {} (0x{:08X})", message.message_type, message.opcode);
@@ -1364,6 +1422,10 @@ impl Client {
                     }
                     S2CMessage::CommunicationTextboxString => self.handle_chat_message(message),
                     S2CMessage::CommunicationTurbineChat => self.handle_turbine_chat(message),
+                    S2CMessage::LoginLogOffCharacter => {
+                        info!(target: "net", "Server confirmed character logoff");
+                        self.emit_protocol(gromnie_events::S2CEvent::CharacterLogOff);
+                    }
                     S2CMessage::CommunicationHearSpeech => {
                         dispatch_message::<asheron_rs::messages::s2c::CommunicationHearSpeech, _>(
                             self, message,

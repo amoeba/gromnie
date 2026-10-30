@@ -128,6 +128,9 @@ pub enum S2CEvent {
         speaker_id: u32,
         chat_type: u32,
     },
+    /// Character_LogOff (0xF653) from the server: the character has left the world
+    /// and the session is back at character select.
+    CharacterLogOff,
 }
 
 /// Nested game events with OrderedGameEvent metadata
