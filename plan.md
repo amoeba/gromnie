@@ -39,14 +39,14 @@ All six stages are implemented and **verified against the live server** (`play.c
 
 ## Live verification
 
-Run against `play.coldeve.ac:9000` as `treestats` via
+Run against `play.coldeve.ac:9000` with a test account via
 `cargo run -p gromnie-client --example hello_world`.
 
 | Scenario | Result |
 |---|---|
 | Valid credentials | `connect()` → `CharacterSelect` in **1.26s**, 10 characters listed |
-| `enter_world("Treestats")` | resolved in **1.31s**, `character_id 1342189415` — the requested character |
-| Case-insensitive lookup | `--character treestats` (all lowercase) matched `Treestats` |
+| `enter_world("<character>")` | resolved in **1.31s**, `character_id <id>` — the requested character |
+| Case-insensitive lookup | `--character <lowercase-name>` matched `<CharacterName>` |
 | Event stream | 52 events over a 10s hold, zero `Lagged`, scene still `InWorld` at the end |
 | `disconnect()` | clean; 13.0s total wall clock |
 | Wrong password | `connect()` → `Authentication("...password...not correct")` in 1.11s |

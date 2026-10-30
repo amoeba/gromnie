@@ -107,7 +107,7 @@ async fn wisp_handshake_and_udp_stream() -> Result<()> {
     let (mut reader, mut writer) = stream.into_split();
 
     // Send a small test packet (game client login header)
-    let test_data = b"\x00\x00\x00\x00\x04\x00\x00\x00treestats\x00treestats\x00";
+    let test_data = b"\x00\x00\x00\x00\x04\x00\x00\x00redacted\x00redacted\x00";
     writer
         .send(wisp_mux::ws::Payload::copy_from_slice(test_data))
         .await?;
