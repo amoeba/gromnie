@@ -1900,6 +1900,37 @@ impl Client {
                 Ok(s2c_packet) => {
                     if let Some(blob_fragments) = s2c_packet.fragments {
                         self.handle_fragment(blob_fragments);
+                        // A packet can carry several fragments back to back; the generated
+                        // S2CPacket reader only takes the first. Read the rest here.
+                        let mut extra = 0;
+                        while (cursor.position() as usize) + FRAGMENT_HEADER_SIZE <= size {
+                            let fragment_start = cursor.position() as usize;
+                            // BlobFragments::read subtracts the 16-byte header size from
+                            // the declared size, so reject invalid/truncated sizes first.
+                            let fragment_size = u16::from_le_bytes([
+                                buffer[fragment_start + 10],
+                                buffer[fragment_start + 11],
+                            ]) as usize;
+                            if fragment_size < FRAGMENT_HEADER_SIZE
+                                || fragment_size > size - fragment_start
+                            {
+                                warn!(target: "net", "Invalid trailing fragment size: {} ({} bytes remain)", fragment_size, size - fragment_start);
+                                break;
+                            }
+                            match BlobFragments::read(&mut cursor) {
+                                Ok(frag) => {
+                                    extra += 1;
+                                    self.handle_fragment(frag);
+                                }
+                                Err(e) => {
+                                    warn!(target: "net", "Failed to read trailing fragment: {}", e);
+                                    break;
+                                }
+                            }
+                        }
+                        if extra > 0 {
+                            debug!(target: "net", "Processed {} additional fragment(s) in packet", extra);
+                        }
                     } else {
                         warn!(target: "net", "BLOB_FRAGMENTS flag set but no fragments in packet");
                     }
@@ -2389,6 +2420,66 @@ mod tests {
 
         fn recv<'a>(&'a mut self, _buf: &'a mut [u8]) -> TransportFuture<'a, (usize, SocketAddr)> {
             Box::pin(async { Ok((0, "127.0.0.1:1".parse().unwrap())) })
+        }
+    }
+
+    #[tokio::test]
+    async fn packet_handles_all_trailing_fragments() {
+        // Include both a partial header and a full header with a truncated payload.
+        for (trailing_bytes, invalid_trailing_size) in
+            [(0, false), (8, false), (18, false), (16, true)]
+        {
+            let (event_tx, _event_rx) = mpsc::channel(8);
+            let (mut client, _action_tx) = Client::new_with_transport(
+                1,
+                "127.0.0.1:9000".to_string(),
+                "acct".to_string(),
+                "pw".to_string(),
+                None,
+                event_tx,
+                false,
+                Box::new(NoopTransport),
+            )
+            .await;
+
+            let mut body = Cursor::new(Vec::new());
+            for sequence in 1..=4 {
+                let fragment = BlobFragments {
+                    sequence,
+                    id: 0x8000_0000,
+                    count: 1,
+                    size: 20,
+                    index: 0,
+                    group: FragmentGroup::Event,
+                    data: 0xF7DCu32.to_le_bytes().to_vec(),
+                };
+                fragment.write(&mut body).unwrap();
+            }
+            let mut body = body.into_inner();
+            body.truncate(60 + trailing_bytes);
+            if invalid_trailing_size {
+                body[70..72].copy_from_slice(&0u16.to_le_bytes());
+            }
+            let mut header = PacketHeader::with_flags(PacketHeaderFlags::BLOB_FRAGMENTS);
+            header.size = body.len() as u16;
+            let mut packet = Cursor::new(Vec::new());
+            header.write(&mut packet).unwrap();
+            let mut packet = packet.into_inner();
+            packet.extend(body);
+            let size = packet.len();
+            // Unused receive-buffer capacity must not be parsed as packet data.
+            packet.resize(size + 64, 0);
+            client
+                .process_packet(&packet, size, &"127.0.0.1:9000".parse().unwrap())
+                .await;
+
+            assert_eq!(client.message_queue.len(), 3);
+            for sequence in 1..=3 {
+                let message = client.message_queue.pop_front().unwrap();
+                assert_eq!(message.sequence, sequence);
+                assert_eq!(message.opcode, 0xF7DC);
+            }
+            assert!(client.pending_fragments.is_empty());
         }
     }
 
