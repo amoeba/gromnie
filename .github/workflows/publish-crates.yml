@@ -1,0 +1,54 @@
+# Publishes the workspace crates to crates.io on version tags using crates.io
+# trusted publishing (OIDC), so no long-lived API token is stored in the repo.
+#
+# Ordering, resumability, and index propagation are handled by
+# scripts/publish-crates.sh. See docs/releasing.md for the crate list and the
+# one-time bootstrap that has to happen before trusted publishing works.
+
+name: Publish crates.io
+
+on:
+  push:
+    tags:
+      - "v[0-9]+.[0-9]+.[0-9]+*"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  # Required to exchange the GitHub OIDC token for a crates.io publish token.
+  id-token: write
+
+concurrency:
+  group: publish-crates-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    # Must match the environment configured for each crate on crates.io.
+    environment: release
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+
+      - name: Install toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Authenticate with crates.io
+        id: auth
+        uses: rust-lang/crates-io-auth-action@v1
+
+      - name: Check bootstrap state
+        run: |
+          if ! curl --silent --show-error --fail --output /dev/null \
+            https://crates.io/api/v1/crates/gromnie-events; then
+            echo "::error::gromnie-events is not on crates.io yet."
+            echo "Trusted publishing cannot perform a crate's first publish."
+            echo "Run scripts/publish-crates.sh locally once, then re-run this job."
+            exit 1
+          fi
+
+      - name: Publish crates
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ steps.auth.outputs.token }}
+        run: scripts/publish-crates.sh

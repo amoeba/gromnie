@@ -22,10 +22,10 @@ path = "src/bin/load-tester.rs"
 [dependencies]
 clap.workspace = true
 crossterm.workspace = true
-gromnie-client = { path = "../gromnie-client" }
-gromnie-events = { path = "../gromnie-events" }
-gromnie-runner = { path = "../gromnie-runner" }
-gromnie-scripting-host = { path = "../gromnie-scripting-host", optional = true }
+gromnie-client = { path = "../gromnie-client", version = "0.1.0" }
+gromnie-events = { path = "../gromnie-events", version = "0.1.0" }
+gromnie-runner = { path = "../gromnie-runner", version = "0.1.0" }
+gromnie-scripting-host = { path = "../gromnie-scripting-host", version = "0.1.0", optional = true }
 ratatui.workspace = true
 serenity.workspace = true
 tokio = { workspace = true, features = ["full"] }

@@ -43,7 +43,7 @@ chrono.workspace = true
 clap.workspace = true
 crossterm = { workspace = true, optional = true }
 directories = { workspace = true, optional = true }
-gromnie-events = { path = "../gromnie-events" }
+gromnie-events = { path = "../gromnie-events", version = "0.1.0" }
 rand = "0.8"
 rand_isaac = "0.3"
 ratatui = { workspace = true, optional = true }
