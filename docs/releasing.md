@@ -93,22 +93,30 @@ GitHub's OIDC token is exchanged for a short-lived crates.io token by
 `rust-lang/crates-io-auth-action`, so no long-lived secret is stored.
 
 One-time bootstrap is required, because **trusted publishing cannot perform a
-crate's first publish**:
+crate's first publish**. After the PR is merged:
 
-1. Merge to `main`, then publish 0.1.0 locally with your personal crates.io
-   token: `scripts/publish-crates.sh`.
-2. For each crate on crates.io, go to Settings -> Trusted Publishing and add
-   a GitHub trusted publisher with repository owner `amoeba`, repository
-   `gromnie`, workflow filename `publish-crates.yml`, and environment
-   `release`.
-3. From then on, pushing a version tag publishes the crates automatically.
+1. Confirm `Cargo.toml` is still at version `0.1.0` and check out the exact
+   commit you intend to release.
+2. Create a crates.io API token with publish permission. Set it in your local
+   shell only (do not add it to GitHub secrets):
+   `read -rsp "crates.io token: " CARGO_REGISTRY_TOKEN; echo; export CARGO_REGISTRY_TOKEN`.
+3. Run `scripts/publish-crates.sh`. It publishes the seven public crates in
+   dependency order and waits for each one to appear on crates.io. Unset the
+   token afterwards with `unset CARGO_REGISTRY_TOKEN`.
+4. On **each** of the seven published crate pages, open Settings -> Trusted
+   Publishing and add a GitHub publisher with owner `amoeba`, repository
+   `gromnie`, workflow filename `publish-crates.yml`, and environment `release`.
+5. Create the GitHub Actions environment named `release` if it does not exist.
+   Protection rules are optional.
+6. Push the first release tag:
+   `git tag v0.1.0 && git push origin v0.1.0`.
+   cargo-dist builds the binaries; the crates workflow authenticates with OIDC
+   and skips the seven versions already published during bootstrap.
 
-Until step 1 is done the workflow fails fast with a message pointing here.
-Re-running the workflow after a partial failure is safe: already-published
-versions are skipped, and it can be started manually via `workflow_dispatch`.
-
-The workflow uses the `release` environment, so protection rules (required
-reviewers, deployment branches) can be added in repository settings.
+After bootstrap, future releases need only a version bump (including internal
+path-dependency version requirements), then pushing the matching `vX.Y.Z` tag.
+The workflow is safe to rerun after partial failure: already-published
+versions are skipped. It can also be started manually with `workflow_dispatch`.
 
 ## Version bumps
 
