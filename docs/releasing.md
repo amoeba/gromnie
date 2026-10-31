@@ -115,8 +115,10 @@ crate's first publish**. After the PR is merged:
 
 After bootstrap, future releases need only a version bump (including internal
 path-dependency version requirements), then pushing the matching `vX.Y.Z` tag.
-The workflow is safe to rerun after partial failure: already-published
-versions are skipped. It can also be started manually with `workflow_dispatch`.
+The publishing workflow first checks that the tag matches every public crate's
+version and waits for the repository CI workflow to pass. It is safe to rerun
+after partial failure: already-published versions are skipped. It can also be
+started manually from the release tag with `workflow_dispatch`.
 
 ## Version bumps
 

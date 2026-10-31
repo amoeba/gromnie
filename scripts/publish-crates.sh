@@ -8,8 +8,7 @@
 # whose version is already live are skipped.
 #
 # Usage:
-#   scripts/publish-crates.sh              # publish for real
-#   scripts/publish-crates.sh --dry-run    # cargo publish --dry-run
+#   scripts/publish-crates.sh
 #
 # Set CARGO_REGISTRY_TOKEN to authenticate (the release workflow gets a
 # short-lived token from crates.io trusted publishing).
@@ -28,12 +27,10 @@ CRATES=(
   gromnie-cli
 )
 
-DRY_RUN=0
 for arg in "$@"; do
   case "$arg" in
-    --dry-run) DRY_RUN=1 ;;
     -h | --help)
-      sed -n '2,16p' "$0" | sed 's/^# \{0,1\}//'
+      sed -n '2,15p' "$0" | sed 's/^# \{0,1\}//'
       exit 0
       ;;
     *)
@@ -53,6 +50,7 @@ version_of() {
 is_published() {
   local crate="$1" version="$2"
   curl --silent --show-error --fail --output /dev/null \
+    -H 'User-Agent: gromnie-release (https://github.com/amoeba/gromnie)' \
     "https://crates.io/api/v1/crates/${crate}/${version}" 2>/dev/null
 }
 
@@ -77,13 +75,6 @@ for crate in "${CRATES[@]}"; do
 
   if is_published "$crate" "$version"; then
     echo "== ${crate} ${version}: already published, skipping"
-    continue
-  fi
-
-  if [[ "$DRY_RUN" == "1" ]]; then
-    echo "== ${crate} ${version}: dry run"
-    # --allow-dirty so this can be run before committing local changes.
-    cargo publish --dry-run --allow-dirty -p "$crate"
     continue
   fi
 
