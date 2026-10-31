@@ -18,26 +18,60 @@ workflow creates the GitHub Release and uploads the cargo-dist artifacts.
 
 ## crates.io publication status
 
-Crate publication is not enabled yet. A dry-run of `cargo publish --workspace`
-currently fails because workspace path dependencies (for example,
-`gromnie-cli` -> `gromnie-client`) do not declare a version requirement. Some
-workspace crates also depend on Git-sourced dependencies, which need to be
-available from crates.io (or otherwise made publishable) before those crates
-can be published there. The release workflow therefore must not attempt a
-crates.io publish yet; doing so would fail after a tag is pushed.
+Crate publication is not enabled yet. Two things block it:
 
-Before adding tag-triggered crates.io publication, decide:
+1. Internal path dependencies (for example, `gromnie-cli` -> `gromnie-client`)
+   do not declare a `version`, so `cargo publish` rejects the manifests. Adding
+   `version = "0.1.0"` next to each `path` fixes this mechanically.
+2. `wisp-mux` is pinned to an unpublished upstream commit (see below).
 
-1. Which workspace crates are intended to be public on crates.io (libraries,
-   binaries, or both). `gromnie-ios-bridge` and `xtask` are explicitly private.
-2. Whether Git dependencies such as `asheron-rs` and `wisp-mux` should be
-   published first, replaced with crates.io dependencies, or excluded by
-   narrowing the public crate set.
-3. Whether all public crates should share the workspace version and be published
-   together, or have independent versions/releases.
-4. Which crates.io publishing credential/owner should be used. The eventual
-   release workflow will need a repository secret such as
-   `CARGO_REGISTRY_TOKEN` (or an approved trusted-publishing setup).
+### External dependencies
+
+| Dependency | Pinned by gromnie | Latest on crates.io | Status |
+| --- | --- | --- | --- |
+| `asheron-rs` | `=0.2.0` (registry) | `0.2.0` | Resolved |
+| `wisp-mux` | git rev `0c11678` (6.0.0) | `5.1.0` (2024) | Blocked |
+
+`asheron-rs` is published and gromnie now depends on the registry release.
+
+`wisp-mux` 6.0.0 is **not** on crates.io, and the upstream repo does not have a
+crates.io publish step in CI (its release workflow publishes the npm package
+only). Gromnie depends on the 6.0.0 API, which is a rewrite compared to 5.1.0:
+
+- `WispV2Handshake` / `AnyProtocolExtensionBuilder` (5.1.0 has no handshake
+  wrapper; extension builders are `Box<dyn ProtocolExtensionBuilder>`)
+- `ws::TransportRead`, `ws::TransportWrite`, `ws::TransportExt`,
+  `ws::async_iterator_transport_read/write`, `ws::TokioTungsteniteTransport`
+  (5.1.0 has no transport abstraction at all: it flips the model to
+  `WebSocketRead` / `WebSocketWrite` traits over `Frame`s)
+- generic `MuxStream<W>` with `Stream`/`Sink` impls (5.1.0 `MuxStream` is
+  non-generic and provides `into_io()` / `read()` / `write()`)
+- `ServerMux::new` / `ClientMux::new` / `wait_for_stream` / `new_stream`
+  (5.1.0 names these `create` / `server_new_stream` / `client_new_stream`)
+
+Also relevant: crates.io `wisp-mux` 5.1.0 is `LGPL-3.0-only`, while upstream
+6.0.0 is `MIT`. Moving to 5.1.0 would add an LGPL dependency to MIT-licensed
+gromnie binaries.
+
+Impact: `gromnie-wisp`, `gromnie-web`, and `gromnie-proxy` consume the
+6.0.0-only API. `gromnie-events`, `gromnie-client`, `gromnie-runner`,
+`gromnie-tui`, `gromnie-cli`, `gromnie-scripting-api`, and
+`gromnie-scripting-host` do not depend on `wisp-mux` and can be published once
+the path-dependency versions are added.
+
+### Open decisions
+
+1. Which workspace crates should be public? `gromnie-ios-bridge` and `xtask`
+   are explicitly private.
+2. How to resolve `wisp-mux`:
+   - get upstream to publish `6.0.0` to crates.io (smallest change here),
+   - vendor/fork `6.0.0` into the workspace or a published shim crate (MIT),
+   - port to `5.1.0` (rewrite of the transport layer plus an LGPL dependency),
+   - or ship binaries only, and publish just the crates that don't use it.
+3. Should public crates share the workspace version and release together, or
+   have independent versions?
+4. Which crates.io credential/owner should Actions use: repository secret
+   `CARGO_REGISTRY_TOKEN` or trusted publishing?
 
 Once these are settled, add the version requirements to internal path
 dependencies, validate the selected packages with `cargo publish --dry-run`,
