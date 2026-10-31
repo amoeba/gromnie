@@ -18,25 +18,25 @@ workflow creates the GitHub Release and uploads the cargo-dist artifacts.
 
 ## crates.io publication status
 
-Crate publication is not enabled yet. Two things block it:
-
-1. Internal path dependencies (for example, `gromnie-cli` -> `gromnie-client`)
-   do not declare a `version`, so `cargo publish` rejects the manifests. Adding
-   `version = "0.1.0"` next to each `path` fixes this mechanically.
-2. `wisp-mux` is pinned to an unpublished upstream commit (see below).
+Crate publication is not enabled yet. Internal path dependencies (for example,
+`gromnie-cli` -> `gromnie-client`) need a `version` requirement, which is now
+recorded next to each `path`. The WISP crates are explicitly private because
+they depend on the unreleased `wisp-mux` 6.0.0 source (details below).
 
 ### External dependencies
 
 | Dependency | Pinned by gromnie | Latest on crates.io | Status |
 | --- | --- | --- | --- |
 | `asheron-rs` | `=0.2.0` (registry) | `0.2.0` | Resolved |
-| `wisp-mux` | git rev `0c11678` (6.0.0) | `5.1.0` (2024) | Blocked |
+| `wisp-mux` | git rev `0c11678` (6.0.0) | `5.1.0` (2024) | Used only by private crates |
 
 `asheron-rs` is published and gromnie now depends on the registry release.
 
 `wisp-mux` 6.0.0 is **not** on crates.io, and the upstream repo does not have a
 crates.io publish step in CI (its release workflow publishes the npm package
-only). Gromnie depends on the 6.0.0 API, which is a rewrite compared to 5.1.0:
+only). Gromnie depends on the 6.0.0 API, which is a rewrite compared to 5.1.0.
+To avoid making that an obstacle to publishing the main crates, `gromnie-wisp`,
+`gromnie-proxy`, and `gromnie-web` are marked `publish = false` for now.
 
 - `WispV2Handshake` / `AnyProtocolExtensionBuilder` (5.1.0 has no handshake
   wrapper; extension builders are `Box<dyn ProtocolExtensionBuilder>`)
@@ -73,9 +73,9 @@ available on crates.io today.
 | 5 | `gromnie-runner` | lib | yes | depends on 1, 3, 4 |
 | 6 | `gromnie-tui` | lib + bin `tui` | yes | depends on 1, 3, 4, 5 |
 | 7 | `gromnie-cli` | lib + bins `cli`, `discord-bot`, `load-tester` | yes | depends on 1, 3, 4, 5 |
-| - | `gromnie-wisp` | lib | yes, later | blocked on `wisp-mux` |
-| - | `gromnie-proxy` | bin `gromnie-proxy` | yes, later | blocked on `wisp-mux` |
-| - | `gromnie-web` | wasm lib | yes, later | wasm32-only browser bindings, blocked on `wisp-mux` |
+| - | `gromnie-wisp` | lib | no | `publish = false`; relies on unreleased `wisp-mux` 6.0.0 |
+| - | `gromnie-proxy` | bin `gromnie-proxy` | no | `publish = false`; depends on `gromnie-wisp` |
+| - | `gromnie-web` | wasm lib | no | `publish = false`; browser bindings depend on `gromnie-wisp` |
 | - | `gromnie-ios-bridge` | staticlib | no | `publish = false` |
 | - | `gromnie-test-script` | cdylib | no | test fixture, `publish = false` |
 | - | `xtask` | bin | no | `publish = false`; name also taken on crates.io |
@@ -117,15 +117,9 @@ workspace version, update those `version` fields in the same commit, or
 publication will resolve the previous release from crates.io instead of the
 new one.
 
-## Open decisions
+## Deferred WISP crates
 
-1. How to resolve `wisp-mux`, which blocks publishing `gromnie-wisp`,
-   `gromnie-proxy`, and `gromnie-web`:
-   - get upstream to publish `6.0.0` to crates.io (smallest change here, but
-     requires waiting on MercuryWorkshop),
-   - vendor/fork the MIT `6.0.0` code into the workspace or a published shim
-     crate (no waiting, but we own the code),
-   - port to `5.1.0` (rewrite of the transport layer plus an LGPL dependency).
-2. Whether to publish `gromnie-ios-bridge`, which is marked `publish = false`
-   and builds only a static library; otherwise keep it out of the crates.io
-   release.
+`gromnie-wisp`, `gromnie-proxy`, and `gromnie-web` stay out of crates.io for
+now. If we later want to publish them, either upstream must publish the
+compatible `wisp-mux` 6.x release, we must vendor/fork the MIT 6.0.0 code, or
+we must port to the older LGPL 5.1.0 API.

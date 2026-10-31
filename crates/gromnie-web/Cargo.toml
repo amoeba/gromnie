@@ -6,6 +6,7 @@ edition.workspace = true
 description = "WISP-over-WebSocket wasm client bindings for gromnie"
 repository.workspace = true
 license.workspace = true
+publish = false
 
 [lib]
 crate-type = ["cdylib", "rlib"]

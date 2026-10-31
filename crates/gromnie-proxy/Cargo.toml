@@ -6,6 +6,12 @@ edition.workspace = true
 description = "WISP proxy server for tunneling UDP to AC game servers"
 repository.workspace = true
 license.workspace = true
+publish = false
+
+# Keep building binary release artifacts with cargo-dist despite not publishing
+# this crate to crates.io.
+[package.metadata.dist]
+dist = true
 
 [[bin]]
 name = "gromnie-proxy"
