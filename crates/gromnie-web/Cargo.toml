@@ -15,7 +15,7 @@ event-listener = "5.4"
 flume = "0.11"
 futures = "0.3"
 futures-util = { version = "0.3", features = ["sink"] }
-gromnie-client = { path = "../gromnie-client", default-features = false, features = ["wasm"] }
+gromnie-client = { path = "../gromnie-client", version = "0.1.0", default-features = false, features = ["wasm"] }
 js-sys = "0.3"
 send_wrapper = { version = "0.6", features = ["futures"] }
 thiserror.workspace = true
@@ -24,4 +24,4 @@ wasm-bindgen = "0.2"
 wasm-bindgen-futures = "0.4"
 web-sys = { version = "0.3", features = ["BinaryType", "console", "MessageEvent", "WebSocket", "Window"] }
 wisp-mux.workspace = true
-gromnie-wisp = { path = "../gromnie-wisp" }
+gromnie-wisp = { path = "../gromnie-wisp", version = "0.1.0" }
