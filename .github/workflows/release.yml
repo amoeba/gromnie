@@ -15,7 +15,7 @@
 
 name: Release
 permissions:
-  "contents": "write"
+  contents: read
 
 # This task will run whenever you push a git tag that looks like a version
 # like "1.0.0", "v0.1.0-prerelease.1", "my-app/0.1.0", "releases/v1.0.0", etc.
@@ -211,14 +211,75 @@ jobs:
           path: |
             ${{ steps.cargo-dist.outputs.paths }}
             ${{ env.BUILD_MANIFEST_NAME }}
+  # Validate the release commit before publishing any crates.
+  ci:
+    if: ${{ github.event_name != 'pull_request' }}
+    uses: ./.github/workflows/ci.yml
+
+  publish-crates:
+    name: Publish crates.io
+    needs:
+      - plan
+      - ci
+    if: ${{ needs.plan.outputs.publishing == 'true' }}
+    runs-on: ubuntu-latest
+    environment: release
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: Check bootstrap state
+        run: |
+          if ! curl --silent --show-error --fail --output /dev/null \
+            -H 'User-Agent: gromnie-release (https://github.com/amoeba/gromnie)' \
+            https://crates.io/api/v1/crates/gromnie-events; then
+            echo "::error::gromnie-events is not on crates.io yet."
+            echo "Trusted publishing cannot perform a crate's first publish."
+            echo "Follow the bootstrap steps in docs/releasing.md."
+            exit 1
+          fi
+
+      - name: Checkout source
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+
+      - name: Install toolchain
+        uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
+
+      - name: Verify tag matches every public crate version
+        run: |
+          set -euo pipefail
+          tag_version="${GITHUB_REF_NAME#v}"
+          for crate in gromnie-events gromnie-scripting-api gromnie-client gromnie-scripting-host gromnie-runner gromnie-tui gromnie-cli; do
+            version=$(cargo metadata --no-deps --format-version 1 | jq -r --arg crate "$crate" '.packages[] | select(.name == $crate) | .version')
+            echo "$crate: tag=$tag_version manifest=$version"
+            if [ "$tag_version" != "$version" ]; then
+              echo "::error::Tag ${GITHUB_REF_NAME} does not match ${crate} version ${version}"
+              exit 1
+            fi
+          done
+
+      - name: Authenticate with crates.io
+        id: auth
+        uses: rust-lang/crates-io-auth-action@3268eb413133e2960fa4ae0e963ca76380c54cd9 # v1
+
+      - name: Publish crates
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ steps.auth.outputs.token }}
+        run: scripts/publish-crates.sh
+
   # Determines if we should publish/announce
   host:
     needs:
       - plan
       - build-local-artifacts
       - build-global-artifacts
+      - publish-crates
     # Only run if we're "publishing", and only if plan, local and global didn't fail (skipped is fine)
-    if: ${{ always() && needs.plan.result == 'success' && needs.plan.outputs.publishing == 'true' && (needs.build-global-artifacts.result == 'skipped' || needs.build-global-artifacts.result == 'success') && (needs.build-local-artifacts.result == 'skipped' || needs.build-local-artifacts.result == 'success') }}
+    if: ${{ always() && needs.plan.result == 'success' && needs.plan.outputs.publishing == 'true' && needs.publish-crates.result == 'success' && (needs.build-global-artifacts.result == 'skipped' || needs.build-global-artifacts.result == 'success') && (needs.build-local-artifacts.result == 'skipped' || needs.build-local-artifacts.result == 'success') }}
+    permissions:
+      contents: write
     env:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     runs-on: "ubuntu-22.04"

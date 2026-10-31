@@ -87,8 +87,9 @@ and waits for the index before publishing the next crate.
 
 ## Publishing with trusted publishing
 
-`.github/workflows/publish-crates.yml` publishes on version tags using
-crates.io [trusted publishing](https://crates.io/docs/trusted-publishing):
+`.github/workflows/release.yml` publishes on version tags using crates.io
+[trusted publishing](https://crates.io/docs/trusted-publishing). The crates
+job runs after CI and must succeed before cargo-dist creates the GitHub Release:
 GitHub's OIDC token is exchanged for a short-lived crates.io token by
 `rust-lang/crates-io-auth-action`, so no long-lived secret is stored.
 
@@ -105,13 +106,14 @@ crate's first publish**. After the PR is merged:
    token afterwards with `unset CARGO_REGISTRY_TOKEN`.
 4. On **each** of the seven published crate pages, open Settings -> Trusted
    Publishing and add a GitHub publisher with owner `amoeba`, repository
-   `gromnie`, workflow filename `publish-crates.yml`, and environment `release`.
+   `gromnie`, workflow filename `release.yml`, and environment `release`.
 5. Create the GitHub Actions environment named `release` if it does not exist.
    Protection rules are optional.
 6. Push the first release tag:
    `git tag v0.1.0 && git push origin v0.1.0`.
-   cargo-dist builds the binaries; the crates workflow authenticates with OIDC
-   and skips the seven versions already published during bootstrap.
+   cargo-dist builds the binaries; after CI passes, the release workflow
+   authenticates with OIDC and skips the seven versions already published
+   during bootstrap. The GitHub Release is created only after this succeeds.
 
 After bootstrap, future releases need only a version bump (including internal
 path-dependency version requirements), then pushing the matching `vX.Y.Z` tag.
