@@ -6,6 +6,7 @@ edition.workspace = true
 description = "Shared WISP protocol helpers for gromnie"
 repository.workspace = true
 license.workspace = true
+publish = false
 
 [lib]
 name = "gromnie_wisp"

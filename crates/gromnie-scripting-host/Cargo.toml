@@ -13,9 +13,9 @@ path = "src/lib.rs"
 
 [dependencies]
 asheron-rs.workspace = true
-gromnie-scripting-api = { path = "../gromnie-scripting-api" }
-gromnie-client = { path = "../gromnie-client" }
-gromnie-events = { path = "../gromnie-events" }
+gromnie-scripting-api = { path = "../gromnie-scripting-api", version = "0.1.0" }
+gromnie-client = { path = "../gromnie-client", version = "0.1.0" }
+gromnie-events = { path = "../gromnie-events", version = "0.1.0" }
 anyhow.workspace = true
 directories.workspace = true
 tokio = { workspace = true, features = ["full", "test-util"] }
