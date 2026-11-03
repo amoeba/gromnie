@@ -16,6 +16,12 @@ repos:
   # ── Rust formatting & linting (mirrors .github/workflows/ci.yml) ──────────
   - repo: local
     hooks:
+      - id: scripting-wit-sync
+        name: scripting WIT sync
+        entry: bash scripts/check-scripting-wit-sync.sh
+        language: system
+        pass_filenames: false
+
       - id: cargo-fmt
         name: cargo fmt
         entry: cargo fmt --all -- --check

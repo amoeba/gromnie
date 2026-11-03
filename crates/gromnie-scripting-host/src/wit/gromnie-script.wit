@@ -1,0 +1,488 @@
+package gromnie:scripting@0.1.0;
+
+/// Interface defining what the host (Gromnie) provides to WASM scripts
+interface host {
+    /// ===== Client Information =====
+
+    /// Current client state snapshot
+    record client-state {
+        session: client-session,
+        scene: scene,
+    }
+
+    /// Client session state (protocol state + metadata)
+    record client-session {
+        state: session-state,
+    }
+
+    /// ACE protocol session states
+    enum session-state {
+        /// Sent LoginRequest, waiting for ConnectRequest
+        auth-login-request,
+        /// Received ConnectRequest, sent ConnectResponse
+        auth-connect-response,
+        /// Authenticated and connected
+        auth-connected,
+        /// Connected to world server
+        world-connected,
+        /// Termination started
+        termination-started,
+    }
+
+    /// Scene-based UI state (what the user sees)
+    variant scene {
+        connecting(connecting-scene),
+        character-select(character-select-scene),
+        character-create(character-create-scene),
+        in-world(in-world-scene),
+        error(error-scene),
+    }
+
+    /// Connecting scene state
+    record connecting-scene {
+        connect-progress: connecting-progress,
+        patch-progress: patching-progress,
+    }
+
+    /// Connecting progress sub-state
+    enum connecting-progress {
+        initial,
+        login-request-sent,
+        connect-request-received,
+        connect-response-sent,
+    }
+
+    /// Patching progress sub-state
+    enum patching-progress {
+        not-started,
+        waiting-for-ddd,
+        received-ddd,
+        sent-ddd-response,
+        complete,
+    }
+
+    /// Character select scene state
+    record character-select-scene {
+        account-name: string,
+        characters: list<character-identity>,
+        entering-world: option<entering-world-state>,
+    }
+
+    /// Character information (matches acprotocol CharacterIdentity)
+    record character-identity {
+        character-id: u32,
+        name: string,
+        seconds-greyed-out: u32,
+    }
+
+    /// State for entering the world with a character
+    record entering-world-state {
+        character-id: u32,
+        character-name: string,
+        account: string,
+        login-complete: bool,
+    }
+
+    /// Character creation scene state
+    record character-create-scene {
+        /// Placeholder field (WIT records must have at least one field)
+        placeholder: bool,
+    }
+
+    /// In-world scene state
+    record in-world-scene {
+        character-id: u32,
+        character-name: string,
+    }
+
+    /// Error scene state
+    record error-scene {
+        error: client-error,
+        can-retry: bool,
+    }
+
+    /// Client error types
+    variant client-error {
+        character-error(u32),
+        connection-failed(string),
+        patching-failed(string),
+        login-timeout,
+        patching-timeout,
+        authentication(string),
+    }
+
+    /// ===== Events =====
+
+    /// Character error from the server
+    record character-error {
+        error-code: u32,
+        error-message: string,
+    }
+
+    /// ===== Protocol Event Types (Full acprotocol access) =====
+
+    // ----- S2C Message Records -----
+
+    record login-create-player-msg {
+        character-id: u32,
+    }
+
+    record login-character-set-msg {
+        account: string,
+        characters: list<character-identity>,
+        num-slots: u32,
+    }
+
+    record item-create-object-msg {
+        object-id: u32,
+        name: string,
+    }
+
+    record hear-speech-msg {
+        sender-name: string,
+        message: string,
+        message-type: u32,
+    }
+
+    record hear-ranged-speech-msg {
+        sender-name: string,
+        message: string,
+        message-type: u32,
+    }
+
+    record ddd-interrogation-msg {
+        language: string,
+        region: string,
+        product: string,
+    }
+
+    // ----- Game Event Records -----
+
+    record hear-direct-speech-msg {
+        message: string,
+        sender-name: string,
+        sender-id: u32,
+        target-id: u32,
+        message-type: u32,
+    }
+
+    record transient-string-msg {
+        message: string,
+    }
+
+    // ----- Trade Event Records -----
+
+    record trade-registered-msg {
+        initiator-id: u32,
+        partner-id: u32,
+        stamp: s64,
+    }
+
+    record trade-opened-msg {
+        object-id: u32,
+    }
+
+    record trade-item-added-msg {
+        item-id: u32,
+    }
+
+    record trade-item-removed-msg {
+        item-id: u32,
+    }
+
+    record trade-failure-msg {
+        reason: u32,
+    }
+
+    // ----- Spell / Enchantment Event Records -----
+
+    record enchantment-updated-msg {
+        spell-id: u32,
+        duration: f64,
+        caster-id: u32,
+        power-level: u32,
+    }
+
+    record enchantment-removed-msg {
+        spell-id: u32,
+    }
+
+    // ----- Movement Types -----
+
+    /// World position (landcell + local coordinates + optional orientation)
+    record position-pack {
+        /// Landcell ID (encodes region + block + cell)
+        landcell: u32,
+        /// Local X coordinate within the landcell
+        x: f32,
+        /// Local Y coordinate within the landcell
+        y: f32,
+        /// Local Z coordinate within the landcell
+        z: f32,
+        /// Orientation quaternion W component (present when object has orientation)
+        quat-w: option<f32>,
+        /// Orientation quaternion X component
+        quat-x: option<f32>,
+        /// Orientation quaternion Y component
+        quat-y: option<f32>,
+        /// Orientation quaternion Z component
+        quat-z: option<f32>,
+    }
+
+    /// Movement_PositionEvent (0xF748) - sets position/motion of an object
+    record movement-position-event-msg {
+        object-id: u32,
+        position: position-pack,
+    }
+
+    /// Movement_PositionAndMovementEvent (0xF619) - sets both position and movement
+    /// Sent when an object materializes at a new location (e.g. lifestone recall, portal)
+    record movement-position-and-movement-event-msg {
+        object-id: u32,
+        position: position-pack,
+    }
+
+    /// Movement_SetObjectMovement (0xF74C) - animation/movement state for an object
+    record movement-set-object-movement-msg {
+        object-id: u32,
+        object-instance-sequence: u16,
+    }
+
+    /// Effects_PlayerTeleport (0xF751) - server notifies client teleport occurred
+    record effects-player-teleport-msg {
+        object-teleport-sequence: u16,
+    }
+
+    // ----- Top-level S2C Messages -----
+
+    /// Top-level server-to-client messages
+    variant s2c-event {
+        login-create-player(login-create-player-msg),
+        login-character-set(login-character-set-msg),
+        item-create-object(item-create-object-msg),
+        character-error(character-error),
+        hear-speech(hear-speech-msg),
+        hear-ranged-speech(hear-ranged-speech-msg),
+        ddd-interrogation(ddd-interrogation-msg),
+        chargen-verification-response,
+        movement-position(movement-position-event-msg),
+        movement-position-and-movement(movement-position-and-movement-event-msg),
+        movement-set-object-movement(movement-set-object-movement-msg),
+        effects-player-teleport(effects-player-teleport-msg),
+    }
+
+    // ----- Nested Game Events -----
+
+    /// Nested game events (from OrderedGameEvent wrapper)
+    variant game-event-msg {
+        hear-direct-speech(hear-direct-speech-msg),
+        transient-string(transient-string-msg),
+        // Trading events
+        trade-registered(trade-registered-msg),
+        trade-opened(trade-opened-msg),
+        trade-closed,
+        trade-item-added(trade-item-added-msg),
+        trade-item-removed(trade-item-removed-msg),
+        trade-accepted,
+        trade-declined,
+        trade-reset,
+        trade-failure(trade-failure-msg),
+        // Spell / enchantment events
+        enchantment-updated(enchantment-updated-msg),
+        enchantment-removed(enchantment-removed-msg),
+    }
+
+    // ----- Unified Protocol Event -----
+
+    /// Wrapper for ordered game events with metadata
+    record ordered-game-event {
+        object-id: u32,
+        sequence: u32,
+        event: game-event-msg,
+    }
+
+    /// Protocol event from server (unified wrapper)
+    variant protocol-event {
+        /// Top-level S2C message
+        s2c(s2c-event),
+        /// Nested game event with metadata
+        game-event(ordered-game-event),
+    }
+
+    /// Client state change events
+    variant state-event {
+        connecting,
+        connected,
+        connecting-failed(string),
+        patching,
+        patched,
+        patching-failed(string),
+        character-select,
+        entering-world,
+        in-world,
+        exiting-world,
+        character-error,
+    }
+
+    /// System lifecycle events
+    variant system-event {
+        /// Authentication succeeded
+        authentication-succeeded,
+        /// Authentication failed
+        authentication-failed(string),
+        /// Connecting phase started
+        connecting-started,
+        /// Connecting phase completed
+        connecting-done,
+        /// Updating/patching phase started
+        updating-started,
+        /// Updating/patching phase completed
+        updating-done,
+        /// Login succeeded
+        login-succeeded(login-info),
+        /// Connection was lost
+        disconnected,
+        /// Attempting to reconnect
+        reconnecting,
+        /// Script reload requested
+        reload-scripts,
+        /// System shutdown requested
+        shutdown,
+    }
+
+    /// Login information
+    record login-info {
+        character-id: u32,
+        character-name: string,
+    }
+
+    /// Unified event type that scripts receive
+    variant script-event {
+        /// Protocol event from server
+        protocol(protocol-event),
+        /// Client state change
+        state(state-event),
+        /// System lifecycle event
+        system(system-event),
+    }
+
+    /// ===== Action Methods =====
+
+    /// Send a chat message to the server (say, visible to nearby players)
+    send-chat: func(message: string);
+
+    /// Send a direct tell to a specific player by name
+    send-tell: func(recipient: string, message: string);
+
+    /// Login as a specific character
+    login-character: func(account-name: string, character-id: u32, character-name: string);
+
+    // ===== Trading Actions =====
+
+    /// Open trade negotiations with another player by their object ID
+    open-trade: func(partner-id: u32);
+
+    /// Add an item to the trade window at the given slot index
+    add-to-trade: func(item-id: u32, slot: u32);
+
+    /// Accept the current trade (uses trade data received from server)
+    accept-trade: func();
+
+    /// Decline the current trade
+    decline-trade: func();
+
+    /// Reset the current trade (clear all items)
+    reset-trade: func();
+
+    /// Close the trade window
+    close-trade: func();
+
+    // ===== Spell Casting Actions =====
+
+    /// Cast a spell at a specific target object
+    cast-targeted-spell: func(target-id: u32, spell-id: u32);
+
+    /// Cast an untargeted (self or area) spell
+    cast-untargeted-spell: func(spell-id: u32);
+
+    /// Log a message from the script (will be displayed with script name)
+    log: func(message: string);
+
+    /// ===== Movement Methods =====
+
+    /// Send a movement command (start moving in a direction)
+    /// motion: motion command value (see acprotocol Motion enum)
+    /// speed: movement speed multiplier (1.0 = normal)
+    /// hold-key: hold key modifier (0=Invalid, 1=None, 2=Run)
+    do-movement-command: func(motion: u32, speed: f32, hold-key: u32);
+
+    /// Stop a movement command
+    /// motion: the motion command to stop (must match the one passed to do-movement-command)
+    /// hold-key: hold key modifier (must match)
+    stop-movement-command: func(motion: u32, hold-key: u32);
+
+    /// ===== Timer Methods =====
+
+    /// Schedule a one-shot timer (returns timer ID)
+    schedule-timer: func(delay-secs: u64, name: string) -> u64;
+
+    /// Schedule a recurring timer (returns timer ID)
+    schedule-recurring: func(interval-secs: u64, name: string) -> u64;
+
+    /// Cancel a timer
+    cancel-timer: func(timer-id: u64) -> bool;
+
+    /// Check if a timer has fired (consumes the fired state)
+    check-timer: func(timer-id: u64) -> bool;
+
+    /// ===== State Access =====
+
+    /// Get current client state
+    get-client-state: func() -> client-state;
+
+    /// Get current event time in milliseconds since epoch
+    get-event-time-millis: func() -> u64;
+}
+
+/// Interface defining what WASM scripts must export to the host
+interface guest {
+    use host.{script-event};
+
+    /// Initialize the script (MUST be called before other functions)
+    init: func();
+
+    /// Get the unique script ID
+    get-id: func() -> string;
+
+    /// Get the human-readable script name
+    get-name: func() -> string;
+
+    /// Get the script description
+    get-description: func() -> string;
+
+    /// Called when the script is first loaded
+    on-load: func();
+
+    /// Called when the script is being unloaded
+    on-unload: func();
+
+    /// Return list of event filter IDs this script subscribes to
+    /// Values correspond to EventFilter enum discriminants (see host interface)
+    subscribed-events: func() -> list<u32>;
+
+    /// Handle a script event (protocol, state, or system)
+    on-event: func(event: script-event);
+
+    /// Called periodically at fixed rate (default 20Hz)
+    /// delta-millis: milliseconds since last tick
+    on-tick: func(delta-millis: u64);
+}
+
+/// The script world combining host and guest interfaces
+world script {
+    /// Import host functions
+    import host;
+
+    /// Export guest functions
+    export guest;
+}

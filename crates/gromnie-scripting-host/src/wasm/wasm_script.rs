@@ -14,11 +14,11 @@ use gromnie_events::{
     ClientEvent, ClientStateEvent, ClientSystemEvent, GameEventMsg, ProtocolEvent, S2CEvent,
 };
 
-// Generate bindings from WIT (use the canonical definition from gromnie-scripting-api)
+// Keep a packaged copy of the WIT definitions here because this crate is
+// published independently from gromnie-scripting-api.
 wasmtime::component::bindgen!({
-    path: "../gromnie-scripting-api/src/wit",
+    path: "src/wit",
     world: "script",
-
 });
 
 // Re-export for convenience
