@@ -1,4 +1,5 @@
 pub mod app;
+pub mod command_ui;
 pub mod components;
 pub mod event_handler;
 pub mod object_tracker;

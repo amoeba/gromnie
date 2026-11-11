@@ -19,10 +19,7 @@ install-path = "CARGO_HOME"
 install-updater = false
 
 [[bin]]
-name = "tui"
-
-[[bin]]
-name = "cli"
+name = "gromnie"
 
 [[bin]]
 name = "discord-bot"
