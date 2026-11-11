@@ -230,14 +230,16 @@ jobs:
     steps:
       - name: Check bootstrap state
         run: |
-          if ! curl --silent --show-error --fail --output /dev/null \
-            -H 'User-Agent: gromnie-release (https://github.com/amoeba/gromnie)' \
-            https://crates.io/api/v1/crates/gromnie-events; then
-            echo "::error::gromnie-events is not on crates.io yet."
-            echo "Trusted publishing cannot perform a crate's first publish."
-            echo "Follow the bootstrap steps in docs/releasing.md."
-            exit 1
-          fi
+          for crate in gromnie-events gromnie-scripting-api gromnie-client gromnie-scripting-host gromnie-runner gromnie gromnie-cli; do
+            if ! curl --silent --show-error --fail --output /dev/null \
+              -H 'User-Agent: gromnie-release (https://github.com/amoeba/gromnie)' \
+              "https://crates.io/api/v1/crates/${crate}"; then
+              echo "::error::${crate} is not on crates.io yet."
+              echo "Trusted publishing cannot perform a crate's first publish."
+              echo "Follow the bootstrap steps in docs/releasing.md."
+              exit 1
+            fi
+          done
 
       - name: Checkout source
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
@@ -251,7 +253,7 @@ jobs:
         run: |
           set -euo pipefail
           tag_version="${GITHUB_REF_NAME#v}"
-          for crate in gromnie-events gromnie-scripting-api gromnie-client gromnie-scripting-host gromnie-runner gromnie-tui gromnie-cli; do
+          for crate in gromnie-events gromnie-scripting-api gromnie-client gromnie-scripting-host gromnie-runner gromnie gromnie-cli; do
             version=$(cargo metadata --no-deps --format-version 1 | jq -r --arg crate "$crate" '.packages[] | select(.name == $crate) | .version')
             echo "$crate: tag=$tag_version manifest=$version"
             if [ "$tag_version" != "$version" ]; then

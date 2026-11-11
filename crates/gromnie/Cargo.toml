@@ -1,11 +1,11 @@
 [package]
-name = "gromnie-tui"
+name = "gromnie"
 autobins = false
 default-run = "gromnie"
 version.workspace = true
 authors.workspace = true
 edition.workspace = true
-description = "TUI game client for gromnie"
+description = "Command-driven Asheron's Call terminal client"
 repository.workspace = true
 license.workspace = true
 

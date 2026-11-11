@@ -4,7 +4,7 @@ use tracing::{error, info};
 use gromnie_client::config::GromnieConfig;
 use gromnie_events::SimpleClientAction;
 use gromnie_runner::{ClientConfig, ClientRunner, TuiConsumer, TuiEvent, logging};
-use gromnie_tui::{App, event_handler::EventHandler, ui::try_init_tui};
+use gromnie::{App, event_handler::EventHandler, ui::try_init_tui};
 
 #[derive(Parser)]
 #[command(version, about, long_about = None)]
@@ -291,11 +291,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 // Handle TUI events in a centralized function
 fn handle_tui_event(
     app: &mut App,
-    tui_event: gromnie_tui::event_handler::TuiEvent,
+    tui_event: gromnie::event_handler::TuiEvent,
     shutdown_tx: &tokio::sync::watch::Sender<bool>,
 ) -> Result<(), Box<dyn std::error::Error>> {
     use crossterm::event::{KeyCode, KeyModifiers};
-    use gromnie_tui::event_handler::TuiEvent;
+    use gromnie::event_handler::TuiEvent;
     use tracing::{error, info};
 
     match tui_event {
@@ -303,12 +303,12 @@ fn handle_tui_event(
             // Handle Tab/BackTab for GameWorld tab switching (only when not in portal space)
             if matches!(
                 app.game_scene,
-                gromnie_tui::app::GameScene::GameWorld { .. }
+                gromnie::app::GameScene::GameWorld { .. }
             ) && matches!(key.code, KeyCode::Tab | KeyCode::BackTab)
             {
                 // Prevent tab switching while in portal space
-                if let gromnie_tui::app::GameScene::GameWorld { ref state, .. } = app.game_scene
-                    && *state != gromnie_tui::app::GameWorldState::InPortalSpace
+                if let gromnie::app::GameScene::GameWorld { ref state, .. } = app.game_scene
+                    && *state != gromnie::app::GameWorldState::InPortalSpace
                 {
                     match key.code {
                         KeyCode::Tab => {
@@ -354,7 +354,7 @@ fn handle_tui_event(
                 }
             } else {
                 // Handle GameView character selection controls
-                if app.current_view == gromnie_tui::app::AppView::Game {
+                if app.current_view == gromnie::app::AppView::Game {
                     match key.code {
                         KeyCode::Up => {
                             app.select_previous_character();
@@ -364,12 +364,12 @@ fn handle_tui_event(
                         }
                         KeyCode::Enter => {
                             // If in GameWorld scene and on Chat tab, activate chat input (but not in portal space)
-                            if let gromnie_tui::app::GameScene::GameWorld { ref state, .. } =
+                            if let gromnie::app::GameScene::GameWorld { ref state, .. } =
                                 app.game_scene
                             {
-                                if app.game_world_tab == gromnie_tui::app::GameWorldTab::Chat {
+                                if app.game_world_tab == gromnie::app::GameWorldTab::Chat {
                                     // Only allow chat input when not in portal space
-                                    if *state != gromnie_tui::app::GameWorldState::InPortalSpace {
+                                    if *state != gromnie::app::GameWorldState::InPortalSpace {
                                         app.chat_input_active = true;
                                     }
                                 } else {
@@ -397,11 +397,11 @@ fn handle_tui_event(
                         }
                         KeyCode::Char('c') => {
                             // Activate chat input when in game world (but not during portal space)
-                            if let gromnie_tui::app::GameScene::GameWorld { ref state, .. } =
+                            if let gromnie::app::GameScene::GameWorld { ref state, .. } =
                                 app.game_scene
                             {
                                 // Only allow chat input when not in portal space
-                                if *state != gromnie_tui::app::GameWorldState::InPortalSpace {
+                                if *state != gromnie::app::GameWorldState::InPortalSpace {
                                     app.chat_input_active = true;
                                 }
                             }
@@ -414,10 +414,10 @@ fn handle_tui_event(
                 if !app.chat_input_active {
                     match key.code {
                         KeyCode::Char('1') => {
-                            app.switch_view(gromnie_tui::app::AppView::Game);
+                            app.switch_view(gromnie::app::AppView::Game);
                         }
                         KeyCode::Char('2') => {
-                            app.switch_view(gromnie_tui::app::AppView::Debug);
+                            app.switch_view(gromnie::app::AppView::Debug);
                         }
                         KeyCode::Char('q') => {
                             app.should_quit = true;

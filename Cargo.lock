@@ -1249,6 +1249,28 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0cc23270f6e1808e30a928bdc84dea0b9b4136a8bc82338574f23baf47bbd280"
 
 [[package]]
+name = "gromnie"
+version = "0.2.0"
+dependencies = [
+ "asheron-rs",
+ "chrono",
+ "clap",
+ "crossterm",
+ "gromnie-client",
+ "gromnie-events",
+ "gromnie-runner",
+ "gromnie-scripting-host",
+ "ratatui",
+ "tempfile",
+ "textwrap",
+ "tokio",
+ "toml",
+ "tracing",
+ "tracing-subscriber",
+ "unicode-width 0.2.0",
+]
+
+[[package]]
 name = "gromnie-cli"
 version = "0.2.0"
 dependencies = [
@@ -1387,28 +1409,6 @@ version = "0.1.0"
 dependencies = [
  "gromnie-scripting-api",
  "wit-bindgen 0.36.0",
-]
-
-[[package]]
-name = "gromnie-tui"
-version = "0.2.0"
-dependencies = [
- "asheron-rs",
- "chrono",
- "clap",
- "crossterm",
- "gromnie-client",
- "gromnie-events",
- "gromnie-runner",
- "gromnie-scripting-host",
- "ratatui",
- "tempfile",
- "textwrap",
- "tokio",
- "toml",
- "tracing",
- "tracing-subscriber",
- "unicode-width 0.2.0",
 ]
 
 [[package]]

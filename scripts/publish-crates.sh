@@ -23,7 +23,7 @@ CRATES=(
   gromnie-client
   gromnie-scripting-host
   gromnie-runner
-  gromnie-tui
+  gromnie
   gromnie-cli
 )
 
