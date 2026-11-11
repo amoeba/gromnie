@@ -1,27 +1,28 @@
 # Releasing
 
 The repository uses cargo-dist 0.30.3. Its GitHub Actions release workflow builds
-and attaches archives/installers for `gromnie-cli`, `gromnie-tui`, and
+and attaches archives/installers for `gromnie`, `gromnie-cli`, and
 `gromnie-proxy` to a GitHub Release. The workflow also runs `dist plan` on pull
 requests, so a PR checks that the release configuration is valid.
 
 After merging a release-ready change, push a version tag from that commit:
 
 ```sh
-git tag v0.1.0
-git push origin v0.1.0
+git tag vX.Y.Z
+git push origin vX.Y.Z
 ```
 
-Use the version declared in the workspace (`Cargo.toml`) and update that version
-before creating the tag. A pushed version tag starts the release workflow; the
+Replace `X.Y.Z` with a new version matching the workspace (`Cargo.toml`), and update
+the manifests before creating the tag. Do not recreate an existing release tag. A pushed version tag starts the release workflow; the
 workflow creates the GitHub Release and uploads the cargo-dist artifacts.
 
 ## crates.io publication status
 
-Crate publication is not enabled yet. Internal path dependencies (for example,
-`gromnie-cli` -> `gromnie-client`) need a `version` requirement, which is now
-recorded next to each `path`. The WISP crates are explicitly private because
-they depend on the unreleased `wisp-mux` 6.0.0 source (details below).
+The release workflow publishes the public crates using trusted publishing.
+The renamed `gromnie` package still needs its first publish and trusted-publisher
+setup (see below). Existing `gromnie-tui` releases remain available; this workspace
+no longer publishes that package. The WISP crates remain private because they
+depend on unreleased `wisp-mux` 6.0.0 source (details below).
 
 ### External dependencies
 
@@ -55,14 +56,13 @@ gromnie binaries.
 
 Impact: `gromnie-wisp`, `gromnie-web`, and `gromnie-proxy` consume the
 6.0.0-only API. `gromnie-events`, `gromnie-client`, `gromnie-runner`,
-`gromnie-tui`, `gromnie-cli`, `gromnie-scripting-api`, and
-`gromnie-scripting-host` do not depend on `wisp-mux` and can be published once
-the path-dependency versions are added.
+`gromnie`, `gromnie-cli`, `gromnie-scripting-api`, and
+`gromnie-scripting-host` do not depend on `wisp-mux` and have versioned internal
+path dependencies for crates.io publication.
 
 ## What gets published
 
-All crates share the workspace version and are released together. Names are
-available on crates.io today.
+Public crates share the workspace version and are released together.
 
 | # | Crate | Kind | Publish | Notes |
 | --- | --- | --- | --- | --- |
@@ -71,8 +71,8 @@ available on crates.io today.
 | 3 | `gromnie-client` | lib | yes | depends on 1 |
 | 4 | `gromnie-scripting-host` | lib | yes | depends on 1-3 |
 | 5 | `gromnie-runner` | lib | yes | depends on 1, 3, 4 |
-| 6 | `gromnie-tui` | lib + bin `tui` | yes | depends on 1, 3, 4, 5 |
-| 7 | `gromnie-cli` | lib + bins `cli`, `discord-bot`, `load-tester` | yes | depends on 1, 3, 4, 5 |
+| 6 | `gromnie` | lib + bin `gromnie` | yes | depends on 1, 3, 4, 5 |
+| 7 | `gromnie-cli` | lib + bins `discord-bot`, `load-tester` | yes | depends on 1, 3, 4, 5 |
 | - | `gromnie-wisp` | lib | no | `publish = false`; relies on unreleased `wisp-mux` 6.0.0 |
 | - | `gromnie-proxy` | bin `gromnie-proxy` | no | `publish = false`; depends on `gromnie-wisp` |
 | - | `gromnie-web` | wasm lib | no | `publish = false`; browser bindings depend on `gromnie-wisp` |
@@ -93,41 +93,35 @@ job runs after CI and must succeed before cargo-dist creates the GitHub Release:
 GitHub's OIDC token is exchanged for a short-lived crates.io token by
 `rust-lang/crates-io-auth-action`, so no long-lived secret is stored.
 
-One-time bootstrap is required, because **trusted publishing cannot perform a
-crate's first publish**. After the PR is merged:
+### First publish of the renamed application
 
-1. Confirm `Cargo.toml` is still at version `0.1.0` and check out the exact
-   commit you intend to release.
-2. Create a crates.io API token with publish permission. Set it in your local
-   shell only (do not add it to GitHub secrets):
-   `read -rsp "crates.io token: " CARGO_REGISTRY_TOKEN; echo; export CARGO_REGISTRY_TOKEN`.
-3. Run `scripts/publish-crates.sh`. It publishes the seven public crates in
-   dependency order and waits for each one to appear on crates.io. Unset the
-   token afterwards with `unset CARGO_REGISTRY_TOKEN`.
-4. On **each** of the seven published crate pages, open Settings -> Trusted
-   Publishing and add a GitHub publisher with owner `amoeba`, repository
-   `gromnie`, workflow filename `release.yml`, and environment `release`.
-5. Create the GitHub Actions environment named `release` if it does not exist.
-   Protection rules are optional.
-6. Push the first release tag:
-   `git tag v0.1.0 && git push origin v0.1.0`.
-   cargo-dist builds the binaries; after CI passes, the release workflow
-   authenticates with OIDC and skips the seven versions already published
-   during bootstrap. The GitHub Release is created only after this succeeds.
+**Trusted publishing cannot perform a crate's first publish.** Before the next
+tagged release:
 
-After bootstrap, future releases need only a version bump (including internal
-path-dependency version requirements), then pushing the matching `vX.Y.Z` tag.
-The publishing workflow first checks that the tag matches every public crate's
-version and waits for the repository CI workflow to pass. It is safe to rerun
-after partial failure: already-published versions are skipped. It can also be
-started manually from the release tag with `workflow_dispatch`.
+1. Check out the merged commit intended for publication.
+2. Run `cargo login` locally, then `cargo publish -p gromnie`. Its declared library
+   dependencies must already be published; use `scripts/publish-crates.sh` if a
+   version bump also requires publishing those dependencies first.
+3. On the `gromnie` crate page, open Settings -> Trusted Publishing and add the
+   GitHub publisher: owner `amoeba`, repository `gromnie`, workflow `release.yml`,
+   environment `release`.
+
+The existing library and utility crates already have trusted publishers.
+Do not put a long-lived crates.io token in GitHub secrets.
+
+### Subsequent releases
+
+Bump the workspace version and internal dependency requirements, then push a
+matching, unused `vX.Y.Z` tag. The workflow checks that every public crate exists,
+verifies its version against the tag, and waits for CI before publishing.
+The publish script skips versions already on crates.io, so it is safe to rerun
+after a partial failure.
 
 ## Version bumps
 
-Internal `path` dependencies also carry `version = "0.1.0"`. When bumping the
-workspace version, update those `version` fields in the same commit, or
-publication will resolve the previous release from crates.io instead of the
-new one.
+Internal `path` dependencies also carry explicit `version` requirements. Update
+those in the same commit as the workspace version, or publication may resolve
+an older release from crates.io.
 
 ## Deferred WISP crates
 

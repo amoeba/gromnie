@@ -13,8 +13,7 @@ gromnie wouldn't have been possible without existing sources like actestclient, 
 
 1. Headless client library for use in other projects
 2. Wasm-based scripting system with hot reload (`gromnie-scripting`)
-3. Basic CLI client (`gromnie-cli`)
-3. Basic TUI client (`gromnie-tui`)
+3. Fullscreen terminal client (`gromnie`)
 4. Discord bot (`discord-bot`)
 5. Load tester (`load-tester`) for spawning potentially infinite clients at once.
 6. Browser client with UDP proxy.
@@ -30,8 +29,8 @@ The repository is a Cargo workspace. The most important crates:
 | `gromnie-runner` | Runs clients, wires up event consumers, multi-client/load-test orchestration, and logging. |
 | `gromnie-scripting-api` | Guest-side API (WIT + Rust) that scripts are written against. |
 | `gromnie-scripting-host` | Host runtime that loads/runs WASM scripts in Wasmtime (async, timers, hot reload). |
-| `gromnie-tui` | The `tui` terminal client binary. |
-| `gromnie-cli` | The `cli`, `discord-bot`, and `load-tester` binaries. |
+| `gromnie` | The fullscreen terminal client in `crates/gromnie`. |
+| `gromnie-cli` | The `discord-bot` and `load-tester` utilities. |
 | `gromnie-proxy` | WISP proxy server: WebSocket ⇄ UDP, used to reach AC servers from the browser. |
 | `gromnie-wisp` | Shared WISP protocol helpers used by the proxy and web client. |
 | `gromnie-web` | `wasm-bindgen` browser bindings plus a demo UI. |
@@ -42,8 +41,7 @@ The repository is a Cargo workspace. The most important crates:
 
 | Binary | Crate | What it does |
 | --- | --- | --- |
-| `tui` | `gromnie-tui` | Interactive terminal client. |
-| `cli` | `gromnie-cli` | Headless command-line client. |
+| `gromnie` | `gromnie` | Interactive terminal client. |
 | `discord-bot` | `gromnie-cli` | Bridges a Discord channel and the in-game chat. |
 | `load-tester` | `gromnie-cli` | Spawns many clients to load-test an AC server. |
 | `gromnie-proxy` | `gromnie-proxy` | WISP-over-WebSocket proxy for the browser client. |
@@ -68,6 +66,23 @@ For the browser path, UDP is tunneled over a WebSocket:
 ```
 Browser (WASM) ──wss──▶ reverse proxy ──▶ gromnie-proxy ──UDP──▶ AC server
 ```
+
+## Installation
+
+Prebuilt binaries and installers are available on [GitHub Releases](https://github.com/amoeba/gromnie/releases).
+To install from this checkout:
+
+```sh
+cargo install --path crates/gromnie --bin gromnie
+```
+
+The renamed `gromnie` crate has not had its first crates.io publish yet. After that publish:
+
+```sh
+cargo install gromnie
+```
+
+The `gromnie` binary replaces `cli` and `tui`. Existing `gromnie-tui` releases remain available.
 
 ## Development
 
@@ -95,14 +110,24 @@ cargo build --workspace --release
 
 ### Configure a server and account
 
-The `cli` binary writes an example config on first run. On macOS/Linux the config lives at
-`~/.config/gromnie/config.toml` (XDG-aware); on Windows it is under `%APPDATA%\gromnie\`.
+Start the fullscreen client (no config file required):
 
 ```bash
-cargo run --bin cli        # creates the example config if missing, then exits
+cargo run --bin gromnie
 ```
 
-Then edit `~/.config/gromnie/config.toml`:
+Inside the client:
+
+```text
+/account    # add or select an account
+/server     # add or select a server
+/connect    # use the active server and account
+/enter      # select a character
+```
+
+Saved accounts and servers use `~/.config/gromnie/config.toml` on macOS/Linux
+(XDG-aware), or `%APPDATA%\gromnie\` on Windows. Passwords are stored in plaintext.
+Existing configuration aliases remain usable:
 
 ```toml
 [servers.local]
@@ -112,28 +137,17 @@ port = 9000
 [accounts.default]
 username = "user"
 password = "pass"
-# character = "MyCharacterName"   # optional auto-login
 ```
 
-### Run something
+### Run the load tester
 
 ```bash
-# Terminal UI (config-based)
-cargo run --bin tui -- --server local --account default
-
-# Terminal UI (direct connection)
-cargo run --bin tui -- --host play.example.com --port 9000 \
-  --account myaccount --password mypassword --character MyCharacter
-
-# Headless CLI
-cargo run --bin cli -- --server local --account default
-
-# Load tester (5 clients against localhost:9000)
 cargo run --bin load-tester -- --clients 5 --host localhost --port 9000
 ```
 
-Logging goes to stdout. Set `GROMNIE_LOG_FILE=1` to also write to
-`~/.local/share/gromnie/logs/<component>.log`. Use `RUST_LOG` to control verbosity.
+For `gromnie`, set `GROMNIE_LOG_FILE=1` or `RUST_LOG` to enable file-only diagnostics
+at `~/.local/share/gromnie/logs/gromnie.log` (XDG-aware). Runner-based utilities log
+to stdout; `GROMNIE_LOG_FILE=1` also enables their log files.
 
 ### Working on scripts
 
