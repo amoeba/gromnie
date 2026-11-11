@@ -19,8 +19,8 @@ workflow creates the GitHub Release and uploads the cargo-dist artifacts.
 ## crates.io publication status
 
 The release workflow publishes the public crates using trusted publishing.
-The renamed `gromnie` package still needs its first publish and trusted-publisher
-setup (see below). Existing `gromnie-tui` releases remain available; this workspace
+The `gromnie` package replaces `gromnie-tui`; its initial publish and trusted-publisher
+setup are described below. Existing `gromnie-tui` releases remain available; this workspace
 no longer publishes that package. The WISP crates remain private because they
 depend on unreleased `wisp-mux` 6.0.0 source (details below).
 

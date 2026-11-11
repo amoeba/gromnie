@@ -10,7 +10,7 @@ crate-type = ["cdylib"]
 path = "src/lib.rs"
 
 [dependencies]
-gromnie-scripting-api = { path = "../../crates/gromnie-scripting-api", version = "0.2.0" }
+gromnie-scripting-api = { path = "../../crates/gromnie-scripting-api", version = "0.3.0" }
 # wit-bindgen is required to generate the Guest trait implementation and export! macro.
 # While we try to minimize dependencies, the WIT component model requires generating
 # bindings in each WASM component (script). The WIT definitions themselves come from
