@@ -1402,10 +1402,13 @@ dependencies = [
  "gromnie-runner",
  "gromnie-scripting-host",
  "ratatui",
+ "tempfile",
  "textwrap",
  "tokio",
+ "toml",
  "tracing",
  "tracing-subscriber",
+ "unicode-width 0.2.0",
 ]
 
 [[package]]

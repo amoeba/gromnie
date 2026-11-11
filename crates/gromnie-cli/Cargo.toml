@@ -1,15 +1,12 @@
 [package]
 name = "gromnie-cli"
+autobins = false
 version.workspace = true
 authors.workspace = true
 edition.workspace = true
 description = "CLIs for gromnie"
 repository.workspace = true
 license.workspace = true
-
-[[bin]]
-name = "cli"
-path = "src/bin/cli.rs"
 
 [[bin]]
 name = "discord-bot"
