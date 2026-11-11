@@ -18,10 +18,10 @@ asheron-rs.workspace = true
 chrono.workspace = true
 clap.workspace = true
 crossterm.workspace = true
-gromnie-client = { path = "../gromnie-client", version = "0.2.0" }
-gromnie-events = { path = "../gromnie-events", version = "0.2.0" }
-gromnie-runner = { path = "../gromnie-runner", version = "0.2.0" }
-gromnie-scripting-host = { path = "../gromnie-scripting-host", version = "0.2.0", optional = true }
+gromnie-client = { path = "../gromnie-client", version = "0.3.0" }
+gromnie-events = { path = "../gromnie-events", version = "0.3.0" }
+gromnie-runner = { path = "../gromnie-runner", version = "0.3.0" }
+gromnie-scripting-host = { path = "../gromnie-scripting-host", version = "0.3.0", optional = true }
 ratatui.workspace = true
 textwrap = "0.16"
 tempfile = "3"

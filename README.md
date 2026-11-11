@@ -76,7 +76,7 @@ To install from this checkout:
 cargo install --path crates/gromnie --bin gromnie
 ```
 
-The renamed `gromnie` crate has not had its first crates.io publish yet. After that publish:
+To install a published release from crates.io:
 
 ```sh
 cargo install gromnie
