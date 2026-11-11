@@ -1250,7 +1250,7 @@ checksum = "0cc23270f6e1808e30a928bdc84dea0b9b4136a8bc82338574f23baf47bbd280"
 
 [[package]]
 name = "gromnie-cli"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "clap",
  "crossterm",
@@ -1268,7 +1268,7 @@ dependencies = [
 
 [[package]]
 name = "gromnie-client"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "anyhow",
  "asheron-rs",
@@ -1300,7 +1300,7 @@ dependencies = [
 
 [[package]]
 name = "gromnie-events"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "asheron-rs",
  "js-sys",
@@ -1310,7 +1310,7 @@ dependencies = [
 
 [[package]]
 name = "gromnie-ios-bridge"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "asheron-rs",
  "gromnie-client",
@@ -1323,7 +1323,7 @@ dependencies = [
 
 [[package]]
 name = "gromnie-proxy"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "anyhow",
  "axum",
@@ -1341,7 +1341,7 @@ dependencies = [
 
 [[package]]
 name = "gromnie-runner"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "asheron-rs",
  "chrono",
@@ -1358,14 +1358,14 @@ dependencies = [
 
 [[package]]
 name = "gromnie-scripting-api"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "wit-bindgen 0.57.1",
 ]
 
 [[package]]
 name = "gromnie-scripting-host"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "anyhow",
  "asheron-rs",
@@ -1391,7 +1391,7 @@ dependencies = [
 
 [[package]]
 name = "gromnie-tui"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "asheron-rs",
  "chrono",
@@ -1413,7 +1413,7 @@ dependencies = [
 
 [[package]]
 name = "gromnie-web"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "event-listener",
  "flume",
@@ -1433,7 +1433,7 @@ dependencies = [
 
 [[package]]
 name = "gromnie-wisp"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "wisp-mux",
 ]
@@ -5150,7 +5150,7 @@ checksum = "1ffae5123b2d3fc086436f8834ae3ab053a283cfac8fe0a0b8eaae044768a4c4"
 
 [[package]]
 name = "xtask"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "anyhow",
  "clap",
