@@ -9,7 +9,7 @@ members = [
   "crates/gromnie-runner",
   "crates/gromnie-scripting-api",
   "crates/gromnie-scripting-host",
-  "crates/gromnie-tui",
+  "crates/gromnie",
   "crates/gromnie-web",
   "crates/gromnie-wisp",
   "crates/xtask",
@@ -23,7 +23,7 @@ default-members = [
   "crates/gromnie-runner",
   "crates/gromnie-scripting-api",
   "crates/gromnie-scripting-host",
-  "crates/gromnie-tui",
+  "crates/gromnie",
   "crates/xtask"
 ]
 

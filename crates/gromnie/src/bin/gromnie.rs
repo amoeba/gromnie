@@ -43,5 +43,5 @@ fn init_file_logging() -> Result<(), Box<dyn std::error::Error>> {
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     Cli::parse();
     init_file_logging()?;
-    gromnie_tui::command_ui::run().await
+    gromnie::command_ui::run().await
 }
